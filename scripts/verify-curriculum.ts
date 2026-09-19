@@ -12,6 +12,9 @@ import { ALL_UNITS, DOMAIN_UNIT_COUNTS, UNIT_BY_ID, UNIT_INDEX } from '../src/da
 import { DOMAINS, PLANNED_UNITS } from '../src/data/domains';
 import { TOTAL_UNITS, WIDGET_IDS, type LearningUnit } from '../src/types/curriculum';
 
+/** `--domain=ML` checks a single domain in isolation, for authoring in progress. */
+const domainArg = process.argv.find((a) => a.startsWith('--domain='))?.split('=')[1]?.toUpperCase();
+
 const errors: string[] = [];
 const warnings: string[] = [];
 
@@ -30,11 +33,12 @@ function textOf(u: LearningUnit): string {
 /* Structure                                                          */
 /* ---------------------------------------------------------------- */
 
-if (ALL_UNITS.length !== TOTAL_UNITS) {
+if (!domainArg && ALL_UNITS.length !== TOTAL_UNITS) {
   errors.push(`TOTAL: expected exactly ${TOTAL_UNITS} units, found ${ALL_UNITS.length}`);
 }
 
 for (const d of DOMAINS) {
+  if (domainArg && d.id !== domainArg) continue;
   const actual = DOMAIN_UNIT_COUNTS[d.id];
   const planned = PLANNED_UNITS[d.id];
   if (actual !== planned) {
@@ -48,6 +52,13 @@ const perDomainCounter = new Map<string, number>();
 
 for (const u of ALL_UNITS) {
   const tag = u.id;
+  const skip = Boolean(domainArg) && u.domain !== domainArg;
+  if (skip) {
+    perDomainCounter.set(u.domain, (perDomainCounter.get(u.domain) ?? 0) + 1);
+    seenIds.add(u.id);
+    seenSlugs.add(u.slug);
+    continue;
+  }
 
   if (seenIds.has(u.id)) err(tag, 'duplicate id');
   seenIds.add(u.id);
@@ -246,4 +257,8 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log(green(bold(`\n  ✓ Curriculum valid — ${ALL_UNITS.length}/${TOTAL_UNITS} units authored and complete.\n`)));
+if (domainArg) {
+  console.log(green(bold(`\n  ✓ Domain ${domainArg} valid — ${DOMAIN_UNIT_COUNTS[domainArg as keyof typeof DOMAIN_UNIT_COUNTS]} units complete.\n`)));
+} else {
+  console.log(green(bold(`\n  ✓ Curriculum valid — ${ALL_UNITS.length}/${TOTAL_UNITS} units authored and complete.\n`)));
+}

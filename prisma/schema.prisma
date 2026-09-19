@@ -1,0 +1,287 @@
+// AI/ML Mastery — persistence schema.
+//
+// Provider is SQLite so the app works immediately after `npm run setup` with
+// no external service. Every model below is portable to PostgreSQL: switch
+// `provider` to "postgresql", point DATABASE_URL at the server and run
+// `prisma migrate dev`. No SQLite-specific types are used.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  profile          Profile?
+  state            LearnerMeta?
+  progress         UnitProgress[]
+  assessments      Assessment[]
+  xpTransactions   XpTransaction[]
+  achievements     UserAchievement[]
+  mistakes         Mistake[]
+  notes            Note[]
+  teachingAttempts TeachingAttempt[]
+  sessions         StudySession[]
+  activity         DayActivity[]
+  notifications    Notification[]
+  appliedEvents    AppliedEvent[]
+  authSessions     AuthSession[]
+}
+
+/// Server-side session records, so a token can be revoked rather than only expiring.
+model AuthSession {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+  userAgent String?
+
+  @@index([userId])
+}
+
+model Profile {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                String
+  studyBudget         Int      @default(60)
+  preferredStudyTime  String   @default("19:00")
+  experience          String   @default("complete-beginner")
+  targetRole          String   @default("ai-ml-intern")
+  startDate           String   @default("2026-09-20")
+  endDate             String   @default("2026-12-31")
+  timezone            String   @default("UTC")
+  onboardedAt         DateTime?
+  /// JSON blob of NotificationPrefs.
+  notificationPrefs   String   @default("{}")
+  /// JSON array of paused ISO dates.
+  pausedDates         String   @default("[]")
+  theme               String   @default("dark")
+  reduceMotion        Boolean  @default(false)
+  highContrast        Boolean  @default(false)
+  fontScale           Int      @default(100)
+  updatedAt           DateTime @updatedAt
+}
+
+/// Scalar learner state that does not belong to a per-unit or per-event row.
+model LearnerMeta {
+  id                String @id @default(cuid())
+  userId            String @unique
+  user              User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  xp                Int    @default(0)
+  revision          Int    @default(0)
+  streakCurrent     Int    @default(0)
+  streakLongest     Int    @default(0)
+  streakLastDate    String?
+  testStreak        Int    @default(0)
+  longestTestStreak Int    @default(0)
+  teachingStreak    Int    @default(0)
+  freezesRemaining  Int    @default(2)
+  disciplineScore   Int    @default(80)
+  testsDue          Int    @default(0)
+  testsCompleted    Int    @default(0)
+  testsMissed       Int    @default(0)
+  updatedAt         DateTime @updatedAt
+}
+
+model UnitProgress {
+  id                String  @id @default(cuid())
+  userId            String
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unitId            String
+  mastery           String  @default("NOT_STARTED")
+  bestScore         Float   @default(0)
+  lastScore         Float   @default(0)
+  attempts          Int     @default(0)
+  practiceCompleted Int     @default(0)
+  challengeCompleted Boolean @default(false)
+  teachingScore     Float?
+  lessonCompletedAt DateTime?
+  lastStudiedAt     DateTime?
+  timeSpentSeconds  Int     @default(0)
+  nextReviewAt      String?
+  reviewStep        Int     @default(0)
+  weak              Boolean @default(false)
+  skipped           Boolean @default(false)
+  bookmarked        Boolean @default(false)
+  flaggedDifficult  Boolean @default(false)
+  updatedAt         DateTime @updatedAt
+
+  @@unique([userId, unitId])
+  @@index([userId, nextReviewAt])
+}
+
+model Assessment {
+  id          String   @id
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind        String
+  date        String
+  /// JSON array of unit ids covered.
+  unitIds     String
+  score       Float
+  correct     Int
+  total       Int
+  seconds     Int
+  completedAt DateTime @default(now())
+  answers     Answer[]
+
+  @@index([userId, date])
+  @@index([userId, kind])
+}
+
+model Answer {
+  id           String     @id @default(cuid())
+  assessmentId String
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  questionId   String
+  unitId       String
+  type         String
+  correct      Boolean
+  credit       Float      @default(0)
+  /// JSON-encoded learner response.
+  response     String
+  seconds      Int        @default(0)
+
+  @@index([assessmentId])
+}
+
+model XpTransaction {
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount    Int
+  reason    String
+  detail    String
+  unitId    String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model UserAchievement {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievementId String
+  unlockedAt    DateTime @default(now())
+
+  @@unique([userId, achievementId])
+}
+
+model Mistake {
+  id            String   @id
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unitId        String
+  questionId    String
+  prompt        String
+  yourAnswer    String
+  correctAnswer String
+  why           String
+  concept       String
+  createdAt     DateTime @default(now())
+  reviewAt      String
+  resolved      Boolean  @default(false)
+  timesWrong    Int      @default(1)
+
+  @@unique([userId, questionId])
+  @@index([userId, resolved])
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unitId    String
+  body      String
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, unitId])
+}
+
+model TeachingAttempt {
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unitId    String
+  text      String
+  score     Float
+  clarity   Float    @default(0)
+  /// JSON arrays.
+  coverage  String   @default("[]")
+  missing   String   @default("[]")
+  feedback  String
+  createdAt DateTime @default(now())
+
+  @@index([userId, unitId])
+}
+
+model StudySession {
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unitId    String?
+  kind      String
+  startedAt DateTime @default(now())
+  seconds   Int
+
+  @@index([userId, startedAt])
+}
+
+/// One row per calendar day, powering the heatmap and daily/weekly reports.
+model DayActivity {
+  id             String @id @default(cuid())
+  userId         String
+  user           User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date           String
+  unitsCompleted Int    @default(0)
+  xp             Int    @default(0)
+  studySeconds   Int    @default(0)
+  testScore      Float?
+  testTaken      Boolean @default(false)
+  teachBacks     Int    @default(0)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+model Notification {
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      String
+  title     String
+  body      String
+  href      String?
+  dedupeKey String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, read])
+}
+
+/// Idempotency ledger: a replayed offline event is applied exactly once.
+model AppliedEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventId   String
+  type      String
+  appliedAt DateTime @default(now())
+
+  @@unique([userId, eventId])
+  @@index([userId, appliedAt])
+}
