@@ -1,0 +1,328 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ==================================================================
+   Design tokens
+   ------------------------------------------------------------------
+   One semantic scale, two themes. Components never reference raw
+   colours — only these tokens — so theming stays a one-file change.
+   ================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* Surfaces, darkest to lightest */
+  --c-canvas: 222 47% 4%;
+  --c-surface: 223 41% 7%;
+  --c-surface-2: 222 36% 10%;
+  --c-surface-3: 222 32% 14%;
+  --c-border: 222 26% 19%;
+  --c-border-strong: 222 24% 28%;
+
+  /* Text */
+  --c-text: 215 30% 96%;
+  --c-text-muted: 218 15% 68%;
+  --c-text-subtle: 218 13% 52%;
+
+  /* Brand */
+  --c-primary: 252 90% 68%;
+  --c-primary-soft: 252 70% 58%;
+  --c-primary-contrast: 250 60% 98%;
+  --c-accent: 188 86% 55%;
+  --c-accent-2: 286 84% 68%;
+
+  /* Semantic */
+  --c-success: 158 68% 47%;
+  --c-warning: 38 92% 58%;
+  --c-danger: 348 82% 62%;
+  --c-info: 205 90% 60%;
+  --c-xp: 41 94% 60%;
+
+  /* Domain accents — one hue per curriculum domain */
+  --d-PY: 45 93% 58%;
+  --d-DSA: 14 89% 62%;
+  --d-NP: 199 89% 58%;
+  --d-PD: 265 85% 68%;
+  --d-VIZ: 330 82% 64%;
+  --d-SQL: 173 72% 48%;
+  --d-MATH: 221 88% 66%;
+  --d-STAT: 158 68% 50%;
+  --d-ML: 252 90% 70%;
+  --d-DL: 286 84% 68%;
+  --d-NLP: 24 90% 60%;
+  --d-CV: 188 86% 55%;
+  --d-GEN: 310 88% 66%;
+  --d-OPS: 210 16% 62%;
+
+  --radius: 0.875rem;
+  --shadow-soft: 0 1px 2px hsl(222 60% 2% / 0.4), 0 8px 24px -12px hsl(222 60% 2% / 0.6);
+  --shadow-lift: 0 2px 4px hsl(222 60% 2% / 0.4), 0 24px 48px -20px hsl(222 60% 2% / 0.75);
+  --glass: hsl(var(--c-surface-2) / 0.72);
+  --grid-line: hsl(var(--c-border) / 0.5);
+}
+
+.light {
+  color-scheme: light;
+
+  --c-canvas: 220 40% 98%;
+  --c-surface: 0 0% 100%;
+  --c-surface-2: 220 36% 97%;
+  --c-surface-3: 220 30% 93%;
+  --c-border: 220 20% 88%;
+  --c-border-strong: 220 16% 76%;
+
+  --c-text: 222 47% 11%;
+  --c-text-muted: 220 14% 38%;
+  --c-text-subtle: 220 10% 50%;
+
+  --c-primary: 252 78% 56%;
+  --c-primary-soft: 252 70% 62%;
+  --c-primary-contrast: 0 0% 100%;
+  --c-accent: 188 78% 38%;
+  --c-accent-2: 286 66% 52%;
+
+  --c-success: 158 64% 34%;
+  --c-warning: 32 88% 44%;
+  --c-danger: 348 72% 48%;
+  --c-info: 205 82% 44%;
+  --c-xp: 36 90% 45%;
+
+  --d-PY: 42 88% 42%;
+  --d-DSA: 14 78% 48%;
+  --d-NP: 199 82% 42%;
+  --d-PD: 265 68% 55%;
+  --d-VIZ: 330 68% 50%;
+  --d-SQL: 173 68% 32%;
+  --d-MATH: 221 76% 52%;
+  --d-STAT: 158 60% 34%;
+  --d-ML: 252 74% 58%;
+  --d-DL: 286 64% 52%;
+  --d-NLP: 24 80% 45%;
+  --d-CV: 188 76% 36%;
+  --d-GEN: 310 70% 50%;
+  --d-OPS: 210 12% 42%;
+
+  --shadow-soft: 0 1px 2px hsl(220 40% 40% / 0.08), 0 8px 24px -14px hsl(220 40% 30% / 0.18);
+  --shadow-lift: 0 2px 4px hsl(220 40% 40% / 0.08), 0 24px 48px -22px hsl(220 40% 30% / 0.28);
+  --glass: hsl(0 0% 100% / 0.78);
+  --grid-line: hsl(var(--c-border) / 0.9);
+}
+
+@theme inline {
+  --color-canvas: hsl(var(--c-canvas));
+  --color-surface: hsl(var(--c-surface));
+  --color-surface-2: hsl(var(--c-surface-2));
+  --color-surface-3: hsl(var(--c-surface-3));
+  --color-line: hsl(var(--c-border));
+  --color-line-strong: hsl(var(--c-border-strong));
+
+  --color-ink: hsl(var(--c-text));
+  --color-muted: hsl(var(--c-text-muted));
+  --color-subtle: hsl(var(--c-text-subtle));
+
+  --color-primary: hsl(var(--c-primary));
+  --color-primary-soft: hsl(var(--c-primary-soft));
+  --color-on-primary: hsl(var(--c-primary-contrast));
+  --color-accent: hsl(var(--c-accent));
+  --color-accent-2: hsl(var(--c-accent-2));
+
+  --color-success: hsl(var(--c-success));
+  --color-warning: hsl(var(--c-warning));
+  --color-danger: hsl(var(--c-danger));
+  --color-info: hsl(var(--c-info));
+  --color-xp: hsl(var(--c-xp));
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-mono-stack), ui-monospace, "SF Mono", Menlo, monospace;
+
+  --radius-xs: 0.375rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.75rem;
+
+  --shadow-soft: var(--shadow-soft);
+  --shadow-lift: var(--shadow-lift);
+
+  --animate-shimmer: shimmer 2.4s linear infinite;
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-pulse-ring: pulse-ring 2.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: -140% 0; }
+  100% { background-position: 140% 0; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+@keyframes pulse-ring {
+  0% { transform: scale(0.9); opacity: 0.7; }
+  70% { transform: scale(1.35); opacity: 0; }
+  100% { opacity: 0; }
+}
+
+/* ==================================================================
+   Base
+   ================================================================== */
+
+@layer base {
+  * {
+    border-color: hsl(var(--c-border));
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+    font-size: var(--root-font-size, 100%);
+  }
+
+  body {
+    background-color: hsl(var(--c-canvas));
+    color: hsl(var(--c-text));
+    font-family: var(--font-sans);
+    font-feature-settings: "cv02", "cv03", "cv04", "ss01";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    min-height: 100dvh;
+  }
+
+  h1, h2, h3, h4 {
+    letter-spacing: -0.021em;
+    text-wrap: balance;
+  }
+
+  p, li {
+    text-wrap: pretty;
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--c-accent));
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: hsl(var(--c-primary) / 0.32);
+    color: hsl(var(--c-text));
+  }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--c-border-strong));
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background-color: hsl(var(--c-text-subtle)); background-clip: content-box; }
+
+  /* High-contrast preference, user-toggleable in Settings */
+  .contrast-high {
+    --c-text-muted: 218 24% 82%;
+    --c-text-subtle: 218 20% 72%;
+    --c-border: 222 26% 34%;
+    --c-border-strong: 222 24% 46%;
+  }
+  .light.contrast-high {
+    --c-text-muted: 220 30% 22%;
+    --c-text-subtle: 220 24% 28%;
+    --c-border: 220 24% 62%;
+    --c-border-strong: 220 22% 42%;
+  }
+}
+
+/* Reduced motion: honoured both from the OS and from Settings. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* ==================================================================
+   Composable surface utilities
+   ================================================================== */
+
+@utility glass {
+  background: var(--glass);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+}
+
+@utility panel {
+  background-color: hsl(var(--c-surface));
+  border: 1px solid hsl(var(--c-border));
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+}
+
+@utility grid-bg {
+  background-image:
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+
+@utility text-gradient {
+  background-image: linear-gradient(
+    100deg,
+    hsl(var(--c-text)) 0%,
+    hsl(var(--c-primary)) 45%,
+    hsl(var(--c-accent)) 100%
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+@utility ring-focus {
+  outline: 2px solid hsl(var(--c-accent));
+  outline-offset: 2px;
+}
+
+/* Skip link */
+.skip-link {
+  position: absolute;
+  left: 0.75rem;
+  top: -4rem;
+  z-index: 100;
+  padding: 0.625rem 1rem;
+  border-radius: 0.5rem;
+  background: hsl(var(--c-primary));
+  color: hsl(var(--c-primary-contrast));
+  font-weight: 600;
+  transition: top 0.18s ease;
+}
+.skip-link:focus { top: 0.75rem; }
+
+/* KaTeX sizing tune — the default is slightly too large in body copy. */
+.katex { font-size: 1.04em; }
+.katex-display { margin: 0.9rem 0; overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
+.katex-display > .katex { white-space: nowrap; }
+
+/* Prose defaults for lesson copy, without pulling in a plugin. */
+.lesson-prose { max-width: 68ch; line-height: 1.75; color: hsl(var(--c-text-muted)); }
+.lesson-prose strong { color: hsl(var(--c-text)); font-weight: 600; }
+.lesson-prose code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  background: hsl(var(--c-surface-3));
+  color: hsl(var(--c-accent));
+  padding: 0.12em 0.38em;
+  border-radius: 0.3rem;
+}
