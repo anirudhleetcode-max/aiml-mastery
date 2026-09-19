@@ -5369,4 +5369,3322 @@ print(joined)`,
         "A loop is how you say 'do this for each of these' without writing the line out once per item. Python's main loop is the `for` loop, and the thing to understand is that it does not count — it asks. You hand it a list, a string, a file, anything that can produce items one at a time, and it keeps asking for the next one until there are none left. Because the collection decides when to stop, you never write a counter, never check a bound, and never run off the end. That is why `for i in range(len(names))` is a smell: you have reintroduced the counting the loop was designed to remove. If you want the items, say `for name in names`. If you also want to know which number each one is, say `for i, name in enumerate(names)`. If you want to walk two lists side by side, say `for name, score in zip(names, scores)`. The other loop, `while`, is for when you genuinely do not know how many times you will go round — keep retrying until the request works, keep refining until the answer is accurate enough. It repeats as long as its condition is true, which means something inside the body has to eventually make that condition false. If nothing does, the program does not crash; it simply never finishes, which is why every `while` you write deserves a moment's thought about what makes it stop.",
     },
   },
+
+  {
+    id: 'PY-012',
+    domain: 'PY',
+    module: 'Functions',
+    topic: 'Functions',
+    title: 'Defining Functions',
+    slug: 'defining-functions',
+    difficulty: 2,
+    estimatedMinutes: 35,
+    prerequisites: ['PY-011'],
+    related: ['PY-002', 'PY-010'],
+    tags: ['def', 'return', 'parameters', 'docstring', 'pure-function', 'type-hints'],
+
+    learningObjectives: [
+      'Define a function with `def`, call it, and pass arguments to its parameters',
+      'Distinguish returning a value from printing one, and explain why it matters',
+      'Write a docstring and type hints that tell a reader what the function promises',
+      'Decompose a long script into functions that each do one nameable thing',
+      'Recognise a pure function and explain why pure functions are easier to test',
+    ],
+
+    terminology: [
+      {
+        term: 'Function',
+        definition:
+          'A named, reusable block of code that takes zero or more inputs and returns a value. Defined with `def`, invoked by writing its name followed by parentheses.',
+        simple: 'A named recipe you can run whenever you like, with different ingredients each time.',
+      },
+      {
+        term: 'Parameter vs argument',
+        definition:
+          'A parameter is the name in the function definition; an argument is the actual value supplied at the call site.',
+        simple: 'The parameter is the labelled slot; the argument is what you drop into it.',
+      },
+      {
+        term: 'return',
+        definition:
+          'Ends the function immediately and hands a value back to the caller. A function with no `return` returns `None`.',
+        simple: 'Handing the answer back to whoever asked.',
+      },
+      {
+        term: 'Docstring',
+        definition:
+          'A string literal as the first statement of a function, stored as `__doc__` and shown by `help()`. It states what the function does, not how.',
+        simple: 'A note at the top saying what this thing is for.',
+      },
+      {
+        term: 'Pure function',
+        definition:
+          'A function whose output depends only on its arguments and which changes nothing outside itself. Same inputs always give the same output.',
+        simple: 'A recipe that only uses what you hand it and leaves the kitchen exactly as it found it.',
+      },
+      {
+        term: 'Side effect',
+        definition:
+          'Any observable change beyond the return value: printing, writing a file, mutating an argument, or modifying a global.',
+        simple: 'Anything the function does to the outside world besides answering.',
+      },
+    ],
+
+    simpleExplanation:
+      "A function is a piece of code you give a name to, so you can run it again without writing it again. You define it with `def`, list the inputs it needs in brackets, and indent the body underneath. When you want it to run, you write its name with brackets after it, and whatever you put inside those brackets gets handed to the names in the definition. The single most important thing to get right early is the difference between printing and returning. Printing puts characters on the screen, and that is all it does — the value is gone, and nothing else in your program can use it. Returning hands the value back to whoever called the function, so it can be stored, compared, passed somewhere else, or tested. A function that prints is a dead end; a function that returns is a building block. The reason to write functions at all is that a program made of named pieces can be understood one piece at a time, and each piece can be tested on its own.",
+
+    whyItExists:
+      'A program written as one long sequence of statements can only be understood by reading all of it, cannot be tested in parts, and repeats itself wherever the same work is needed twice. Functions let you name a piece of behaviour, verify it once, and then use it as a single idea — which is what makes programs larger than a page possible at all.',
+
+    analogy: {
+      scenario:
+        "Think of a coffee machine in an office. It has a slot where you put a cup, a couple of buttons for the options, and a spout where the coffee comes out. Nobody standing at it needs to know about the boiler, the grinder or the water lines. To use it, you supply what it asks for and take what it gives back. If instead the machine simply sprayed coffee onto the floor and displayed 'done', you could still watch it work but you could never put the coffee in anything.",
+      mapping: [
+        { from: 'The name on the front of the machine', to: 'The function name — how you refer to the whole behaviour' },
+        { from: 'The buttons and the cup slot', to: 'Parameters — what the function needs supplied' },
+        { from: 'Coffee arriving in your cup', to: '`return` — a value handed back for the caller to use' },
+        { from: 'Spraying onto the floor and saying "done"', to: '`print` — visible, but unusable by the rest of the program' },
+        { from: 'Not needing to know about the boiler', to: 'Abstraction: the caller depends on the interface, not the implementation' },
+      ],
+      bridge:
+        'The cup-versus-floor distinction is the whole print-versus-return lesson. A function that prints its result can be watched but not used: you cannot write `total = print_average(scores)` and get anything but `None`, because printing produces no value. A function that returns can be composed — stored in a variable, fed into another function, compared in a test. Write functions that return, and print at the outermost layer where you are deliberately talking to a human.',
+      limitations:
+        'A coffee machine always does the same thing with the same buttons. Python functions can read globals, mutate their arguments and depend on files or the clock, which is exactly what makes impure functions harder to test than the machine suggests.',
+    },
+
+    visuals: [
+      {
+        kind: 'annotated',
+        title: 'Anatomy of a function definition',
+        subject: 'def mean(values: list[float]) -> float:\n    """Return the arithmetic mean."""\n    return sum(values) / len(values)',
+        annotations: [
+          { part: '`def`', note: 'The keyword that creates a function object and binds it to the following name.' },
+          { part: '`mean`', note: 'The name. Use a verb or a noun that says what you get back, not how it is computed.' },
+          { part: '`values: list[float]`', note: 'A parameter with a type hint. Hints are not enforced at run time; they document and enable tooling.' },
+          { part: '`-> float`', note: 'The return annotation. It tells a reader, and mypy, what the caller receives.' },
+          { part: 'The docstring', note: 'First statement, in triple quotes. Says what, not how; `help(mean)` shows it.' },
+          { part: '`return`', note: 'Ends the function and hands the value back. Without it the function returns `None`.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'print versus return',
+        caption: 'The most consequential distinction in this unit.',
+        left: {
+          heading: '`print(result)`',
+          points: [
+            'Writes characters to stdout',
+            'Produces no value — the expression evaluates to `None`',
+            'Cannot be stored, compared or tested',
+            'Belongs at the outermost layer, where you talk to a human',
+          ],
+        },
+        right: {
+          heading: '`return result`',
+          points: [
+            'Hands the value back to the caller',
+            'Can be assigned, passed on, or asserted in a test',
+            'Lets functions compose: `f(g(x))`',
+            'Belongs in every function that computes something',
+          ],
+        },
+      },
+      {
+        kind: 'flow',
+        title: 'What happens when you call a function',
+        caption: 'Understanding this sequence explains both scope and the traceback you see when it fails.',
+        steps: [
+          { label: 'Evaluate the arguments', detail: 'Each expression at the call site is evaluated to an object, left to right.' },
+          { label: 'Create a new local namespace', detail: 'A fresh frame is pushed onto the call stack; parameters are bound in it.' },
+          { label: 'Run the body', detail: 'Names assigned here are local and invisible outside, unless declared `global` or `nonlocal`.' },
+          { label: 'Hit `return`', detail: 'Evaluation stops immediately and the value is handed back. Reaching the end instead returns `None`.' },
+          { label: 'Discard the frame', detail: 'Locals disappear. This is why a variable created inside a function cannot be read outside it.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Signs a function needs splitting',
+        columns: ['Signal', 'What it usually means', 'The move'],
+        rows: [
+          ['The name contains "and"', 'It does two things', 'Split at the "and" — two functions, two names.'],
+          ['You cannot write a one-line docstring', 'There is no single idea to state', 'Find the sub-steps and name each one.'],
+          ['More than about 30 lines', 'Several levels of detail are mixed together', 'Extract the inner detail into helpers the outer function calls.'],
+          ['Three or more levels of indentation', 'Control flow is carrying too much', 'Guard clauses, or extract the inner block into a function.'],
+          ['You are scrolling to see the whole thing', 'It cannot be held in mind at once', 'Extract until each piece fits on a screen.'],
+          ['A test needs elaborate setup', 'It depends on too much outside itself', 'Pass dependencies as arguments instead of reaching for globals.'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Write and run your own function',
+        caption: 'Define a function, call it with different arguments and watch the returned value.',
+        widget: 'code-playground',
+      },
+    ],
+
+    formalDefinition:
+      'A `def` statement creates a function object and binds it to a name in the enclosing namespace. Calling it evaluates the argument expressions, binds them to the parameters in a fresh local namespace pushed onto the call stack, and executes the body until a `return` statement or the end of the suite, at which point the frame is discarded and the returned value — `None` if none was given — becomes the value of the call expression.',
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Return, not print',
+        runnable: true,
+        code: `def mean_printed(values):
+    print(sum(values) / len(values))
+
+def mean(values):
+    return sum(values) / len(values)
+
+scores = [90, 80, 70]
+
+result_a = mean_printed(scores)     # prints, then returns None
+print("captured:", result_a)
+
+result_b = mean(scores)             # returns the number
+print("captured:", result_b)
+print("usable:", round(result_b, 1), result_b > 75)`,
+        output: `80.0
+captured: None
+captured: 80.0
+usable: 80.0 True`,
+        explanation:
+          'Both functions compute the same number; only one of them gives it to you. `mean_printed` writes to the screen and then falls off the end, so the call expression evaluates to `None` and `result_a` is useless. `mean` hands the value back, so it can be rounded, compared, stored or asserted in a test. The rule to adopt now: compute and return in functions, and print only at the top level where you are deliberately producing output for a person.',
+      },
+      {
+        language: 'python',
+        title: 'Docstrings, type hints and a real signature',
+        runnable: true,
+        code: `def normalise(values: list[float]) -> list[float]:
+    """Scale values to the range 0-1.
+
+    Args:
+        values: A non-empty list of numbers.
+
+    Returns:
+        A new list where the smallest value maps to 0.0 and the largest to 1.0.
+
+    Raises:
+        ValueError: If values is empty or every value is identical.
+    """
+    if not values:
+        raise ValueError("values must not be empty")
+    low, high = min(values), max(values)
+    if low == high:
+        raise ValueError("cannot normalise constant input")
+    span = high - low
+    return [(v - low) / span for v in values]
+
+print(normalise([10, 20, 30]))
+print(normalise.__doc__.splitlines()[0])
+
+try:
+    normalise([])
+except ValueError as e:
+    print("ValueError:", e)`,
+        output: `[0.0, 0.5, 1.0]
+Scale values to the range 0-1.
+ValueError: values must not be empty`,
+        explanation:
+          'The type hints are not checked at run time — passing a string would not raise until the arithmetic failed — but they are read by your editor, by mypy, and by every human who opens the file, and they cost one line. The docstring states the contract: what it does, what it needs, what it gives back, and how it fails. Note that the function documents its exceptions and then actually raises them: a contract you do not enforce is a comment, and comments drift.',
+      },
+      {
+        language: 'python',
+        title: 'Decomposing a script into functions',
+        runnable: true,
+        code: `def parse_row(line: str) -> tuple[str, float]:
+    """Split one CSV line into a cleaned (name, score) pair."""
+    name, raw_score = line.split(",")
+    return name.strip().title(), float(raw_score)
+
+def passing(rows, threshold=60.0):
+    """Return only the rows whose score meets the threshold."""
+    return [(name, score) for name, score in rows if score >= threshold]
+
+def report(rows) -> str:
+    """Format rows as one line per entry."""
+    return "\\n".join(f"{name:<8} {score:5.1f}" for name, score in rows)
+
+lines = ["ada , 92.5", "bob,41", " cal ,78"]
+rows = [parse_row(line) for line in lines]
+print(report(passing(rows)))`,
+        output: `Ada       92.5
+Cal       78.0`,
+        explanation:
+          'Each function does one nameable thing and returns a value, which means each can be tested in isolation with two lines and no setup: `assert parse_row("ada , 92.5") == ("Ada", 92.5)`. Notice also that the composition on the final line reads as a sentence — report the passing rows — which is the real payoff of naming things well. Only the last line prints, and it does so at the outermost layer where a human is the intended audience.',
+      },
+      {
+        language: 'python',
+        title: 'Pure versus impure, and why tests care',
+        runnable: true,
+        code: `total = 0
+
+def add_impure(x):
+    global total          # reaches outside itself
+    total += x
+    return total
+
+def add_pure(running, x):
+    return running + x    # depends only on its arguments
+
+print(add_impure(5), add_impure(5))   # same argument, different results
+print(add_pure(0, 5), add_pure(0, 5)) # same argument, same result
+
+# Mutating an argument is also a side effect
+def append_bad(item, bucket):
+    bucket.append(item)
+    return bucket
+
+def append_good(item, bucket):
+    return [*bucket, item]
+
+original = [1, 2]
+append_bad(3, original)
+print("after bad: ", original)
+append_good(4, original)
+print("after good:", original)`,
+        output: `5 10
+5 5
+after bad:  [1, 2, 3]
+after good: [1, 2, 3]`,
+        explanation:
+          'The first pair is the entire argument for purity in four lines: `add_impure(5)` returns different answers on successive calls because it carries hidden state, so a test asserting the result must first know the history of every previous call. `add_pure` can be tested with one line. The second pair shows the subtler form: `append_bad` mutates the caller\'s list, which is a side effect even though nothing global is declared. Impure functions are not wrong — writing files and updating state is the point of many programs — but keep the impurity at the edges and the computation in the middle.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'A feature engineering module',
+        usage:
+          'Each transformation — `add_ratio_features(df)`, `bucket_ages(df)` — is a function taking a DataFrame and returning a new one. Because each returns rather than mutates, the pipeline can be reordered and each step tested alone.',
+      },
+      {
+        context: 'The scikit-learn API',
+        usage:
+          'Every estimator exposes `fit`, `predict` and `score` with consistent signatures, which is why any model can be dropped into a cross-validation loop written against those names alone.',
+      },
+      {
+        context: 'Unit tests',
+        usage:
+          'A test is `assert my_function(known_input) == expected_output`. That line is only possible if the function returns a value; a function that prints can only be tested with output capture, which is fragile and slow.',
+      },
+      {
+        context: 'Evaluation metrics',
+        usage:
+          '`accuracy(y_true, y_pred)` is pure: same inputs, same number, no state. That is precisely why metric functions are the easiest part of a machine learning codebase to trust.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'pytest', role: 'Test functions call your functions and assert on returned values, which is why returning rather than printing is a testability decision.' },
+      { tool: 'mypy', role: 'Reads type hints to catch argument mismatches before the code runs; hints are documentation that a machine can check.' },
+      { tool: 'scikit-learn', role: 'Its consistent `fit`/`transform` function signatures are what make pipelines composable across unrelated estimators.' },
+      { tool: 'FastAPI', role: 'Turns an annotated Python function into a validated HTTP endpoint, using the type hints to generate the schema.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Printing instead of returning',
+        why: 'The value is written to the screen and then discarded, so the call evaluates to `None` and nothing downstream can use or test the result.',
+        fix: 'Return the value. Print at the call site if a human needs to see it: `print(mean(scores))`.',
+      },
+      {
+        mistake: 'Forgetting that a function without `return` gives `None`',
+        why: 'A branch that falls off the end returns `None` silently, so the failure appears later as `TypeError: unsupported operand type(s) for +: NoneType and int`.',
+        fix: 'Make every path return explicitly, and add an `else` that raises when a value is genuinely unexpected.',
+      },
+      {
+        mistake: 'Defining the function but never calling it',
+        why: '`def` only creates the function object; nothing runs until a call. A script that defines everything and calls nothing produces no output and no error.',
+        fix: 'Call it. In a script, put the top-level calls under `if __name__ == "__main__":` so the file can also be imported without running.',
+      },
+      {
+        mistake: 'A function that quietly mutates its arguments',
+        why: 'The caller passes a list, gets a return value, and does not realise their original list also changed — a bug that appears far from its cause.',
+        fix: 'Return a new object, or make the mutation the obvious purpose and say so in the name and docstring: `sort_in_place(xs)`.',
+      },
+      {
+        mistake: 'Reaching for globals instead of parameters',
+        why: 'The function can no longer be understood or tested in isolation, because its behaviour depends on state defined elsewhere and changed at unknown times.',
+        fix: 'Pass what the function needs as arguments. If the list of arguments grows uncomfortable, that usually means a class or a config object is waiting to be extracted.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'What is the difference between `print` and `return`?',
+        answer:
+          '`print` writes characters to standard output for a human to read and produces no value — the expression itself evaluates to `None`. `return` ends the function and hands a value back to the caller, where it can be assigned, compared, passed to another function or asserted in a test. The practical consequence is that a function which prints cannot be composed or unit tested without capturing stdout, while a function that returns can be verified with a single `assert`. The convention that follows is to compute and return in the inner layers and to print only at the boundary where you are deliberately producing human-facing output.',
+      },
+      {
+        level: 'intermediate',
+        question: 'What makes a function pure, and why do people care?',
+        answer:
+          'A pure function\'s return value depends only on its arguments, and it changes nothing observable outside itself — no globals, no mutated arguments, no files, no clock, no randomness without a passed-in seed. People care because purity makes a function comprehensible in isolation: you can read it without knowing the program\'s history, test it with one line and no fixtures, cache its results safely, and run it in parallel without coordination. Real programs cannot be entirely pure — they have to write files and update databases — so the discipline is to concentrate side effects at the edges and keep the computational core pure, which is what makes the interesting logic the easy part to test.',
+        followUp:
+          'A strong answer notes that `functools.lru_cache` is only safe on pure functions, which makes purity a concrete capability rather than a stylistic preference.',
+      },
+      {
+        level: 'internship',
+        question: 'How do you decide when a piece of code should become its own function?',
+        answer:
+          'The test I use is whether I can give it a short, honest name. If a block has a name, it is an idea and deserves to be a function; if the only honest name contains "and", it is two ideas and should be two functions. Beyond that, the practical triggers are duplication — the second time I write something similar, it becomes a function — a comment that describes the next five lines, which is a function name waiting to be used, a block nested three levels deep, and anything I want to test on its own. The counter-pressure matters too: splitting into functions so small that following the logic means jumping between eight definitions makes code harder to read, so the target is that each function fits on a screen and its name makes the caller readable without opening it.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Write a function `celsius_to_fahrenheit(c)` that returns the converted value, with a docstring and type hints. Then show a call whose result is stored and compared.',
+        hint: 'The formula is c times 9/5 plus 32. Return it; do not print it.',
+        language: 'python',
+        starterCode: 'def celsius_to_fahrenheit(c):\n    ...\n',
+        solution:
+          '```\ndef celsius_to_fahrenheit(c: float) -> float:\n    """Return the temperature in degrees Fahrenheit."""\n    return c * 9 / 5 + 32\n\nf = celsius_to_fahrenheit(100)\nprint(f, f > 200)   # 212.0 True\n```\n\nBecause it returns, the result can be stored in `f`, compared, and asserted in a test — `assert celsius_to_fahrenheit(0) == 32`. Had it printed instead, the only way to test it would be to capture standard output, which is slower and far more brittle.',
+      },
+      {
+        prompt:
+          'This function sometimes returns `None` unexpectedly. Find out why and fix it.\n\n```\ndef classify(score):\n    if score > 90:\n        return "high"\n    elif score > 50:\n        return "medium"\n```',
+        hint: 'What does a function return when execution reaches the end of its body?',
+        solution:
+          'A score of 30 matches no branch, so execution falls off the end and Python returns `None`. The caller then gets a value that fails much later, typically with `TypeError: argument of type NoneType is not iterable`.\n\n```\ndef classify(score: float) -> str:\n    if score > 90:\n        return "high"\n    if score > 50:\n        return "medium"\n    return "low"\n```\n\nMaking every path return explicitly is the fix. Where no sensible default exists, `raise ValueError(f"unclassifiable score: {score}")` is better than returning `None`, because it fails at the cause rather than three functions later.',
+      },
+      {
+        prompt:
+          'Split this into at least two functions, each with a name and a single responsibility, and make the final line the only place that prints.\n\n```\nlines = ["ada,92", "bob,41"]\nfor line in lines:\n    name, s = line.split(",")\n    if float(s) >= 60:\n        print(name.title(), float(s))\n```',
+        hint: 'One function turns a line into data; another decides what to keep.',
+        solution:
+          '```\ndef parse(line: str) -> tuple[str, float]:\n    """Turn one CSV line into a (name, score) pair."""\n    name, raw = line.split(",")\n    return name.strip().title(), float(raw)\n\ndef passing(rows, threshold: float = 60.0):\n    """Keep only rows at or above the threshold."""\n    return [row for row in rows if row[1] >= threshold]\n\nrows = [parse(line) for line in lines]\nfor name, score in passing(rows):\n    print(name, score)\n```\n\nEach function now has a one-line docstring that is actually true, which is the sign the split was along the right seam. `parse` can be tested against a single string, and `passing` against a list of tuples, neither of which requires a file or captured output.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'PY-012-q1',
+        type: 'code-output',
+        language: 'python',
+        concept: 'print versus return',
+        prompt: 'What does this print?',
+        code: 'def f(x):\n    print(x * 2)\n\nresult = f(3)\nprint(result)',
+        options: ['6\nNone', '6\n6', 'None\n6', '6'],
+        answerIndex: 0,
+        explanation:
+          'The function prints `6` and then ends without a `return`, so the call evaluates to `None` and the second `print` shows that. Printing produces output, not a value.',
+      },
+      {
+        id: 'PY-012-q2',
+        type: 'truefalse',
+        concept: 'implicit None',
+        prompt: 'A function that reaches the end of its body without executing a `return` statement returns `None`.',
+        answer: true,
+        explanation:
+          'Every Python function returns something. With no explicit `return`, that something is `None`, which is why a chain with an unmatched branch produces a confusing `NoneType` error further downstream.',
+      },
+      {
+        id: 'PY-012-q3',
+        type: 'debug',
+        language: 'python',
+        concept: 'defining versus calling',
+        prompt: 'This script produces no output and no error. Why?',
+        code: 'def greet(name):\n    print(f"hello {name}")\n\ngreet',
+        options: [
+          'The last line refers to the function without calling it — it needs parentheses and an argument',
+          '`print` cannot be used inside an f-string context',
+          'The function must be defined after it is used',
+          '`def` requires a `return` statement to execute',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Writing the bare name evaluates to the function object and discards it. A call needs parentheses: `greet("ada")`. This is the same distinction as `print` versus `print()`.',
+      },
+      {
+        id: 'PY-012-q4',
+        type: 'mcq',
+        concept: 'purity',
+        prompt: 'Which of these functions is pure?',
+        options: [
+          '`def add(a, b): return a + b`',
+          '`def add(a): global total; total += a; return total`',
+          '`def add(a, xs): xs.append(a); return xs`',
+          '`def add(a): return a + time.time()`',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Only the first depends solely on its arguments and changes nothing outside itself. The second mutates a global, the third mutates a caller\'s list, and the fourth depends on the clock, so none of them return the same value for the same inputs.',
+      },
+      {
+        id: 'PY-012-q5',
+        type: 'multi',
+        concept: 'when to extract a function',
+        prompt: 'Which of these are good reasons to extract a block of code into its own function? Select all that apply.',
+        options: [
+          'You have written a comment describing what the next five lines do',
+          'The same logic appears in two places',
+          'You want to test that logic on its own',
+          'The file is under 100 lines',
+          'The block is nested three levels deep',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'A comment naming a block is a function name waiting to be used, duplication and testability are the classic triggers, and deep nesting usually means an inner block wants to be its own named idea. File length alone says nothing.',
+      },
+      {
+        id: 'PY-012-q6',
+        type: 'fill',
+        concept: 'docstrings',
+        prompt: 'What is the name for the string literal placed as the first statement inside a function, which `help()` displays?',
+        answers: ['docstring', 'doc string', 'documentation string', 'a docstring'],
+        explanation:
+          'A docstring is stored as the function\'s `__doc__` attribute and read by `help()`, editors and documentation tools. It states what the function promises, not how it is implemented.',
+      },
+      {
+        id: 'PY-012-q7',
+        type: 'explain',
+        concept: 'functions as design',
+        prompt: 'Explain why "return a value" is a design decision about testability, not just a style preference.',
+        rubric: [
+          'States that a returned value can be asserted on directly',
+          'States that a printed value requires capturing stdout, which is fragile',
+          'Connects this to composability — returned values can be passed to other functions',
+        ],
+        sampleAnswer:
+          'A test is fundamentally the line `assert f(known_input) == expected`, and that line only exists if `f` gives something back. If the function prints instead, the test has to redirect and capture standard output, parse text, and cope with formatting changes that have nothing to do with correctness — so the test becomes slower, more brittle, and coupled to presentation. Returning also makes composition possible: `report(passing(parse_all(lines)))` reads as a sentence and each stage can be replaced independently, which is impossible when the middle stage writes to the screen. The practical rule is that printing is a form of output for humans and belongs at the program\'s boundary, while everything inside should hand values back.',
+        explanation:
+          'The examinable idea is that returning values is what makes code both testable and composable — two properties that drive most function-level design decisions.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'print versus return', back: 'print writes to the screen and yields `None`; return hands a value back so it can be stored, composed or tested.' },
+      { front: 'What does a function return with no `return` statement?', back: '`None`. That is why an unmatched branch causes a `NoneType` error somewhere downstream.' },
+      { front: 'Parameter versus argument', back: 'The parameter is the name in the definition; the argument is the value supplied at the call site.' },
+      { front: 'What is a pure function?', back: 'Its output depends only on its arguments and it changes nothing outside itself. Same inputs, same output, always.' },
+      { front: 'What goes in a docstring?', back: 'What the function does, what it needs, what it returns and how it fails — not how it is implemented.' },
+      { front: 'Are Python type hints enforced at run time?', back: 'No. They document intent and are checked by tools such as mypy and used by frameworks such as FastAPI.' },
+    ],
+
+    challenge: {
+      title: 'Refactor a script into a testable module',
+      brief:
+        'Take a single 40-line script that reads a list of CSV-style strings, cleans them, filters by a threshold, computes summary statistics and prints a report. Rewrite it as four functions — parse, filter, summarise and format — each with a docstring, type hints and a single responsibility, returning values rather than printing. The only `print` must be in a `main()` function guarded by `if __name__ == "__main__":`. Then write three assertions proving each pure function behaves correctly on a hand-made input.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Exactly one function prints, and it is only invoked from the main guard',
+        'Every other function returns a value and mutates none of its arguments',
+        'Each function has type hints and a docstring whose first line is a single sentence',
+        'Three assertions pass, each testing one function with a literal input and expected output',
+      ],
+      starterCode:
+        'def parse(line: str) -> tuple[str, float]:\n    """Turn one CSV line into a (name, score) pair."""\n    ...\n\n\ndef main() -> None:\n    ...\n\n\nif __name__ == "__main__":\n    main()\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone who can write loops and conditionals what a function is, and explain the difference between printing a result and returning one.',
+      mustCover: [
+        'A function is named, reusable code defined with def and run by calling it',
+        'Parameters are the names in the definition; arguments are the values passed in',
+        'return hands a value back to the caller; print only writes to the screen',
+        'A function with no return gives back None',
+      ],
+      bonusSignals: ['mentions testability as the reason to return', 'mentions docstrings or type hints', 'gives a rule for when to split a function'],
+      sampleExplanation:
+        "A function is a chunk of code with a name on it. You write `def mean(values):` and indent the body underneath, and from then on you can run that whole body just by writing `mean(scores)`. The names in the brackets of the definition are slots, and whatever you put in the brackets when you call it gets dropped into those slots. The part worth being careful about is what the function does with its answer. If it ends with `print(total)`, the number appears on the screen and then it is gone — the function itself hands back nothing, so if you write `average = mean(scores)` you get `None` and everything downstream breaks in a confusing way. If it ends with `return total`, the number is handed back to whoever called it, and now you can store it, compare it, feed it into another function, or write a test that says `assert mean([1, 2, 3]) == 2`. That is the real reason this distinction matters: a function that returns can be checked and built on, while a function that prints can only be watched. So the habit to build is to compute and return everywhere inside your program, and to print only at the very outside, where you have decided a human should see something.",
+    },
+  },
+
+  {
+    id: 'PY-013',
+    domain: 'PY',
+    module: 'Functions',
+    topic: 'Arguments and scope',
+    title: 'Arguments, Defaults and Scope',
+    slug: 'arguments-defaults-and-scope',
+    difficulty: 3,
+    estimatedMinutes: 35,
+    prerequisites: ['PY-012'],
+    related: ['PY-002', 'PY-006', 'PY-008'],
+    tags: ['args', 'kwargs', 'defaults', 'scope', 'legb', 'mutable-default'],
+
+    learningObjectives: [
+      'Pass arguments positionally and by keyword, and explain when each is clearer',
+      'Give parameters default values and order them legally in a signature',
+      'Collect extra arguments with `*args` and `**kwargs`, and unpack them at a call site',
+      'Apply the LEGB rule to work out which variable a name refers to',
+      'Explain the mutable default argument trap and fix it correctly',
+    ],
+
+    terminology: [
+      {
+        term: 'Positional argument',
+        definition:
+          'An argument matched to a parameter by its position in the call. `f(1, 2)` binds 1 to the first parameter and 2 to the second.',
+        simple: 'A value matched up by the order you wrote it in.',
+      },
+      {
+        term: 'Keyword argument',
+        definition:
+          'An argument matched by name: `f(rate=0.1)`. Order becomes irrelevant, and the call documents itself.',
+        simple: 'A value with a label on it, so the order does not matter.',
+      },
+      {
+        term: '*args / **kwargs',
+        definition:
+          '`*args` collects surplus positional arguments into a tuple; `**kwargs` collects surplus keyword arguments into a dictionary. The star is what matters, not the names.',
+        simple: '"Anything else positional goes in this bag; anything else named goes in that one."',
+      },
+      {
+        term: 'LEGB',
+        definition:
+          'The order in which Python resolves a name: Local, then Enclosing function, then Global (module), then Built-in.',
+        simple: 'Where Python looks for a name, starting closest and working outwards.',
+      },
+      {
+        term: 'Mutable default',
+        definition:
+          'A default argument value that can be changed in place. It is evaluated once at definition time and shared by every call, which almost always causes a bug.',
+        simple: 'A default that secretly remembers what previous calls did to it.',
+      },
+      {
+        term: 'Keyword-only parameter',
+        definition:
+          'A parameter after a bare `*` in the signature, which callers must pass by name. Used to stop boolean and configuration flags being passed positionally.',
+        simple: 'A setting you are required to name when you pass it.',
+      },
+    ],
+
+    simpleExplanation:
+      "Once a function takes more than one or two inputs, how those inputs are supplied starts to matter. You can pass them in order, which is fine for one or two obvious values, or by name — `train(epochs=30)` — which makes a call readable without opening the definition. You can give parameters defaults so callers only mention what they want to change. And you can let a function accept any number of extras with `*args` and `**kwargs`, which is how wrappers pass arguments through to something else without knowing what they are. Alongside this sits scope: the rule Python uses to decide which variable a name refers to. It looks in the function first, then in any function surrounding it, then at module level, then among the built-ins, and it uses the first match. One trap deserves naming up front, because it catches everyone once: a default value is created a single time, when the function is defined, not fresh on each call. If that default is a list or a dictionary, every call shares the same one, and it accumulates.",
+
+    whyItExists:
+      'Real functions have a handful of essential inputs and a long tail of options that almost always take the same value. Defaults and keyword arguments let a signature express that difference, so common calls stay short while unusual ones remain possible, and scoping rules make it unambiguous which of several same-named variables a piece of code is talking about.',
+
+    analogy: {
+      scenario:
+        "Think about ordering coffee. 'A large oat latte' relies on a fixed order everyone in the shop knows — size, milk, drink — and it works right up until the day you want to change only the temperature, at which point you have to say 'extra hot' by name. Most of the menu has defaults you never mention: a standard cup, a standard number of shots, no syrup. And the barista will accept any number of extra named instructions and pass them straight to the person making the drink, without needing to understand each one.",
+      mapping: [
+        { from: 'Saying the size, milk and drink in the expected order', to: 'Positional arguments' },
+        { from: 'Saying "extra hot" by name', to: 'A keyword argument' },
+        { from: 'The standard cup you never mention', to: 'A default parameter value' },
+        { from: 'Passing along extra named instructions untouched', to: '`**kwargs` forwarded to an inner function' },
+        { from: 'A shared jug that stays on the counter between customers', to: 'A mutable default, created once and reused by every call' },
+      ],
+      bridge:
+        'The shared jug is the analogy that matters. A default value is evaluated once, when the `def` line runs, and stored on the function object — so `def f(items=[])` creates exactly one list that every call without an argument sees, complete with everything previous calls put in it. The fix is to default to `None` and create a fresh list inside the body, which is the equivalent of fetching a clean jug for each customer.',
+      limitations:
+        'Baristas apply judgement to contradictory orders. Python does not: it matches arguments to parameters by a strict set of rules and raises `TypeError` the moment the call does not fit, which is why the error messages here are unusually precise and worth reading.',
+    },
+
+    visuals: [
+      {
+        kind: 'annotated',
+        title: 'The full parameter grammar',
+        subject: 'def f(pos_only, /, normal, *args, kw_only, **kwargs):',
+        annotations: [
+          { part: '`pos_only, /`', note: 'Everything before the slash can only be passed positionally. Used to keep parameter names free to change.' },
+          { part: '`normal`', note: 'Can be passed either positionally or by keyword. Most parameters live here.' },
+          { part: '`*args`', note: 'Collects surplus positional arguments into a tuple. A bare `*` instead means "no more positionals allowed".' },
+          { part: '`kw_only`', note: 'After `*args` or a bare `*`, a parameter can only be passed by name. Ideal for flags and options.' },
+          { part: '`**kwargs`', note: 'Collects surplus keyword arguments into a dict. Must come last.' },
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'LEGB: how Python resolves a name',
+        caption: 'The first match wins, and the search stops there.',
+        steps: [
+          { label: 'Local', detail: 'Names assigned anywhere in the current function body — including after the point of use.' },
+          { label: 'Enclosing', detail: 'Locals of any function that lexically encloses this one. This is what closures capture.' },
+          { label: 'Global', detail: 'Names at module level, including imports and module constants.' },
+          { label: 'Built-in', detail: '`len`, `print`, `sum` and friends. Shadowing one here is how `list = [1]` breaks `list(...)`.' },
+          { label: 'Not found', detail: 'Raises `NameError`, or `UnboundLocalError` if the name is local but used before assignment.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'The mutable default trap',
+        caption: 'The same function, written twice. One of them accumulates across calls.',
+        left: {
+          heading: 'Broken — `def add(x, bucket=[])`',
+          points: [
+            'The list is created once, when `def` executes',
+            'Stored on the function object as `add.__defaults__`',
+            'Every default call shares and mutates that one list',
+            'Results depend on call history, so tests pass alone and fail together',
+          ],
+        },
+        right: {
+          heading: 'Correct — `def add(x, bucket=None)`',
+          points: [
+            '`None` is immutable and cannot accumulate',
+            '`if bucket is None: bucket = []` runs on every call',
+            'Each default call gets a fresh list',
+            'The signature still documents that the parameter is optional',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Argument passing, and the errors you will see',
+        columns: ['Call', 'Meaning', 'Common error'],
+        rows: [
+          ['`f(1, 2)`', 'Both positional', '`TypeError: takes 2 positional arguments but 3 were given`'],
+          ['`f(1, b=2)`', 'One positional, one keyword', '`TypeError: got multiple values for argument "b"`'],
+          ['`f(**config)`', 'Unpack a dict into keyword arguments', '`TypeError: got an unexpected keyword argument "lr"`'],
+          ['`f(*values)`', 'Unpack a sequence into positional arguments', '`TypeError: missing 1 required positional argument`'],
+          ['`def f(a=1, b)`', 'Illegal signature', '`SyntaxError: non-default argument follows default argument`'],
+          ['`f(1, flag=True)`', 'Keyword-only flag', 'Prevents the unreadable `f(1, True, False, True)`'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'At call time Python binds arguments to parameters by position, then by keyword, then fills unbound parameters from their defaults, raising `TypeError` if any parameter remains unbound or any argument is unmatched. Default expressions are evaluated once, at function-definition time, and stored on the function object. Name resolution inside the body follows the LEGB chain, and a name assigned anywhere in the body is local throughout it unless declared `global` or `nonlocal`.',
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Positional, keyword and default arguments',
+        runnable: true,
+        code: `def train(model, epochs=10, lr=0.01, verbose=False):
+    return f"{model}: {epochs} epochs at lr={lr}, verbose={verbose}"
+
+print(train("resnet"))                          # all defaults
+print(train("vit", 30))                         # positional
+print(train("vit", lr=0.001))                   # skip a middle parameter
+print(train(model="mlp", epochs=5, lr=0.1))     # fully keyword
+
+# Unpacking a dict into keyword arguments
+config = {"epochs": 50, "lr": 0.003, "verbose": True}
+print(train("bert", **config))
+
+# Defaults must follow non-defaults
+try:
+    exec("def bad(a=1, b): pass")
+except SyntaxError as e:
+    print("SyntaxError:", e.msg)`,
+        output: `resnet: 10 epochs at lr=0.01, verbose=False
+vit: 30 epochs at lr=0.01, verbose=False
+vit: 10 epochs at lr=0.001, verbose=False
+mlp: 5 epochs at lr=0.1, verbose=False
+bert: 50 epochs at lr=0.003, verbose=True
+SyntaxError: non-default argument follows default argument`,
+        explanation:
+          'The third call is the reason keyword arguments exist: you want to change `lr` without repeating the default for `epochs`, and naming it makes that possible and readable. The `**config` line is how configuration files reach functions in real projects — the dictionary keys must match parameter names exactly, and an unexpected key raises `TypeError` rather than being ignored, which is a feature. The final error is a language rule with an obvious reason: if a defaulted parameter came first, there would be no way to supply the later one positionally.',
+      },
+      {
+        language: 'python',
+        title: 'The mutable default trap, demonstrated',
+        runnable: true,
+        code: `def collect_bad(item, bucket=[]):
+    bucket.append(item)
+    return bucket
+
+print(collect_bad("a"))
+print(collect_bad("b"))      # the list remembers the previous call
+print(collect_bad("c"))
+print("stored default:", collect_bad.__defaults__)
+
+def collect_good(item, bucket=None):
+    if bucket is None:
+        bucket = []
+    bucket.append(item)
+    return bucket
+
+print(collect_good("a"))
+print(collect_good("b"))
+print(collect_good("c", ["existing"]))`,
+        output: `['a']
+['a', 'b']
+['a', 'b', 'c']
+stored default: (['a', 'b', 'c'],)
+['a']
+['b']
+['existing', 'c']`,
+        explanation:
+          'The `__defaults__` line is what makes this stick: the default list is an attribute of the function object, created once when `def` ran, and you can watch it grow. Every call that omits the argument gets that same object. The `None` sentinel is the standard fix — `None` is immutable, so it cannot accumulate, and the `if` inside the body runs on every call, producing a fresh list. The pattern also keeps the signature honest, since the default still communicates "this parameter is optional".',
+      },
+      {
+        language: 'python',
+        title: '*args, **kwargs and keyword-only parameters',
+        runnable: true,
+        code: `def summarise(label, *values, unit="ms", precision=2):
+    avg = sum(values) / len(values) if values else 0
+    return f"{label}: {avg:.{precision}f}{unit} over {len(values)} runs"
+
+print(summarise("latency", 12.1, 13.4, 11.8))
+print(summarise("latency", 12.1, 13.4, unit="s", precision=3))
+
+timings = [9.5, 10.5, 11.0]
+print(summarise("batch", *timings))        # unpack a list positionally
+
+# A wrapper that forwards everything it is given
+def logged(fn, *args, **kwargs):
+    print(f"calling {fn.__name__} with {args} {kwargs}")
+    return fn(*args, **kwargs)
+
+print(logged(summarise, "gpu", 1.0, 2.0, unit="s"))`,
+        output: `latency: 12.43ms over 3 runs
+latency: 12.750s over 2 runs
+batch: 10.33ms over 3 runs
+calling summarise with ('gpu', 1.0, 2.0) {'unit': 's'}
+gpu: 1.50s over 2 runs`,
+        explanation:
+          'Because `*values` swallows every remaining positional argument, `unit` and `precision` become keyword-only automatically — there is no way to reach them positionally, which is exactly what you want for options. The star does double duty: in a definition it collects, and at a call site it unpacks, which is why `summarise("batch", *timings)` spreads the list into separate arguments. The `logged` wrapper is the canonical `*args, **kwargs` use: it forwards everything untouched without needing to know the signature of what it wraps, which is precisely the mechanism behind decorators.',
+      },
+      {
+        language: 'python',
+        title: 'Scope: LEGB, global and nonlocal',
+        runnable: true,
+        code: `count = 0            # global
+
+def read_only():
+    return count     # found via the G in LEGB
+
+def shadowed():
+    count = 99       # a NEW local; the global is untouched
+    return count
+
+def rebind_global():
+    global count
+    count += 1
+    return count
+
+def outer():
+    total = 0
+    def inner():
+        nonlocal total    # the E in LEGB
+        total += 5
+        return total
+    inner(); inner()
+    return total
+
+print(read_only(), shadowed(), count)
+print(rebind_global(), count)
+print(outer())
+
+def broken():
+    print(count)     # Python already decided count is local here
+    count = 1
+try:
+    broken()
+except UnboundLocalError as e:
+    print("UnboundLocalError:", e)`,
+        output: `0 99 0
+1 1
+10
+UnboundLocalError: cannot access local variable 'count' where it is not associated with a value`,
+        explanation:
+          '`shadowed` is the important one: assigning to a name anywhere in a function makes it local *throughout* the function, so the global is neither read nor changed. `broken` shows the consequence — the `print` on the first line fails, because Python decided at compile time that `count` was local and it has not been assigned yet. `global` and `nonlocal` opt out of that rule, but both are worth avoiding in favour of passing values in and returning them out; `nonlocal` earns its place mainly inside closures and decorators, which the later units cover.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Library APIs with many options',
+        usage:
+          '`pd.read_csv(path, sep=",", header=0, na_values=None, ...)` has dozens of parameters with sensible defaults. Almost every real call supplies one or two by name, which is exactly the design that defaults plus keyword arguments enable.',
+      },
+      {
+        context: 'Decorators and wrappers',
+        usage:
+          'Every decorator you will write uses `def wrapper(*args, **kwargs): return fn(*args, **kwargs)` so it can wrap a function of any signature without knowing what it looks like.',
+      },
+      {
+        context: 'Configuration-driven experiments',
+        usage:
+          'A YAML file loaded into a dict and splatted with `train(**config)` runs an experiment from data rather than code. Unknown keys raise `TypeError` immediately, which catches typos in configs before a training run wastes GPU hours.',
+      },
+      {
+        context: 'The caching bug that looks like a data bug',
+        usage:
+          'A mutable default on a data-loading helper makes the second call return the first call\'s rows appended to its own. It is often first noticed as a "duplicated data" issue and hunted for in the wrong place entirely.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'pandas / scikit-learn', role: 'Both rely heavily on keyword arguments with defaults; reading their signatures is a practical exercise in this unit.' },
+      { tool: 'functools.wraps', role: 'Preserves a wrapped function\'s name and docstring, which `*args, **kwargs` forwarding otherwise loses.' },
+      { tool: 'argparse / Hydra', role: 'Turn command-line flags and config files into the keyword arguments your functions take.' },
+      { tool: 'pytest fixtures', role: 'Injected by parameter name, which is the same name-matching machinery as keyword arguments.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Using a mutable object as a default: `def f(xs=[])`',
+        why: 'The default is evaluated once at definition time, so every call without that argument shares and mutates one object, and results depend on call history.',
+        fix: 'Default to `None` and create the object inside: `if xs is None: xs = []`. The same applies to `{}`, `set()` and any object with state.',
+      },
+      {
+        mistake: 'Assigning to a global inside a function and expecting it to stick',
+        why: 'Assignment makes the name local for the entire function, so the module-level variable is untouched and the local vanishes when the function returns.',
+        fix: 'Return the new value and let the caller rebind. Use `global` only when you have decided module-level state is genuinely right, which is rare.',
+      },
+      {
+        mistake: 'Passing booleans positionally: `train(model, True, False)`',
+        why: 'The call site is unreadable, and inserting a parameter later silently changes what every existing call means.',
+        fix: 'Make flags keyword-only by putting a bare `*` before them in the signature, forcing `train(model, verbose=True)`.',
+      },
+      {
+        mistake: 'Shadowing a built-in with a parameter name',
+        why: '`def f(list, id, type)` makes those built-ins unreachable inside the body, so a later `list(...)` raises `TypeError: object is not callable`.',
+        fix: 'Rename: `items`, `record_id`, `kind`. A trailing underscore (`list_`) is the conventional escape when the word is genuinely the right one.',
+      },
+      {
+        mistake: 'Believing a default is re-evaluated on each call',
+        why: '`def f(t=time.time())` captures the import-time timestamp forever, which surfaces as log entries all sharing one impossible time.',
+        fix: 'Default to `None` and compute inside the body — the same sentinel pattern as for mutable defaults.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Explain the mutable default argument problem and how you fix it.',
+        answer:
+          'Default values are evaluated once, when the `def` statement executes, and stored on the function object in `__defaults__`. If the default is mutable — a list, a dict, a set — every call that omits the argument receives that same object, so mutations accumulate across calls and the function\'s behaviour depends on its history. The classic symptom is a function that returns one item the first time, two the second, and passes its unit tests individually while failing when the suite runs in order. The fix is the `None` sentinel: default the parameter to `None`, and inside the body do `if bucket is None: bucket = []`, which creates a fresh object per call while keeping the signature\'s documentation value. The same reasoning applies to any default computed at definition time, such as `time.time()` or a database connection.',
+        followUp:
+          'A strong answer mentions that the behaviour is occasionally used deliberately, for a per-function cache, but that `functools.lru_cache` says so far more clearly.',
+      },
+      {
+        level: 'intermediate',
+        question: 'What are `*args` and `**kwargs`, and when do you actually need them?',
+        answer:
+          '`*args` collects any surplus positional arguments into a tuple and `**kwargs` collects any surplus keyword arguments into a dict; the star and double star are the syntax, and the names are pure convention. At a call site the same operators do the reverse, unpacking a sequence into positional arguments and a mapping into keyword arguments. You genuinely need them when writing something that wraps or forwards to another callable without knowing its signature — decorators, logging wrappers, subclass `__init__` methods calling `super().__init__(*args, **kwargs)`. What you should not do is use them to avoid thinking about a signature: a function taking `**kwargs` has no discoverable interface, so editors cannot complete it, type checkers cannot verify it, and callers find out about typos at run time rather than immediately.',
+      },
+      {
+        level: 'internship',
+        question: 'Walk me through the LEGB rule, and explain why this raises `UnboundLocalError`:\n\n```\nx = 1\ndef f():\n    print(x)\n    x = 2\n```',
+        answer:
+          'LEGB is the order in which Python resolves a name: Local scope first, then any Enclosing function scopes, then the module-level Global scope, then the Built-ins. The first match wins. The subtlety in this example is that scope is determined at compile time, not line by line: because `x` is assigned somewhere in the body, the compiler marks `x` as local for the whole function, including the `print` that appears before the assignment. So the lookup never falls back to the global `x`; it finds a local that has not been bound yet and raises `UnboundLocalError`. The fixes are to read the global under a different name, to declare `global x` if you truly intend to rebind the module-level variable, or — best — to pass `x` in as a parameter and return the new value, which removes the ambiguity entirely.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Fix this function so each call starts with an empty list, and explain in one sentence what was wrong.\n\n```\ndef record(item, log=[]):\n    log.append(item)\n    return log\n```',
+        hint: 'When is the default expression evaluated?',
+        language: 'python',
+        starterCode: 'def record(item, log=[]):\n    log.append(item)\n    return log\n',
+        solution:
+          '```\ndef record(item, log=None):\n    if log is None:\n        log = []\n    log.append(item)\n    return log\n```\n\nThe original default list was created once, when the `def` line executed, so every call that omitted `log` appended to that same shared list and results depended on call history. `None` is immutable and cannot accumulate, and the `if` runs afresh on every call. You can verify the original problem with `record.__defaults__`, which shows the growing list attached to the function object.',
+      },
+      {
+        prompt:
+          'Write a function `report(title, *rows, sep=" | ", upper=False)` that joins the rows with the separator and optionally uppercases the result. Then call it by unpacking a list of rows.',
+        hint: 'Anything after `*rows` can only be passed by keyword.',
+        solution:
+          '```\ndef report(title, *rows, sep=" | ", upper=False):\n    body = sep.join(rows)\n    text = f"{title}: {body}"\n    return text.upper() if upper else text\n\nlines = ["a", "b", "c"]\nprint(report("run", *lines))              # run: a | b | c\nprint(report("run", *lines, upper=True))  # RUN: A | B | C\n```\n\nBecause `*rows` absorbs every remaining positional argument, `sep` and `upper` are keyword-only — there is no positional slot left for them — which is exactly the right treatment for options. The `*lines` at the call site does the opposite job, spreading the list into separate positional arguments.',
+      },
+      {
+        prompt:
+          'Predict the output and explain:\n\n```\nx = "global"\ndef outer():\n    x = "outer"\n    def inner():\n        return x\n    return inner()\nprint(outer(), x)\n```',
+        hint: 'Which scope does `inner` find `x` in, and does it change anything?',
+        solution:
+          'It prints `outer global`.\n\n`inner` has no local `x`, so the lookup moves out one level to the Enclosing scope — `outer`\'s local — and finds `"outer"`. The module-level `x` is never reached, because the search stops at the first match and the enclosing scope comes before the global one in LEGB. Nothing was rebound anywhere, so the global `x` still prints as `"global"`. Had `inner` contained `x = "inner"`, `x` would have been local to `inner` and `outer`\'s variable would have been untouched; only `nonlocal x` would have let `inner` rebind the enclosing one.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'PY-013-q1',
+        type: 'code-output',
+        language: 'python',
+        concept: 'mutable default',
+        prompt: 'What does this print?',
+        code: 'def f(x, acc=[]):\n    acc.append(x)\n    return acc\n\nprint(f(1))\nprint(f(2))',
+        options: ['[1]\n[1, 2]', '[1]\n[2]', '[1, 2]\n[1, 2]', 'It raises a TypeError'],
+        answerIndex: 0,
+        explanation:
+          'The default list is created once when `def` executes and stored on the function object, so both calls append to the same list. Default to `None` and build a fresh list inside the body.',
+      },
+      {
+        id: 'PY-013-q2',
+        type: 'code-output',
+        language: 'python',
+        concept: 'scope shadowing',
+        prompt: 'What does this print?',
+        code: 'n = 5\ndef f():\n    n = 10\n    return n\nprint(f(), n)',
+        options: ['10 5', '10 10', '5 5', 'It raises an UnboundLocalError'],
+        answerIndex: 0,
+        explanation:
+          'Assigning to `n` inside the function creates a local name; the module-level `n` is never touched. Rebinding the global would require an explicit `global n` declaration.',
+      },
+      {
+        id: 'PY-013-q3',
+        type: 'debug',
+        language: 'python',
+        concept: 'UnboundLocalError',
+        prompt: 'Why does this raise `UnboundLocalError: cannot access local variable "total"`?',
+        code: 'total = 0\ndef add(x):\n    total = total + x\n    return total',
+        options: [
+          'Assigning to `total` makes it local for the whole function, so the read on the right-hand side finds an unbound local',
+          '`total` must be declared with a type annotation',
+          'Integers cannot be added inside a function',
+          'The function needs to be defined before `total`',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Scope is decided at compile time from whether a name is assigned anywhere in the body. The clean fix is to pass `total` in as a parameter and return the new value rather than reaching for the global.',
+      },
+      {
+        id: 'PY-013-q4',
+        type: 'mcq',
+        concept: 'argument unpacking',
+        prompt: 'Given `def f(a, b)` and `vals = {"a": 1, "b": 2}`, which call works?',
+        options: ['`f(**vals)`', '`f(*vals)`', '`f(vals)`', '`f(&vals)`'],
+        answerIndex: 0,
+        explanation:
+          '`**` unpacks a mapping into keyword arguments matched by name. `*vals` would spread the dictionary\'s *keys* positionally, passing the strings `"a"` and `"b"`, and `f(vals)` passes the dict as a single argument.',
+      },
+      {
+        id: 'PY-013-q5',
+        type: 'multi',
+        concept: 'signature design',
+        prompt: 'Which of these are good reasons to make a parameter keyword-only? Select all that apply.',
+        options: [
+          'It is a boolean flag whose meaning is unreadable at the call site',
+          'It is a rarely used option among many',
+          'You want freedom to reorder the optional parameters later',
+          'It is the single most important argument the function takes',
+        ],
+        answerIndices: [0, 1, 2],
+        explanation:
+          'Keyword-only parameters make calls self-documenting and let you change the order of options without breaking callers. The primary argument is the one case where a positional parameter is clearer, since `mean(values)` needs no label.',
+      },
+      {
+        id: 'PY-013-q6',
+        type: 'order',
+        concept: 'LEGB',
+        prompt: 'Order the scopes Python searches when resolving a name, from first to last.',
+        items: ['Local — the current function body', 'Enclosing — any surrounding function', 'Global — module level', 'Built-in — len, print, sum'],
+        explanation:
+          'The first match wins and the search stops there, which is why a local variable named `list` hides the built-in and why a name assigned in a function is never looked up globally.',
+      },
+      {
+        id: 'PY-013-q7',
+        type: 'explain',
+        concept: 'defaults and definition time',
+        prompt: 'Explain why `def log(msg, at=time.time())` records the same timestamp forever, and how the fix generalises.',
+        rubric: [
+          'States that default expressions are evaluated once, at definition time',
+          'Notes that the value is stored on the function object and reused',
+          'Gives the `None` sentinel fix and generalises it beyond mutable containers',
+        ],
+        sampleAnswer:
+          'The expression `time.time()` runs exactly once, when the `def` statement is executed at import, and the resulting float is stored in the function\'s `__defaults__`. Every later call that omits `at` gets that same number, so a day-long process logs every line with the moment the module was imported. The general principle is that a default is a value, not an expression re-evaluated per call, so any default that should reflect the present moment or be independent per call has to be created inside the body. The standard shape is to default the parameter to `None` and write `if at is None: at = time.time()` as the first line, which is the same fix as for a mutable list default and for anything else carrying state, such as an open connection.',
+        explanation:
+          'Recognising that this is one rule with several symptoms — not two unrelated gotchas — is what separates memorising the list trap from understanding it.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'When are default argument values evaluated?', back: 'Once, when the `def` statement runs. They are stored on the function object and reused by every call.' },
+      { front: 'How do you fix a mutable default?', back: 'Default to `None` and create the object inside: `if xs is None: xs = []`.' },
+      { front: 'What does `*args` collect, and what does `**kwargs` collect?', back: 'Surplus positional arguments into a tuple; surplus keyword arguments into a dict.' },
+      { front: 'What is the LEGB order?', back: 'Local, Enclosing, Global, Built-in. The first match wins and the search stops.' },
+      { front: 'Why does assigning to a global inside a function not work?', back: 'Assignment makes the name local for the whole function. You need `global` to rebind, but returning a value is usually better.' },
+      { front: 'How do you make a parameter keyword-only?', back: 'Put a bare `*` (or `*args`) before it in the signature, so no positional slot can reach it.' },
+    ],
+
+    challenge: {
+      title: 'A configurable experiment runner',
+      brief:
+        'Write `run_experiment(name, *datasets, epochs=10, lr=0.01, seed=None, **extra)` that returns a formatted summary string. Requirements: `seed` defaults to `None` and, when omitted, is generated fresh on each call (prove it by calling twice); every option after the datasets is keyword-only; unknown options land in `extra` and are reported back verbatim; and the function must be callable by unpacking a config dictionary. Then add a deliberately broken variant using a mutable default, and print evidence from `__defaults__` showing why it is wrong.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Two consecutive calls without `seed` produce different seeds, demonstrating per-call evaluation',
+        'No option can be passed positionally',
+        'Unknown keyword arguments are collected rather than raising',
+        'The broken variant is shown alongside output from `__defaults__` proving the shared-object behaviour',
+      ],
+      starterCode:
+        'import random\n\n\ndef run_experiment(name, *datasets, epochs=10, lr=0.01, seed=None, **extra):\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone who can write functions how arguments are matched to parameters, what defaults really are, and why `def f(xs=[])` is a bug.',
+      mustCover: [
+        'Arguments can be passed by position or by keyword',
+        'Defaults let callers omit parameters, and must come after non-default parameters',
+        'Default values are evaluated once at definition time, not per call',
+        'A mutable default is shared across calls, so use None and create the object inside',
+      ],
+      bonusSignals: ['explains *args and **kwargs in both definition and call positions', 'mentions LEGB', 'mentions keyword-only parameters for flags'],
+      sampleExplanation:
+        "When you call a function, Python has to work out which value goes into which slot. By default it goes by order: the first value fills the first parameter. But you can also name them — `train(epochs=30)` — and then the order stops mattering and the call explains itself to anyone reading it. Parameters can also have defaults, so callers only mention the things they want to change; that is why `pd.read_csv(path)` works even though the function has dozens of options. Here is the part that catches everybody once. A default is not an instruction that gets carried out each time the function runs; it is a value that gets created once, when Python first reads the `def` line, and then kept on the function itself. For a number or a string that makes no difference. For a list it is a disaster: `def collect(item, bucket=[])` creates exactly one list, and every call that does not supply its own appends to that same list, so the second call sees the first call's data. The cure is always the same shape — make the default `None`, and put `if bucket is None: bucket = []` as the first line of the body, so a genuinely new list is made every time the function runs.",
+    },
+  },
+
+  {
+    id: 'PY-014',
+    domain: 'PY',
+    module: 'Functions',
+    topic: 'Recursion',
+    title: 'Recursion',
+    slug: 'recursion',
+    difficulty: 3,
+    estimatedMinutes: 35,
+    prerequisites: ['PY-013'],
+    related: ['PY-011', 'PY-012'],
+    tags: ['recursion', 'base-case', 'call-stack', 'memoisation', 'tree', 'divide-and-conquer'],
+
+    learningObjectives: [
+      'Identify the base case and the recursive case of a problem',
+      'Trace a recursive call by hand using the call stack',
+      'Explain why a missing or unreachable base case causes `RecursionError`',
+      'Convert exponential naive recursion into linear time with memoisation',
+      'Judge when recursion is clearer than iteration, and when it is not',
+    ],
+
+    terminology: [
+      {
+        term: 'Recursion',
+        definition:
+          'A function that solves a problem by calling itself on a strictly smaller version of the same problem, until a case it can answer directly.',
+        simple: 'Solving a problem by doing a smaller version of the same problem.',
+      },
+      {
+        term: 'Base case',
+        definition:
+          'The input small enough to answer without recursing. Every recursive path must reach one, or the function never terminates.',
+        simple: 'The smallest question, which you can answer straight away.',
+      },
+      {
+        term: 'Recursive case',
+        definition:
+          'The branch that reduces the problem and calls the function again. It must make genuine progress towards a base case.',
+        simple: 'The step that makes the problem a bit smaller and asks again.',
+      },
+      {
+        term: 'Call stack',
+        definition:
+          'The stack of frames holding each in-progress call\'s locals and return address. Recursion depth is stack depth, and CPython caps it at about 1000 frames by default.',
+        simple: 'The pile of unfinished calls, each waiting for the one above it to answer.',
+      },
+      {
+        term: 'Memoisation',
+        definition:
+          'Caching a function\'s result per input so repeated sub-problems are computed once. `functools.lru_cache` provides it in one line.',
+        simple: 'Writing down answers you have already worked out, so you never redo them.',
+      },
+      {
+        term: 'RecursionError',
+        definition:
+          'Raised when the interpreter exceeds its recursion limit — almost always a missing base case or a recursive step that does not shrink the input.',
+        simple: 'The error meaning "you never stopped going deeper".',
+      },
+    ],
+
+    simpleExplanation:
+      "Recursion is what happens when a function calls itself. It sounds circular, and it would be, except for one rule: each call must work on a smaller problem than the one before, and there must be a smallest problem that the function answers outright without calling itself again. That smallest case is the base case, and it is the thing that makes the whole idea terminate rather than spin forever. The reason recursion is worth learning is that some structures are recursive by nature — a folder contains files and other folders; a comment can have replies which can have replies — and writing a loop over something like that means keeping your own stack of where you have been. A recursive function lets the language keep that stack for you. The cost is that every unfinished call takes memory, so recursion depth is bounded: Python stops at around a thousand nested calls and raises `RecursionError`, which in practice is nearly always a base case you forgot rather than a problem that was genuinely too deep.",
+
+    whyItExists:
+      'Trees, nested structures and divide-and-conquer algorithms are defined in terms of themselves, so an iterative solution must manually maintain a stack of pending work. Recursion lets the call stack carry that bookkeeping, so the code states the definition of the problem directly instead of the mechanics of traversing it.',
+
+    analogy: {
+      scenario:
+        "Imagine you are in a queue and want to know your position, but you can only see the person directly in front of you. So you tap them on the shoulder and ask, 'what number are you?' They cannot see past the person in front of them either, so they ask the same question forward. This continues until it reaches the person at the very front, who does not need to ask anyone — they simply know they are number one. That answer then comes back down the line, each person adding one before passing it to whoever asked them.",
+      mapping: [
+        { from: 'Asking the person in front', to: 'The recursive call on a smaller problem' },
+        { from: 'The person at the front knowing they are first', to: 'The base case, answered without recursing' },
+        { from: 'Adding one before passing the answer back', to: 'Combining the recursive result with local work' },
+        { from: 'Everyone standing there waiting for an answer', to: 'The call stack: each frame is suspended until its call returns' },
+        { from: 'A queue arranged in a circle with no front', to: 'A missing base case, giving `RecursionError`' },
+      ],
+      bridge:
+        'The queue picture makes two mechanics concrete. First, the work happens on the way *back*: each person adds one only after receiving an answer, which is why the statement after a recursive call runs in reverse order of the calls. Second, everyone in the line is occupying space while waiting — that is the call stack, and it is why depth costs memory and why Python imposes a limit. A circular queue has no front, and a recursive function with no reachable base case has no bottom.',
+      limitations:
+        'In the queue, each person asks exactly one question. Many real recursions branch — computing `fib(n)` asks two questions each time — and that is what makes naive recursion exponential rather than merely deep.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'The anatomy of every recursive function',
+        caption: 'If you can fill in these four lines, you can write the function.',
+        steps: [
+          { label: 'Name the base case', detail: 'What is the smallest input you can answer immediately? `n == 0`, an empty list, a leaf node.' },
+          { label: 'Answer it directly', detail: 'Return a value with no recursive call. This is what stops the descent.' },
+          { label: 'Shrink the problem', detail: 'Reduce the input so it is strictly closer to the base case: `n - 1`, `xs[1:]`, a child node.' },
+          { label: 'Combine', detail: 'Do something with the result of the recursive call: add, concatenate, take a maximum.' },
+          { label: 'Trust the recursion', detail: 'Assume the recursive call is already correct for the smaller input. Do not trace every level in your head.' },
+        ],
+      },
+      {
+        kind: 'ascii',
+        title: 'Why naive `fib` is exponential',
+        caption: 'Each node is a call. Notice how many times fib(2) is recomputed.',
+        art: `                fib(5)
+              /        \\
+         fib(4)          fib(3)
+        /     \\          /    \\
+   fib(3)   fib(2)   fib(2)  fib(1)
+   /    \\    /   \\    /   \\
+fib(2) fib(1) f(1) f(0) f(1) f(0)
+ /   \\
+f(1) f(0)
+
+fib(2) computed 3 times, fib(1) computed 5 times.
+Calls double with each extra n: O(2^n).
+With memoisation each distinct n is computed once: O(n).`,
+      },
+      {
+        kind: 'compare',
+        title: 'Recursion versus iteration',
+        caption: 'Neither is universally better. The structure of the data decides.',
+        left: {
+          heading: 'Recursion fits when...',
+          points: [
+            'The data is itself recursive: trees, nested dicts, file systems',
+            'The problem splits into independent sub-problems (merge sort, quicksort)',
+            'The iterative version would need an explicit stack you maintain by hand',
+            'Depth is bounded and modest — tree height, not list length',
+          ],
+        },
+        right: {
+          heading: 'Iteration fits when...',
+          points: [
+            'You are walking a flat sequence',
+            'Depth could exceed about a thousand frames',
+            'Each step depends only on the previous one, as in a running total',
+            'Constant memory matters; a loop uses one frame regardless of n',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Complexity, before and after memoisation',
+        columns: ['Problem', 'Naive recursion', 'With memoisation', 'Why'],
+        rows: [
+          ['Fibonacci', 'O(2^n) time', 'O(n) time, O(n) space', 'Each n is computed once instead of exponentially often.'],
+          ['Factorial', 'O(n) time', 'O(n) — no gain', 'No sub-problem is ever repeated, so there is nothing to cache.'],
+          ['Grid paths', 'O(2^(m+n))', 'O(m × n)', 'Distinct cells, each visited once after caching.'],
+          ['Tree sum', 'O(nodes)', 'O(nodes) — no gain', 'Each node is visited exactly once already.'],
+          ['Coin change', 'Exponential', 'O(amount × coins)', 'Overlapping sub-problems collapse onto a small state space.'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Expand a recursion tree',
+        caption: 'Step through the calls and watch the stack grow and unwind.',
+        widget: 'recursion-tree',
+      },
+    ],
+
+    formalDefinition:
+      'A recursive function is one defined in terms of itself, consisting of one or more base cases returning a value without self-reference, and one or more recursive cases that invoke the function on inputs strictly closer to a base case under some well-founded ordering. Each invocation pushes a frame onto the call stack; termination requires that every recursive chain reaches a base case within the interpreter\'s recursion limit, which CPython sets to 1000 by default.',
+
+    math: {
+      intuition:
+        'The cost of a recursive function is itself defined recursively: the work for input n is the local work plus the cost of the smaller calls it makes. Writing that down as a recurrence and expanding it a few times tells you the complexity without running anything, and it explains exactly why two recursive calls per level is catastrophically different from one.',
+      formulas: [
+        {
+          latex: 'T(n) = T(n-1) + O(1) \\implies T(n) = O(n)',
+          name: 'Linear recursion',
+          meaning:
+            'One recursive call on an input one smaller, plus constant work. Factorial and summing a list have this shape: n frames, linear time.',
+          variables: [
+            { symbol: 'T(n)', meaning: 'The total work to solve an input of size n.' },
+            { symbol: 'O(1)', meaning: 'The constant work done in this frame, outside the recursive call.' },
+          ],
+          category: 'complexity',
+        },
+        {
+          latex: 'T(n) = 2T(n-1) + O(1) \\implies T(n) = O(2^{n})',
+          name: 'Branching recursion',
+          meaning:
+            'Two recursive calls per level doubles the number of calls at each step. This is naive Fibonacci, and it is why `fib(40)` takes seconds while `fib(35)` is instant.',
+          variables: [
+            { symbol: '2T(n-1)', meaning: 'Two sub-problems, each only one smaller — the input barely shrinks while the count doubles.' },
+          ],
+          category: 'complexity',
+        },
+        {
+          latex: 'T(n) = 2T(n/2) + O(n) \\implies T(n) = O(n \\log n)',
+          name: 'Divide and conquer',
+          meaning:
+            'Two calls on inputs of *half* the size, plus linear merging. This is merge sort, and the contrast with the line above shows that how fast the input shrinks matters more than how many calls are made.',
+          variables: [
+            { symbol: 'n/2', meaning: 'Each sub-problem is half the size, so the depth is log n rather than n.' },
+            { symbol: 'O(n)', meaning: 'The cost of combining the two results, performed once per level.' },
+          ],
+          category: 'complexity',
+        },
+      ],
+      derivation: [
+        'Take naive Fibonacci: `fib(n)` calls `fib(n-1)` and `fib(n-2)`, so T(n) = T(n-1) + T(n-2) + O(1).',
+        'Bound it below by replacing T(n-2) with the smaller T(n-2) twice: T(n) > 2T(n-2), which doubles every two steps.',
+        'Doubling every two steps gives a growth of roughly 2^(n/2), and the true bound is the golden ratio to the power n — exponential either way.',
+        'Now memoise: each distinct argument from 0 to n is computed exactly once, and every later request is a dictionary lookup.',
+        'That gives n computations of constant work each, so T(n) = O(n) time with O(n) space for the cache — an exponential-to-linear improvement from one decorator.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Tracing `factorial(4)` frame by frame',
+      setup:
+        'Take `def factorial(n): return 1 if n <= 1 else n * factorial(n - 1)`. The goal is to see that nothing magical happens — each call simply waits for the one it made, and the multiplications all happen on the way back up.',
+      steps: [
+        { label: 'Call factorial(4)', detail: '4 is not <= 1, so this frame must compute `4 * factorial(3)`. It cannot finish yet; it suspends and pushes a new frame.' },
+        { label: 'Call factorial(3)', detail: 'Likewise suspends, waiting on `3 * factorial(2)`. Two frames are now on the stack.' },
+        { label: 'Call factorial(2)', detail: 'Suspends, waiting on `2 * factorial(1)`. Three frames waiting.' },
+        { label: 'Call factorial(1) — base case', detail: '1 <= 1, so this returns `1` immediately without recursing. This is the bottom of the descent.', latex: 'T(1) = 1' },
+        { label: 'Unwind: factorial(2) resumes', detail: 'It receives 1 and computes `2 * 1 = 2`, then returns that to its caller and its frame is discarded.' },
+        { label: 'Unwind: factorial(3) resumes', detail: 'Receives 2, computes `3 * 2 = 6`, returns.' },
+        { label: 'Unwind: factorial(4) resumes', detail: 'Receives 6, computes `4 * 6 = 24`, returns to the original caller. The stack is now empty.', latex: '4! = 4 \\times 3 \\times 2 \\times 1 = 24' },
+      ],
+      conclusion:
+        'Four frames were live at the deepest point, and every multiplication happened during the unwind, in the reverse order of the calls. That is the general shape: the descent breaks the problem down, the base case supplies the first real answer, and the ascent combines results. It is also why depth costs memory — all four frames existed simultaneously — and why `factorial(5000)` raises `RecursionError` despite being mathematically trivial.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Base case, recursive case, and what happens without one',
+        runnable: true,
+        code: `def countdown(n):
+    if n <= 0:              # base case
+        return ["liftoff"]
+    return [n] + countdown(n - 1)   # recursive case: strictly smaller
+
+print(countdown(3))
+
+def factorial(n):
+    if n < 0:
+        raise ValueError("factorial is undefined for negative n")
+    if n <= 1:
+        return 1
+    return n * factorial(n - 1)
+
+print(factorial(5))
+
+def broken(n):
+    return n + broken(n)    # never shrinks: no reachable base case
+
+try:
+    broken(1)
+except RecursionError as e:
+    print("RecursionError:", str(e)[:48])`,
+        output: `[3, 2, 1, 'liftoff']
+120
+RecursionError: maximum recursion depth exceeded`,
+        explanation:
+          'Every correct recursive function has the two-part shape visible in `countdown`: a condition that returns without recursing, and a call on an input that is strictly closer to it. `broken` has a recursive call but passes `n` unchanged, so no descent ever terminates and the stack fills. Note the guard in `factorial`: raising on a negative input turns an infinite descent into a clear error message, which is worth doing for any recursion whose base case is only reachable from valid inputs.',
+      },
+      {
+        language: 'python',
+        title: 'Memoisation turns exponential into linear',
+        runnable: true,
+        code: `import time
+from functools import lru_cache
+
+def fib_slow(n):
+    return n if n < 2 else fib_slow(n - 1) + fib_slow(n - 2)
+
+@lru_cache(maxsize=None)
+def fib_fast(n):
+    return n if n < 2 else fib_fast(n - 1) + fib_fast(n - 2)
+
+start = time.perf_counter()
+fib_slow(30)
+slow = time.perf_counter() - start
+
+start = time.perf_counter()
+fib_fast(30)
+fast = time.perf_counter() - start
+
+print("same answer:", fib_slow(30) == fib_fast(30))
+print("speedup factor:", round(slow / max(fast, 1e-9)))
+print(fib_fast.cache_info())
+print("fib(200) instantly:", fib_fast(200))`,
+        output: `same answer: True
+speedup factor: 180000
+fib_fast.cache_info(): CacheInfo(hits=28, misses=31, maxsize=None, currsize=31)
+fib(200) instantly: 280571172992510140037611932413038677189525`,
+        explanation:
+          'One decorator changed the complexity class. `fib_slow` recomputes `fib(28)` thousands of times because each branch of the tree is explored independently; `fib_fast` computes each distinct argument once and answers every repeat from a dictionary. The `cache_info()` line makes that concrete — 31 misses for the 31 distinct inputs, and every other request was a hit. Two caveats worth internalising: `lru_cache` is only safe on pure functions with hashable arguments, and the cache holds references for the lifetime of the process, so `maxsize=None` on a function called with unbounded distinct inputs is a memory leak.',
+      },
+      {
+        language: 'python',
+        title: 'Recursion on naturally recursive data',
+        runnable: true,
+        code: `tree = {
+    "name": "root",
+    "size": 0,
+    "children": [
+        {"name": "src", "size": 0, "children": [
+            {"name": "main.py", "size": 120, "children": []},
+            {"name": "util.py", "size": 80, "children": []},
+        ]},
+        {"name": "README.md", "size": 15, "children": []},
+    ],
+}
+
+def total_size(node):
+    """Sum this node's size and every descendant's."""
+    return node["size"] + sum(total_size(child) for child in node["children"])
+
+def deepest(node, depth=0):
+    """Return the greatest depth below this node."""
+    if not node["children"]:
+        return depth
+    return max(deepest(child, depth + 1) for child in node["children"])
+
+print(total_size(tree))
+print(deepest(tree))
+
+# The iterative equivalent needs an explicit stack
+def total_size_iterative(root):
+    stack, total = [root], 0
+    while stack:
+        node = stack.pop()
+        total += node["size"]
+        stack.extend(node["children"])
+    return total
+
+print(total_size_iterative(tree))`,
+        output: `215
+2
+215`,
+        explanation:
+          'This is where recursion earns its keep. `total_size` is four words long and reads exactly like the definition of the problem: a node\'s total is its own size plus the totals of its children. The base case is implicit and elegant — a node with no children produces an empty `sum()`, which is zero. Compare the iterative version: it is also correct and it avoids any depth limit, but it introduces an explicit stack and the reader now has to verify the bookkeeping rather than the idea. For a file system or a comment thread, where depth is small and the structure is genuinely nested, the recursive form is the honest one.',
+      },
+      {
+        language: 'python',
+        title: 'When to convert recursion to a loop',
+        runnable: true,
+        code: `import sys
+
+def sum_list_recursive(xs):
+    if not xs:
+        return 0
+    return xs[0] + sum_list_recursive(xs[1:])   # also copies the list each call
+
+def sum_list_iterative(xs):
+    total = 0
+    for x in xs:
+        total += x
+    return total
+
+small = list(range(100))
+print(sum_list_recursive(small) == sum_list_iterative(small))
+
+big = list(range(5000))
+try:
+    sum_list_recursive(big)
+except RecursionError:
+    print("RecursionError at depth", sys.getrecursionlimit())
+print("iterative handles it:", sum_list_iterative(big))`,
+        output: `True
+RecursionError at depth 1000
+iterative handles it: 12497500`,
+        explanation:
+          'This recursion is a bad one twice over. Its depth equals the length of the list, so it dies at a thousand elements, and `xs[1:]` copies the remaining list on every call, making it quadratic in time and memory as well. The rule that follows: recursion depth should be proportional to something naturally small — the height of a tree, the number of digits, log n — not to the size of a flat sequence. Raising the limit with `sys.setrecursionlimit` is available and is almost always the wrong answer, since the real C stack can overflow and crash the interpreter outright.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Walking a file system or a JSON payload',
+        usage:
+          '`os.walk` and any function that traverses nested JSON are recursive in structure. Flattening a deeply nested API response is the single most common recursion a working data engineer writes.',
+      },
+      {
+        context: 'Decision trees',
+        usage:
+          'Both fitting and predicting in a decision tree are recursive: predict descends to a leaf, and fitting splits a node then fits each side. Reading scikit-learn\'s tree code is easier once this is obvious.',
+      },
+      {
+        context: 'Merge sort and quicksort',
+        usage:
+          'Divide-and-conquer sorts split the input, sort each half recursively and combine. The `T(n) = 2T(n/2) + O(n)` recurrence is exactly where their O(n log n) comes from.',
+      },
+      {
+        context: 'Dynamic programming interview questions',
+        usage:
+          'The standard approach is to write the naive recursion first, confirm it is correct, then add `@lru_cache` and state the new complexity. Interviewers are usually more interested in that progression than in a bottom-up table.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'functools.lru_cache', role: 'One decorator that converts overlapping-subproblem recursion from exponential to linear, provided the function is pure.' },
+      { tool: 'json / nested config', role: 'Recursive traversal is how you flatten, validate or redact arbitrarily nested structures.' },
+      { tool: 'scikit-learn', role: 'Tree-based models are recursive structures; understanding the shape makes their depth and pruning hyperparameters intuitive.' },
+      { tool: 'sys.setrecursionlimit', role: 'Exists, is tempting, and is almost always the wrong fix — the honest options are a deeper base case or an explicit stack.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'No base case, or one that the recursion can never reach',
+        why: 'Every call pushes a frame with nothing to stop the descent, so the stack fills and Python raises `RecursionError: maximum recursion depth exceeded`.',
+        fix: 'Write the base case first, before the recursive case, and check that the recursive call moves strictly towards it — `n - 1`, not `n`.',
+      },
+      {
+        mistake: 'Recursing on something whose depth scales with the data',
+        why: 'CPython allows roughly a thousand frames, so recursing once per list element fails on any realistic dataset.',
+        fix: 'Use a loop for flat sequences. Reserve recursion for structures whose depth is naturally small, such as tree height or the number of digits.',
+      },
+      {
+        mistake: 'Forgetting to return the recursive call',
+        why: 'Writing `factorial(n - 1)` instead of `return n * factorial(n - 1)` computes the sub-result and throws it away, so the function returns `None` and arithmetic fails.',
+        fix: 'Every recursive case must return something. If the result of the inner call is not used, the recursion is doing nothing.',
+      },
+      {
+        mistake: 'Using naive recursion where sub-problems overlap',
+        why: 'Branching recursion recomputes identical sub-problems exponentially often; `fib(40)` makes over 300 million calls.',
+        fix: 'Add `@lru_cache(maxsize=None)` for a one-line fix, or rewrite bottom-up with a table when you also want to bound memory.',
+      },
+      {
+        mistake: 'Slicing inside the recursive call: `f(xs[1:])`',
+        why: 'Each slice copies the remaining list, so an O(n)-depth recursion becomes O(n squared) in both time and memory.',
+        fix: 'Pass an index instead — `f(xs, i + 1)` — so every frame shares one list.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What are the two required parts of a recursive function, and what happens if either is wrong?',
+        answer:
+          'A base case that returns without recursing, and a recursive case that calls the function on an input strictly closer to that base case. If the base case is missing or unreachable — for example because the recursive call passes the input unchanged, or because a negative input skips past `n == 0` — the descent never terminates and Python raises `RecursionError` at around a thousand frames. If the recursive case fails to make progress in the right direction, the same thing happens even though a base case exists on paper. The practical habits that prevent both are writing the base case first, guarding invalid inputs with an explicit `raise` so they cannot slip past it, and stating out loud what quantity is decreasing on each call.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Why is naive recursive Fibonacci exponential, and how does memoisation fix it?',
+        answer:
+          'Each call spawns two more, so the call count roughly doubles with every increment of n, giving a recursion tree with about 2^n nodes — `fib(n-2)` alone is recomputed from scratch in both branches, and this repeats all the way down. The recurrence is T(n) = T(n-1) + T(n-2) + O(1), whose solution grows as the golden ratio to the power n. Memoisation caches the result for each distinct argument, so the second and every later request for `fib(28)` is a dictionary lookup instead of a subtree. There are only n distinct arguments, so the work collapses to O(n) time and O(n) space. In Python it is one decorator, `@lru_cache(maxsize=None)`, and it is safe here precisely because the function is pure and takes a hashable argument.',
+        followUp:
+          'A strong answer notes that the iterative bottom-up version achieves O(n) time in O(1) space, which matters if memory is the binding constraint.',
+      },
+      {
+        level: 'internship',
+        question: 'When would you choose recursion over iteration in production code?',
+        answer:
+          'When the data itself is recursive and the depth is naturally bounded — traversing a file tree, a JSON document, a decision tree, an expression AST or a comment thread. In those cases the iterative version has to maintain an explicit stack, and the reader ends up verifying stack bookkeeping instead of the actual idea; the recursive version reads like the definition of the structure. I would choose iteration when walking a flat sequence, when depth could plausibly approach the thousand-frame limit, or when the function is on a hot path where per-call overhead matters. The honest middle ground for deep-but-recursive data is an explicit stack with a `while` loop, which keeps the traversal logic while removing the depth ceiling — and if I ever found myself reaching for `sys.setrecursionlimit`, I would treat that as a signal that I had picked the wrong tool rather than as a fix.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Write a recursive function that sums the digits of a positive integer: `digit_sum(1234)` returns 10.',
+        hint: '`n % 10` gives the last digit and `n // 10` removes it. What is the smallest n you can answer immediately?',
+        language: 'python',
+        starterCode: 'def digit_sum(n: int) -> int:\n    ...\n',
+        solution:
+          '```\ndef digit_sum(n: int) -> int:\n    if n < 10:\n        return n\n    return n % 10 + digit_sum(n // 10)\n```\n\nThe base case is a single-digit number, which is its own digit sum. Each recursive call removes one digit, so the depth is the number of digits — about 19 for the largest 64-bit value, comfortably within the limit. This is a good recursion precisely because its depth grows logarithmically with the input rather than linearly.',
+      },
+      {
+        prompt:
+          'This function takes several seconds for `n = 35`. Make it fast without changing its logic, and state the new complexity.',
+        hint: 'The sub-problems overlap heavily. Something in `functools` fixes this in one line.',
+        solution:
+          '```\nfrom functools import lru_cache\n\n@lru_cache(maxsize=None)\ndef fib(n: int) -> int:\n    return n if n < 2 else fib(n - 1) + fib(n - 2)\n```\n\nTime goes from O(2^n) to O(n), with O(n) space for the cache. The decorator works here because the function is pure — same input, same output, no side effects — and its argument is hashable, which are exactly the preconditions for caching to be safe. `fib.cache_info()` will confirm that only n distinct values were ever computed.',
+      },
+      {
+        prompt:
+          'Write a function that counts every value in an arbitrarily nested list: `count_items([1, [2, [3, 4]], 5])` returns 5.',
+        hint: 'For each element, ask whether it is itself a list. Two different things to do, so two branches.',
+        solution:
+          '```\ndef count_items(xs) -> int:\n    total = 0\n    for x in xs:\n        if isinstance(x, list):\n            total += count_items(x)\n        else:\n            total += 1\n    return total\n```\n\nThe base case is implicit: an element that is not a list contributes one and recurses no further, and an empty list contributes nothing because the loop body never runs. Depth here is the nesting depth, not the number of elements, which is what makes recursion appropriate — a flat list of a million items nests only one level deep.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'PY-014-q1',
+        type: 'code-output',
+        language: 'python',
+        concept: 'tracing recursion',
+        prompt: 'What does this return for `f(3)`?',
+        code: 'def f(n):\n    if n == 0:\n        return 0\n    return n + f(n - 1)\n\nprint(f(3))',
+        options: ['6', '3', '0', 'It raises a RecursionError'],
+        answerIndex: 0,
+        explanation:
+          'The calls unwind as 3 + (2 + (1 + 0)) = 6. Each frame waits for the one below it, and the additions all happen during the unwind, in reverse order of the calls.',
+      },
+      {
+        id: 'PY-014-q2',
+        type: 'debug',
+        language: 'python',
+        concept: 'missing progress towards the base case',
+        prompt: 'This raises `RecursionError` even though it has a base case. Why?',
+        code: 'def countdown(n):\n    if n == 0:\n        return "done"\n    return countdown(n)',
+        options: [
+          'The recursive call passes `n` unchanged, so the base case is never reached',
+          'The base case must use `<=` rather than `==`',
+          'A function cannot return a string from a recursive call',
+          'The recursion limit is too low for any value of n',
+        ],
+        answerIndex: 0,
+        explanation:
+          'A base case only helps if the recursion moves towards it. `countdown(n - 1)` shrinks the input; `countdown(n)` repeats the identical problem forever. Note that `<=` would also be safer, since `==` is skipped entirely by a negative start.',
+      },
+      {
+        id: 'PY-014-q3',
+        type: 'mcq',
+        concept: 'complexity of branching recursion',
+        prompt: 'What is the time complexity of naive recursive Fibonacci?',
+        options: ['O(2^n)', 'O(n)', 'O(n log n)', 'O(n squared)'],
+        answerIndex: 0,
+        explanation:
+          'Each call makes two more on inputs that barely shrink, so the call count roughly doubles per level. Memoising collapses it to O(n), since there are only n distinct arguments.',
+      },
+      {
+        id: 'PY-014-q4',
+        type: 'truefalse',
+        concept: 'recursion depth',
+        prompt: 'Recursing once per element of a 10,000-item list is fine in CPython as long as the logic is correct.',
+        answer: false,
+        explanation:
+          'The default recursion limit is about 1000 frames, so it raises `RecursionError` long before finishing. Depth should scale with something naturally small, such as tree height or digit count — not with the length of a flat sequence.',
+      },
+      {
+        id: 'PY-014-q5',
+        type: 'multi',
+        concept: 'when recursion fits',
+        prompt: 'For which problems is recursion a natural fit? Select all that apply.',
+        options: [
+          'Summing the sizes of every file in a nested directory tree',
+          'Computing a running total over a list of a million numbers',
+          'Flattening an arbitrarily nested JSON document',
+          'Merge sort',
+          'Reading lines from a large log file',
+        ],
+        answerIndices: [0, 2, 3],
+        explanation:
+          'Directory trees, nested documents and divide-and-conquer sorts are recursive in structure with bounded depth. Flat sequences of unknown length should be iterated, since recursion there adds a depth limit for no expressive gain.',
+      },
+      {
+        id: 'PY-014-q6',
+        type: 'order',
+        concept: 'call stack order',
+        prompt: 'Order these events when `factorial(3)` is evaluated.',
+        items: [
+          'factorial(3) suspends, waiting on factorial(2)',
+          'factorial(2) suspends, waiting on factorial(1)',
+          'factorial(1) hits the base case and returns 1',
+          'factorial(2) resumes and returns 2',
+          'factorial(3) resumes and returns 6',
+        ],
+        explanation:
+          'The descent suspends frames one after another until the base case supplies the first concrete value; the combining work then happens on the way back up, in reverse order of the calls.',
+      },
+      {
+        id: 'PY-014-q7',
+        type: 'explain',
+        concept: 'memoisation',
+        prompt: 'Explain what memoisation does to a recursive function, and what has to be true for it to be safe.',
+        rubric: [
+          'States that results are cached per distinct argument so repeats are not recomputed',
+          'Explains the effect on complexity when sub-problems overlap',
+          'Names the preconditions: the function must be pure and its arguments hashable',
+        ],
+        sampleAnswer:
+          'Memoisation stores the result of each distinct call and returns the stored value the next time the same arguments arrive. When a recursion has overlapping sub-problems — the same argument reached down many different branches — this collapses an exponential recursion tree into one computation per distinct input, which is what takes Fibonacci from O(2^n) to O(n). It does nothing for recursions with no repeats, such as factorial or a tree traversal, since every call is already unique. For it to be safe, the function must be pure: the answer must depend only on the arguments, with no reliance on globals, mutation, the clock or randomness, or the cache will happily serve a stale result. The arguments must also be hashable, which means lists have to be converted to tuples first. Finally, an unbounded cache on a function with unbounded distinct inputs keeps every result alive for the life of the process, so `maxsize` is a real decision rather than a formality.',
+        explanation:
+          'The examinable content is both the mechanism and its preconditions — candidates who mention purity and hashability have understood why the decorator works rather than merely that it does.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What are the two parts of every recursive function?', back: 'A base case that returns without recursing, and a recursive case on a strictly smaller input.' },
+      { front: 'What causes `RecursionError`?', back: 'No reachable base case, or a recursive call that does not shrink the input. Occasionally, genuine depth beyond ~1000 frames.' },
+      { front: 'Why is naive `fib` exponential?', back: 'Two calls per level on barely-smaller inputs, so the call count doubles each step: T(n) = T(n-1) + T(n-2).' },
+      { front: 'What does `@lru_cache` require of a function?', back: 'Purity — same inputs give same outputs with no side effects — and hashable arguments.' },
+      { front: 'When should recursion become a loop?', back: 'When depth scales with the size of a flat sequence, or could approach the recursion limit.' },
+      { front: 'Why is `f(xs[1:])` a bad recursive call?', back: 'The slice copies the rest of the list on every call, making the recursion quadratic in time and memory. Pass an index instead.' },
+    ],
+
+    challenge: {
+      title: 'Flatten and measure a nested structure',
+      brief:
+        'Write three recursive functions over arbitrarily nested lists and dictionaries: `flatten(obj)` returning a flat list of all scalar values in order; `max_depth(obj)` returning the deepest nesting level; and `find_path(obj, target)` returning the list of keys and indices that leads to the first occurrence of a value, or `None`. Each must have an explicit base case, none may use slicing in the recursive call, and all three must handle an empty container without special-casing it. Then write a fourth function that computes the same flatten result iteratively with an explicit stack, and say in a comment when you would prefer each version.',
+      language: 'python',
+      acceptanceCriteria: [
+        'All three recursive functions terminate correctly on empty and deeply nested inputs',
+        'No recursive call slices a list or copies a dictionary',
+        '`find_path` returns `None` rather than raising when the target is absent',
+        'The iterative flatten produces identical output to the recursive one, with a comment justifying when each is preferable',
+      ],
+      starterCode:
+        'data = {"a": [1, {"b": [2, 3]}], "c": {"d": 4}}\n\n\ndef flatten(obj) -> list:\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone who understands functions and loops what recursion is, why it needs a base case, and when it is the right tool.',
+      mustCover: [
+        'A recursive function calls itself on a smaller version of the same problem',
+        'A base case answers the smallest problem without recursing, which is what makes it terminate',
+        'Each call occupies a frame on the call stack, so depth costs memory and is limited',
+        'Recursion fits naturally recursive data such as trees and nested structures',
+      ],
+      bonusSignals: ['uses a concrete trace or analogy', 'mentions RecursionError and its usual cause', 'mentions memoisation for overlapping sub-problems'],
+      sampleExplanation:
+        "Recursion is a function calling itself. That sounds like it could never stop, and it would not, except for one rule: every call has to work on a smaller problem than the one that made it, and there has to be a smallest problem the function can answer outright. Think of standing in a queue and wanting to know your position when you can only see the person in front. You tap their shoulder and ask what number they are. They cannot see past the person in front of them either, so they ask forward, and so on, until the question reaches the person at the very front, who does not need to ask anyone — they simply know they are first. That answer comes back down the line, each person adding one before passing it on. The person at the front is the base case, and without one the queue would be a circle and the question would go round forever; in Python that shows up as `RecursionError`. Notice also that everyone in the line is standing there waiting while the question travels forward — that is the call stack, each unfinished call taking up memory, which is why Python cuts you off at about a thousand levels. So recursion is the right tool when the thing you are working on is itself nested and not very deep: folders inside folders, replies to replies, the branches of a decision tree. It is the wrong tool for walking a long flat list, where a plain loop does the same job with one frame and no ceiling.",
+    },
+  },
+
+  {
+    id: 'PY-015',
+    domain: 'PY',
+    module: 'Object-Oriented Python',
+    topic: 'Classes',
+    title: 'Classes and Objects',
+    slug: 'classes-and-objects',
+    difficulty: 3,
+    estimatedMinutes: 40,
+    prerequisites: ['PY-013'],
+    related: ['PY-008', 'PY-012'],
+    tags: ['class', 'object', 'init', 'self', 'attributes', 'methods', 'dataclass'],
+
+    learningObjectives: [
+      'Define a class with `__init__` and create instances of it',
+      'Explain what `self` is and why it appears in every method signature',
+      'Distinguish instance attributes from class attributes and predict which one a lookup finds',
+      'Decide when a class is the right tool and when a function or a dictionary is better',
+      'Use `@dataclass` to remove the boilerplate from a class that mostly holds data',
+    ],
+
+    terminology: [
+      {
+        term: 'Class',
+        definition:
+          'A blueprint that defines what data instances carry and what operations they support. Creating it does not create any instance.',
+        simple: 'The design for a kind of thing.',
+      },
+      {
+        term: 'Instance (object)',
+        definition:
+          'A concrete value built from a class, with its own attribute storage. `Dog("rex")` builds one instance; `Dog("ada")` builds a different one.',
+        simple: 'One actual thing made from the design.',
+      },
+      {
+        term: '`__init__`',
+        definition:
+          'The initialiser, called automatically after the instance is created. It sets up the instance\'s attributes and must return `None`.',
+        simple: 'The set-up step that runs when a new thing is made.',
+      },
+      {
+        term: 'self',
+        definition:
+          'The conventional name for the first parameter of an instance method, bound automatically to the instance the method was called on.',
+        simple: 'The word a method uses to mean "the particular thing I was called on".',
+      },
+      {
+        term: 'Instance attribute',
+        definition:
+          'Data stored on one object, normally assigned as `self.name = value` in `__init__`. Each instance has its own.',
+        simple: 'Something this one object knows about itself.',
+      },
+      {
+        term: 'Class attribute',
+        definition:
+          'Data assigned in the class body, shared by every instance. Found only when an instance has no attribute of that name.',
+        simple: 'Something true of the design, shared by everything made from it.',
+      },
+    ],
+
+    simpleExplanation:
+      "A class is a description of a kind of thing: what it knows and what it can do. Writing the class does not create anything — it is the design, not the object. When you call the class like a function, `Account(\"ada\", 100)`, Python builds a new instance and immediately runs the `__init__` method, which is where you store the details on that particular object using `self`. That `self` is the part that looks strange at first and is actually simple: when you call `account.deposit(50)`, Python passes `account` into the method as its first argument, so `self` is just the name the method uses to refer to whichever object it was called on. Everything stored as `self.something` belongs to that one instance; anything written directly in the class body is shared by all of them. The reason to define a class rather than a function is when data and the operations on it belong together — when the operations only make sense in the presence of that data, and when the object needs to remember something between calls.",
+
+    whyItExists:
+      'Some concepts are a bundle of related data plus the operations that make sense on it, where passing the data into loose functions means threading the same five variables through every call and trusting every caller to keep them consistent. A class packages the state and its behaviour together so the invariants live in one place and callers work through a named interface.',
+
+    analogy: {
+      scenario:
+        "Think of a cookie cutter and the cookies it makes. The cutter defines the shape: every cookie from it will have the same outline and the same places for decoration. But the cutter itself is not a cookie and cannot be eaten. Each cookie you press out is a separate thing with its own icing; changing the icing on one does not touch the others. If, however, you write something on the cutter itself — say the batch number etched into the handle — then every cookie is associated with that same number, and changing it changes what all of them are associated with.",
+      mapping: [
+        { from: 'The cookie cutter', to: 'The class — a description, not a thing' },
+        { from: 'Each pressed-out cookie', to: 'An instance created by calling the class' },
+        { from: 'The icing on one cookie', to: 'An instance attribute, set with `self.x = ...`' },
+        { from: 'The batch number etched on the handle', to: 'A class attribute, shared by every instance' },
+        { from: 'Pointing at one particular cookie', to: '`self`, bound to the instance a method was called on' },
+      ],
+      bridge:
+        'The etched handle is where the analogy pays off. Python looks for an attribute on the instance first and only then on the class, so a class attribute acts as a shared default that any instance can quietly override for itself by assigning to it. That is harmless for a constant such as a species name, and it is a genuine bug when the class attribute is mutable — a shared list on the class is appended to by every instance at once, which is the class-level version of the mutable default argument trap.',
+      limitations:
+        'A cookie cutter produces identical outlines. Python instances can gain entirely new attributes at run time, so two objects of the same class need not have the same shape at all — which is flexible and also why typos such as `self.nmae = x` silently create a new attribute rather than raising.',
+    },
+
+    visuals: [
+      {
+        kind: 'annotated',
+        title: 'Anatomy of a class',
+        subject: 'class Account:\n    bank = "Ledger"          # class attribute\n\n    def __init__(self, owner, balance=0):\n        self.owner = owner    # instance attribute\n        self.balance = balance\n\n    def deposit(self, amount):\n        self.balance += amount\n        return self.balance',
+        annotations: [
+          { part: '`class Account:`', note: 'Creates a class object bound to the name `Account`. No instance exists yet.' },
+          { part: '`bank = "Ledger"`', note: 'A class attribute, shared by every instance and found when the instance has no such attribute of its own.' },
+          { part: '`__init__`', note: 'Runs automatically after the instance is created. It initialises; it does not construct, and it must return `None`.' },
+          { part: '`self`', note: 'The instance, passed automatically. `a.deposit(5)` is really `Account.deposit(a, 5)`.' },
+          { part: '`self.balance = balance`', note: 'Stores data on this one object. Without `self.`, it would be a local variable that vanishes.' },
+          { part: '`deposit`', note: 'An instance method: behaviour that only makes sense given the data this object carries.' },
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'What `Account("ada", 100)` actually does',
+        caption: 'Two steps, of which beginners usually only know about the second.',
+        steps: [
+          { label: 'Call the class', detail: 'Calling a class invokes its metaclass, which is how `Account(...)` becomes a construction request.' },
+          { label: '`__new__` allocates', detail: 'A blank instance is created. You almost never define this yourself.' },
+          { label: '`__init__` initialises', detail: 'The blank instance arrives as `self`; your code stores the arguments on it.' },
+          { label: 'The instance is returned', detail: '`__init__` returns `None`; the *instance* is what the call expression evaluates to.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Instance attribute versus class attribute',
+        caption: 'Lookup checks the instance first, then the class. Assignment always writes to the instance.',
+        left: {
+          heading: 'Instance — `self.x = 1` in `__init__`',
+          points: [
+            'One copy per object',
+            'Set in `__init__` or any method',
+            'Right for anything that differs between objects',
+            'Safe for mutable values such as lists',
+          ],
+        },
+        right: {
+          heading: 'Class — `x = 1` in the class body',
+          points: [
+            'One copy shared by every instance',
+            'Read through any instance, or through the class itself',
+            'Right for constants, counters and configuration',
+            'Dangerous when mutable: every instance mutates the same object',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Class, function, dict or dataclass?',
+        columns: ['Situation', 'Reach for', 'Why'],
+        rows: [
+          ['A pure calculation on its inputs', 'A function', 'No state to carry, so a class adds ceremony and nothing else.'],
+          ['A record of named fields, mostly read', 'A `@dataclass` or `NamedTuple`', 'You get `__init__`, `__repr__` and `__eq__` free, and the fields are typed.'],
+          ['Loosely structured, dynamic keys', 'A dict', 'The field names are data, not part of the design.'],
+          ['State plus operations that maintain an invariant', 'A class', 'The rules live with the data they protect.'],
+          ['Several implementations of one interface', 'A class hierarchy or a Protocol', 'Callers depend on the shared method names, not the concrete type.'],
+          ['One function with configuration that does not change', 'A closure or `functools.partial`', 'A class with one method and `__init__` is usually a function in disguise.'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Experiment with instances',
+        caption: 'Create two objects from one class and watch their attributes stay independent.',
+        widget: 'code-playground',
+      },
+    ],
+
+    formalDefinition:
+      'A `class` statement executes its body in a new namespace and creates a type object bound to the class name. Calling that type invokes `__new__` to allocate an instance and then `__init__` to initialise it. Attribute lookup on an instance searches the instance `__dict__`, then the class and its method resolution order; attribute assignment always writes to the instance `__dict__`, shadowing any class attribute of the same name. An instance method accessed through an instance yields a bound method whose first parameter receives that instance.',
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'A class with state and behaviour',
+        runnable: true,
+        code: `class Account:
+    bank = "Ledger Bank"          # class attribute: shared
+
+    def __init__(self, owner, balance=0):
+        self.owner = owner        # instance attributes: per object
+        self.balance = balance
+        self.history = []         # fresh list per instance
+
+    def deposit(self, amount):
+        if amount <= 0:
+            raise ValueError("deposit must be positive")
+        self.balance += amount
+        self.history.append(("deposit", amount))
+        return self.balance
+
+    def withdraw(self, amount):
+        if amount > self.balance:
+            raise ValueError(f"insufficient funds: have {self.balance}")
+        self.balance -= amount
+        self.history.append(("withdraw", amount))
+        return self.balance
+
+a = Account("ada", 100)
+b = Account("bob")
+
+a.deposit(50)
+b.deposit(10)
+print(a.owner, a.balance, a.history)
+print(b.owner, b.balance, b.history)
+print(a.bank, b.bank, Account.bank)
+
+try:
+    b.withdraw(999)
+except ValueError as e:
+    print("ValueError:", e)`,
+        output: `ada 150 [('deposit', 50)]
+bob 10 [('deposit', 10)]
+Ledger Bank Ledger Bank Ledger Bank
+ValueError: insufficient funds: have 10`,
+        explanation:
+          'The two accounts have entirely separate `balance` and `history`, because those were assigned to `self` inside `__init__`, which runs once per instance. `bank` was assigned in the class body, so all three lookups find the same shared string. The real argument for the class is in `withdraw`: the rule "you cannot take out more than you have" lives next to the data it protects, so no caller can bypass it by editing a dictionary directly. That is what people mean by encapsulation, and it is more useful than the word suggests.',
+      },
+      {
+        language: 'python',
+        title: 'The shared mutable class attribute trap',
+        runnable: true,
+        code: `class BadDog:
+    tricks = []                  # ONE list, shared by every instance
+
+    def __init__(self, name):
+        self.name = name
+
+    def learn(self, trick):
+        self.tricks.append(trick)   # mutates the shared class list
+
+class GoodDog:
+    def __init__(self, name):
+        self.name = name
+        self.tricks = []            # a fresh list per instance
+
+    def learn(self, trick):
+        self.tricks.append(trick)
+
+r, s = BadDog("rex"), BadDog("sam")
+r.learn("sit")
+print("bad:", r.tricks, s.tricks)
+
+r2, s2 = GoodDog("rex"), GoodDog("sam")
+r2.learn("sit")
+print("good:", r2.tricks, s2.tricks)
+
+# Assignment writes to the INSTANCE, so this shadows rather than mutates
+s.tricks = ["roll"]
+print("after rebind:", r.tricks, s.tricks, BadDog.tricks)`,
+        output: `bad: ['sit'] ['sit']
+good: ['sit'] []
+after rebind: ['sit'] ['roll'] ['sit']`,
+        explanation:
+          'Sam learned a trick nobody taught him, because `self.tricks.append(...)` found no instance attribute, fell back to the class attribute, and mutated the one shared list. This is the class-level twin of the mutable default argument problem and has the same cause: one object created once at definition time. The last line shows the asymmetry that makes it confusing — *assignment* always creates an instance attribute, so `s.tricks = [...]` shadows the class attribute rather than changing it, leaving Rex and the class itself still pointing at the original list.',
+      },
+      {
+        language: 'python',
+        title: '`__repr__`, and why your objects print as gibberish',
+        runnable: true,
+        code: `class Point:
+    def __init__(self, x, y):
+        self.x, self.y = x, y
+
+class BetterPoint:
+    def __init__(self, x, y):
+        self.x, self.y = x, y
+
+    def __repr__(self):
+        return f"BetterPoint(x={self.x}, y={self.y})"
+
+    def __eq__(self, other):
+        if not isinstance(other, BetterPoint):
+            return NotImplemented
+        return (self.x, self.y) == (other.x, other.y)
+
+print(Point(1, 2))
+print(BetterPoint(1, 2))
+print([BetterPoint(1, 2), BetterPoint(3, 4)])
+print(Point(1, 2) == Point(1, 2))
+print(BetterPoint(1, 2) == BetterPoint(1, 2))`,
+        output: `<__main__.Point object at 0x7f3c1c0d5f10>
+BetterPoint(x=1, y=2)
+[BetterPoint(x=1, y=2), BetterPoint(x=3, y=4)]
+False
+True`,
+        explanation:
+          'The default `__repr__` tells you the class and a memory address, which is useless in a debugger and worse inside a list, where every element looks identical. Defining `__repr__` costs one line and pays for itself the first time you print a collection of your objects. The `__eq__` result is the other default worth knowing: without it, two objects are equal only if they are the *same* object, so `Point(1,2) == Point(1,2)` is False. Returning `NotImplemented` for an unrelated type is the correct protocol — it lets Python try the reflected operation rather than asserting inequality.',
+      },
+      {
+        language: 'python',
+        title: 'Let `@dataclass` write the boilerplate',
+        runnable: true,
+        code: `from dataclasses import dataclass, field
+
+@dataclass
+class Experiment:
+    name: str
+    lr: float = 0.01
+    epochs: int = 10
+    tags: list[str] = field(default_factory=list)   # NOT tags: list = []
+
+    def summary(self) -> str:
+        return f"{self.name}: {self.epochs} epochs @ {self.lr}"
+
+e1 = Experiment("baseline")
+e2 = Experiment("baseline")
+e3 = Experiment("tuned", lr=0.003, tags=["sweep"])
+
+print(e1)                    # __repr__ for free
+print(e1 == e2)              # __eq__ for free, comparing field values
+print(e3.summary(), e3.tags)
+e1.tags.append("first")
+print(e1.tags, e2.tags)      # independent lists`,
+        output: `Experiment(name='baseline', lr=0.01, epochs=10, tags=[])
+True
+tuned: 30 epochs @ 0.003
+['first'] []`,
+        explanation:
+          '`@dataclass` generates `__init__`, `__repr__` and `__eq__` from the annotated fields, which removes the most repetitive twenty lines in Python and makes the field list the single source of truth. The `field(default_factory=list)` is the mutable-default fix in dataclass form; writing `tags: list = []` raises `ValueError: mutable default` at class-definition time, which is one of the few places Python protects you from this trap outright. Methods still work exactly as in a normal class, because a dataclass *is* a normal class with some methods written for you.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'The scikit-learn estimator',
+        usage:
+          '`LinearRegression()` is an instance whose `__init__` stores hyperparameters and whose `fit` stores learned parameters on `self` as `coef_`. The trailing underscore convention distinguishes learned state from configuration.',
+      },
+      {
+        context: 'PyTorch modules',
+        usage:
+          'A model subclasses `nn.Module`, registers layers as instance attributes in `__init__`, and defines behaviour in `forward`. The attribute assignment is doing real work — it is how parameters get discovered for the optimiser.',
+      },
+      {
+        context: 'Configuration objects',
+        usage:
+          'A `@dataclass TrainConfig` with typed fields replaces a loose dictionary, so a typo becomes `TypeError: unexpected keyword argument` at construction rather than a `KeyError` in hour three of a training run.',
+      },
+      {
+        context: 'Database connections and sessions',
+        usage:
+          'A connection object holds state — an open socket, a transaction — and exposes operations that only make sense while that state exists. This is the clearest case where data and behaviour genuinely belong together.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'dataclasses', role: 'Generates `__init__`, `__repr__` and `__eq__` from typed fields; the default choice for data-carrying classes.' },
+      { tool: 'pydantic', role: 'Dataclass-like models that also validate and coerce types at run time, used heavily by FastAPI.' },
+      { tool: 'PyTorch nn.Module', role: 'Attribute assignment in `__init__` registers parameters, which is why the framework can find them for the optimiser.' },
+      { tool: 'scikit-learn BaseEstimator', role: 'Inheriting it gives `get_params`/`set_params`, which is what makes custom estimators work inside pipelines and grid search.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Forgetting `self.` and assigning a plain local in `__init__`',
+        why: '`balance = balance` creates a local variable that disappears when `__init__` returns, so later methods fail with `AttributeError: object has no attribute balance`.',
+        fix: 'Every piece of per-instance state must be assigned to `self`: `self.balance = balance`.',
+      },
+      {
+        mistake: 'Using a mutable class attribute as per-instance state',
+        why: 'One object is created when the class body runs, so every instance shares and mutates it — the class-level version of the mutable default trap.',
+        fix: 'Initialise mutable state in `__init__` with `self.items = []`, or use `field(default_factory=list)` in a dataclass.',
+      },
+      {
+        mistake: 'Omitting `self` from a method signature',
+        why: 'Python passes the instance automatically as the first argument, so a method defined as `def deposit(amount)` receives the instance in `amount` and raises `TypeError: takes 1 positional argument but 2 were given`.',
+        fix: 'Every instance method takes `self` first. Use `@staticmethod` when the function genuinely does not need the instance.',
+      },
+      {
+        mistake: 'Returning something from `__init__`',
+        why: '`__init__` initialises an instance that already exists; returning a non-`None` value raises `TypeError: __init__() should return None`.',
+        fix: 'Assign to `self` and return nothing. If you need alternative construction, use a `@classmethod` factory such as `from_csv`.',
+      },
+      {
+        mistake: 'Writing a class where a function would do',
+        why: 'A class with an `__init__` and one method, instantiated and called once, adds indirection without adding structure — the reader now has two things to follow instead of one.',
+        fix: 'Use a class when there is state worth keeping between calls or an invariant worth protecting. Otherwise a function, a dataclass or a dict is honest.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What is `self`, and why does it appear in every method definition?',
+        answer:
+          '`self` is the conventional name for the first parameter of an instance method, and it receives the instance the method was called on. Python makes attribute access explicit rather than implicit: accessing an instance method through an instance produces a bound method, so `a.deposit(50)` is equivalent to `Account.deposit(a, 50)` — the instance is passed as the first argument automatically, which is why the parameter must be declared. The benefit is that there is no ambiguity between a local variable and an attribute: `balance` is unmistakably local and `self.balance` is unmistakably instance state, with no need for a `this->` convention or member-declaration rules. The name is convention, not syntax — you could call it anything — but every Python reader expects `self`, so using anything else is a readability bug.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Explain the difference between a class attribute and an instance attribute, and give a case where the difference causes a bug.',
+        answer:
+          'A class attribute is assigned in the class body and exists once, shared by every instance; an instance attribute is assigned on `self` and exists once per object. Lookup checks the instance first, then the class, so a class attribute acts as a shared default. Assignment, however, always writes to the instance, which produces the asymmetry at the heart of the classic bug: with `class Dog: tricks = []`, calling `self.tricks.append("sit")` finds no instance attribute, falls back to the shared class list and mutates it, so every dog learns the trick. Rebinding with `self.tricks = ["sit"]` behaves differently again, creating an instance attribute that shadows the class one. The rule is to use class attributes for constants and configuration only, and to initialise all mutable per-instance state inside `__init__`.',
+        followUp:
+          'A strong answer connects this to the mutable default argument trap — both are "one object created once at definition time, shared thereafter".',
+      },
+      {
+        level: 'internship',
+        question: 'When would you not use a class?',
+        answer:
+          'When there is no state to keep between calls, a function is clearer: a class with an `__init__` and a single method that is constructed and immediately called is a function wearing a costume, and `functools.partial` or a closure expresses the same thing without the indirection. When the shape of the data is dynamic — keys that come from a file or an API and are not known when writing the code — a dictionary is honest, because the field names are data rather than part of the design. When the type is a plain record of named fields, a `@dataclass` or `NamedTuple` gives the benefits without the boilerplate, and a `NamedTuple` additionally gets hashability and immutability. I would reach for a full class when there is state that must stay consistent, an invariant worth enforcing in one place, or several implementations that callers should be able to use interchangeably through a shared set of method names.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Write a `Counter` class with a `count` starting at zero, an `increment(by=1)` method that returns the new count, and a `reset()` method. Prove two instances are independent.',
+        hint: 'Anything that differs between instances belongs on `self`, set in `__init__`.',
+        language: 'python',
+        starterCode: 'class Counter:\n    ...\n',
+        solution:
+          '```\nclass Counter:\n    def __init__(self, start: int = 0):\n        self.count = start\n\n    def increment(self, by: int = 1) -> int:\n        self.count += by\n        return self.count\n\n    def reset(self) -> None:\n        self.count = 0\n\na, b = Counter(), Counter()\na.increment(); a.increment(5)\nprint(a.count, b.count)   # 6 0\n```\n\nBecause `count` is assigned on `self` inside `__init__`, each instance gets its own. Had it been written as a class attribute `count = 0`, the `+=` in `increment` would read the class value and then create an instance attribute — which happens to work for integers and fails badly for lists, so it is not a habit worth acquiring.',
+      },
+      {
+        prompt:
+          'This class makes every instance share one list. Explain and fix.\n\n```\nclass Cart:\n    items = []\n    def add(self, item):\n        self.items.append(item)\n```',
+        hint: 'When is the list created, and how many of them are there?',
+        solution:
+          'The list is created once, when the class body executes, so there is exactly one and every instance mutates it through the class-attribute fallback.\n\n```\nclass Cart:\n    def __init__(self):\n        self.items = []\n\n    def add(self, item):\n        self.items.append(item)\n```\n\nNow `__init__` runs per instance and builds a fresh list each time. Note that the broken version would also have *looked* fine if `add` had used `self.items = self.items + [item]`, because assignment creates an instance attribute — which is exactly why the bug is confusing: whether you mutate or rebind changes the symptom entirely.',
+      },
+      {
+        prompt:
+          'Convert this into a dataclass with a default learning rate of 0.01 and a `tags` list that is empty by default, then show that two instances have independent tag lists.',
+        hint: 'A mutable default in a dataclass needs `field(default_factory=...)`.',
+        solution:
+          '```\nfrom dataclasses import dataclass, field\n\n@dataclass\nclass Run:\n    name: str\n    lr: float = 0.01\n    tags: list[str] = field(default_factory=list)\n\na, b = Run("x"), Run("y")\na.tags.append("first")\nprint(a.tags, b.tags)   # [\'first\'] []\nprint(a)                # Run(name=\'x\', lr=0.01, tags=[\'first\'])\n```\n\n`default_factory` is called once per instance, so each object gets its own list. Writing `tags: list = []` instead raises `ValueError: mutable default <class list> for field tags is not allowed` at class definition — one of the few places Python catches this trap for you, and a good reason to prefer dataclasses for records.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'PY-015-q1',
+        type: 'code-output',
+        language: 'python',
+        concept: 'shared class attribute',
+        prompt: 'What does this print?',
+        code: 'class Dog:\n    tricks = []\n    def learn(self, t):\n        self.tricks.append(t)\n\na, b = Dog(), Dog()\na.learn("sit")\nprint(b.tricks)',
+        options: ["['sit']", '[]', 'None', 'It raises an AttributeError'],
+        answerIndex: 0,
+        explanation:
+          '`tricks` is a class attribute — one list created when the class body ran. `self.tricks.append` finds no instance attribute, falls back to the class one, and mutates the object both dogs see.',
+      },
+      {
+        id: 'PY-015-q2',
+        type: 'debug',
+        language: 'python',
+        concept: 'missing self in assignment',
+        prompt: 'Why does `a.balance` raise `AttributeError` here?',
+        code: 'class Account:\n    def __init__(self, balance):\n        balance = balance\n\na = Account(100)\nprint(a.balance)',
+        options: [
+          'The assignment created a local variable; it must be `self.balance = balance`',
+          '`__init__` must return the balance',
+          'The parameter cannot share a name with an attribute',
+          '`Account(100)` should be `Account(balance=100)`',
+        ],
+        answerIndex: 0,
+        explanation:
+          '`balance = balance` rebinds a local to itself and that local disappears when `__init__` returns. Only names assigned on `self` become instance state.',
+      },
+      {
+        id: 'PY-015-q3',
+        type: 'truefalse',
+        concept: 'init semantics',
+        prompt: '`__init__` creates and returns the new instance.',
+        answer: false,
+        explanation:
+          '`__new__` allocates the instance; `__init__` receives the already-created object as `self` and initialises it. It must return `None` — returning anything else raises `TypeError`.',
+      },
+      {
+        id: 'PY-015-q4',
+        type: 'mcq',
+        concept: 'bound methods',
+        prompt: 'Given `a = Account("ada")`, what is `a.deposit(50)` equivalent to?',
+        options: [
+          '`Account.deposit(a, 50)`',
+          '`Account.deposit(50)`',
+          '`deposit(a, 50)`',
+          '`a.__init__(deposit, 50)`',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Accessing a method through an instance creates a bound method that passes the instance as the first argument. That is exactly why `self` must be declared in the signature.',
+      },
+      {
+        id: 'PY-015-q5',
+        type: 'multi',
+        concept: 'when to use a class',
+        prompt: 'Which situations genuinely call for a class? Select all that apply.',
+        options: [
+          'An object holding an open database connection plus the operations that use it',
+          'Converting Celsius to Fahrenheit',
+          'A model that stores learned parameters after `fit` and uses them in `predict`',
+          'A record of five named fields that is only ever read',
+          'Several interchangeable strategies that callers use through the same method names',
+        ],
+        answerIndices: [0, 2, 4],
+        explanation:
+          'State that must persist between calls, and interchangeable implementations behind one interface, are the two strong cases. A pure conversion is a function, and a read-only record is better served by a dataclass or NamedTuple.',
+      },
+      {
+        id: 'PY-015-q6',
+        type: 'match',
+        concept: 'class vocabulary',
+        prompt: 'Match each term to its meaning.',
+        pairs: [
+          { left: 'Class', right: 'The blueprint; creating it makes no objects' },
+          { left: 'Instance', right: 'One concrete object with its own attribute storage' },
+          { left: '`__init__`', right: 'Runs after creation to set up instance attributes' },
+          { left: '`self`', right: 'The instance the method was called on' },
+          { left: 'Class attribute', right: 'One value shared by every instance' },
+        ],
+        explanation:
+          'The distinction that matters most in practice is class-versus-instance storage, because attribute lookup falls back from instance to class while assignment always writes to the instance.',
+      },
+      {
+        id: 'PY-015-q7',
+        type: 'explain',
+        concept: 'encapsulation',
+        prompt: 'Explain what a class gives you that a dictionary of the same fields does not.',
+        rubric: [
+          'Notes that behaviour lives with the data it operates on',
+          'Notes that invariants can be enforced in one place rather than by every caller',
+          'Mentions a discoverable interface — named methods, `__repr__`, autocompletion, type checking',
+        ],
+        sampleAnswer:
+          'A dictionary stores the fields, but nothing about it says which operations are valid or what must stay true. With a class, the rule that a balance may never go negative lives inside `withdraw`, so no caller can violate it by editing a key, and if the rule changes there is exactly one place to change it. The class also gives a discoverable interface: the methods are the documented ways to interact with the object, editors can complete them, type checkers can verify calls, and `__repr__` makes the thing readable in a log or a debugger. A dictionary is the better choice when the keys are genuinely dynamic and there are no invariants — configuration read from a file, or a JSON payload you are passing through — because then the structure really is data rather than design.',
+        explanation:
+          'The examinable idea is that encapsulation is about locating invariants, not about hiding fields, which is why Python gets by without private access modifiers.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What is `self`?', back: 'The instance the method was called on, passed automatically as the first argument. `a.f(x)` means `C.f(a, x)`.' },
+      { front: 'Instance attribute versus class attribute', back: 'Instance: one per object, set on `self`. Class: one shared copy, set in the class body. Lookup checks instance first.' },
+      { front: 'Why is `tricks = []` in a class body a bug?', back: 'One list is created when the class is defined, so every instance mutates the same one. Initialise it in `__init__`.' },
+      { front: 'What does `__init__` return?', back: '`None`. It initialises an already-created instance; `__new__` does the allocating.' },
+      { front: 'Why define `__repr__`?', back: 'The default shows a class name and memory address, which is useless in logs, debuggers and lists of objects.' },
+      { front: 'What does `@dataclass` generate?', back: '`__init__`, `__repr__` and `__eq__` from the annotated fields — with `field(default_factory=list)` for mutable defaults.' },
+    ],
+
+    challenge: {
+      title: 'A running-statistics class',
+      brief:
+        'Write a `RunningStats` class that accepts numbers one at a time via `add(x)` and can report `count`, `mean` and `max` at any moment, without storing every value. Give it a `__repr__` that shows the current statistics, an `__eq__` that compares the statistics rather than object identity, and a `@classmethod from_iterable(cls, values)` that builds an instance from a sequence in one call. Prove that two instances are independent, and that adding to one does not disturb the other.',
+      language: 'python',
+      acceptanceCriteria: [
+        'No list of all values is retained; mean is maintained incrementally',
+        '`__repr__` shows count, mean and max in a form you would be happy to see in a log',
+        '`from_iterable` is a classmethod and returns a fully initialised instance',
+        'Two instances built separately have independent state, demonstrated by printed output',
+      ],
+      starterCode:
+        'class RunningStats:\n    def __init__(self) -> None:\n        self.count = 0\n        ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone who writes functions confidently what a class is, what `self` means, and when a class is better than a function or a dictionary.',
+      mustCover: [
+        'A class is a blueprint; calling it creates an instance',
+        '`__init__` runs on creation and stores per-instance data on `self`',
+        '`self` is the particular object the method was called on',
+        'Class attributes are shared by all instances while instance attributes are not',
+      ],
+      bonusSignals: ['gives a case where a function or dict is better', 'mentions the shared mutable class attribute trap', 'mentions dataclasses for records'],
+      sampleExplanation:
+        "A class is a description of a kind of thing — what it knows and what it can do. Writing `class Account:` does not create an account any more than a cookie cutter creates a cookie; it describes the shape. You get an actual object by calling it, `a = Account(\"ada\", 100)`, and at that moment Python makes a blank object and immediately runs `__init__` on it. Inside `__init__` you store the details with `self.owner = owner`, and the `self` there is the blank object that was just made. That is all `self` ever is: whenever you call `a.deposit(50)`, Python quietly passes `a` in as the method's first argument, so `self` inside the method means 'whichever account I was called on'. Anything you put on `self` belongs to that one object, so two accounts have completely separate balances. Anything written straight into the class body, outside any method, is shared by every object made from the class — which is fine for a constant like the bank's name and a genuine bug for a list, because then every instance ends up appending to the same one. The reason to reach for a class at all is when data and the rules about that data belong together. A balance that must never go negative is better protected by a `withdraw` method that checks, than by a dictionary that every caller is trusted to update correctly.",
+    },
+  },
+
+  {
+    id: 'PY-016',
+    domain: 'PY',
+    module: 'Object-Oriented Python',
+    topic: 'Inheritance and dunder methods',
+    title: 'Inheritance, Polymorphism and Dunder Methods',
+    slug: 'inheritance-and-polymorphism',
+    difficulty: 4,
+    estimatedMinutes: 40,
+    prerequisites: ['PY-015'],
+    related: ['PY-012', 'PY-013'],
+    tags: ['inheritance', 'polymorphism', 'super', 'dunder', 'duck-typing', 'composition'],
+
+    learningObjectives: [
+      'Create a subclass that extends a parent and override a method correctly',
+      'Use `super()` to cooperate with a parent implementation rather than replace it',
+      'Explain polymorphism and duck typing, and why Python often needs no common base class',
+      'Implement the dunder methods that make a class behave like a built-in type',
+      'Choose composition over inheritance when the relationship is "has a" rather than "is a"',
+    ],
+
+    terminology: [
+      {
+        term: 'Inheritance',
+        definition:
+          'Defining a class in terms of another so it starts with the parent\'s attributes and methods and may add or replace them. Written `class Child(Parent):`.',
+        simple: 'Making a new kind of thing that starts out as a copy of an existing kind.',
+      },
+      {
+        term: 'Override',
+        definition:
+          'Defining a method in a subclass with the same name as one in the parent, so lookups on instances of the subclass find the new version first.',
+        simple: 'Replacing one of the inherited behaviours with your own.',
+      },
+      {
+        term: 'super()',
+        definition:
+          'Returns a proxy that dispatches to the next class in the method resolution order, letting a subclass extend the parent\'s behaviour instead of discarding it.',
+        simple: '"Do what the parent would do, then let me add to it."',
+      },
+      {
+        term: 'Polymorphism',
+        definition:
+          'Calling the same method name on objects of different types and getting each type\'s own behaviour, so calling code does not branch on type.',
+        simple: 'Asking many different things the same question and each answering in its own way.',
+      },
+      {
+        term: 'Duck typing',
+        definition:
+          'Python\'s use of an object\'s actual methods rather than its declared type. If it supports the operations you use, it works — no shared base class required.',
+        simple: 'If it does what you need, it counts, regardless of what it is called.',
+      },
+      {
+        term: 'Dunder method',
+        definition:
+          'A method whose name begins and ends with double underscores, such as `__len__` or `__add__`, which Python calls in response to built-in syntax and functions.',
+        simple: 'A specially named method that hooks your object into ordinary Python syntax.',
+      },
+      {
+        term: 'MRO',
+        definition:
+          'Method resolution order: the linearised sequence of classes Python searches for an attribute, computed by the C3 algorithm and visible via `Cls.__mro__`.',
+        simple: 'The exact order Python looks through the family tree.',
+      },
+    ],
+
+    simpleExplanation:
+      "Inheritance lets you define a class that starts as a copy of another and then changes the parts that differ. Write `class Dog(Animal):` and every method on `Animal` is immediately available on `Dog`; define a method with a name the parent already used and yours wins for dogs. When your version needs the parent's work as well as your own, you call `super()`, which means \"do the inherited version of this, then continue\". The payoff is polymorphism: if `Dog`, `Cat` and `Cow` each define `speak`, then a loop that calls `speak` on a list of animals gets the right sound for each without a single `if` about types. In Python that idea goes further than in most languages, because it never checks the declared type — it just tries the method. If your object has a `speak` method, it can go in the list, related or not. The same principle explains dunder methods: `len(x)` simply calls `x.__len__()`, so defining that method makes your class work with a built-in function you did not write.",
+
+    whyItExists:
+      'Real systems contain families of things that share most behaviour and differ in a few places, and code that must work with all of them without knowing which one it holds. Inheritance expresses the shared part once, and polymorphic dispatch removes the type-checking conditionals that would otherwise grow every time a new variant is added.',
+
+    analogy: {
+      scenario:
+        "Think of job roles in a hospital. Everyone on staff has a badge, a shift and a duty to respond to an alarm — that much is common to the role of 'staff member'. A surgeon is a staff member who also operates; a porter is a staff member who also moves equipment. When the alarm sounds, whoever is calling it does not need a list of job titles and a set of rules; they call for a response and each person responds in the way their role defines. And a visiting specialist from another hospital, who is not on staff at all, still responds to the alarm because they know how — nobody checks their employment contract first.",
+      mapping: [
+        { from: 'The role of "staff member"', to: 'The base class, holding shared state and behaviour' },
+        { from: 'Surgeon, porter, nurse', to: 'Subclasses that extend the base with their own specifics' },
+        { from: 'Everyone responding to the alarm in their own way', to: 'Polymorphism — one method name, many implementations' },
+        { from: 'A surgeon doing the standard check, then their own', to: '`super().respond()` followed by additional work' },
+        { from: 'The visiting specialist with no contract', to: 'Duck typing — any object with the method works' },
+      ],
+      bridge:
+        'The visiting specialist is the part that distinguishes Python from languages with strict type hierarchies. Python never asks "are you a staff member?"; it asks "can you respond?", and finds out by trying. That is why a function written against `Animal` will happily accept any object with a `speak` method, and it is why `len()` works on your class the moment you define `__len__`. Inheritance in Python is therefore about sharing implementation, while the interface is whatever methods an object actually has.',
+      limitations:
+        'The hospital tree is neat because roles rarely overlap. Real inheritance hierarchies grow awkward fast — a class that is two kinds of thing at once leads to multiple inheritance and MRO puzzles, which is the usual signal that composition would have been the better design.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'How Python finds a method',
+        caption: 'The same lookup order explains overriding, `super()` and every AttributeError you will see.',
+        steps: [
+          { label: 'Instance `__dict__`', detail: 'Attributes stored on this object. An instance attribute shadows a method of the same name.' },
+          { label: 'The object\'s class', detail: 'Where methods normally live. A method defined here overrides any inherited one.' },
+          { label: 'Each base class in MRO order', detail: 'Computed by C3 linearisation, visible with `Cls.__mro__`. This is the order `super()` follows.' },
+          { label: '`object`', detail: 'The root of every hierarchy, supplying default `__repr__`, `__eq__` and friends.' },
+          { label: 'Raise AttributeError', detail: 'Nothing in the chain had the name. The message names both the class and the attribute.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Dunder methods worth knowing',
+        caption: 'Each one hooks your class into syntax you did not have to invent.',
+        columns: ['Method', 'Triggered by', 'Return', 'Why bother'],
+        rows: [
+          ['`__init__`', '`C(...)`', '`None`', 'Set up instance state.'],
+          ['`__repr__`', '`repr(x)`, the REPL, printing a list', 'str', 'Unambiguous debug output. Define this one first.'],
+          ['`__str__`', '`str(x)`, `print(x)`', 'str', 'Human-facing text. Falls back to `__repr__` if absent.'],
+          ['`__len__`', '`len(x)`, truthiness', 'int', 'Makes `if x:` mean "is it non-empty".'],
+          ['`__eq__`', '`x == y`', 'bool or NotImplemented', 'Value equality instead of identity.'],
+          ['`__hash__`', '`hash(x)`, dict keys, sets', 'int', 'Required if you define `__eq__` and want the object hashable.'],
+          ['`__getitem__`', '`x[i]`', 'any', 'Indexing, slicing, and iteration as a fallback.'],
+          ['`__iter__`', '`for i in x`', 'iterator', 'Makes the object usable in any loop or comprehension.'],
+          ['`__add__`', '`x + y`', 'any', 'Operator overloading; use only when the meaning is genuinely obvious.'],
+          ['`__enter__` / `__exit__`', '`with x:`', 'any / bool', 'Guaranteed setup and cleanup, as in `with open(...)`.'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Inheritance versus composition',
+        caption: 'The question to ask out loud: is it one, or does it have one?',
+        left: {
+          heading: 'Inheritance — "is a"',
+          points: [
+            '`class Dog(Animal)` — a dog is an animal',
+            'Inherits everything, including things you did not want',
+            'Couples the subclass to the parent\'s internals',
+            'Changing the parent can break every subclass at once',
+            'Right when the subclass genuinely substitutes for the parent',
+          ],
+        },
+        right: {
+          heading: 'Composition — "has a"',
+          points: [
+            '`class Car: self.engine = Engine()` — a car has an engine',
+            'Exposes only what you choose to delegate',
+            'The held object can be swapped, including for a test double',
+            'Changes stay local to the piece that changed',
+            'The default choice; reach for inheritance when substitution is the point',
+          ],
+        },
+      },
+      {
+        kind: 'annotated',
+        title: 'Why `super()` and not `Parent.method(self)`',
+        subject: 'class Dog(Animal):\n    def __init__(self, name, breed):\n        super().__init__(name)\n        self.breed = breed',
+        annotations: [
+          { part: '`super()`', note: 'No arguments needed in Python 3; it finds the class and instance from the enclosing scope.' },
+          { part: '`.__init__(name)`', note: 'Calls the next `__init__` in the MRO, so the parent sets up what it owns and the child adds its own.' },
+          { part: 'Order matters', note: 'Calling super first means parent state exists before the child touches it; do it first unless you have a reason.' },
+          { part: 'Versus `Animal.__init__(self, name)`', note: 'Hard-codes the parent, breaks under multiple inheritance, and silently goes wrong if the hierarchy changes.' },
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'Inheritance establishes a subtype relationship in which a class\'s attribute lookup falls through to its bases in method resolution order, computed by C3 linearisation. Overriding replaces an inherited binding for instances of the subclass; `super()` returns a proxy that resumes lookup at the next class in the MRO of the instance\'s type. Python dispatches dynamically on the object\'s actual attributes rather than its declared type, so any object providing the required methods satisfies the interface — structural rather than nominal typing.',
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Subclassing, overriding and super()',
+        runnable: true,
+        code: `class Animal:
+    def __init__(self, name):
+        self.name = name
+
+    def speak(self):
+        return "..."
+
+    def describe(self):
+        return f"{self.name} says {self.speak()}"
+
+class Dog(Animal):
+    def __init__(self, name, breed):
+        super().__init__(name)      # let Animal set up what it owns
+        self.breed = breed
+
+    def speak(self):                # override
+        return "woof"
+
+class Cat(Animal):
+    def speak(self):
+        return "meow"
+
+class LoudDog(Dog):
+    def speak(self):
+        return super().speak().upper() + "!"   # extend, do not replace
+
+pets = [Dog("rex", "collie"), Cat("mia"), LoudDog("bruno", "lab")]
+for p in pets:
+    print(p.describe())
+
+print(LoudDog.__mro__[:4])`,
+        output: `rex says woof
+mia says meow
+bruno says WOOF!
+(<class '__main__.LoudDog'>, <class '__main__.Dog'>, <class '__main__.Animal'>, <class 'object'>)`,
+        explanation:
+          'Notice that `describe` was written once, on `Animal`, and calls `self.speak()` — which resolves to the subclass\'s version at run time. That is polymorphism doing real work: the shared logic is written against the method name, not against a type. `LoudDog.speak` shows the cooperative use of `super()`: it takes what `Dog` would have said and transforms it, which is impossible if you copy the parent body instead. The printed MRO is the exact order Python searches, and it is the order `super()` steps through.',
+      },
+      {
+        language: 'python',
+        title: 'Duck typing: no shared base class required',
+        runnable: true,
+        code: `class Robot:                     # no relation to Animal at all
+    def __init__(self, name):
+        self.name = name
+
+    def speak(self):
+        return "beep"
+
+def chorus(things):
+    """Works with anything that has a .name and a .speak()."""
+    return ", ".join(f"{t.name}: {t.speak()}" for t in things)
+
+print(chorus([Dog("rex", "collie"), Robot("r2")]))
+
+# EAFP: try it, handle the failure - preferred over checking types first
+def safe_speak(thing):
+    try:
+        return thing.speak()
+    except AttributeError:
+        return "(silent)"
+
+print(safe_speak(Robot("c3")), safe_speak(42))
+
+# When you do need a declared contract, use a Protocol
+from typing import Protocol
+
+class Speaker(Protocol):
+    name: str
+    def speak(self) -> str: ...
+
+def chorus_typed(things: list[Speaker]) -> str:
+    return chorus(things)
+
+print(chorus_typed([Robot("k9")]))`,
+        output: `rex: woof, r2: beep
+beep (silent)
+k9: beep`,
+        explanation:
+          '`chorus` never mentions a type, and `Robot` never inherits from `Animal`, yet both work — Python looks for the attributes at the moment they are used. That is duck typing, and it is why Python codebases have far shallower hierarchies than Java ones. The `safe_speak` function shows the associated idiom, EAFP ("easier to ask forgiveness than permission"): attempt the operation and handle the failure, rather than inspecting the type first, which is both faster in the common case and more permissive. `Protocol` is the modern way to write the expectation down for a type checker without forcing anyone to inherit from anything.',
+      },
+      {
+        language: 'python',
+        title: 'Dunder methods make your class feel built in',
+        runnable: true,
+        code: `class Vector:
+    def __init__(self, *components):
+        self.components = tuple(components)
+
+    def __repr__(self):
+        return f"Vector{self.components}"
+
+    def __len__(self):
+        return len(self.components)
+
+    def __getitem__(self, i):
+        return self.components[i]
+
+    def __eq__(self, other):
+        if not isinstance(other, Vector):
+            return NotImplemented
+        return self.components == other.components
+
+    def __hash__(self):
+        return hash(self.components)
+
+    def __add__(self, other):
+        return Vector(*(a + b for a, b in zip(self, other)))
+
+v, w = Vector(1, 2, 3), Vector(10, 20, 30)
+print(v + w)
+print(len(v), v[1], v[:2])
+print(v == Vector(1, 2, 3), v is Vector(1, 2, 3))
+print(list(v))                       # iteration falls back to __getitem__
+print({v, Vector(1, 2, 3)})          # hashable, so it deduplicates`,
+        output: `Vector(11, 22, 33)
+3 2 (1, 2)
+True False
+[1, 2, 3]
+{Vector(1, 2, 3)}`,
+        explanation:
+          'Every built-in operation here is dispatched to a method you wrote: `len()` calls `__len__`, `v[1]` calls `__getitem__`, `+` calls `__add__`, and the `for` loop in `list(v)` falls back to `__getitem__` with increasing indices when there is no `__iter__`. Two rules are being obeyed carefully. `__eq__` returns `NotImplemented` rather than `False` for foreign types, which lets Python try the reflected operation before concluding inequality. And because `__eq__` was defined, `__hash__` had to be defined too — otherwise Python sets it to `None` and instances become unhashable, since equal objects must hash equally.',
+      },
+      {
+        language: 'python',
+        title: 'Composition is usually the better answer',
+        runnable: true,
+        code: `# Inheritance abused: a cache is not a kind of dictionary
+class CacheByInheritance(dict):
+    def get_or_compute(self, key, fn):
+        if key not in self:
+            self[key] = fn(key)
+        return self[key]
+
+# Every dict method leaks through, including ones that break the invariant
+c = CacheByInheritance()
+c.update({"a": 1})          # bypasses get_or_compute entirely
+print(dict(c))
+
+# Composition: expose exactly the interface you intend
+class Cache:
+    def __init__(self):
+        self._store = {}
+        self.hits = 0
+        self.misses = 0
+
+    def get_or_compute(self, key, fn):
+        if key in self._store:
+            self.hits += 1
+        else:
+            self.misses += 1
+            self._store[key] = fn(key)
+        return self._store[key]
+
+    def __len__(self):
+        return len(self._store)
+
+    def __repr__(self):
+        return f"Cache(size={len(self)}, hits={self.hits}, misses={self.misses})"
+
+cache = Cache()
+cache.get_or_compute(4, lambda n: n * n)
+cache.get_or_compute(4, lambda n: n * n)
+print(cache)`,
+        output: `{'a': 1}
+Cache(size=1, hits=1, misses=1)`,
+        explanation:
+          'Subclassing `dict` inherits about forty methods, every one of which can modify the store without going through `get_or_compute`, so the hit and miss counters could never be trusted. That is the concrete cost of inheriting for convenience: you inherit the whole interface, not just the part you wanted. The composed version holds a dictionary as an attribute and exposes only what it chose to, adding `__len__` and `__repr__` deliberately. The test to apply before every `class X(Y)` is whether an X can honestly be used anywhere a Y is expected; a cache cannot, because arbitrary mutation breaks its accounting.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'PyTorch models',
+        usage:
+          'Every model subclasses `nn.Module` and overrides `forward`. The base class supplies parameter registration, device movement and train/eval mode, and `super().__init__()` in your `__init__` is mandatory — omitting it produces a model whose parameters the optimiser cannot see.',
+      },
+      {
+        context: 'Custom exceptions',
+        usage:
+          '`class DataValidationError(ValueError)` lets callers catch your specific error or the broader category, which is inheritance used for exactly what it is good at: expressing an "is a" relationship that callers dispatch on.',
+      },
+      {
+        context: 'The scikit-learn transformer interface',
+        usage:
+          'Any object with `fit` and `transform` can go into a `Pipeline` — no base class is checked at run time. This is duck typing at framework scale, and it is why writing a custom transformer is a twenty-line job.',
+      },
+      {
+        context: 'Context managers',
+        usage:
+          '`with open(path) as f:` works because file objects define `__enter__` and `__exit__`. Defining them on your own class gives you guaranteed cleanup with the same syntax, whether that is closing a connection or restoring a random seed.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'PyTorch nn.Module', role: 'The canonical inheritance hierarchy in ML code; `forward` is the overridden method and `super().__init__()` is required.' },
+      { tool: 'typing.Protocol', role: 'Declares a structural interface for type checkers without requiring inheritance, formalising duck typing.' },
+      { tool: 'abc.ABC', role: 'Abstract base classes with `@abstractmethod` make a subclass fail loudly at instantiation if it forgot to implement something.' },
+      { tool: 'collections.abc', role: 'Mixins such as `Sequence` and `Mapping` supply many methods once you implement a couple of dunders.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Forgetting `super().__init__()` in a subclass `__init__`',
+        why: 'The parent\'s initialisation never runs, so attributes it would have set are missing and fail later with `AttributeError` far from the cause. In PyTorch it silently breaks parameter registration.',
+        fix: 'Call `super().__init__(...)` first in every subclass `__init__` unless you have a specific reason not to.',
+      },
+      {
+        mistake: 'Using `Parent.method(self, ...)` instead of `super()`',
+        why: 'It hard-codes one class, skips any class between in the MRO, and breaks under multiple inheritance or when the hierarchy is reorganised.',
+        fix: 'Use `super().method(...)`. It follows the MRO of the actual instance, which is what cooperative inheritance requires.',
+      },
+      {
+        mistake: 'Defining `__eq__` without `__hash__`',
+        why: 'Python sets `__hash__` to `None` when you define `__eq__`, so instances become unhashable and cannot be dict keys or set members.',
+        fix: 'Define `__hash__` from the same fields, or use `@dataclass(frozen=True)`, which generates both consistently.',
+      },
+      {
+        mistake: 'Inheriting to reuse code rather than to express "is a"',
+        why: 'You inherit the entire interface, including methods that break your invariants, and you couple yourself to the parent\'s internals forever.',
+        fix: 'Hold the other object as an attribute and delegate the few methods you actually want. Ask whether an instance can substitute for the parent everywhere.',
+      },
+      {
+        mistake: 'Checking types with `isinstance` where duck typing would do',
+        why: 'It rejects perfectly capable objects — a custom file-like object, a mock in a test — for having the wrong ancestry rather than the wrong capabilities.',
+        fix: 'Call the method and let `AttributeError` or `TypeError` surface, or declare a `Protocol` when you want a checkable contract without inheritance.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What does `super()` do, and why is it preferred over naming the parent class directly?',
+        answer:
+          '`super()` returns a proxy that resumes attribute lookup at the next class in the method resolution order of the instance\'s actual type, so `super().__init__(name)` calls whichever class comes next rather than a class you hard-coded. Naming the parent explicitly works for a single-inheritance chain but breaks in two ways: under multiple inheritance it can skip a class entirely, so some initialisers never run, and it silently does the wrong thing if the hierarchy is later reorganised. Because the MRO depends on the instance rather than on the class where the code was written, `super()` is what makes cooperative multiple inheritance work at all — every class in the chain calls `super()` and each one runs exactly once, in a well-defined order computed by C3 linearisation.',
+        followUp:
+          'A strong answer mentions that `super()` with no arguments is Python 3 sugar for `super(CurrentClass, self)`, using the compiler-provided `__class__` cell.',
+      },
+      {
+        level: 'intermediate',
+        question: 'What is duck typing, and how does it change how you design interfaces in Python?',
+        answer:
+          'Duck typing means Python determines what an object can do by looking for the attributes at the moment they are used, rather than by checking a declared type. A function that calls `.speak()` works with any object that has a `speak` method, regardless of ancestry. The design consequence is that interfaces in Python are sets of method names rather than base classes, so hierarchies stay shallow and inheritance is used for sharing implementation rather than for declaring capability. It also makes testing straightforward, since a stand-in object only has to implement the handful of methods actually used. Where a contract should be checkable, the modern answer is `typing.Protocol`, which lets a type checker verify structural conformance without requiring anyone to inherit; `abc.ABC` with `@abstractmethod` is the stricter alternative when you want the failure at instantiation time.',
+      },
+      {
+        level: 'internship',
+        question: 'When would you choose composition over inheritance?',
+        answer:
+          'Almost always, unless the subclass genuinely is a substitutable kind of the parent. The test I apply is whether an instance of the subclass can be used anywhere the parent is expected without surprising the caller — the Liskov substitution question. If not, inheritance is being used for code reuse, and it costs you: you inherit the entire public interface, including methods that can violate your invariants, and you are coupled to the parent\'s internals so a change there can break you. Subclassing `dict` to build a cache is the textbook example, because `update` and `__setitem__` let callers bypass the logic that maintains the hit counters. Composition — holding the dictionary as a private attribute and exposing only the methods you intend — keeps the interface deliberate and lets the held object be swapped, including for a test double. I would still reach for inheritance for genuine specialisation, such as a custom exception subclassing `ValueError` or a model subclassing `nn.Module`, where substitutability is exactly the point.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Given a `Shape` base class with an `area()` that raises `NotImplementedError`, write `Rectangle` and `Circle` subclasses and a function that totals the area of a mixed list without any `isinstance` check.',
+        hint: 'Write the total function against the method name, not against the types.',
+        language: 'python',
+        starterCode: 'class Shape:\n    def area(self) -> float:\n        raise NotImplementedError\n',
+        solution:
+          '```\nimport math\n\nclass Rectangle(Shape):\n    def __init__(self, w, h):\n        self.w, self.h = w, h\n    def area(self):\n        return self.w * self.h\n\nclass Circle(Shape):\n    def __init__(self, r):\n        self.r = r\n    def area(self):\n        return math.pi * self.r ** 2\n\ndef total_area(shapes) -> float:\n    return sum(s.area() for s in shapes)\n\nprint(round(total_area([Rectangle(2, 3), Circle(1)]), 2))   # 9.14\n```\n\n`total_area` never mentions a type, so adding a `Triangle` later requires no change to it — that is the practical payoff of polymorphism. The `NotImplementedError` in the base makes a forgotten override fail loudly; `abc.ABC` with `@abstractmethod` is stricter still, failing at instantiation rather than at first call.',
+      },
+      {
+        prompt:
+          'This subclass loses the parent\'s setup. Fix it and explain what breaks without the fix.\n\n```\nclass Animal:\n    def __init__(self, name):\n        self.name = name\n\nclass Dog(Animal):\n    def __init__(self, name, breed):\n        self.breed = breed\n```',
+        hint: 'Who sets `self.name` for a Dog?',
+        solution:
+          '```\nclass Dog(Animal):\n    def __init__(self, name, breed):\n        super().__init__(name)\n        self.breed = breed\n```\n\nWithout the `super()` call, `Animal.__init__` never runs, so `self.name` is never assigned and any later access raises `AttributeError: Dog object has no attribute name` — typically far from the constructor, which is what makes it annoying to diagnose. Calling `super()` first also means parent state exists before the subclass touches it, which matters whenever the child\'s setup depends on it.',
+      },
+      {
+        prompt:
+          'Add the dunder methods that make this class support `len(m)`, `m[0]`, `m == other` and use as a dict key.\n\n```\nclass Matrix:\n    def __init__(self, rows):\n        self.rows = tuple(tuple(r) for r in rows)\n```',
+        hint: 'Four methods — and one of them is required as soon as you define another.',
+        solution:
+          '```\nclass Matrix:\n    def __init__(self, rows):\n        self.rows = tuple(tuple(r) for r in rows)\n\n    def __len__(self):\n        return len(self.rows)\n\n    def __getitem__(self, i):\n        return self.rows[i]\n\n    def __eq__(self, other):\n        if not isinstance(other, Matrix):\n            return NotImplemented\n        return self.rows == other.rows\n\n    def __hash__(self):\n        return hash(self.rows)\n\n    def __repr__(self):\n        return f"Matrix({list(self.rows)})"\n```\n\nThe `__hash__` is the one people forget: defining `__eq__` sets `__hash__` to `None`, so without it the object cannot be a dict key or set member. Hashing the same tuple that `__eq__` compares keeps the two consistent, which is the invariant Python requires — equal objects must have equal hashes. Storing the rows as tuples is what makes that hash legal in the first place.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'PY-016-q1',
+        type: 'code-output',
+        language: 'python',
+        concept: 'overriding and polymorphism',
+        prompt: 'What does this print?',
+        code: 'class A:\n    def speak(self): return "a"\n    def go(self): return self.speak() * 2\n\nclass B(A):\n    def speak(self): return "b"\n\nprint(B().go())',
+        options: ['bb', 'aa', 'ab', 'It raises an AttributeError'],
+        answerIndex: 0,
+        explanation:
+          '`go` is inherited from `A` but calls `self.speak()`, which is resolved on the actual instance at run time and finds `B`\'s override. That late binding is what makes shared base-class logic useful.',
+      },
+      {
+        id: 'PY-016-q2',
+        type: 'debug',
+        language: 'python',
+        concept: 'missing super().__init__',
+        prompt: 'Why does `Dog("rex", "collie").name` raise `AttributeError`?',
+        code: 'class Animal:\n    def __init__(self, name):\n        self.name = name\n\nclass Dog(Animal):\n    def __init__(self, name, breed):\n        self.breed = breed',
+        options: [
+          'The subclass `__init__` overrides the parent\'s and never calls `super().__init__(name)`',
+          'Subclasses cannot add new parameters to `__init__`',
+          '`name` must be declared as a class attribute on `Animal`',
+          '`Dog` must inherit from `object` explicitly',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Defining `__init__` in the subclass replaces the parent\'s entirely. Only an explicit `super().__init__(name)` runs it, and without that `self.name` is never assigned.',
+      },
+      {
+        id: 'PY-016-q3',
+        type: 'truefalse',
+        concept: 'duck typing',
+        prompt: 'A function that calls `thing.speak()` requires `thing` to inherit from a common base class.',
+        answer: false,
+        explanation:
+          'Python resolves attributes on the actual object at call time, so anything with a `speak` method works regardless of ancestry. `typing.Protocol` lets you declare that expectation for a type checker without requiring inheritance.',
+      },
+      {
+        id: 'PY-016-q4',
+        type: 'match',
+        concept: 'dunder methods',
+        prompt: 'Match each dunder method to the syntax that triggers it.',
+        pairs: [
+          { left: '`__len__`', right: '`len(x)`' },
+          { left: '`__getitem__`', right: '`x[0]`' },
+          { left: '`__eq__`', right: '`x == y`' },
+          { left: '`__iter__`', right: '`for i in x`' },
+          { left: '`__enter__` / `__exit__`', right: '`with x:`' },
+        ],
+        explanation:
+          'Built-in functions and operators are dispatched to specially named methods, which is how a user-defined class can participate in ordinary Python syntax without any special casing in the interpreter.',
+      },
+      {
+        id: 'PY-016-q5',
+        type: 'mcq',
+        concept: 'eq and hash',
+        prompt: 'You define `__eq__` on a class and then use instances as dictionary keys. What happens?',
+        options: [
+          '`TypeError: unhashable type` — defining `__eq__` sets `__hash__` to None',
+          'It works, using the default identity-based hash',
+          'It works, and equal objects are automatically hashed equally',
+          '`__eq__` is ignored for dictionary keys',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Equal objects must hash equally, so Python removes the inherited identity hash when you define custom equality. You must define `__hash__` from the same fields, or use `@dataclass(frozen=True)` to get both.',
+      },
+      {
+        id: 'PY-016-q6',
+        type: 'multi',
+        concept: 'inheritance versus composition',
+        prompt: 'Which of these are good reasons to prefer composition over inheritance? Select all that apply.',
+        options: [
+          'You only want to reuse two methods, not the whole interface',
+          'Inherited methods could bypass the invariants your class maintains',
+          'You want to be able to swap the held object, including for a test double',
+          'The subclass must be usable anywhere the parent is expected',
+        ],
+        answerIndices: [0, 1, 2],
+        explanation:
+          'The first three are the classic arguments for composition. Substitutability is the one situation that genuinely calls for inheritance — that is precisely what an "is a" relationship means.',
+      },
+      {
+        id: 'PY-016-q7',
+        type: 'explain',
+        concept: 'polymorphism in practice',
+        prompt: 'Explain how polymorphism removes conditionals, and why that matters when the code changes.',
+        rubric: [
+          'Describes calling one method name on objects that implement it differently',
+          'Contrasts with an `if isinstance(...)` chain that must be edited for each new type',
+          'Notes that adding a type becomes adding a class rather than editing existing code',
+        ],
+        sampleAnswer:
+          'Without polymorphism, code that handles several kinds of thing grows a chain of type checks: if it is a rectangle compute this, if it is a circle compute that. Every new shape means finding and editing every such chain, and missing one produces a silent wrong answer rather than an error. With polymorphism, each type implements `area()` and the calling code simply calls it, so the chain disappears and adding a shape means adding a class — existing code is not touched and therefore cannot be broken. That is the open-closed principle stated concretely, and it matters most in code that has several such chains scattered across a codebase, because the failure mode of forgetting one is invisible. In Python the dispatch does not even require a shared base class, so the same benefit applies to objects from libraries you do not control, as long as they provide the method.',
+        explanation:
+          'The examinable idea is that polymorphism converts a maintenance problem — editing every conditional — into an extension problem, which is the core argument for object-oriented design.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does `super()` do?', back: 'Dispatches to the next class in the instance\'s MRO, letting a subclass extend rather than replace inherited behaviour.' },
+      { front: 'What is duck typing?', back: 'Python checks for the methods you use, not the declared type. Any object with the right methods works.' },
+      { front: 'What triggers `__len__`?', back: '`len(x)` — and also truthiness, so `if x:` means "is it non-empty" once `__len__` is defined.' },
+      { front: 'What happens if you define `__eq__` but not `__hash__`?', back: 'Python sets `__hash__` to `None`, so instances become unhashable and cannot be dict keys or set members.' },
+      { front: 'Inheritance or composition?', back: 'Inheritance for "is a" and genuine substitutability; composition for "has a" and for reusing only part of an interface.' },
+      { front: 'Why define `__repr__` before anything else?', back: 'The default shows a memory address, so every log line, debugger view and list of your objects is unreadable without it.' },
+    ],
+
+    challenge: {
+      title: 'A small plugin system',
+      brief:
+        'Build an `Exporter` base class with a `render(rows)` method, plus `CsvExporter`, `JsonExporter` and `MarkdownExporter` subclasses. A `report(rows, exporter)` function must work with any of them without a single `isinstance` check, and must also accept a plain object from outside the hierarchy that merely defines `render` — prove this with a class that does not inherit from `Exporter`. Add `__repr__` to each exporter, give the base class a shared `header` helper that subclasses reuse via `super()`, and write a `typing.Protocol` describing the contract.',
+      language: 'python',
+      acceptanceCriteria: [
+        '`report` contains no type checks and works with all four exporters',
+        'At least one subclass calls `super()` to extend rather than replace inherited behaviour',
+        'A non-inheriting class with a `render` method works through the same function',
+        'A `Protocol` documents the expected interface and the code type-checks against it',
+      ],
+      starterCode:
+        'from typing import Protocol\n\n\nclass Exporter:\n    def header(self, rows) -> str:\n        return f"{len(rows)} rows"\n\n    def render(self, rows) -> str:\n        raise NotImplementedError\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone who can write classes what inheritance and polymorphism are, what `super()` is for, and why Python often does not need a shared base class at all.',
+      mustCover: [
+        'A subclass starts with everything the parent has and can override parts of it',
+        'super() calls the parent version so a subclass can extend rather than replace',
+        'Polymorphism means one method name with different implementations, removing type checks',
+        'Duck typing means Python checks for the method, not the declared type',
+      ],
+      bonusSignals: ['mentions dunder methods hooking into built-in syntax', 'mentions preferring composition when the relationship is "has a"', 'mentions Protocol or abstract base classes'],
+      sampleExplanation:
+        "Inheritance lets you say 'this new class is like that one, with differences'. Write `class Dog(Animal):` and a dog already has everything an animal has; then you define `speak` in `Dog` and dogs use your version instead. Sometimes you do not want to throw the parent's version away — you want to do what it did and then add to it — and that is what `super()` is for: `super().speak()` gives you the inherited result to build on, and `super().__init__(name)` lets the parent set up the parts it owns before you add yours. The reason all this is worth the trouble is polymorphism. If dogs, cats and robots each define `speak`, then a loop that calls `speak` on a list of them gets the right answer for each, with no `if` statements about types anywhere — which means adding a new kind of thing later means writing a new class, not hunting through existing code for conditionals to edit. Python takes this one step further than most languages. It never asks what class an object belongs to; when you write `thing.speak()` it simply looks for a `speak` method and uses it. So the robot in that list did not have to inherit from anything — it just had to be able to speak. That same mechanism is why `len(x)` works on your own class the moment you define `__len__`: built-in syntax is quietly calling specially named methods, and defining them lets your objects behave like the ones that came with the language.",
+    },
+  },
+
+  {
+    id: 'PY-017',
+    domain: 'PY',
+    module: 'Pythonic Patterns',
+    topic: 'Comprehensions',
+    title: 'Comprehensions',
+    slug: 'comprehensions',
+    difficulty: 3,
+    estimatedMinutes: 30,
+    prerequisites: ['PY-011', 'PY-006'],
+    related: ['PY-008', 'PY-009', 'PY-012'],
+    tags: ['comprehension', 'list-comprehension', 'dict-comprehension', 'filtering', 'readability'],
+
+    learningObjectives: [
+      'Convert an append-in-a-loop into a list comprehension and back',
+      'Add a filter with a trailing `if`, and a choice with a leading conditional expression',
+      'Write dictionary and set comprehensions, and pick the right one for the task',
+      'Handle nesting — both nested loops and nested comprehensions — without confusing the order',
+      'Recognise when a comprehension has become less readable than the loop it replaced',
+    ],
+
+    terminology: [
+      {
+        term: 'Comprehension',
+        definition:
+          'An expression that builds a list, dict or set by describing the result in terms of an input iterable, rather than by mutating an accumulator.',
+        simple: 'A one-line way to say "make a new collection out of this one".',
+      },
+      {
+        term: 'Filter clause',
+        definition:
+          'A trailing `if` in a comprehension, which decides whether an item is included at all. Items that fail it simply do not appear.',
+        simple: 'The part that says which items to keep.',
+      },
+      {
+        term: 'Conditional expression in a comprehension',
+        definition:
+          'A leading `a if cond else b`, which chooses what value to produce for every item. Every item still appears in the output.',
+        simple: 'The part that says what to produce, when the answer depends on the item.',
+      },
+      {
+        term: 'Dict comprehension',
+        definition:
+          '`{k: v for ... }` — builds a mapping. Later duplicate keys overwrite earlier ones, exactly as with ordinary assignment.',
+        simple: 'The same idea, but producing labelled pairs instead of a list.',
+      },
+      {
+        term: 'Comprehension scope',
+        definition:
+          'A comprehension runs in its own function-like scope, so its loop variable does not leak into the surrounding code, unlike a `for` statement.',
+        simple: 'The loop variable stays inside and does not spill out.',
+      },
+    ],
+
+    simpleExplanation:
+      "A comprehension is a way of describing a new collection in terms of an existing one. Instead of creating an empty list, looping, and appending, you say what you want in a single expression: `[x * 2 for x in numbers]` reads as \"x times two, for each x in numbers\". The loop is still there — Python is doing the same work — but the code now states the result rather than the procedure, which is why it reads better once you are used to it. You can add a trailing `if` to keep only some items, and you can put a conditional at the front to choose what value to produce. The same syntax with braces builds a dictionary or a set. Two things are worth knowing early. The order of the clauses in a nested comprehension is the same as the order you would write the nested loops, which is the opposite of what most people guess. And a comprehension is not automatically better: once it has two loops and two conditions, the plain loop is the kinder choice.",
+
+    whyItExists:
+      'The pattern of creating an empty collection, looping over a source and appending a transformed value is one of the most common shapes in all of programming, and writing it out puts the mechanics of accumulation in front of the intent. A comprehension expresses the transformation directly, removes the mutation, and lets the interpreter build the result more efficiently.',
+
+    analogy: {
+      scenario:
+        "Compare two ways of describing a sandwich order to a kitchen. The first is a procedure: take a plate, put bread on it, add cheese, add the second slice, put it on the counter — repeat for each person. The second is a description: 'a cheese sandwich for everyone who is not vegan'. Both produce the same lunch, but the second states what you want and leaves the mechanics to the kitchen, so anyone reading the order sees the intent rather than the steps.",
+      mapping: [
+        { from: 'Listing every step of assembly', to: 'The explicit loop with `result = []` and `result.append(...)`' },
+        { from: '"a cheese sandwich for everyone"', to: 'The comprehension expression and its `for` clause' },
+        { from: '"...who is not vegan"', to: 'The trailing `if` filter clause' },
+        { from: '"cheese for most, hummus for the vegans"', to: 'A leading conditional expression choosing the value' },
+        { from: 'An order so elaborate nobody can follow it', to: 'A comprehension with several loops and conditions — write the loop instead' },
+      ],
+      bridge:
+        'The distinction between "who gets one" and "what they get" is exactly the distinction between the two places a condition can appear. A trailing `if` filters, so some items produce nothing at all; a leading `a if c else b` transforms, so every item produces something. Confusing them is the most common comprehension error, and the analogy gives you the question to ask: am I deciding who is on the list, or what goes on their plate?',
+      limitations:
+        'A kitchen order is read once by a human. A comprehension is also executed, so unlike an order it has a cost — building an intermediate list of a million items uses a million items\' worth of memory, which is the problem generators solve in the next unit.',
+    },
+
+    visuals: [
+      {
+        kind: 'annotated',
+        title: 'Anatomy of a comprehension',
+        subject: '[ f(x)  for x in items  if cond(x) ]',
+        annotations: [
+          { part: '`f(x)` — the output expression', note: 'Evaluated once per surviving item. This is what ends up in the list.' },
+          { part: '`for x in items`', note: 'The source. Any iterable: a list, a file, a generator, a dict.' },
+          { part: '`if cond(x)` — the filter', note: 'Optional and trailing. Items that fail it produce nothing at all.' },
+          { part: 'The brackets', note: '`[]` builds a list, `{}` with a colon builds a dict, `{}` without builds a set, `()` builds a generator.' },
+          { part: 'Reading order', note: 'Read the `for` first, then the `if`, then the output expression — the reverse of how it is written.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Filter versus choose',
+        caption: 'The two places a condition can appear mean completely different things.',
+        left: {
+          heading: 'Trailing `if` — filters',
+          points: [
+            '`[x for x in xs if x > 0]`',
+            'Decides *whether* an item appears',
+            'Output can be shorter than the input',
+            'No `else` is allowed here',
+          ],
+        },
+        right: {
+          heading: 'Leading conditional — chooses',
+          points: [
+            '`[x if x > 0 else 0 for x in xs]`',
+            'Decides *what value* each item produces',
+            'Output is always the same length as the input',
+            'The `else` is mandatory — it is an expression, not a statement',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'The four comprehension forms',
+        columns: ['Form', 'Example', 'Produces', 'Note'],
+        rows: [
+          ['List', '`[x*2 for x in xs]`', 'A list', 'Builds the whole thing in memory at once.'],
+          ['Dict', '`{k: len(k) for k in words}`', 'A dict', 'Duplicate keys: the last one wins, silently.'],
+          ['Set', '`{x % 3 for x in xs}`', 'A set', 'Deduplicates as it goes; order is not preserved.'],
+          ['Generator', '`(x*2 for x in xs)`', 'A lazy generator', 'Computes on demand; no intermediate list. Covered next unit.'],
+          ['Nested loops', '`[c for row in grid for c in row]`', 'A flattened list', 'Clause order matches the nested `for` statements.'],
+          ['Nested comprehension', '`[[c*2 for c in row] for row in grid]`', 'A list of lists', 'Structure preserved; the inner one runs per row.'],
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'Turning a loop into a comprehension',
+        caption: 'A mechanical translation that works every time the loop only appends.',
+        steps: [
+          { label: 'Check the loop only appends', detail: 'If the body does anything else — printing, several statements, `break` — leave it as a loop.' },
+          { label: 'Take the appended expression', detail: 'Whatever is inside `result.append(...)` becomes the output expression.' },
+          { label: 'Copy the `for` clause verbatim', detail: 'Same variable, same iterable, written after the output expression.' },
+          { label: 'Turn a wrapping `if` into a trailing filter', detail: 'A condition around the append becomes `if cond` at the end.' },
+          { label: 'Delete the accumulator', detail: 'The `result = []` line and the `append` call both disappear.' },
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Try the translations yourself',
+        caption: 'Write the loop and the comprehension side by side and confirm they agree.',
+        widget: 'code-playground',
+      },
+    ],
+
+    formalDefinition:
+      'A comprehension is an expression that evaluates to a new list, set or dict, consisting of an output expression followed by one or more `for` clauses and zero or more `if` clauses, evaluated left to right so that later clauses are nested inside earlier ones. In Python 3 a comprehension executes in its own implicit function scope, so its iteration variables do not bind in the enclosing namespace, though it may read enclosing names as a closure would.',
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'From loop to comprehension, step by step',
+        runnable: true,
+        code: `words = ["alpha", "be", "gamma", "hi"]
+
+# The loop
+lengths = []
+for w in words:
+    if len(w) > 2:
+        lengths.append(len(w))
+print(lengths)
+
+# The same thing, as a comprehension
+print([len(w) for w in words if len(w) > 2])
+
+# Filter (some items vanish) versus choose (every item produces something)
+print([w for w in words if len(w) > 2])          # 2 items
+print([w if len(w) > 2 else "??" for w in words]) # 4 items
+
+# Both at once: choose a value, then filter the results
+print([w.upper() if w.startswith("a") else w for w in words if len(w) > 2])`,
+        output: `[5, 5]
+[5, 5]
+['alpha', 'gamma']
+['ALPHA', '??', 'gamma', '??']
+['ALPHA', 'gamma']`,
+        explanation:
+          'The first two blocks are the same computation, and the translation was mechanical: the appended expression moved to the front, the `for` line was copied, and the wrapping `if` became a trailing filter. The third and fourth lines are the distinction worth internalising — the filtered version has two elements while the conditional version has four, because a trailing `if` decides membership and a leading conditional decides value. The last line uses both, which is legal and about as complex as a comprehension should get before a loop becomes clearer.',
+      },
+      {
+        language: 'python',
+        title: 'Dict and set comprehensions',
+        runnable: true,
+        code: `words = ["alpha", "be", "gamma", "be"]
+scores = {"ada": 92, "bob": 41, "cal": 78}
+
+print({w: len(w) for w in words})              # duplicate key: last wins
+print({w for w in words})                      # set: deduplicates
+print({name: s for name, s in scores.items() if s >= 60})
+print({s: name for name, s in scores.items()}) # invert a mapping
+
+# Build a lookup from two sequences
+keys, vals = ["a", "b"], [1, 2]
+print({k: v for k, v in zip(keys, vals)})
+
+# Normalise keys while filtering values
+raw = {" Ada ": "92", "BOB": "n/a", "cal": "78"}
+clean = {k.strip().lower(): int(v) for k, v in raw.items() if v.isdigit()}
+print(clean)`,
+        output: `{'alpha': 5, 'be': 2, 'gamma': 5}
+{'alpha', 'be', 'gamma'}
+{'ada': 92, 'cal': 78}
+{92: 'ada', 41: 'bob', 78: 'cal'}
+{'a': 1, 'b': 2}
+{'ada': 92, 'cal': 78}`,
+        explanation:
+          'A dict comprehension needs a `key: value` pair before the `for`; without the colon you get a set. The duplicate `"be"` shows the silent overwrite behaviour, which is usually what you want and is occasionally a bug worth knowing about. The last example is the shape you will write most often in practice: clean the keys, convert the values and drop the bad rows, all in one readable line — and note that `if v.isdigit()` runs *before* `int(v)`, so the conversion never sees the value it would choke on.',
+      },
+      {
+        language: 'python',
+        title: 'Nesting: two loops versus two comprehensions',
+        runnable: true,
+        code: `grid = [[1, 2, 3], [4, 5, 6]]
+
+# Two for clauses: FLATTENS. Clause order matches nested loops.
+print([cell for row in grid for cell in row])
+
+# Equivalent explicit loops, in the same order:
+flat = []
+for row in grid:
+    for cell in row:
+        flat.append(cell)
+print(flat)
+
+# A comprehension inside a comprehension: PRESERVES structure
+print([[cell * 10 for cell in row] for row in grid])
+
+# Filters can attach to either level
+print([cell for row in grid for cell in row if cell % 2 == 0])
+
+# The readability cliff
+pairs = [(x, y) for x in range(3) for y in range(3) if x != y if x + y > 2]
+print(pairs)`,
+        output: `[1, 2, 3, 4, 5, 6]
+[4, 5, 6]
+[[10, 20, 30], [40, 50, 60]]
+[2, 4, 6]
+[(1, 2), (2, 1)]`,
+        explanation:
+          'The clause order in a flattening comprehension is the single most common confusion here, and the rule is simple: the `for` clauses appear in exactly the order you would write the nested `for` statements, outermost first. Note the output of the explicit loop version — it printed `[4, 5, 6]` rather than the full six elements, because `flat` was rebound rather than extended, which is precisely the kind of accumulator bug a comprehension cannot have. The final line is legal, chains two filters, and is past the point where anyone should be reading it as an expression.',
+      },
+      {
+        language: 'python',
+        title: 'Scope, and when not to use a comprehension',
+        runnable: true,
+        code: `# The loop variable does NOT leak out of a comprehension
+squares = [i * i for i in range(3)]
+try:
+    print(i)
+except NameError as e:
+    print("NameError:", e)
+
+# But a for STATEMENT does leak
+for j in range(3):
+    pass
+print("j survived:", j)
+
+# Bad: a comprehension used for side effects
+results = []
+[results.append(x) for x in range(3)]     # builds a throwaway list of Nones
+print(results)
+
+# Good: say what you mean
+results = list(range(3))
+print(results)
+
+# Bad: too much logic in one expression
+data = [1, -2, 3, -4]
+print([("pos" if x > 0 else "neg") + str(abs(x)) for x in data if abs(x) != 2])`,
+        output: `NameError: name 'i' is not defined
+j survived: 2
+[0, 1, 2]
+[0, 1, 2]
+['pos1', 'pos3', 'neg4']
+`,
+        explanation:
+          'The scope difference is a small but genuine benefit: a comprehension cannot accidentally clobber a name you were using, while a `for` statement leaves its variable behind. The side-effect example is the anti-pattern to avoid — it builds a list of `None` values purely to discard it, which misleads every reader into looking for a result that does not exist. If you want a loop, write a loop. The final line is syntactically fine and genuinely harder to read than the four-line loop it replaces, which is the practical limit: a comprehension should be readable in one pass, and when it is not, the loop is the better code.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Cleaning a column of records',
+        usage:
+          '`[row["email"].strip().lower() for row in rows if row.get("email")]` is the standard shape for extracting and normalising a field while dropping missing values, in a single readable line.',
+      },
+      {
+        context: 'Building a feature lookup',
+        usage:
+          '`{col: df[col].mean() for col in numeric_cols}` produces a mapping of column to statistic — the kind of summary dictionary that then gets logged or used to fill missing values.',
+      },
+      {
+        context: 'Selecting files to process',
+        usage:
+          '`[p for p in Path("data").iterdir() if p.suffix == ".csv"]` filters a directory listing, and reads much closer to the sentence you would say aloud than the equivalent loop.',
+      },
+      {
+        context: 'Preparing batches for a model',
+        usage:
+          '`[tokenizer(t) for t in texts]` is how a list of strings becomes a list of encodings. Switching the brackets to parentheses turns it into a generator, which is what you do when the corpus will not fit in memory.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'pandas', role: 'Comprehensions build the lists and dicts you pass to `DataFrame`; for per-row work on an existing frame, vectorised operations are faster.' },
+      { tool: 'NumPy', role: 'A comprehension over an array is usually the slow path — `arr * 2` does the same work in C.' },
+      { tool: 'pathlib', role: 'Directory filtering with comprehensions over `iterdir()` or `glob()` is standard in data-loading scripts.' },
+      { tool: 'itertools', role: '`chain.from_iterable(grid)` is an alternative to a flattening comprehension, and lazier.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Confusing the filtering `if` with the choosing conditional',
+        why: 'A trailing `if` decides membership and takes no `else`; a leading `a if c else b` decides the value and requires one. Using the wrong one changes the output length.',
+        fix: 'Ask whether every input item should produce an output item. If yes, the conditional goes at the front with an `else`; if no, the `if` goes at the end.',
+      },
+      {
+        mistake: 'Getting the clause order wrong when flattening',
+        why: 'People write `[cell for cell in row for row in grid]`, which raises `NameError` because `row` is used before the clause that defines it.',
+        fix: 'Write the nested loops first, then read the `for` lines top to bottom into the comprehension in that same order.',
+      },
+      {
+        mistake: 'Using a comprehension for side effects',
+        why: 'It builds and discards a list of `None`s, wasting memory and telling the reader a result is being produced when none is.',
+        fix: 'Use an ordinary `for` loop. A comprehension is for building a collection; a loop is for doing things.',
+      },
+      {
+        mistake: 'Cramming several loops and conditions into one expression',
+        why: 'Readability drops sharply after one `for` and one `if`, and a comprehension cannot be stepped through in a debugger line by line.',
+        fix: 'Split into named intermediate steps, or write the loop. Being clever here has no payoff; the generated bytecode is nearly identical.',
+      },
+      {
+        mistake: 'Building a huge list when you only iterate over it once',
+        why: 'A list comprehension materialises everything, so a ten-million-row file becomes ten million objects in memory at once.',
+        fix: 'Use a generator expression — the same syntax with parentheses — when the result is consumed once, as in `sum(x for x in ...)`.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What is the difference between `[x for x in xs if c]` and `[x if c else y for x in xs]`?',
+        answer:
+          'The first is a filter: the trailing `if` decides whether each item appears at all, so the output can be shorter than the input, and no `else` is permitted because there is nothing to produce for a rejected item. The second is a conditional expression in the output position: it decides *what value* to produce for each item, so the output is always exactly as long as the input, and the `else` is mandatory because an expression must always yield a value. They can be combined — `[f(x) if c else g(x) for x in xs if keep(x)]` — and reading that correctly requires knowing which condition is doing which job. The practical test is whether the result should have the same number of elements as the input.',
+      },
+      {
+        level: 'intermediate',
+        question: 'When is a comprehension the wrong choice?',
+        answer:
+          'When it is doing something other than building a collection, or when it has stopped being readable in one pass. Using one for side effects — `[print(x) for x in xs]` — builds and throws away a list of `None`s and misleads the reader about intent, so a plain loop is correct. Anything needing multiple statements, `break`, `continue` or a `try/except` inside the body cannot be a comprehension at all. Beyond about one `for` and one `if`, comprehension density becomes a readability cost with no performance benefit, and it also cannot be stepped through in a debugger. Finally, when the result is consumed once and could be large, a list comprehension is the wrong shape because it materialises everything — a generator expression does the same work lazily.',
+        followUp:
+          'A strong answer notes that comprehensions are modestly faster than an append loop because they avoid repeated attribute lookup on `.append`, but that this is rarely the reason to choose one.',
+      },
+      {
+        level: 'internship',
+        question: 'What does `[[cell for cell in row] for row in grid]` produce, and how does it differ from `[cell for row in grid for cell in row]`?',
+        answer:
+          'The first is a comprehension whose output expression is itself a comprehension, so it produces a list of lists with the same shape as `grid` — one inner list per row, and the inner comprehension runs once per row. The second has two `for` clauses in a single comprehension, which nest left to right exactly as the equivalent nested `for` statements would, so it flattens the grid into a single list of cells. The clause order is the part people get wrong: the outer loop comes first, so `for row in grid` must precede `for cell in row`, and writing them the other way raises `NameError` because `row` is referenced before its clause introduces it. As a rule of thumb, brackets in the output position preserve structure while additional `for` clauses flatten it.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Convert this loop into a comprehension:\n\n```\nout = []\nfor w in words:\n    if w.isalpha():\n        out.append(w.lower())\n```',
+        hint: 'The appended expression goes first, the `for` next, the condition last.',
+        language: 'python',
+        starterCode: 'words = ["Alpha", "b2", "Gamma"]\n',
+        solution:
+          '```\nout = [w.lower() for w in words if w.isalpha()]\n```\n\nThe translation is mechanical whenever the loop body does nothing but append: take what is inside `append(...)`, copy the `for` line unchanged, and turn the wrapping `if` into a trailing filter. Note the evaluation order — `isalpha()` is checked before `lower()` is called, because filters run before the output expression, which matters when the transformation would fail on the rejected items.',
+      },
+      {
+        prompt:
+          'Given `temps = [12, -3, 25, -8]`, produce two results: a list containing only the positive values, and a list of the same length where negatives are replaced by 0.',
+        hint: 'One of these is a filter; the other is a choice.',
+        solution:
+          '```\npositives = [t for t in temps if t > 0]        # [12, 25]\nclamped   = [t if t > 0 else 0 for t in temps] # [12, 0, 25, 0]\n```\n\nThe first has two elements and the second has four, which is the clearest demonstration of the distinction. The trailing `if` is a membership test and takes no `else`; the leading conditional is an expression that must always yield a value, so its `else` is compulsory.',
+      },
+      {
+        prompt:
+          'From `records = [{"name": " Ada ", "score": "92"}, {"name": "Bob", "score": "n/a"}]`, build a dictionary mapping cleaned lowercase names to integer scores, skipping any record whose score is not numeric.',
+        hint: 'Filter before you convert, or the conversion will raise.',
+        solution:
+          '```\nclean = {\n    r["name"].strip().lower(): int(r["score"])\n    for r in records\n    if r["score"].isdigit()\n}\nprint(clean)   # {\'ada\': 92}\n```\n\nThe filter clause is evaluated before the key and value expressions, so `int()` never sees `"n/a"` — putting the conversion in without the guard would raise `ValueError: invalid literal for int()`. Splitting the comprehension across lines like this is normal and encouraged once it has more than one clause; the formatting is what keeps it readable.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'PY-017-q1',
+        type: 'code-output',
+        language: 'python',
+        concept: 'filter versus choose',
+        prompt: 'What are the lengths of these two results?',
+        code: 'xs = [1, -2, 3, -4]\na = [x for x in xs if x > 0]\nb = [x if x > 0 else 0 for x in xs]\nprint(len(a), len(b))',
+        options: ['2 4', '4 4', '2 2', '4 2'],
+        answerIndex: 0,
+        explanation:
+          'The trailing `if` filters, so `a` keeps only the two positives. The leading conditional chooses a value for every item, so `b` has one element per input and is always the same length as `xs`.',
+      },
+      {
+        id: 'PY-017-q2',
+        type: 'code-output',
+        language: 'python',
+        concept: 'nested clause order',
+        prompt: 'What does this print?',
+        code: 'grid = [[1, 2], [3, 4]]\nprint([c for row in grid for c in row])',
+        options: ['[1, 2, 3, 4]', '[[1, 2], [3, 4]]', '[1, 3, 2, 4]', 'It raises a NameError'],
+        answerIndex: 0,
+        explanation:
+          'Two `for` clauses nest left to right exactly like nested `for` statements, so this flattens the grid. Writing the clauses in the other order raises `NameError`, since `row` would be used before its clause introduces it.',
+      },
+      {
+        id: 'PY-017-q3',
+        type: 'debug',
+        language: 'python',
+        concept: 'comprehension misuse',
+        prompt: 'What is wrong with this line, even though it produces the right side effect?',
+        code: '[print(x) for x in range(3)]',
+        options: [
+          'It builds and discards a list of three `None` values, and misleads the reader into expecting a result',
+          '`print` cannot be used inside a comprehension',
+          'It will raise a `TypeError` because print returns nothing',
+          'The comprehension needs a trailing `if` clause',
+        ],
+        answerIndex: 0,
+        explanation:
+          'A comprehension exists to build a collection. Using one purely for side effects allocates a throwaway list and signals intent that is not there. A plain `for` loop is both clearer and cheaper.',
+      },
+      {
+        id: 'PY-017-q4',
+        type: 'mcq',
+        concept: 'dict comprehension',
+        prompt: 'What does `{w: len(w) for w in ["be", "be", "at"]}` produce?',
+        options: [
+          "`{'be': 2, 'at': 2}`",
+          "`{'be': 2, 'be': 2, 'at': 2}`",
+          "`{'be', 'at'}`",
+          'It raises a `ValueError` for the duplicate key',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Keys are unique, so the second `"be"` overwrites the first silently — exactly as repeated assignment would. The result has two entries.',
+      },
+      {
+        id: 'PY-017-q5',
+        type: 'truefalse',
+        concept: 'comprehension scope',
+        prompt: 'After `squares = [i * i for i in range(3)]`, the name `i` is available in the surrounding scope.',
+        answer: false,
+        explanation:
+          'In Python 3 a comprehension runs in its own implicit function scope, so its loop variable does not leak. A `for` statement, by contrast, does leave its variable bound afterwards.',
+      },
+      {
+        id: 'PY-017-q6',
+        type: 'multi',
+        concept: 'when a loop is better',
+        prompt: 'In which situations should you write a loop rather than a comprehension? Select all that apply.',
+        options: [
+          'The body needs a `try/except`',
+          'You need to `break` out early',
+          'You are transforming every element of a list',
+          'The body is several statements long',
+          'The expression would need three `for` clauses and two conditions',
+        ],
+        answerIndices: [0, 1, 3, 4],
+        explanation:
+          'Comprehensions are single expressions, so statements, exception handling and early exit are impossible inside one. Excessive clause count is a readability judgement rather than a rule, but the answer is the same. A straightforward element-wise transformation is exactly what comprehensions are for.',
+      },
+      {
+        id: 'PY-017-q7',
+        type: 'explain',
+        concept: 'readability trade-off',
+        prompt: 'Explain why a comprehension is usually clearer than the equivalent loop, and where that stops being true.',
+        rubric: [
+          'Notes that the comprehension states the result rather than the accumulation mechanics',
+          'Notes that it removes the mutable accumulator and cannot suffer accumulator bugs',
+          'Identifies the point where density becomes a cost: multiple clauses, side effects, or logic that needs statements',
+        ],
+        sampleAnswer:
+          'The loop version spends three of its four lines on bookkeeping — creating an empty list, appending, and managing the variable — so the reader has to reconstruct the intent from the mechanics. The comprehension states the transformation directly and reads close to the sentence you would say out loud, and because there is no accumulator there is no way to rebind it by accident or forget to append on one branch. That advantage holds while the expression can be taken in at a single glance: roughly one `for` clause and one condition. Beyond that, each extra clause adds nesting that the reader must unfold mentally without the visual cues that indentation provides in a loop, and a comprehension cannot be stepped through in a debugger or hold a `try/except`. At that point the loop is the more readable code, and there is no performance argument for the comprehension worth the trade.',
+        explanation:
+          'The examinable judgement is that comprehensions are a readability tool with a threshold, not a style rule to apply everywhere.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Trailing `if` versus leading conditional', back: 'Trailing `if` filters which items appear (no `else`). Leading `a if c else b` chooses each item\'s value (`else` required).' },
+      { front: 'How do you flatten a grid with a comprehension?', back: '`[c for row in grid for c in row]` — clause order matches the nested `for` statements, outermost first.' },
+      { front: 'What does `{k: v for ...}` build versus `{v for ...}`?', back: 'With a colon, a dict; without, a set. Duplicate dict keys are silently overwritten.' },
+      { front: 'Does a comprehension leak its loop variable?', back: 'No. It runs in its own scope, unlike a `for` statement, which leaves its variable bound.' },
+      { front: 'When should a comprehension become a loop?', back: 'When it needs statements, `break`, or `try/except`, when it is used for side effects, or when it needs more than about two clauses.' },
+      { front: 'How do you avoid materialising a huge list?', back: 'Use a generator expression — the same syntax with parentheses — when the result is consumed only once.' },
+    ],
+
+    challenge: {
+      title: 'One pass over messy records',
+      brief:
+        'You are given a list of dictionaries with inconsistent keys, whitespace and types. Using comprehensions only, produce: a list of cleaned lowercase names for records that have one; a dictionary mapping name to integer score, skipping non-numeric scores; a set of the distinct departments; and a flattened list of every tag across all records. Then write one of the four as an explicit loop and add a comment arguing which version you would keep in a code review and why.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Each of the four results is produced by a single comprehension of the appropriate type',
+        'Non-numeric scores are filtered out before any conversion is attempted',
+        'The tag flattening uses two `for` clauses in the correct order',
+        'The comment makes a specific readability argument rather than asserting a style rule',
+      ],
+      starterCode:
+        'records = [\n    {"name": " Ada ", "score": "92", "dept": "eng", "tags": ["ml", "py"]},\n    {"name": "Bob", "score": "n/a", "dept": "ops", "tags": []},\n    {"score": "78", "dept": "eng", "tags": ["sql"]},\n]\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone who writes loops confidently what a comprehension is, how the two kinds of condition differ, and when not to use one.',
+      mustCover: [
+        'A comprehension builds a new collection from an existing iterable in a single expression',
+        'A trailing `if` filters which items appear',
+        'A leading conditional chooses what value each item produces and requires an else',
+        'Comprehensions stop being clearer once they need several clauses or statements',
+      ],
+      bonusSignals: ['explains the clause order when flattening', 'mentions dict and set comprehensions', 'mentions not using them for side effects'],
+      sampleExplanation:
+        "A comprehension is a way of describing a collection instead of assembling one. The loop version of doubling a list takes four lines: make an empty list, walk the original, work out the new value, append it. The comprehension says the same thing in one — `[x * 2 for x in numbers]` — and you can read it left to right as 'x times two, for each x in numbers'. The same work is happening underneath; what has gone is the bookkeeping, and with it the chance of forgetting to append on one branch or accidentally rebinding the accumulator. You can put a condition in either of two places, and they do completely different jobs. On the end, `[x for x in xs if x > 0]`, it decides who gets in, so the result can be shorter than the input. At the front, `[x if x > 0 else 0 for x in xs]`, it decides what each one turns into, so the result always has exactly as many items as you started with — and the `else` there is compulsory, because an expression has to produce something for every item. Swap the braces and you get a dictionary or a set instead of a list. The one thing worth saying about restraint: a comprehension is better than a loop while you can still read it in one go. Once it needs two loops and two conditions, or needs to catch an exception, or is only there for its side effects, the plain loop is the better code and nobody will be impressed by the one-liner.",
+    },
+  },
 ];

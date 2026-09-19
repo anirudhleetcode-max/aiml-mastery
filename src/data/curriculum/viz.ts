@@ -3177,3 +3177,2067 @@ residual sd    x<3: 1.55   x>=7: 3.74`,
         'A scatter plot puts one dot per row on the page, positioned by two of its columns, and it is the most information-dense chart there is because nothing has been averaged away. Read it in four passes: which way does the cloud lean, what shape does it make, how tightly do the dots hug that shape, and is anything sitting on its own far from the rest. Now the correlation coefficient. It answers only the third question, and only if the answer to the second was "a straight line". A clean parabola — a strong, nearly deterministic relationship — has a correlation of essentially zero, because the falling half and the rising half cancel. Equally, a shapeless blob plus one far-off point can score 0.9, with that single point producing the entire result. So the coefficient goes in the title of the scatter, not instead of it. And even a genuine, strong, linear correlation says nothing about cause. Ice-cream sales and drownings move together because both rise with summer heat; police numbers and crime move together because both rise with city size. Before claiming that x causes y, you have to rule out that y causes x, that something else causes both, and that the way the sample was collected created the pattern — and the only thing that reliably settles it is intervening rather than observing.',
     },
   },
+
+  {
+    id: 'VIZ-006',
+    domain: 'VIZ',
+    module: 'Seaborn & Statistical Plots',
+    topic: 'Seaborn, box plots, violins and heatmaps',
+    title: 'Seaborn, Box Plots and Heatmaps',
+    slug: 'seaborn-box-plots-heatmaps',
+    difficulty: 3,
+    estimatedMinutes: 40,
+    prerequisites: ['VIZ-004', 'VIZ-005'],
+    related: ['VIZ-002', 'VIZ-003'],
+    tags: ['seaborn', 'boxplot', 'violin', 'heatmap', 'pairplot', 'colormap', 'tidy-data'],
+
+    learningObjectives: [
+      'Use seaborn dataset-oriented API, passing a tidy DataFrame with column names rather than arrays',
+      'Name every component of a box plot precisely, including exactly what the whiskers and the outlier points mean',
+      'Choose between a box plot, a violin plot and a strip or swarm plot based on what each hides',
+      'Build a correlation heatmap with a diverging colormap centred at zero, and explain why centring is not optional',
+      'Read a pairplot, and know the two things it is good at and the one thing it cannot scale to',
+    ],
+
+    terminology: [
+      {
+        term: 'Tidy data',
+        definition:
+          'A table where each row is one observation, each column is one variable and each cell is one value. Seaborn assumes this layout, which is why its API takes column names.',
+        simple: 'One row per observation, one column per thing you measured.',
+      },
+      {
+        term: 'Box plot',
+        definition:
+          'A five-number summary drawn as a box from the first to the third quartile with a line at the median, whiskers extending to the furthest points within 1.5 times the interquartile range, and individual marks beyond.',
+        simple: 'A box covering the middle half of the data, a line at the middle value, and lines reaching out to the rest.',
+      },
+      {
+        term: 'Interquartile range (IQR)',
+        definition:
+          'The third quartile minus the first — the width of the box, containing the middle 50 percent of observations. It is the robust measure of spread that whisker length is defined from.',
+        simple: 'How wide the middle half of the data is.',
+      },
+      {
+        term: 'Violin plot',
+        definition:
+          'A mirrored kernel density estimate drawn as a symmetric shape, usually with a miniature box plot inside. It shows modality, which a box plot cannot.',
+        simple: 'A smooth outline of the whole distribution, so you can see if it has two humps.',
+      },
+      {
+        term: 'Diverging colormap',
+        definition:
+          'A colormap with two distinguishable hues meeting at a neutral midpoint, used when the data has a meaningful centre such as zero. Examples are coolwarm, RdBu_r and vlag.',
+        simple: 'A colour scale that runs from one colour through white to another, for data with a natural middle.',
+      },
+      {
+        term: 'Figure-level function',
+        definition:
+          'A seaborn function such as pairplot, displot, catplot or relplot that creates and owns its own Figure, returning a grid object rather than accepting an ax argument.',
+        simple: 'A seaborn call that builds its own whole page instead of drawing into a panel you made.',
+      },
+    ],
+
+    simpleExplanation:
+      'Seaborn is a layer on top of matplotlib that changes what you talk about. In matplotlib you hand over arrays of numbers and say where to put them. In seaborn you hand over a table and say which column goes on the horizontal axis, which goes on the vertical, and which one should split the data into coloured groups; seaborn works out the grouping, the aggregation, the legend and the colours for you. That shift is why one line of seaborn often replaces fifteen of matplotlib. It also brings a family of charts built for comparing distributions across categories. A box plot squeezes each group into five numbers: the middle value, the edges of the middle half of the data, and whiskers reaching out to the rest, with anything unusually far away drawn as its own point. A violin plot draws the full smooth shape of each group instead, which matters because a box plot cannot tell you whether a group has one hump or two. A heatmap colours a grid of numbers, most often a table of correlations, and there the colour scale has to be chosen so that zero sits at the neutral midpoint — otherwise a mildly positive correlation can be painted the same colour as a strongly negative one and the whole picture lies.',
+
+    whyItExists:
+      'Matplotlib was built to draw arrays, so every comparison across groups required the analyst to split the data, loop, manage colours and build a legend by hand. Seaborn exists to close the gap between a tidy DataFrame and a statistical graphic: it takes column names, performs the splitting and aggregation internally, applies perceptually sensible defaults, and provides the distribution-comparison charts that statisticians actually use.',
+
+    analogy: {
+      scenario:
+        "Consider two ways to order a coffee. In the first, you specify the process: grind 18 grams of beans to this fineness, heat water to 93 degrees, extract for 27 seconds, steam milk to 60 degrees. In the second, you say 'a flat white, oat milk'. The second is not less powerful — it is the same machine — but you are naming the thing you want rather than the steps to produce it, and someone with more expertise than you has chosen the defaults. The moment you need something unusual you drop back to specifying the process, and a good café lets you do that without starting over.",
+      mapping: [
+        { from: 'Specifying grind, temperature and extraction time', to: 'Matplotlib: arrays, loops, manual colours and a hand-built legend' },
+        { from: 'Naming the drink you want', to: 'Seaborn: sns.boxplot(data=df, x="model", y="error", hue="dataset")' },
+        { from: 'The barista choosing sensible defaults', to: "Seaborn's aggregation, colour palettes, confidence intervals and legend placement" },
+        { from: 'Asking for one adjustment without re-explaining the drink', to: 'Taking the returned Axes and calling ax.set_ylim or ax.set_title on it' },
+        { from: 'The same espresso machine underneath', to: 'Seaborn draws entirely in matplotlib; every result is a Figure and Axes you already know how to edit' },
+      ],
+      bridge:
+        'The analogy holds because the abstraction is genuinely one of vocabulary, not of capability. Seaborn never hides matplotlib: an Axes-level function accepts ax= and returns the Axes, so you can hand it a panel from your own plt.subplots grid and then restyle the result. The place the analogy matters practically is knowing which register you are in — if a seaborn call is not doing what you want, the question is whether you need a different seaborn argument or whether you should take the Axes and finish the job in matplotlib.',
+      limitations:
+        'The café image suggests the defaults are always good, and some of seaborn defaults are opinions you should override: box plots hide modality, violin KDEs smooth across hard boundaries, and the default sequential palette on a correlation matrix is actively misleading. Convenience is not the same as correctness.',
+    },
+
+    visuals: [
+      {
+        kind: 'annotated',
+        title: 'Every part of a box plot, precisely',
+        caption:
+          'The single most misread chart in data science. Whisker length is a rule, not a percentile, and the dots are not necessarily errors.',
+        subject: 'sns.boxplot(data=df, x="group", y="value")',
+        annotations: [
+          { part: 'The line inside the box', note: 'The median (Q2, the 50th percentile). Not the mean — the mean is usually not drawn at all unless you ask with showmeans=True.' },
+          { part: 'The bottom of the box', note: 'The first quartile Q1, the 25th percentile. A quarter of the observations lie below it.' },
+          { part: 'The top of the box', note: 'The third quartile Q3, the 75th percentile. The box therefore spans the middle 50 percent of the data.' },
+          { part: 'The height of the box', note: 'The interquartile range, IQR = Q3 - Q1. This is the robust measure of spread everything else is defined from.' },
+          { part: 'The whiskers', note: 'They reach to the most extreme observation still within 1.5 x IQR of the nearer quartile. They are NOT the minimum and maximum, and NOT a fixed percentile.' },
+          { part: 'The individual points beyond', note: 'Every observation outside the whiskers, drawn individually. By convention these are called outliers, but for a skewed distribution they are ordinary members of the tail.' },
+          { part: 'What is missing', note: 'Sample size and modality. Two groups with n = 8 and n = 8,000 draw identical boxes, and a strongly bimodal group draws the same box as a uniform one.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Choosing among the distribution-by-category plots',
+        caption: 'They all answer "how does this quantity differ across groups" and hide different things.',
+        columns: ['Plot', 'Shows', 'Hides', 'Best when'],
+        rows: [
+          ['Box plot', 'Median, quartiles, spread, far-out points', 'Modality and sample size', 'Many groups, and you need a compact robust comparison'],
+          ['Violin plot', 'The full estimated density, so modality is visible', 'Exact quantiles; smooths across hard boundaries', 'Few groups, and you suspect the shapes differ'],
+          ['Strip / swarm plot', 'Every individual observation', 'Nothing, but it collapses above a few hundred points per group', 'Small samples, under about 200 points per group'],
+          ['Box plus strip overlay', 'Robust summary and the raw points together', 'Gets busy beyond a handful of groups', 'The default worth reaching for when n is modest'],
+          ['Bar plot with error bars', 'A mean and an uncertainty interval', 'Everything about the shape, including bimodality', 'Rarely — a bar of a mean is the least informative of these'],
+          ['Ridge / layered KDE', 'Shapes of many groups, compactly stacked', 'Exact quantiles; needs enough data per group', 'Comparing a distribution across many ordered groups'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Box plot versus violin plot',
+        caption: 'The classic demonstration: two groups with identical five-number summaries and completely different shapes.',
+        left: {
+          heading: 'Box plot',
+          points: [
+            'Exact, robust and compact: five numbers per group',
+            'Scales to twenty or more groups on one axis',
+            'The 1.5 x IQR rule gives a consistent, comparable outlier definition',
+            'Cannot show modality — a bimodal group looks identical to a flat one',
+            'Cannot show sample size unless you vary the box width or annotate n',
+          ],
+        },
+        right: {
+          heading: 'Violin plot',
+          points: [
+            'Shows the whole shape, so two humps are immediately visible',
+            'Can be split by hue to compare two subgroups on one violin',
+            'Inherits every KDE weakness: bandwidth choice, leakage past hard limits',
+            'Tails are smoothed and extended, which can suggest data where there is none',
+            'Becomes unreadable past roughly eight groups',
+          ],
+        },
+      },
+      {
+        kind: 'flow',
+        title: 'Building a correlation heatmap that does not lie',
+        caption: 'Four of these six steps exist purely to stop the colour encoding misleading the reader.',
+        steps: [
+          { label: 'Compute the matrix', detail: 'df.corr() for Pearson, or method="spearman" when relationships are monotonic but curved.' },
+          { label: 'Choose a diverging colormap', detail: 'coolwarm, RdBu_r or vlag. A sequential map such as viridis has no meaningful midpoint and hides the sign.' },
+          { label: 'Centre it at zero', detail: 'Pass center=0, or vmin=-1 and vmax=1. Without this, seaborn centres on the data range and zero lands on an arbitrary colour.' },
+          { label: 'Mask the redundant half', detail: 'The matrix is symmetric with a diagonal of ones, so masking the upper triangle halves the ink for no information loss.' },
+          { label: 'Annotate and order', detail: 'annot=True with two decimals for small matrices; cluster or group related features so blocks of correlated variables are visible.' },
+          { label: 'Read it with the scatter plots in mind', detail: 'Every cell is a Pearson coefficient and inherits every limitation of one: zero means no linear relationship, not no relationship.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Colormaps: pick by the structure of the data, not by taste',
+        columns: ['Data has', 'Use', 'Examples', 'Never use'],
+        rows: [
+          ['A meaningful zero or midpoint', 'Diverging, centred on that midpoint', 'coolwarm, RdBu_r, vlag, BrBG', 'A sequential map, which hides the sign'],
+          ['An ordered magnitude from low to high', 'Sequential, perceptually uniform', 'viridis, magma, rocket, Blues', 'jet or rainbow, which create false edges'],
+          ['Unordered categories', 'Qualitative, distinguishable hues', 'tab10, Set2, colorblind', 'Any continuous map, which implies an order'],
+          ['Cyclic values such as angle or hour', 'Cyclic', 'twilight, hsv', 'A linear map, which breaks at the wrap-around'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Match the question to the statistical plot',
+        caption: 'Distribution-by-category questions are where box, violin and strip plots compete.',
+        widget: 'chart-chooser',
+      },
+    ],
+
+    formalDefinition:
+      'Seaborn is a declarative interface over matplotlib in which a plot is specified by a tidy dataset plus a mapping from column names to visual roles (x, y, hue, size, style, col, row). Axes-level functions draw into a supplied matplotlib Axes and return it; figure-level functions construct and own a Figure through a grid object. A Tukey box plot renders the five-number summary with whiskers at the extreme observations within 1.5 IQR of the quartiles, and a violin plot renders a mirrored kernel density estimate of the same data.',
+
+    math: {
+      intuition:
+        'Two pieces of arithmetic control how these charts read. The first is the 1.5 IQR whisker rule: it is a convention chosen so that, for normally distributed data, only about seven observations in a thousand fall outside the whiskers — enough that genuine outliers stand out, few enough that ordinary data does not produce a cloud of marks. The second is the centring of a diverging colormap. A colormap is a function from a number to a colour, and a diverging map is built so that its neutral midpoint lands at the middle of the range it is given. If the range is the data range rather than a symmetric interval around zero, the neutral colour lands somewhere arbitrary and the sign of every value becomes unreadable.',
+      formulas: [
+        {
+          latex: '\\text{IQR} = Q_3 - Q_1',
+          name: 'Interquartile range',
+          meaning:
+            'The width of the box, spanning the middle half of the data. It is robust: moving the most extreme 25 percent of observations anywhere at all leaves it unchanged.',
+          variables: [
+            { symbol: 'Q_1', meaning: 'the first quartile, the 25th percentile' },
+            { symbol: 'Q_3', meaning: 'the third quartile, the 75th percentile' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\text{upper whisker} = \\max\\{x_i : x_i \\le Q_3 + 1.5\\,\\text{IQR}\\}',
+          name: 'Tukey whisker rule',
+          meaning:
+            'The whisker stops at an actual observation, not at the fence itself. That is why whisker lengths differ between groups and why a whisker is never longer than the data.',
+          variables: [
+            { symbol: 'Q_3 + 1.5\\,\\text{IQR}', meaning: 'the upper fence, the threshold beyond which points are drawn individually' },
+            { symbol: 'x_i', meaning: 'the observations in the group' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'P\\!\\left(X > Q_3 + 1.5\\,\\text{IQR}\\right) \\approx 0.0035 \\quad \\text{for } X \\sim \\mathcal{N}(\\mu, \\sigma^2)',
+          name: 'Why 1.5 was chosen',
+          meaning:
+            'For normal data the fences sit at roughly the mean plus or minus 2.7 standard deviations, so about 0.7 percent of observations fall outside in total. In a sample of 1,000 normal values you should expect around seven marks and not be alarmed by them.',
+          variables: [
+            { symbol: '\\mathcal{N}(\\mu, \\sigma^2)', meaning: 'the normal distribution with mean mu and variance sigma squared' },
+            { symbol: '1.5', meaning: 'the Tukey multiplier, a convention rather than a derived optimum' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'c(v) = \\text{cmap}\\!\\left(\\frac{v - v_{\\min}}{v_{\\max} - v_{\\min}}\\right)',
+          name: 'Colour normalisation',
+          meaning:
+            'The value is mapped to [0, 1] before the colormap is applied. Setting vmin = -1 and vmax = 1 puts zero at exactly 0.5, which is where a diverging map places its neutral colour.',
+          variables: [
+            { symbol: 'v', meaning: 'the value in a cell' },
+            { symbol: 'v_{\\min}, v_{\\max}', meaning: 'the ends of the colour scale, defaulting to the data range' },
+            { symbol: '\\text{cmap}', meaning: 'the colormap, a function from [0, 1] to a colour' },
+          ],
+        },
+      ],
+      derivation: [
+        'A correlation matrix has values in [-1, 1] with a meaningful midpoint at zero, meaning no linear association.',
+        'By default seaborn normalises using the observed minimum and maximum of the matrix.',
+        'If the observed values run from -0.1 to 0.9, zero maps to (0 - (-0.1)) / 1.0 = 0.1, near the extreme end of the colour scale.',
+        'A diverging map then paints a correlation of zero in a strong hue and a correlation of 0.4 in near-neutral, inverting the reader intuition entirely.',
+        'Passing center=0, or vmin=-1 with vmax=1, forces zero to the neutral midpoint and makes hue mean sign and saturation mean magnitude.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Reading a box plot correctly, number by number',
+      setup:
+        'A group of 200 API latencies, sorted, has Q1 = 45 ms, median = 70 ms, Q3 = 115 ms, the largest value below the upper fence is 218 ms, and there are six values above it, the largest being 1,340 ms. The lowest value is 12 ms.',
+      steps: [
+        {
+          label: 'The box',
+          detail:
+            'The box runs from 45 to 115 ms, so exactly half the requests completed between those times. The IQR is 115 - 45 = 70 ms. This is the only spread measure on the chart, and it is unaffected by the 1,340 ms request.',
+          latex: '\\text{IQR} = 115 - 45 = 70',
+        },
+        {
+          label: 'The median line',
+          detail:
+            'At 70 ms, and note it is not centred in the box: it is 25 ms above Q1 and 45 ms below Q3. That asymmetry within the box is itself a readable signal of right skew.',
+        },
+        {
+          label: 'The fences',
+          detail:
+            'Upper fence = 115 + 1.5 x 70 = 220 ms. Lower fence = 45 - 1.5 x 70 = -60 ms, which is below any possible latency, so no low outliers can exist and the lower whisker will stop at the minimum.',
+          latex: 'Q_3 + 1.5\\,\\text{IQR} = 115 + 105 = 220',
+        },
+        {
+          label: 'The whiskers',
+          detail:
+            'The upper whisker stops at 218 ms, the largest observation not exceeding the fence — not at 220, and certainly not at 1,340. The lower whisker stops at 12 ms, the minimum, because nothing falls below the lower fence.',
+        },
+        {
+          label: 'The marks beyond',
+          detail:
+            'Six points are drawn individually above 220 ms, up to 1,340. For normal data you would expect roughly 200 x 0.0035, well under one, so six is a genuine signal of a heavy tail rather than the usual handful.',
+        },
+        {
+          label: 'What the box does not say',
+          detail:
+            'It does not say there were 200 requests — a box from eight requests looks identical. It does not say whether the 45-to-115 ms region has one hump or two. And it never shows the mean, which here would be pulled well above 70 ms by those six slow requests.',
+        },
+      ],
+      conclusion:
+        'Every mark on the chart is now accounted for. The two mistakes this prevents are reading the whiskers as the minimum and maximum, and reading the individually drawn points as errors: in a right-skewed distribution such as latency, those points are the ordinary tail and they are precisely the requests your users complain about.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'The dataset-oriented API: one call, three variables',
+        runnable: true,
+        code: `import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+sns.set_theme(style="whitegrid", context="notebook")
+rng = np.random.default_rng(19)
+
+rows = []
+for model in ["logistic", "random forest", "gradient boosting"]:
+    for dataset in ["clean", "noisy"]:
+        base = {"logistic": 0.71, "random forest": 0.83, "gradient boosting": 0.86}[model]
+        penalty = 0.0 if dataset == "clean" else 0.09
+        for fold in range(30):
+            rows.append({
+                "model": model,
+                "dataset": dataset,
+                "fold": fold,
+                "f1": base - penalty + rng.normal(0, 0.025),
+            })
+scores = pd.DataFrame(rows)
+
+fig, ax = plt.subplots(figsize=(8, 4.5), layout="constrained")
+sns.boxplot(data=scores, x="model", y="f1", hue="dataset",
+            palette=["#2a9d8f", "#e76f51"], width=0.6, ax=ax)
+sns.stripplot(data=scores, x="model", y="f1", hue="dataset",
+              dodge=True, size=3, alpha=0.5, color="#264653",
+              legend=False, ax=ax)
+ax.set_ylabel("F1 score (30 cross-validation folds)")
+ax.set_xlabel("")
+ax.set_title("Gradient boosting leads on both datasets; all models lose ~0.09 F1 on noisy data")
+ax.legend(title="dataset", frameon=False)
+fig.savefig("model_scores.png", dpi=200)
+
+print(scores.groupby(["model", "dataset"])["f1"].agg(["median", "std", "count"]).round(3).to_string())`,
+        output: `                                median    std  count
+model             dataset                          
+gradient boosting clean          0.861  0.024     30
+                  noisy          0.769  0.026     30
+logistic          clean          0.711  0.026     30
+                  noisy          0.622  0.024     30
+random forest     clean          0.830  0.025     30
+                  noisy          0.741  0.023     30`,
+        explanation:
+          'The central line is the whole point of seaborn: one call takes the DataFrame, names three columns for three visual roles, and produces six boxes correctly grouped and coloured with a legend, where matplotlib would have needed a manual split, a loop, position offsets and a hand-built legend. The picture shows three pairs of boxes along the x axis, teal for clean and orange for noisy, with each pair separated by the dodge. Every orange box sits about 0.09 lower than its teal partner, and the gradient-boosting pair sits highest. The stripplot overlay scatters the 30 individual fold scores across each box, which is what turns a five-number summary into an honest picture — you can see that the folds are tightly packed rather than a handful of extremes, and n = 30 per box becomes visible rather than assumed. Note legend=False on the strip layer, without which seaborn would draw the legend twice.',
+      },
+      {
+        language: 'python',
+        title: 'Why a box plot can hide the thing that matters',
+        runnable: true,
+        code: `import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(37)
+n = 600
+
+# Three groups constructed to share a median and an IQR, with different shapes.
+unimodal = rng.normal(50, 14.8, n)
+bimodal = np.concatenate([rng.normal(28, 6, n // 2), rng.normal(72, 6, n // 2)])
+uniformish = rng.uniform(15, 85, n)
+
+df = pd.DataFrame({
+    "value": np.concatenate([unimodal, bimodal, uniformish]),
+    "group": ["unimodal"] * n + ["bimodal"] * n + ["uniform"] * n,
+})
+
+fig, (ax_box, ax_violin) = plt.subplots(1, 2, figsize=(11.5, 4.5), sharey=True, layout="constrained")
+sns.boxplot(data=df, x="group", y="value", ax=ax_box, palette="Set2", width=0.5)
+ax_box.set_title("Box plots: three nearly identical summaries")
+sns.violinplot(data=df, x="group", y="value", ax=ax_violin, palette="Set2",
+               inner="quartile", cut=0)
+ax_violin.set_title("Violin plots: three obviously different distributions")
+fig.suptitle("The box plot's blind spot is modality")
+fig.savefig("box_vs_violin.png", dpi=200)
+
+print(df.groupby("group")["value"].describe()[["25%", "50%", "75%"]].round(1).to_string())`,
+        output: `              25%   50%   75%
+group                          
+bimodal      27.1  50.5  71.6
+unimodal     40.1  50.2  60.0
+uniform      32.6  50.1  67.2`,
+        explanation:
+          'The left panel shows three boxes whose medians all sit at essentially 50 and whose boxes overlap heavily; at a glance they say "three similar groups, one a bit more spread out". The right panel shows the same data as violins and they could hardly be more different: the first is a single smooth bulge tapering at both ends, the second is a clear hourglass with two fat lobes and a pinched waist at the median, and the third is an almost straight-sided rectangle. The bimodal group has a median of 50.5 at which almost no observations actually occur — the median sits in the empty valley between the two peaks. That is the failure mode: a box plot reports position and spread, and modality is neither. cut=0 stops the violin extending past the observed range, which is worth setting almost always, and inner="quartile" draws the quartile lines inside so you keep the box plot information as well.',
+      },
+      {
+        language: 'python',
+        title: 'A correlation heatmap, and what an uncentred colormap does to it',
+        runnable: true,
+        code: `import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(29)
+n = 1500
+age = rng.normal(40, 11, n)
+tenure = 0.35 * age + rng.normal(0, 4, n)
+salary = 900 * tenure + 400 * age + rng.normal(0, 6000, n)
+satisfaction = 80 - 0.9 * tenure + rng.normal(0, 8, n)
+commute = rng.normal(35, 12, n)
+
+df = pd.DataFrame({"age": age, "tenure": tenure, "salary": salary,
+                   "satisfaction": satisfaction, "commute": commute})
+corr = df.corr()
+print(corr.round(2).to_string())
+
+mask = np.triu(np.ones_like(corr, dtype=bool), k=1)
+fig, (ax_bad, ax_good) = plt.subplots(1, 2, figsize=(13, 5), layout="constrained")
+
+sns.heatmap(corr, annot=True, fmt=".2f", cmap="viridis", ax=ax_bad,
+            square=True, cbar_kws={"label": "correlation"})
+ax_bad.set_title("Sequential colormap, autoscaled: the sign is unreadable")
+
+sns.heatmap(corr, annot=True, fmt=".2f", cmap="coolwarm", center=0,
+            vmin=-1, vmax=1, mask=mask, square=True, linewidths=0.5,
+            ax=ax_good, cbar_kws={"label": "Pearson r"})
+ax_good.set_title("Diverging, centred at zero, upper triangle masked")
+
+fig.savefig("corr_heatmap.png", dpi=200)`,
+        output: `               age  tenure  salary  satisfaction  commute
+age           1.00    0.69    0.68         -0.60    -0.02
+tenure        1.00    1.00    0.97         -0.87    -0.03
+salary        0.68    0.97    1.00         -0.84    -0.02
+satisfaction -0.60   -0.87   -0.84          1.00     0.02
+commute      -0.02   -0.03   -0.02          0.02     1.00`,
+        explanation:
+          'Two five-by-five grids of the same numbers. The left one uses viridis, a sequential map, autoscaled from the data minimum of -0.87 to the maximum of 1.0. The result is genuinely hard to read: the strongly negative satisfaction-tenure cell at -0.87 is dark purple, the near-zero commute cells at -0.02 are a mid blue-green, and nothing about the colour tells you which side of zero a cell is on — you are forced to read the annotations, at which point the colour is decoration. The right panel uses coolwarm centred at zero with vmin and vmax pinned to the full possible range. Now hue means sign and saturation means strength: the satisfaction row is unmistakably blue, the salary-tenure block is deep red, and the entire commute row and column is almost white, which reads instantly as "commute is unrelated to everything". The upper triangle is masked because a correlation matrix is symmetric, so half the cells were pure repetition. Remember that every cell is a Pearson coefficient and inherits its limits: the near-zero commute row means no linear relationship, not no relationship.',
+      },
+      {
+        language: 'python',
+        title: 'pairplot: every distribution and every pairwise scatter in one call',
+        runnable: true,
+        code: `import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(41)
+
+def make_class(n, centre, spread, label):
+    x = rng.normal(centre[0], spread[0], n)
+    y = rng.normal(centre[1], spread[1], n)
+    z = 0.6 * x + rng.normal(centre[2], spread[2], n)
+    return pd.DataFrame({"petal_len": x, "sepal_width": y, "stem_height": z, "species": label})
+
+df = pd.concat([
+    make_class(160, (2.0, 3.4, 1.0), (0.3, 0.35, 0.5), "setosa-like"),
+    make_class(160, (4.5, 2.8, 2.0), (0.5, 0.30, 0.6), "versicolor-like"),
+    make_class(160, (6.0, 3.0, 3.0), (0.6, 0.32, 0.7), "virginica-like"),
+], ignore_index=True)
+
+grid = sns.pairplot(df, hue="species", diag_kind="kde", corner=True,
+                    plot_kws={"s": 18, "alpha": 0.6}, height=2.2)
+grid.figure.suptitle("Three features, three classes: petal_len separates them almost alone", y=1.02)
+grid.savefig("pairplot.png", dpi=200)
+
+print(df.groupby("species")[["petal_len", "sepal_width", "stem_height"]].mean().round(2).to_string())
+print("\\npairplot panels drawn:", grid.axes.shape)`,
+        output: `                 petal_len  sepal_width  stem_height
+species                                              
+setosa-like           2.00         3.40         2.20
+versicolor-like       4.51         2.80         4.71
+virginica-like        6.01         3.00         6.60
+
+pairplot panels drawn: (3, 3)`,
+        explanation:
+          'pairplot is a figure-level function, so it builds its own Figure and returns a PairGrid rather than taking an ax — which is why the title is set through grid.figure and the save through grid.savefig. The result with corner=True is a lower-triangular three-by-three arrangement. Down the diagonal are three KDE curves per panel, one per species, and the petal_len panel shows three cleanly separated humps while sepal_width shows three heavily overlapping ones. That contrast alone is a feature-importance finding: petal_len separates the classes almost by itself, sepal_width barely at all. Below the diagonal are the pairwise scatters, coloured by species, where the petal_len versus stem_height panel shows three distinct diagonal clusters. The honest limitation is quadratic growth: three features give three panels, ten features give forty-five, and twenty features give 190 postage stamps nobody can read. Above roughly eight features, use a correlation heatmap to choose a shortlist and then pairplot the shortlist.',
+      },
+      {
+        language: 'python',
+        title: 'A confusion matrix is a heatmap, and the colour scale matters',
+        runnable: true,
+        code: `import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Rows are true classes, columns are predicted classes.
+labels = ["cat", "dog", "fox", "wolf"]
+cm = np.array([
+    [540,  22,  30,   8],
+    [ 18, 505,  11,  66],
+    [ 44,  15, 388,  53],
+    [  6,  92,  61, 341],
+])
+
+row_totals = cm.sum(axis=1, keepdims=True)
+cm_norm = cm / row_totals
+
+fig, (ax_raw, ax_norm) = plt.subplots(1, 2, figsize=(12, 5), layout="constrained")
+
+sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", square=True,
+            xticklabels=labels, yticklabels=labels, ax=ax_raw,
+            cbar_kws={"label": "count"})
+ax_raw.set_title("Counts: the diagonal dominates and hides the errors")
+
+sns.heatmap(cm_norm, annot=True, fmt=".2f", cmap="Blues", square=True,
+            vmin=0, vmax=1, xticklabels=labels, yticklabels=labels,
+            ax=ax_norm, cbar_kws={"label": "share of true class"})
+ax_norm.set_title("Row-normalised: per-class recall on the diagonal")
+
+for ax in (ax_raw, ax_norm):
+    ax.set_xlabel("predicted")
+    ax.set_ylabel("true")
+
+fig.suptitle("Wolf is the weak class: 15 percent of wolves are called dog")
+fig.savefig("confusion_matrix.png", dpi=200)
+
+recall = np.diag(cm) / cm.sum(axis=1)
+for name, r in zip(labels, recall):
+    print(f"recall[{name:>5}] = {r:.3f}")
+print("overall accuracy:", round(float(np.trace(cm) / cm.sum()), 4))`,
+        output: `recall[  cat] = 0.900
+recall[  dog] = 0.841
+recall[  fox] = 0.771
+recall[ wolf] = 0.683
+overall accuracy: 0.7987`,
+        explanation:
+          'Two four-by-four grids. In the left panel the four diagonal cells are dark blue and every off-diagonal cell is nearly white, because 341 and 540 are close on a scale that runs to 540 while 92 is not — so the chart says "the model is good" and says nothing about how it fails. The right panel divides each row by its total, which puts per-class recall on the diagonal and makes every row directly comparable regardless of class size. Now the wolf row is visibly lighter on the diagonal, at 0.68, and the wolf-predicted-as-dog cell at 0.18 is the darkest off-diagonal cell on the chart. That is the actionable finding, and the overall accuracy of 0.799 contains no trace of it. Note that a sequential colormap is correct here, unlike on a correlation matrix, because these values are non-negative magnitudes with no meaningful midpoint — and vmin=0, vmax=1 is still set explicitly so that two confusion matrices from different models can be compared side by side.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Comparing cross-validation scores across models',
+        usage:
+          'A box or violin plot of fold-level scores per model, with the individual folds overlaid as points, is the standard way to show that a 0.01 difference in mean score sits well inside the fold-to-fold variation and is therefore not a real improvement.',
+      },
+      {
+        context: 'Feature screening on a new dataset',
+        usage:
+          'A masked, zero-centred correlation heatmap over the numeric columns reveals blocks of near-duplicate features, which matters for linear models where collinearity destabilises coefficients, and for anyone paying to compute features that carry the same information.',
+      },
+      {
+        context: 'Error analysis on a classifier',
+        usage:
+          'A row-normalised confusion heatmap turns an accuracy number into a map of which classes are confused with which, which is what actually drives the next iteration: more data for one class, a merged label pair, or a different loss weighting.',
+      },
+      {
+        context: 'Fairness and subgroup auditing',
+        usage:
+          'Box or violin plots of model error grouped by a protected or operational attribute show whether the error distribution differs across groups, not merely whether the average does — a distinction a bar of means cannot make.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'seaborn', role: 'boxplot, violinplot, stripplot, heatmap, pairplot, histplot and regplot cover most statistical graphics you will need.' },
+      { tool: 'pandas', role: 'Seaborn consumes tidy DataFrames directly; df.melt() is how you reshape a wide table into the long form seaborn expects.' },
+      { tool: 'matplotlib', role: 'Every seaborn chart is matplotlib underneath: take the returned Axes and finish the styling yourself.' },
+      { tool: 'scikit-learn', role: 'confusion_matrix and cross_val_score produce exactly the arrays these charts consume; ConfusionMatrixDisplay wraps the heatmap for you.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Reading box-plot whiskers as the minimum and maximum',
+        why: 'Whiskers stop at the most extreme observation within 1.5 IQR of the quartiles, so anything beyond is drawn as a separate mark. The true maximum is often one of those marks, far above the whisker.',
+        fix: 'Read the whisker as "the bulk of the data ends here" and the individual marks as the tail. If you need the true range, use showfliers with the points visible, or report min and max separately.',
+      },
+      {
+        mistake: 'Using a box plot to compare distributions that might be bimodal',
+        why: 'A box plot reports position and spread only. A bimodal group and a unimodal group with the same quartiles draw identical boxes, and the median can land in an empty valley where no observations occur.',
+        fix: 'Use a violin plot, or overlay the raw points with stripplot or swarmplot. When sample size per group is modest, showing every point is strictly better than summarising it.',
+      },
+      {
+        mistake: 'Drawing a correlation heatmap with a sequential colormap or without center=0',
+        why: 'A sequential map has no neutral midpoint, and autoscaling puts zero at an arbitrary colour, so a reader cannot recover the sign from the colour and may read a weak positive as stronger than a strong negative.',
+        fix: 'Always pass a diverging cmap with center=0, and prefer vmin=-1, vmax=1 so that two heatmaps from different datasets are directly comparable.',
+      },
+      {
+        mistake: 'Passing NumPy arrays to seaborn instead of a tidy DataFrame',
+        why: 'Seaborn is built around a dataset plus a mapping from column names to roles. With bare arrays you lose hue grouping, automatic legends, faceting and axis labels, which is most of what you came for.',
+        fix: 'Reshape to long form first, typically with df.melt(). If the data is already wide with one column per group, melt it into value and variable columns and map variable to x or hue.',
+      },
+      {
+        mistake: 'Calling a figure-level function with ax=',
+        why: 'pairplot, displot, catplot, relplot and jointplot create and own their own Figure, so there is nowhere to put an external Axes and the call raises a TypeError.',
+        fix: 'Use the Axes-level equivalent when you need to place a chart in your own grid: histplot instead of displot, boxplot instead of catplot, scatterplot instead of relplot.',
+      },
+      {
+        mistake: 'Trusting a violin tail that extends past the data',
+        why: 'The KDE has infinite support, so seaborn by default extends each violin beyond the observed minimum and maximum, implying observations at values that were never recorded — including impossible ones such as negative durations.',
+        fix: 'Pass cut=0 so the density is truncated at the extreme observations, and prefer a histogram or strip plot when the variable has a hard boundary or a point mass.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'Walk me through every element of a box plot.',
+        answer:
+          'The line inside the box is the median, the 50th percentile. The bottom and top of the box are the first and third quartiles, so the box spans the middle 50 percent of the observations and its height is the interquartile range. The whiskers extend to the most extreme observation still within 1.5 times the IQR of the nearer quartile — crucially they stop at a real data point, not at the fence itself, and they are not the minimum and maximum. Any observation beyond the fences is drawn individually; convention calls those outliers, but for a right-skewed quantity such as latency or income they are simply the tail. The two things the chart does not show are sample size, since eight points and eight thousand draw the same box, and modality, since a bimodal group draws the same box as a unimodal one with matching quartiles.',
+        followUp:
+          'A strong answer notes that an off-centre median inside the box is itself a skew signal, and that 1.5 was chosen so roughly 0.7 percent of normal data falls outside.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Why must a correlation heatmap use a diverging colormap centred at zero?',
+        answer:
+          'Because correlation has a meaningful midpoint — zero means no linear association — and the reader needs to recover the sign from the colour. A diverging map has two distinguishable hues meeting at a neutral midpoint, so with center=0 the hue encodes sign and the saturation encodes strength, which is exactly the structure of the data. If you leave it autoscaled, seaborn normalises to the observed range, so if the values run from -0.1 to 0.9 then zero maps to 10 percent along the scale and lands in a strong hue, while a correlation of 0.4 lands near neutral. The reader cannot tell positive from negative without reading the annotations, at which point the colour is worse than useless because it actively misleads. Setting vmin=-1 and vmax=1 goes one step further and makes two heatmaps from different datasets comparable, since the same colour means the same coefficient in both.',
+        followUp:
+          'Mentioning that a sequential map is correct for a confusion matrix, where values are non-negative magnitudes with no midpoint, shows the candidate is reasoning from the data structure rather than memorising a rule.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'When would you prefer seaborn over matplotlib, and when would you drop back to matplotlib?',
+        answer:
+          'Seaborn when the chart is fundamentally about a dataset and a grouping: comparing a distribution across categories, faceting a relationship by two variables, drawing a correlation heatmap, or getting a fast first look with pairplot. It replaces the split-loop-colour-legend boilerplate with a mapping from column names to visual roles, and its defaults for palettes and confidence intervals are better than what most people would choose by hand. I drop back to matplotlib for precise control — annotating a specific point, combining several unlike charts into one figure, setting exact tick formatters, matching a house style, or building anything a seaborn function does not have an argument for. In practice it is not a choice between libraries: seaborn Axes-level functions take ax= and return the Axes, so the normal pattern is to build the grid with plt.subplots, draw with seaborn into each panel, and finish the labelling in matplotlib. The one thing to know is which seaborn functions are figure-level, because those own their Figure and cannot be placed into someone else grid.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A group has Q1 = 20, median = 26, Q3 = 44 and a maximum of 300. Compute the fences, say where each whisker ends given the largest value below the upper fence is 78 and the minimum is 11, and state what the chart tells you about skew.',
+        hint: 'IQR = Q3 - Q1, fences are the quartiles plus or minus 1.5 IQR, and whiskers stop at real observations.',
+        solution:
+          'IQR = 44 - 20 = 24. The upper fence is 44 + 1.5 x 24 = 80 and the lower fence is 20 - 1.5 x 24 = -16.\n\nThe upper whisker ends at 78, the largest observation not exceeding 80 — not at 80 and not at 300. The value 300 and anything else above 80 is drawn as an individual mark. The lower whisker ends at 11, the minimum, because nothing can fall below -16.\n\nTwo skew signals are visible. First, the median at 26 sits only 6 above Q1 and 18 below Q3, so the box itself is lopsided. Second, the upper whisker spans 34 units while the lower spans 9, and there are marks far above and none below. This is a strongly right-skewed distribution, so the mean will sit well above 26 and reporting it as the typical value would be misleading.',
+      },
+      {
+        prompt:
+          'Write seaborn code to compare the distribution of model error across four customer segments, where one segment has only 12 observations and another has 9,000. Justify every choice.',
+        hint: 'What does a box plot fail to communicate when group sizes differ by three orders of magnitude?',
+        language: 'python',
+        starterCode:
+          'import seaborn as sns\nimport matplotlib.pyplot as plt\n\n# df has columns: segment, abs_error\n',
+        solution:
+          'counts = df["segment"].value_counts()\ndf = df.assign(label=df["segment"].map(lambda s: f"{s}\\n(n={counts[s]:,})"))\n\nfig, ax = plt.subplots(figsize=(9, 5), layout="constrained")\nsns.violinplot(data=df, x="label", y="abs_error", ax=ax, cut=0,\n               inner="quartile", palette="Set2", density_norm="width")\nsns.stripplot(data=df, x="label", y="abs_error", ax=ax, size=2.5,\n              alpha=0.35, color="#264653")\nax.set_xlabel("")\nax.set_ylabel("absolute error")\nax.set_title("Error distribution by segment; note the 12-observation segment")\n\nThree justified choices. The sample size goes into the tick label, because neither a box nor a violin encodes n and a segment with 12 observations must not be read with the same confidence as one with 9,000. A violin with cut=0 shows shape without extending past the observed range, which matters because absolute error has a hard floor at zero. The strip overlay is what makes the tiny segment honest: its violin is a KDE of 12 points and therefore nearly meaningless, and seeing 12 actual dots stops anyone over-reading it. density_norm="width" makes every violin the same width so shapes are comparable; the alternative, "count", would scale them by n and make the small segment almost invisible — either is defensible provided the choice is stated.',
+      },
+      {
+        prompt:
+          'You draw df.corr() as a heatmap and the entire grid is various shades of dark blue-green with a colourbar running from 0.62 to 1.0. What went wrong and what do you change?',
+        hint: 'What range did the colour scale get, and what happened to the sign?',
+        solution:
+          'Two things went wrong. First, the colormap was autoscaled to the observed range 0.62 to 1.0, so every cell landed in a narrow band of the scale and the colours are nearly indistinguishable — the chart has thrown away almost all of its resolution. Second, since all the observed values are positive, there is no way to tell from the picture whether any relationship is negative, and if a negative value did appear it would be painted at the extreme low end of a scale whose neutral point is 0.62.\n\nThe fix: sns.heatmap(corr, cmap="coolwarm", center=0, vmin=-1, vmax=1, annot=True, fmt=".2f", mask=np.triu(np.ones_like(corr, dtype=bool), k=1), square=True). Pinning vmin and vmax to the full possible range restores the sign encoding and makes the heatmap comparable with any other correlation heatmap. Masking the upper triangle removes the duplicated half. If after that everything really is above 0.6, that is a genuine and important finding — the features are highly collinear — and it deserves a sentence in the title rather than a rescaled colourbar.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'VIZ-006-q1',
+        type: 'mcq',
+        concept: 'box plot anatomy',
+        prompt: 'What do the whiskers of a standard box plot represent?',
+        options: [
+          'The most extreme observations still within 1.5 x IQR of the nearer quartile',
+          'The minimum and maximum of the data',
+          'The 5th and 95th percentiles',
+          'One standard deviation either side of the mean',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The whisker stops at an actual observation, the furthest one not beyond the fence at Q1 - 1.5 IQR or Q3 + 1.5 IQR. Everything past that is drawn individually, so the true maximum is often a separate mark well above the whisker.',
+      },
+      {
+        id: 'VIZ-006-q2',
+        type: 'truefalse',
+        concept: 'box plot limits',
+        prompt: 'Two groups whose box plots look identical must have similarly shaped distributions.',
+        answer: false,
+        explanation:
+          'A box plot encodes five order statistics and nothing else. A strongly bimodal group can share its median and both quartiles with a unimodal one, and the median may even fall in an empty valley between the two peaks. Violin plots or overlaid raw points reveal the difference.',
+      },
+      {
+        id: 'VIZ-006-q3',
+        type: 'numeric',
+        concept: 'tukey fences',
+        prompt: 'A group has Q1 = 30 and Q3 = 50. At what value does the upper fence sit?',
+        answer: 80,
+        explanation:
+          'IQR = 50 - 30 = 20, so the upper fence is Q3 + 1.5 x 20 = 50 + 30 = 80. The upper whisker then stops at the largest observation not exceeding 80, and anything above is drawn as an individual point.',
+      },
+      {
+        id: 'VIZ-006-q4',
+        type: 'multi',
+        concept: 'heatmap design',
+        prompt: 'Which choices make a correlation heatmap more honest? Select all that apply.',
+        options: [
+          'Use a diverging colormap such as coolwarm',
+          'Pass center=0 so zero lands on the neutral colour',
+          'Set vmin=-1 and vmax=1 so different heatmaps are comparable',
+          'Use viridis so the map is perceptually uniform',
+          'Mask the upper triangle, since the matrix is symmetric',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'Correlation has a meaningful midpoint, so it needs a diverging map centred at zero, with the scale pinned to the full range for comparability, and half the cells are redundant. Viridis is perceptually uniform but sequential, so it destroys the sign — the right tool for a confusion matrix, the wrong one here.',
+      },
+      {
+        id: 'VIZ-006-q5',
+        type: 'debug',
+        language: 'python',
+        concept: 'figure-level functions',
+        prompt: 'This raises TypeError: pairplot() got an unexpected keyword argument "ax". Why?',
+        code: 'fig, axes = plt.subplots(2, 2, figsize=(10, 8))\nsns.pairplot(df, hue="species", ax=axes[0, 0])',
+        options: [
+          'pairplot is a figure-level function: it creates and owns its own Figure, so it cannot draw into an existing Axes',
+          'The hue column must be numeric for pairplot to work',
+          'axes[0, 0] must be converted with .flatten() before being passed',
+          'pairplot requires the DataFrame to be passed as data=df',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Figure-level functions — pairplot, displot, catplot, relplot, jointplot — build their own Figure through a grid object and therefore take no ax argument. To draw into a panel you already made, use the Axes-level equivalent such as scatterplot, histplot or boxplot.',
+      },
+      {
+        id: 'VIZ-006-q6',
+        type: 'explain',
+        concept: 'choosing a distribution plot',
+        prompt: 'You must compare a metric across six groups, where two groups have about 15 observations and four have several thousand. Explain what you would draw and why.',
+        rubric: [
+          'Recognises that neither a box plot nor a violin encodes sample size',
+          'Proposes showing the individual observations for the small groups, or annotating n',
+          'Justifies the choice of summary in terms of what each plot hides — modality, spread or n',
+        ],
+        sampleAnswer:
+          'The core problem is that a box plot from 15 points and one from 5,000 look identical, so any chart that only summarises will invite the reader to trust all six groups equally. I would draw violins with cut=0 so the shapes are visible and nothing extends past the observed range, overlay every individual observation with a strip plot at low alpha, and put the sample size directly into each tick label. For the two small groups the strip layer will show fifteen visible dots, which is the honest signal that their violins are kernel density estimates of almost nothing. I would also set the violin width normalisation deliberately and say which I used, since normalising by width makes shapes comparable while normalising by count makes the small groups almost disappear. If the audience needs something more compact, a dot plot of the median with a bootstrap confidence interval per group makes the uncertainty explicit, which is exactly what differs between the groups here.',
+        explanation:
+          'A strong answer identifies the specific blind spot — sample size — and proposes a concrete layered chart, rather than simply naming a plot type.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does a box plot whisker reach to?', back: 'The most extreme observation still within 1.5 x IQR of the nearer quartile. Not the min or max, and not a fixed percentile.' },
+      { front: 'What are the two blind spots of a box plot?', back: 'Sample size and modality. Eight points and eight thousand draw the same box, and a bimodal group matches a unimodal one with the same quartiles.' },
+      { front: 'What is the IQR?', back: 'Q3 minus Q1, the height of the box, spanning the middle 50 percent of the data. It is robust to the most extreme quarter of observations.' },
+      { front: 'Why must a correlation heatmap be centred at zero?', back: 'So hue encodes sign and saturation encodes strength. Autoscaling puts zero at an arbitrary colour and makes the sign unreadable.' },
+      { front: 'Diverging or sequential colormap?', back: 'Diverging when the data has a meaningful midpoint such as zero (correlations, differences); sequential for non-negative magnitudes (counts, confusion matrices).' },
+      { front: 'What does cut=0 do on a violin plot?', back: 'Truncates the KDE at the most extreme observations, so the violin never suggests data beyond the range actually recorded.' },
+      { front: 'Axes-level versus figure-level seaborn functions', back: 'Axes-level (boxplot, scatterplot, histplot) take ax= and return an Axes. Figure-level (pairplot, displot, catplot, relplot) own their own Figure and take no ax.' },
+      { front: 'What does row-normalising a confusion matrix give you?', back: 'Per-class recall on the diagonal, and rows that are comparable regardless of class size — which raw counts hide entirely.' },
+    ],
+
+    challenge: {
+      title: 'A model-comparison report in seaborn',
+      brief:
+        'Given a tidy DataFrame with columns model, fold, dataset, f1 and a separate confusion matrix per model, build a single figure with four panels: (1) violins of fold-level F1 by model with the individual folds overlaid and n in each tick label, (2) a masked, zero-centred correlation heatmap of the numeric features used, (3) a row-normalised confusion heatmap for the winning model with a sequential colormap pinned to [0, 1], and (4) a horizontal bar chart of per-class recall sorted ascending with a zero baseline. Use seaborn Axes-level functions throughout so all four panels live in one plt.subplots grid, and finish the labelling in matplotlib. Each panel title must state a finding.',
+      language: 'python',
+      acceptanceCriteria: [
+        'All four panels are drawn into one figure created with plt.subplots, using Axes-level seaborn functions only',
+        'Sample sizes appear on the distribution panel, and cut=0 is set on the violins',
+        'The correlation heatmap uses a diverging colormap with center=0 and vmin/vmax pinned to -1 and 1, with the upper triangle masked',
+        'The confusion heatmap is row-normalised with a sequential colormap pinned to [0, 1]',
+        'Every panel title states a finding rather than naming the columns plotted',
+      ],
+      starterCode:
+        'import numpy as np\nimport pandas as pd\nimport seaborn as sns\nimport matplotlib.pyplot as plt\n\nsns.set_theme(style="whitegrid")\nfig, axes = plt.subplots(2, 2, figsize=(13, 10), layout="constrained")\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone what seaborn adds to matplotlib, then explain a box plot element by element and say what it hides.',
+      mustCover: [
+        'Seaborn takes a tidy DataFrame and a mapping from column names to visual roles, doing the grouping and legend for you',
+        'The box is Q1 to Q3 with the median inside; whiskers reach the furthest point within 1.5 x IQR; beyond that points are drawn individually',
+        'A box plot hides modality and sample size, which violins and overlaid points fix',
+        'A correlation heatmap needs a diverging colormap centred at zero so hue carries the sign',
+      ],
+      bonusSignals: [
+        'distinguishes Axes-level from figure-level seaborn functions',
+        'notes that a violin inherits KDE weaknesses and that cut=0 helps',
+        'notes that a confusion matrix wants a sequential map, unlike a correlation matrix',
+      ],
+      sampleExplanation:
+        'Seaborn changes what you say rather than what you can do. Instead of handing over arrays and positions, you hand over a table and say "put model on the x axis, F1 on the y axis, and split by dataset" — and it does the grouping, the colours and the legend itself. Underneath it is still matplotlib, so you can take the Axes it returns and adjust anything. Its best-known chart is the box plot, and it is worth knowing exactly. The box runs from the 25th to the 75th percentile, so it covers the middle half of your data, and the line inside is the median, not the mean. The whiskers do not reach the minimum and maximum: they stop at the furthest observation that is still within one and a half box-heights of the box, and every observation beyond that is drawn as its own dot. For skewed data such as latency, those dots are not errors, they are the tail — the requests your users actually complain about. The two things the box will never tell you are how many observations there were and whether the group has one hump or two. A group split into two clusters draws exactly the same box as a single smooth one, with the median sitting in the empty gap between them. So when the shape might matter, draw a violin, or simply scatter the raw points on top and let the reader see what there is.',
+    },
+  },
+
+  {
+    id: 'VIZ-007',
+    domain: 'VIZ',
+    module: 'Reading Charts Critically',
+    topic: 'A decision procedure for chart choice',
+    title: 'Choosing the Right Chart',
+    slug: 'choosing-the-right-chart',
+    difficulty: 2,
+    estimatedMinutes: 30,
+    prerequisites: ['VIZ-003', 'VIZ-004', 'VIZ-005'],
+    related: ['VIZ-001', 'VIZ-006'],
+    tags: ['chart-choice', 'encoding', 'comparison', 'distribution', 'composition', 'trend'],
+
+    learningObjectives: [
+      'Start from the question and the data types rather than from a gallery of chart pictures',
+      'Classify any charting task into comparison, distribution, relationship, composition or trend',
+      'Rank the visual encodings by how accurately people read them, and prefer position over angle and area',
+      'Justify a chart choice out loud in one sentence that names the question, the data types and the encoding',
+      'Recognise the small number of cases where a chart is the wrong answer and a table or a single number is better',
+    ],
+
+    terminology: [
+      {
+        term: 'Visual encoding',
+        definition:
+          'The mapping from a data value to a visual property: position, length, angle, area, colour saturation, shape. Choosing a chart is choosing an encoding.',
+        simple: 'Which visual thing stands for the number: where it sits, how long it is, how dark it is.',
+      },
+      {
+        term: 'Graphical perception ranking',
+        definition:
+          'The empirical ordering, established by Cleveland and McGill in 1984, of how accurately people decode each encoding. Position on a common scale is most accurate; area and colour saturation are least.',
+        simple: 'Some visual channels are read accurately and others are guessed at, and we know which are which.',
+      },
+      {
+        term: 'Measurement type',
+        definition:
+          'Whether a variable is quantitative, ordinal, nominal or temporal. It constrains which encodings are legitimate: nominal data must not be given a continuous colour scale or a connecting line.',
+        simple: 'Is this column a number, an ordered label, an unordered label, or a date?',
+      },
+      {
+        term: 'Small multiples',
+        definition:
+          'A grid of the same chart repeated for different subsets, with shared axes. It replaces an overloaded single chart with several simple ones the eye can scan.',
+        simple: 'The same little chart drawn once per group, side by side on shared axes.',
+      },
+      {
+        term: 'Data-ink ratio',
+        definition:
+          "Tufte's measure of the proportion of a chart's ink that encodes data rather than decoration. Low ratios indicate chartjunk: 3D effects, gradients, redundant grids and borders.",
+        simple: 'How much of the drawing is actual information rather than decoration.',
+      },
+    ],
+
+    simpleExplanation:
+      'Most advice about charts is a gallery: here are forty pictures, pick one you like. That is backwards, and it is why people end up with a pie chart of eleven slices. The useful procedure starts somewhere else entirely, with a sentence. Write down the question you want the chart to answer, in words, as specifically as you can. Not "show the sales data" but "which of our six regions grew fastest last year". That sentence already tells you almost everything. It contains a comparison across six named things, which are unordered categories, and a quantity, growth, which is a number. Unordered categories plus one number compared across them is a bar chart, sorted, and you are done. Change the question to "how did sales move through the year" and the categories become months, which are ordered in time, so it becomes a line. Change it to "what does the spread of order values look like" and you are asking about one number across many rows, which is a histogram. Five question shapes cover almost everything: comparing things, looking at a distribution, looking at a relationship between two numbers, showing what a whole is made of, and following something through time. Decide which one you are in, look at what types your columns are, and the chart chooses itself.',
+
+    whyItExists:
+      'Charting tools present dozens of chart types as equally valid options, which pushes the decision towards aesthetics and away from meaning. A decision procedure exists because the choice is actually determined by two things the analyst already knows — the question being asked and the measurement types of the columns — and because the research on graphical perception tells us that some encodings are read several times more accurately than others.',
+
+    analogy: {
+      scenario:
+        "A carpenter does not walk into the workshop and choose a tool because it feels nice in the hand. They look at the joint that has to be made: is this a butt joint that needs screws, a mitre that needs a saw set to 45 degrees, a housing that needs a router? The joint determines the tool. Someone who instead picks up the router because it is the impressive tool and then looks for something to rout will produce a worse piece of furniture, and it will take longer.",
+      mapping: [
+        { from: 'The joint that has to be made', to: 'The question the chart must answer, written as a sentence' },
+        { from: 'The grain and thickness of the timber', to: 'The measurement types of the columns: quantitative, ordinal, nominal, temporal' },
+        { from: 'Choosing a saw, a router or a chisel', to: 'Choosing an encoding: position, length, angle, colour' },
+        { from: 'Reaching for the impressive tool first', to: 'Choosing a chart from a gallery because it looks sophisticated' },
+        { from: 'A tool that can make the cut but badly', to: 'A pie chart used for a comparison, which works but is read far less accurately than bars' },
+      ],
+      bridge:
+        'The analogy maps cleanly because both crafts have an objective ranking of tool suitability that is independent of taste. Cleveland and McGill measured how accurately people decode each visual channel, and the ordering — position on a common scale, then position on unaligned scales, then length, then angle, then area, then colour saturation — is stable enough to use as a design rule. Choosing a chart is choosing where on that ranking you want your reader to be working.',
+      limitations:
+        'Carpentry has one right answer more often than charting does. Several charts are frequently defensible for the same question, the audience and the medium legitimately shift the choice, and a familiar-but-imperfect chart can beat an optimal-but-unfamiliar one when the reader has ten seconds.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'The decision procedure',
+        caption: 'Six steps, and the first two do most of the work.',
+        branching: true,
+        steps: [
+          { label: '1. Write the question as a sentence', detail: '"Which region grew fastest?" is answerable. "Show the sales data" is not, and no chart will fix it.' },
+          { label: '2. Classify the question', detail: 'Comparison, distribution, relationship, composition or trend. Most confusion comes from being in two of these at once.' },
+          { label: '3. Name the data types', detail: 'How many variables, and is each one quantitative, ordinal, nominal or temporal? This rules out most options immediately.' },
+          { label: '4. Pick the best-read encoding that fits', detail: 'Prefer position, then length. Avoid angle and area unless there is a specific reason.' },
+          { label: '5. Check the count', detail: 'How many categories, how many rows? Twenty categories means horizontal bars; a million rows means density rather than points.' },
+          { label: '6. Sanity-check against the question', detail: 'Can a reader answer your sentence from the picture in under ten seconds? If not, the chart is wrong however pretty it is.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'The decision table',
+        caption: 'Find your question type and your data types; the chart is in the third column.',
+        columns: ['Question type', 'Data', 'Chart', 'Why that one'],
+        rows: [
+          ['Comparison', 'One quantity across a few unordered categories', 'Bar chart, sorted, zero baseline', 'Aligned length from a common baseline is among the most accurately read encodings'],
+          ['Comparison', 'One quantity across many categories, or long labels', 'Horizontal bars, or a dot plot', 'Labels stay horizontal; a dot plot allows a non-zero axis when differences are small'],
+          ['Comparison', 'Two quantities across categories', 'Grouped bars, or a slope chart for before-and-after', 'Grouping preserves a shared baseline for each series'],
+          ['Distribution', 'One quantitative variable', 'Histogram, with an ECDF or KDE beside it', 'Shows modality, skew, gaps and outliers, which no summary can'],
+          ['Distribution', 'One quantitative variable across a few groups', 'Violin or box plot with points overlaid', 'Compares shape and position at once; points restore the sample size'],
+          ['Distribution', 'One quantitative variable across many groups', 'Box plots, or a ridge plot if the groups are ordered', 'Compact enough to scan twenty groups'],
+          ['Relationship', 'Two quantitative variables', 'Scatter plot; hexbin above 100,000 rows', 'The only common chart that shows the joint distribution without aggregating'],
+          ['Relationship', 'Many quantitative variables', 'Correlation heatmap to shortlist, then a pairplot of the shortlist', 'Pairwise panels grow quadratically and become unreadable past about eight variables'],
+          ['Relationship', 'Two quantitative plus one categorical', 'Scatter with colour by category, or small multiples', 'Small multiples avoid overplotting between groups'],
+          ['Composition', 'Parts of one whole, at one time', 'Bar chart of the parts; a pie only for two or three slices', 'Angle and area are read far less accurately than length'],
+          ['Composition', 'Parts of a whole over time', 'Stacked area or stacked bars; 100 percent stacked if shares matter more than totals', 'Keeps the total readable while showing the split'],
+          ['Trend', 'One quantity over time', 'Line chart, with a rolling mean if noisy', 'Slope is what the reader extracts, and slope is what a line encodes'],
+          ['Trend', 'Several series over time', 'Multiple lines if under about five; small multiples beyond that', 'Beyond a handful of lines the chart becomes a tangle regardless of colour'],
+          ['Part-to-whole ranking', 'Counts per category, long tail', 'Horizontal bars of the top n plus an explicit "other" bar', 'Honest about the tail without drawing 300 bars'],
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Encodings ranked by how accurately people read them',
+        caption:
+          'Adapted from Cleveland and McGill (1984). Reading down the table, accuracy falls and the reader does more guessing.',
+        columns: ['Rank', 'Encoding', 'Used by', 'Comment'],
+        rows: [
+          ['1', 'Position on a common scale', 'Scatter, line, dot plot, bars sharing an axis', 'The most accurate channel. Prefer it whenever a precise comparison matters'],
+          ['2', 'Position on identical but unaligned scales', 'Small multiples with shared axes', 'Slightly worse than aligned, still excellent — the reason small multiples work'],
+          ['3', 'Length', 'Bar length, stacked segment height', 'Excellent from a shared baseline; noticeably worse when segments float'],
+          ['4', 'Angle and slope', 'Pie charts, slope graphs', 'Slope is fine for trend; angle is a poor way to compare magnitudes'],
+          ['5', 'Area', 'Bubble charts, treemaps, area-scaled icons', 'People systematically underestimate area ratios, often by a factor near 0.7'],
+          ['6', 'Colour saturation and density', 'Heatmaps, choropleths', 'Fine for pattern and for a rough magnitude; never for a precise value'],
+          ['7', 'Colour hue', 'Categorical colouring', 'Carries identity, not magnitude. Using hue for a quantity implies an order that hue does not have'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'When a chart is not the answer',
+        caption: 'Two honest cases where drawing something is the wrong move.',
+        left: {
+          heading: 'Use a table instead',
+          points: [
+            'The reader needs exact values to quote or to reconcile against another system',
+            'There are only three or four numbers in total',
+            'The columns are heterogeneous — a count, a rate and a currency amount',
+            'The reader will look up individual rows rather than scan for a pattern',
+            'You would end up labelling every bar with its value anyway',
+          ],
+        },
+        right: {
+          heading: 'Use one sentence instead',
+          points: [
+            'The finding is a single number with a single comparison',
+            'A chart of two bars is a sentence with extra steps',
+            'The result is a yes or no: the test passed, the drift check fired',
+            'The audience will read a headline and nothing else',
+            'The chart would need a paragraph of caveats to be read correctly',
+          ],
+        },
+      },
+      {
+        kind: 'widget',
+        title: 'Work the procedure',
+        caption: 'Pick a question and a set of data types, and compare the chart it implies with your instinct.',
+        widget: 'chart-chooser',
+      },
+    ],
+
+    formalDefinition:
+      'Chart selection is the problem of choosing a mapping from data variables to visual channels, subject to two constraints: expressiveness, meaning the mapping asserts all and only the facts present in the data, and effectiveness, meaning that among expressive mappings the one is chosen whose channels are decoded most accurately for the task at hand. Measurement type constrains expressiveness; the graphical perception ranking orders effectiveness.',
+
+    workedExample: {
+      title: 'Running the procedure on four real requests',
+      setup:
+        'Four requests arrive in a week, each phrased vaguely. We apply the six steps to each and show how the chart falls out of the question rather than being chosen from a gallery.',
+      steps: [
+        {
+          label: 'Request: "Can you visualise our customer data?"',
+          detail:
+            'Step one fails immediately: there is no question. The correct response is to ask what decision the chart is for. Suppose the answer is "we want to know whether enterprise customers churn less than self-serve". That is a comparison of one quantity, churn rate, across two nominal categories, with the sample sizes mattering. Two bars, zero baseline, with the confidence intervals and the counts shown — or, since there are only two numbers, a sentence with the two rates and the interval.',
+        },
+        {
+          label: 'Request: "Show model performance over the last ten experiments"',
+          detail:
+            'Question type: trend, since experiments are ordered in time. Data types: one temporal or ordinal axis and one quantitative value, plus a nominal model identifier. With three or four models, overlaid lines. With fifteen, small multiples on shared axes — rank two on the perception table, and far more readable than fifteen lines. If each experiment has fold-level variation, the honest chart adds a band or draws the folds as points, because a single line implies a precision that cross-validation does not have.',
+        },
+        {
+          label: 'Request: "What are our page views made up of?"',
+          detail:
+            'Composition. If it is one snapshot across six sources, a sorted horizontal bar chart beats a pie because length outranks angle, and six slices is already past the point where a pie is readable. If the question is really "how has the mix changed since we launched the app", it is composition over time, which is a stacked area chart, or a 100 percent stacked chart if the shares matter more than the totals — with the caveat that a 100 percent chart hides whether the total rose or fell.',
+        },
+        {
+          label: 'Request: "Is feature X related to the target?"',
+          detail:
+            'Relationship, two quantitative variables. A scatter plot, with the technique chosen by row count: points under 5,000, alpha up to about 50,000, hexbin above. Put both Pearson and Spearman in the title so a curved but monotonic relationship is not missed, and follow with a residual plot if anything is fitted. The mistake to avoid is jumping straight to a correlation heatmap, which reduces this question to one number and loses the form entirely.',
+        },
+        {
+          label: 'The pattern across all four',
+          detail:
+            'In every case the chart was determined once the question was written as a sentence and the column types were named. Nothing was chosen for looking good, and in two of the four cases the right answer was smaller than what was asked for: a sentence, or a shortlist of charts rather than one overloaded one.',
+        },
+      ],
+      conclusion:
+        'The procedure is mechanical on purpose. Its real value is not that it produces exotic charts — it almost always produces a bar, a line, a histogram or a scatter — but that it makes you write down the question, which is the step that most bad charts skipped.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'The procedure as code: same data, four questions, four charts',
+        runnable: true,
+        code: `import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(6)
+months = pd.date_range("2024-01-01", periods=24, freq="MS")
+regions = ["EMEA", "North America", "APAC", "Latin America"]
+
+df = pd.concat([
+    pd.DataFrame({
+        "month": months,
+        "region": region,
+        "revenue": base * (1 + growth) ** np.arange(24) + rng.normal(0, base * 0.04, 24),
+        "deal_size": rng.lognormal(np.log(base / 40), 0.55, 24),
+    })
+    for region, base, growth in [("EMEA", 900, 0.021), ("North America", 1400, 0.012),
+                                 ("APAC", 500, 0.048), ("Latin America", 300, 0.030)]
+], ignore_index=True)
+
+fig, axes = plt.subplots(2, 2, figsize=(13, 8.5), layout="constrained")
+
+# Q1 TREND: "How has total revenue moved over two years?"  -> line, ordered x axis
+total = df.groupby("month")["revenue"].sum()
+axes[0, 0].plot(total.index, total.values, color="#264653", linewidth=2)
+axes[0, 0].set_title("Total revenue grew 41 percent over 24 months")
+axes[0, 0].set_ylabel("revenue (thousands)")
+
+# Q2 COMPARISON: "Which region grew fastest?"  -> sorted bars, zero baseline
+growth = df.groupby("region").apply(
+    lambda g: g.sort_values("month")["revenue"].iloc[-6:].mean() /
+              g.sort_values("month")["revenue"].iloc[:6].mean() - 1,
+    include_groups=False,
+).sort_values()
+bars = axes[0, 1].barh(growth.index, growth.values * 100, color="#2a9d8f")
+axes[0, 1].bar_label(bars, fmt="%.0f%%", padding=3)
+axes[0, 1].set_xlim(left=0)
+axes[0, 1].set_xlabel("growth, first 6 months vs last 6 (percent)")
+axes[0, 1].set_title("APAC grew fastest, from the smallest base")
+
+# Q3 DISTRIBUTION: "What does deal size look like?"  -> histogram
+axes[1, 0].hist(df["deal_size"], bins="fd", color="#8fa7b3", edgecolor="white", linewidth=0.3)
+axes[1, 0].axvline(df["deal_size"].median(), color="#e76f51", linewidth=2,
+                   label=f"median = {df['deal_size'].median():.1f}")
+axes[1, 0].set_xlabel("deal size (thousands)")
+axes[1, 0].set_ylabel("months")
+axes[1, 0].set_title("Deal size is right-skewed: report the median")
+axes[1, 0].legend(frameon=False)
+
+# Q4 RELATIONSHIP: "Does a bigger deal size go with higher revenue?"  -> scatter
+axes[1, 1].scatter(df["deal_size"], df["revenue"], s=18, alpha=0.6, color="#264653")
+r = df["deal_size"].corr(df["revenue"])
+axes[1, 1].set_xlabel("deal size (thousands)")
+axes[1, 1].set_ylabel("revenue (thousands)")
+axes[1, 1].set_title(f"Relationship is weak within regions: r = {r:+.2f}")
+
+fig.suptitle("One dataset, four questions, four different marks", fontsize=14)
+fig.savefig("four_questions.png", dpi=200)
+
+print(growth.round(3).to_string())
+print("total revenue growth:", f"{total.iloc[-1] / total.iloc[0] - 1:.1%}")`,
+        output: `region
+North America    0.128
+EMEA             0.232
+Latin America    0.331
+APAC             0.569
+total revenue growth: 41.3%`,
+        explanation:
+          'Four panels from one DataFrame, each answering a differently shaped question with a different mark. Top left is a single rising line with a slight wobble — the x axis is time, so a line is the only correct mark and the reader extracts slope. Top right is four horizontal bars sorted ascending with percentage labels, APAC longest at 57 percent; the categories are unordered names, the values are compared by magnitude, and the axis starts at zero. Bottom left is a right-skewed histogram with a long tail and an orange median line sitting left of the centre of mass, which is the finding stated in its title. Bottom right is a shapeless scatter cloud with a weak correlation, and its title says so honestly rather than fitting a line to noise. Nothing here required an exotic chart: the procedure almost always terminates at a bar, a line, a histogram or a scatter, which is the point.',
+      },
+      {
+        language: 'python',
+        title: 'When a pie chart is defensible, and when it is not',
+        runnable: true,
+        code: `import numpy as np
+import matplotlib.pyplot as plt
+
+labels_many = ["organic search", "direct", "paid social", "email", "referral",
+               "paid search", "affiliate", "display", "other"]
+shares_many = np.array([0.31, 0.19, 0.13, 0.11, 0.08, 0.07, 0.05, 0.04, 0.02])
+
+fig, axes = plt.subplots(1, 3, figsize=(14, 4.6), layout="constrained")
+
+axes[0].pie(shares_many, labels=labels_many, autopct="%1.0f%%", startangle=90,
+            textprops={"fontsize": 8})
+axes[0].set_title("Nine slices: which is bigger, email or paid social?")
+
+order = np.argsort(shares_many)
+axes[1].barh([labels_many[i] for i in order], shares_many[order] * 100, color="#2a9d8f")
+axes[1].set_xlim(left=0)
+axes[1].set_xlabel("share of sessions (percent)")
+axes[1].set_title("Same data as sorted bars: the ranking is immediate")
+
+axes[2].pie([0.62, 0.38], labels=["returning", "new"], autopct="%1.0f%%",
+            startangle=90, colors=["#264653", "#e9c46a"])
+axes[2].set_title("Two slices: a pie is fine here")
+
+fig.suptitle("Angle is a weak encoding; use it only when there is almost nothing to compare")
+fig.savefig("pie_vs_bar.png", dpi=200)
+
+gaps = np.abs(np.diff(np.sort(shares_many)))
+print("smallest gap between adjacent shares:", f"{gaps.min():.1%}")
+print("that gap as an angle:", f"{gaps.min() * 360:.1f} degrees")`,
+        output: `smallest gap between adjacent shares: 1.0%
+that gap as an angle: 3.6 degrees`,
+        explanation:
+          'Three panels making one argument. The left is a nine-slice pie where the email slice at 11 percent and the paid-social slice at 13 percent are adjacent in size but not adjacent in position, and the printed line quantifies the difficulty: a 1 percent difference is 3.6 degrees of arc, which nobody reads reliably, especially when the two wedges start at different angles. The middle panel is the same nine numbers as sorted horizontal bars, where the ranking is immediate and any two values can be compared by aligned length — the top-ranked encoding on the perception table. The right panel is a two-slice pie and is genuinely fine: with one boundary there is nothing to compare across positions, the part-to-whole reading is instant, and the shape communicates "this is a share of a total" better than a bar does. The rule that follows is narrow rather than absolute: pies for two or three parts of a genuine whole, bars for everything else.',
+      },
+      {
+        language: 'python',
+        title: 'Small multiples beat a tangle of lines',
+        runnable: true,
+        code: `import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(15)
+weeks = np.arange(52)
+names = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot",
+         "golf", "hotel", "india", "juliet", "kilo", "lima"]
+series = {n: 100 + np.cumsum(rng.normal(rng.normal(0.4, 0.6), 3, 52)) for n in names}
+
+fig = plt.figure(figsize=(14, 5.5), layout="constrained")
+sub = fig.subfigures(1, 2, width_ratios=[1, 1.35])
+
+ax_tangle = sub[0].subplots()
+for n, v in series.items():
+    ax_tangle.plot(weeks, v, linewidth=1.2, label=n)
+ax_tangle.set_title("Twelve lines on one axis")
+ax_tangle.set_xlabel("week")
+ax_tangle.set_ylabel("index")
+ax_tangle.legend(ncol=3, fontsize=7, frameon=False)
+
+axes_small = sub[1].subplots(3, 4, sharex=True, sharey=True)
+all_values = np.concatenate(list(series.values()))
+for ax, (n, v) in zip(axes_small.flat, series.items()):
+    ax.plot(weeks, v, color="#bfc9d1", linewidth=1)   # context: this panel's series in grey
+    ax.plot(weeks, v, color="#264653", linewidth=1.6)
+    ax.set_title(n, fontsize=9)
+    ax.set_ylim(all_values.min(), all_values.max())
+    ax.tick_params(labelsize=7)
+sub[1].suptitle("The same twelve as small multiples on shared axes", fontsize=11)
+
+fig.savefig("small_multiples.png", dpi=200)
+
+finals = {n: v[-1] for n, v in series.items()}
+best = max(finals, key=finals.get)
+print(f"highest at week 52: {best} ({finals[best]:.0f})")
+print("range across series at week 52:",
+      f"{min(finals.values()):.0f} to {max(finals.values()):.0f}")`,
+        output: `highest at week 52: india (151)
+range across series at week 52: 89 to 151
+`,
+        explanation:
+          'The left half is twelve overlapping lines in twelve colours with a three-column legend, and it is genuinely unusable: the lines cross repeatedly, several colours are hard to tell apart, and answering "which series ended highest" requires tracing a line by eye from the legend to the right-hand edge. The right half is the same twelve series as a three-by-four grid of small panels sharing both axes. Each panel is trivially readable on its own, and because the axes are shared, comparing across panels is a position judgement on identical scales — rank two on the perception table, against the colour-matching task the tangle demanded, which is rank seven. The cost of small multiples is space and the loss of direct overlay comparison; the benefit is that the chart scales to twelve, or forty, series without degrading. The rule of thumb is that beyond about five lines on one axis you should be reaching for this.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'An experiment readout for a product team',
+        usage:
+          'The question is "did variant B beat variant A on conversion", which is a comparison of two proportions with uncertainty. The right chart is two dots with confidence intervals, or a single interval on the difference — not two bars, which imply the point estimates are exact.',
+      },
+      {
+        context: 'A model card or evaluation report',
+        usage:
+          'Different sections answer different question types: per-class recall is a comparison (sorted bars), the score distribution across folds is a distribution (violins with points), calibration is a relationship (reliability curve), and training progress is a trend (learning curves).',
+      },
+      {
+        context: 'Monitoring dashboards in production',
+        usage:
+          'Latency is a distribution question, so the panel shows percentile lines rather than a mean; traffic is a trend, so it is a line; error breakdown by endpoint is a comparison, so it is sorted horizontal bars with an explicit "other" bucket.',
+      },
+      {
+        context: 'A one-slide executive summary',
+        usage:
+          'The strongest option is frequently not a chart at all: one sentence with the number and the comparison. A chart earns its place when the shape of the data, not just its magnitude, is part of the finding.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'matplotlib', role: 'Implements every chart in the decision table; small multiples are plt.subplots with sharex and sharey.' },
+      { tool: 'seaborn', role: 'Its API is organised by question type: relplot for relationships, displot for distributions, catplot for categorical comparisons.' },
+      { tool: 'pandas', role: 'groupby and pivot reshape data into whichever layout the chosen chart expects; melt produces the long form seaborn wants.' },
+      { tool: 'Vega-Lite / Altair', role: 'Built directly on the expressiveness-and-effectiveness framework, choosing marks automatically from declared field types.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Choosing the chart before writing down the question',
+        why: 'Without a question there is no criterion for success, so the decision defaults to aesthetics and the chart ends up answering something nobody asked.',
+        fix: 'Write the sentence first, specifically enough to be answerable. If you cannot write it, that is the finding: go back and ask what decision the chart is for.',
+      },
+      {
+        mistake: 'A pie chart with more than three slices',
+        why: 'Pies encode magnitude as angle, which sits low on the perception ranking, and comparing wedges that begin at different angles is harder still. Nine slices with a 1 percent gap is a 3.6-degree judgement.',
+        fix: 'Use a sorted bar chart. Keep the pie only for two or three genuine parts of a whole where the part-to-whole reading is the entire message.',
+      },
+      {
+        mistake: 'Overloading one chart with four or five variables',
+        why: 'Position, colour, size and shape all at once forces the reader to decode several channels simultaneously, and the two weakest channels — area and hue — end up carrying real information.',
+        fix: 'Split into small multiples. Two charts each answering one question beat one chart answering neither, and shared axes keep the comparison a position judgement.',
+      },
+      {
+        mistake: 'Using a continuous colour scale for unordered categories',
+        why: 'A sequential colormap implies an ordering and a magnitude, so readers infer that "darker means more" for categories where more is meaningless.',
+        fix: 'Use a qualitative palette such as tab10 or Set2 for nominal data, and reserve sequential and diverging maps for quantitative variables.',
+      },
+      {
+        mistake: 'Drawing a chart when a table or a sentence would serve better',
+        why: 'Charts are for patterns across many values. Four numbers in a chart is a table with extra ink, and a reader who needs exact values to quote is poorly served by bars they must measure.',
+        fix: 'Ask whether the reader will scan for a pattern or look up values. Scanning means a chart; looking up means a table; a single comparison means a sentence.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'How do you decide which chart to use?',
+        answer:
+          'I start by writing the question as a sentence, because a chart is an answer and a vague question has no correct answer. Then I classify it into one of five shapes — comparison, distribution, relationship, composition or trend — and name the measurement types of the columns involved, since nominal, ordinal, quantitative and temporal data admit different encodings. Those two steps usually leave one or two options. Among those I prefer the encoding people read most accurately, which is position on a common scale, then length, and I avoid angle and area unless there is a specific reason. Finally I check the counts: many categories means horizontal bars, many rows means density rather than individual points, many series means small multiples rather than overlaid lines. The last check is whether a reader can answer my original sentence from the picture in under ten seconds.',
+        followUp:
+          'A strong answer mentions that the right answer is sometimes a table or a single sentence, and that the procedure almost always terminates at a bar, line, histogram or scatter rather than something exotic.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Why are pie charts criticised, and when is one actually acceptable?',
+        answer:
+          'A pie encodes magnitude as angle and area, both of which sit low on the graphical perception ranking established by Cleveland and McGill — people decode them substantially less accurately than aligned length or position. It is worse than that in practice, because wedges begin at different angles, so comparing two non-adjacent slices is a comparison across rotations. With nine categories a 1 percent difference is 3.6 degrees of arc, which is not readable. The acceptable case is narrow: two or three slices that genuinely form parts of one whole, where the message is the part-to-whole relationship itself rather than a comparison between parts — for example "62 percent of sessions are from returning users". Even then a sentence often does the job. For anything with a ranking in it, sorted horizontal bars are strictly better.',
+        followUp:
+          'Mentioning that donut charts are worse still, since removing the centre removes the area cue and leaves only arc length, shows the candidate is reasoning from encodings rather than repeating a rule.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'You must show how twenty features drift between training and production. What do you draw?',
+        answer:
+          'Twenty overlaid distributions on one axis is unreadable, so the shape of the answer is small multiples: a grid of twenty small panels, one per feature, each showing the training distribution and the production distribution as two lightweight overlaid densities or step histograms on shared bin edges. Because each panel is a separate position judgement on its own scale, the grid stays readable where a single overloaded chart would not. To make it scannable rather than merely complete, I would sort the panels by a drift statistic such as population stability index or a Kolmogorov-Smirnov distance, so the worst offenders appear first and a reader who looks at three panels has seen what matters, and I would annotate each panel with that statistic. Alongside the grid I would put one sorted horizontal bar chart of the drift statistic per feature, which is the comparison question — "which features drifted most" — answered directly. That pairing, a summary comparison plus small multiples for the detail, is the general pattern for any high-dimensional monitoring question.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Run the procedure on this request: "We want to see how our response times compare to last quarter." State the question type, the data types, the chart, and one thing you would refuse to do.',
+        hint: 'Response time is a distribution, not a single number. What does that rule out immediately?',
+        solution:
+          'Question type: distribution comparison across two groups, this quarter and last. Data types: one quantitative variable, response time in milliseconds, and one nominal grouping with two levels.\n\nThe chart: two overlaid distributions on shared bin edges with a log x axis, since latency is heavy-tailed, or two violins with the individual points overlaid if the sample is small. Alongside it, a small table or dot plot of p50, p95 and p99 for both quarters, because those are the numbers an operations team acts on.\n\nWhat I would refuse: drawing two bars of mean response time. A mean over a heavy-tailed distribution is both unrepresentative and unstable — a handful of slow requests moves it — and two bars imply a comparison of two exact values when what changed may be entirely in the tail. If someone insists on a compact summary, a dot plot of the percentiles with intervals is the honest compact form.',
+      },
+      {
+        prompt:
+          'A colleague sends a chart with country on the x axis, revenue as bar height, profit margin as bar colour on a viridis scale, and headcount as the width of each bar. List what is wrong and propose a replacement.',
+        hint: 'Count the encodings and check each against the perception ranking and the measurement types.',
+        solution:
+          'Four variables are encoded into three channels, two of which are weak. Bar height for revenue is fine — length from a common baseline. Colour on a sequential viridis scale for profit margin is a rough magnitude cue at best, and margin can be negative, so a sequential map hides the sign; it needs a diverging map centred at zero if it stays. Bar width for headcount is the worst problem: varying both width and height makes the bar area vary, and readers decode area, so headcount and revenue get silently multiplied into a single impression that corresponds to nothing.\n\nThe replacement is three small charts sharing a sorted country order: a horizontal bar chart of revenue, a second of headcount, and a dot plot or diverging bar chart of margin centred at zero. Sorting all three by the same key lets the reader scan across rows and compare a country position in each — a position judgement on identical scales rather than an area judgement. If a single chart is genuinely required, a scatter of revenue against headcount with margin as a diverging colour is defensible, because then only one variable is on a weak channel.',
+      },
+      {
+        prompt:
+          'For each question, name the chart and one sentence of justification: (a) which of 30 API endpoints is slowest, (b) how error rate changed after a deploy, (c) whether two features are redundant, (d) what fraction of users are on each of three plans.',
+        hint: 'Classify each into comparison, distribution, relationship, composition or trend first.',
+        solution:
+          '(a) Comparison across 30 unordered categories with long labels: a horizontal bar chart of p95 latency, sorted descending, showing the top 15 plus an explicit "other" summary — horizontal because endpoint paths are long strings, sorted because the question is a ranking, p95 rather than mean because latency is heavy-tailed.\n\n(b) Trend over time with a known intervention: a line chart of error rate by hour with a vertical rule at the deploy time and enough history on both sides to see the baseline — a line because time is ordered and the reader is extracting a step change.\n\n(c) Relationship between two quantitative variables: a scatter plot with both Pearson and Spearman in the title, since redundancy means a tight relationship of any form and a near-deterministic curve would score low on Pearson alone.\n\n(d) Composition of one whole into three parts: a three-slice pie is genuinely acceptable here, or a single stacked horizontal bar, or a sentence — three parts is within the range where angle is readable and the part-to-whole message is the point.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'VIZ-007-q1',
+        type: 'order',
+        concept: 'decision procedure',
+        prompt: 'Put the steps of the chart-choice procedure into the correct order.',
+        items: [
+          'Write the question you want answered as a specific sentence',
+          'Classify it as comparison, distribution, relationship, composition or trend',
+          'Name the measurement type of each variable involved',
+          'Choose the most accurately read encoding that fits',
+          'Adjust for the number of categories, rows and series',
+          'Check that a reader can answer the original sentence from the picture',
+        ],
+        explanation:
+          'The question comes first because it is the only thing that makes a chart right or wrong. Classification and data types narrow the options, the perception ranking picks among what remains, and the counts and the final check catch charts that are correct in principle but unreadable in practice.',
+      },
+      {
+        id: 'VIZ-007-q2',
+        type: 'match',
+        concept: 'question type to chart',
+        prompt: 'Match each question to the chart it implies.',
+        pairs: [
+          { left: 'Which of eight regions has the highest revenue?', right: 'Sorted horizontal bar chart with a zero baseline' },
+          { left: 'What does the spread of order values look like?', right: 'Histogram with a sensible bin rule' },
+          { left: 'Does ad spend relate to sign-ups?', right: 'Scatter plot with the correlation in the title' },
+          { left: 'How did weekly active users move over a year?', right: 'Line chart, with a rolling mean if noisy' },
+          { left: 'How do twelve product lines each trend over time?', right: 'Small multiples on shared axes' },
+        ],
+        explanation:
+          'Each pairing follows from the question type plus the data types: comparison across nominal categories gives bars, one quantitative variable gives a histogram, two quantitative variables give a scatter, a quantity over time gives a line, and many series over time give small multiples rather than a tangle.',
+      },
+      {
+        id: 'VIZ-007-q3',
+        type: 'mcq',
+        concept: 'perception ranking',
+        prompt: 'Which visual encoding do people decode most accurately?',
+        options: [
+          'Position along a common scale',
+          'Angle, as in a pie chart',
+          'Area, as in a bubble chart',
+          'Colour saturation, as in a heatmap',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Cleveland and McGill found position on a common scale to be the most accurately decoded channel, followed by position on identical unaligned scales and then length. Angle, area and colour saturation are progressively worse, which is why pies, bubbles and heatmaps should not carry comparisons that need precision.',
+      },
+      {
+        id: 'VIZ-007-q4',
+        type: 'truefalse',
+        concept: 'when not to chart',
+        prompt: 'Every analysis result is communicated better as a chart than as a table or a sentence.',
+        answer: false,
+        explanation:
+          'Charts are for patterns across many values. When the reader needs exact figures to quote or reconcile, a table is better; when the finding is a single number with a single comparison, a sentence is better. A chart of four numbers is usually a table with extra ink.',
+      },
+      {
+        id: 'VIZ-007-q5',
+        type: 'multi',
+        concept: 'chart choice failures',
+        prompt: 'Which of these are legitimate reasons to reject a proposed chart? Select all that apply.',
+        options: [
+          'It encodes a quantity as area, and the comparison needs to be precise',
+          'It uses a sequential colour scale for unordered categories',
+          'It draws twelve series as overlaid lines on one axis',
+          'It uses a bar chart rather than something more visually novel',
+          'It puts four variables on four different channels including hue and size',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'Weak encodings for precise comparisons, a continuous scale implying an order that nominal data lacks, an unreadable tangle of lines, and channel overload are all real objections. Being unexciting is not: bars and lines are usually the correct answer, and novelty is not a design criterion.',
+      },
+      {
+        id: 'VIZ-007-q6',
+        type: 'explain',
+        concept: 'applying the procedure',
+        prompt: 'A stakeholder asks for "a dashboard of our machine learning model". Explain what you would do before drawing anything, and sketch what you would end up with.',
+        rubric: [
+          'Refuses to start until the questions and decisions are named',
+          'Classifies the resulting questions into types and maps each to a chart',
+          'Justifies at least two of the chart choices in terms of data types or encoding accuracy',
+        ],
+        sampleAnswer:
+          'I would not draw anything until I know which decisions the dashboard supports, because "a dashboard of the model" is not a question and any chart would be a guess. I would ask what actions someone takes after looking at it, which usually produces three or four real questions: is the model still performing, which classes is it failing on, has the input data changed, and is it fast enough. Each of those has a shape. Performance over time is a trend, so a line of the key metric by day with a deployment marker. Failure by class is a comparison across nominal categories, so sorted horizontal bars of per-class recall with a zero baseline, backed by a row-normalised confusion heatmap for the detail. Input change is a distribution comparison, so small multiples of each feature, training against production, sorted by a drift statistic so the worst appear first. Latency is a distribution, so percentile lines rather than a mean. The result is four panels each answering one written-down question, rather than one panel trying to be about the model in general.',
+        explanation:
+          'A strong answer treats the vague request as the problem to solve, converts it into specific questions, and then derives each chart from a question type and its data types.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What is step one of choosing a chart?', back: 'Write the question as a specific sentence. Without a question there is no criterion for whether a chart is right.' },
+      { front: 'The five question types', back: 'Comparison, distribution, relationship, composition and trend. Most confusion comes from being in two at once and needing two charts.' },
+      { front: 'The perception ranking, top to bottom', back: 'Position on a common scale, position on unaligned identical scales, length, angle and slope, area, colour saturation, colour hue.' },
+      { front: 'When is a pie chart acceptable?', back: 'Two or three genuine parts of a whole, where the part-to-whole reading is the message. For any ranking, use sorted bars.' },
+      { front: 'What do you do with more than about five time series?', back: 'Small multiples on shared axes. Comparing across panels is a position judgement; comparing tangled lines is a colour-matching task.' },
+      { front: 'When is a table better than a chart?', back: 'When the reader needs exact values, when there are only a handful of numbers, or when the columns are heterogeneous.' },
+      { front: 'Why not use a sequential colormap for categories?', back: 'It implies an ordering and a magnitude that nominal data does not have. Use a qualitative palette such as tab10 or Set2.' },
+    ],
+
+    challenge: {
+      title: 'Turn five vague requests into five defended charts',
+      brief:
+        'Take these five requests: (1) "show me our user growth", (2) "how do our three models compare", (3) "visualise the customer feedback scores", (4) "is marketing spend working", (5) "give me a dashboard of everything". For each, write the specific question you would agree with the requester, classify it, name the data types, produce the chart in matplotlib or seaborn from data you simulate, and write a one-sentence justification naming the question type, the data types and the encoding. For request five, argue explicitly for replacing it with a set of separate charts, and say which questions they answer.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Each request is restated as a specific, answerable question before any chart is drawn',
+        'Each chart is justified in one sentence naming the question type, the data types and the encoding',
+        'At least one request is answered with a table or a sentence rather than a chart, with the reasoning given',
+        'Request five is decomposed into separate charts rather than drawn as one overloaded figure',
+        'Every chart is fully labelled and every bar axis starts at zero',
+      ],
+      starterCode:
+        'import numpy as np\nimport pandas as pd\nimport matplotlib.pyplot as plt\n\n# Request 1: "show me our user growth"\n# Agreed question: ...\n# Type: ...  Data: ...  Chart: ...  Because: ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone a procedure for choosing a chart that does not involve scrolling through a gallery of examples.',
+      mustCover: [
+        'Start from the question written as a specific sentence, not from the chart types available',
+        'Classify the question into comparison, distribution, relationship, composition or trend',
+        'Name the measurement types of the columns, which rules out most encodings',
+        'Prefer encodings people read accurately — position and length over angle and area',
+      ],
+      bonusSignals: [
+        'mentions small multiples for many series or many groups',
+        'mentions that a table or a sentence is sometimes the right answer',
+        'gives a concrete worked example from question to chart',
+      ],
+      sampleExplanation:
+        'Stop looking at chart galleries. The choice is determined by two things you already have. First, write the question down as a sentence, specifically enough that someone could answer it: not "show the sales data" but "which of our six regions grew fastest last year". Second, look at what kinds of columns are involved — numbers, ordered labels, unordered labels, dates. Now classify the question. Almost everything falls into five shapes: comparing things, looking at the spread of one quantity, looking at how two quantities relate, showing what a whole is made of, or following something through time. Comparison across unordered categories is a bar chart, sorted, starting at zero. One quantity across many rows is a histogram. Two quantities is a scatter. Something over time is a line. Parts of a whole is a bar unless there are only two or three parts. When two options survive, pick the one whose encoding people read more accurately: position first, then length, and avoid angle and area, which is exactly why a nine-slice pie is a bad chart and sorted bars are a good one. Finally, check the counts — many categories means horizontal bars, many rows means density instead of dots, many series means a grid of small charts rather than a tangle of lines. And be willing to conclude that the answer is a table, or one sentence, because four numbers in a chart is a table with extra ink.',
+    },
+  },
+
+  {
+    id: 'VIZ-008',
+    domain: 'VIZ',
+    module: 'Reading Charts Critically',
+    topic: 'Distortion, deception and critical reading',
+    title: 'Misleading Graphs and Honest Reading',
+    slug: 'misleading-graphs',
+    difficulty: 3,
+    estimatedMinutes: 30,
+    prerequisites: ['VIZ-003', 'VIZ-007'],
+    related: ['VIZ-001', 'VIZ-004', 'VIZ-005'],
+    tags: ['misleading', 'truncated-axis', 'dual-axis', 'lie-factor', 'cherry-picking', 'critical-reading'],
+
+    learningObjectives: [
+      'Identify the standard distortions: truncated axes, dual axes, cherry-picked ranges, 3D effects, area double-counting, unequal bins and missing baselines',
+      'Compute a lie factor and use it to quantify how much a chart exaggerates',
+      'Apply a repeatable checklist to any chart you are shown, in the order that catches the most',
+      'Distinguish deliberate deception from the far more common case of an honest author using a bad default',
+      'Audit your own charts before publishing them, including ML charts such as learning curves and confusion matrices',
+    ],
+
+    terminology: [
+      {
+        term: 'Lie factor',
+        definition:
+          "Tufte's ratio of the size of an effect shown in a graphic to the size of that effect in the data. A truthful chart has a lie factor near 1; values above about 1.05 indicate meaningful distortion.",
+        simple: 'How many times bigger the picture makes a change look than it really is.',
+      },
+      {
+        term: 'Truncated axis',
+        definition:
+          'A value axis that does not start at zero on a chart whose mark encodes magnitude as length or area, breaking the proportionality between drawn size and value.',
+        simple: 'A chart that starts at 95 instead of 0, so tiny differences look enormous.',
+      },
+      {
+        term: 'Dual axis',
+        definition:
+          'Two different quantities plotted against two independent vertical scales on one panel. Because both scales are chosen freely, the visual relationship between the two series is an artefact of those choices.',
+        simple: 'Two lines with two different rulers, where the author decides how closely they appear to move together.',
+      },
+      {
+        term: 'Cherry-picked range',
+        definition:
+          'Restricting the x axis to a window chosen because it supports a conclusion, when a longer window would contradict or contextualise it.',
+        simple: 'Showing only the part of the timeline that makes the point.',
+      },
+      {
+        term: 'Area double-counting',
+        definition:
+          'Scaling both the width and the height of an icon or bubble by the value, so the drawn area grows with the square of the value while purporting to represent the value itself.',
+        simple: 'Making a picture twice as tall and twice as wide to show a doubling, which makes it look four times bigger.',
+      },
+      {
+        term: 'Chartjunk',
+        definition:
+          "Tufte's term for visual elements that carry no information: 3D extrusion, gradients, drop shadows, decorative imagery and heavy grids. 3D on a flat quantity also distorts, because perspective changes apparent size.",
+        simple: 'Decoration that adds no information and often distorts what is there.',
+      },
+    ],
+
+    simpleExplanation:
+      'Charts persuade faster than sentences, which is exactly why they are worth checking. Most misleading charts are not forgeries: the numbers are usually correct, and the trick is in how they were drawn. The commonest one is cutting off the bottom of the value axis, so bars that represent 102 and 108 are drawn as lengths of 2 and 8 and a 6 percent difference looks like a fourfold one. Another is putting two different quantities on two different vertical rulers in the same panel, then sliding those rulers until the two lines appear to move together — with two free scales you can make almost any pair of series look related. Another is choosing where the timeline starts, so a decline shown from its own peak looks catastrophic while the same series over ten years looks flat. Then there are the pictorial ones: making an icon twice as tall and twice as wide to show a doubling, which paints four times the area, and tilting a pie into 3D so the slices at the front look bigger than the ones behind. The defence is a short checklist you run every time, starting with the axes, and it costs about fifteen seconds. Run it on other people charts, and then run it on your own, because the usual cause is not dishonesty — it is a default nobody checked.',
+
+    whyItExists:
+      'A chart is an argument, and every encoding choice — where an axis starts, which range is shown, which scale a second series gets — changes how strong the argument looks without changing a single number. This unit exists because those choices are invisible to a reader who is not looking for them, because the defaults in common tools frequently make them badly, and because the same checklist that catches a misleading chart catches an honest mistake in your own work.',
+
+    analogy: {
+      scenario:
+        "Two photographs of the same room. In the first, a wide lens from the doorway shows a small bedroom with a bed, a wardrobe and very little floor. In the second, an estate agent's shot taken from the corner with an ultra-wide lens, at waist height, with the furniture pushed back, shows an airy space. Neither photograph is fake. No object was added or removed. Every choice — lens, position, height, what was left in the frame — was legal, and together they produced two incompatible impressions of one room. The viewer who does not know what focal length does cannot correct for it.",
+      mapping: [
+        { from: 'The focal length of the lens', to: 'The axis range: where the value axis starts and stops' },
+        { from: 'Cropping the frame to exclude the clutter', to: 'Cherry-picking the time window shown' },
+        { from: 'Shooting from a low angle to enlarge the foreground', to: '3D perspective, which enlarges whatever is nearest the viewer' },
+        { from: 'Two shots with different lenses shown side by side', to: 'Dual axes, where two freely chosen scales manufacture an apparent relationship' },
+        { from: 'Asking what focal length was used', to: 'Running the checklist: axes, range, scale, baseline, source' },
+      ],
+      bridge:
+        'The parallel is exact in the way that matters legally and ethically: nothing was falsified in either case, and the distortion lives entirely in choices the viewer cannot see. That is why "the numbers are correct" is not a defence of a chart, and why the remedy is procedural rather than moral — a reader checks the axes the way a buyer asks to see the floor plan, and an honest author states the choices in the caption.',
+      limitations:
+        'The photograph analogy suggests that every distortion is a choice made for effect, whereas the most common cause in practice is a tool default nobody examined: spreadsheet software autoscales bar axes, plotting libraries autoscale colormaps, and dashboards default to dual axes. Assume a bad default before assuming bad faith.',
+    },
+
+    visuals: [
+      {
+        kind: 'table',
+        title: 'The standard distortions and how to spot each one',
+        caption: 'Run down this list on any chart you are shown. It takes about fifteen seconds once it is habitual.',
+        columns: ['Distortion', 'What it does', 'Tell', 'Honest alternative'],
+        rows: [
+          ['Truncated bar axis', 'Breaks proportionality between length and value; magnifies small differences arbitrarily', 'Bar axis starts at 95, or at a value just below the data', 'Start bars at zero; to show small differences, plot the differences or use a dot plot'],
+          ['Dual axes', 'Manufactures an apparent relationship by sliding two independent scales', 'Two y axes with different units on one panel', 'Two stacked panels sharing an x axis, or index both series to 100 at a common start'],
+          ['Cherry-picked range', 'Selects the window that supports the claim', 'A time axis that starts at an unexplained date, often a peak or trough', 'Show the longest range available and mark the window of interest'],
+          ['3D effects', 'Perspective enlarges near elements; extrusion adds ink that carries no data', 'Tilted pies, extruded bars, shadowed columns', 'Flat 2D. A tilted pie is not readable at all'],
+          ['Area double-counting', 'Scales width and height by the value, so area grows as the square', 'Icons or bubbles that are both taller and wider for larger values', 'Scale area to the value, not the linear dimension, and prefer bars entirely'],
+          ['Unequal bins or intervals', 'Hides or manufactures structure by grouping unevenly', 'Histogram bins or age bands of different widths, uneven time steps on a line', 'Equal-width bins; if unequal, plot density (count divided by width), not raw counts'],
+          ['Missing baseline or denominator', 'Reports counts where a rate is the meaningful quantity', 'Raw counts across groups of very different sizes', 'Normalise: per capita, per thousand requests, as a share of the relevant total'],
+          ['Inverted or reversed axis', 'Turns a rise into an apparent fall', 'A y axis whose numbers descend as you move up', 'Conventional orientation, and say so explicitly if reversal is genuinely required'],
+          ['Aggregation hiding the split', 'Pools groups whose trends differ or oppose', 'A single line or bar over a heterogeneous population', "Disaggregate; check for Simpson's paradox by computing within-group trends"],
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'The fifteen-second checklist for reading any chart',
+        caption: 'In this order, because each step catches more than the one after it.',
+        steps: [
+          { label: '1. Read the axes', detail: 'What are the units? Does the value axis start at zero, and does the mark require it to? Is either axis logarithmic or reversed?' },
+          { label: '2. Check the range', detail: 'Why does the time axis start there? Would a longer window change the impression? Is the window centred on a peak?' },
+          { label: '3. Count the scales', detail: 'One vertical scale, or two? If two, treat any apparent co-movement as an artefact until proven otherwise.' },
+          { label: '4. Ask what the denominator is', detail: 'Counts or rates? Per what? Are the groups being compared the same size?' },
+          { label: '5. Look for what is missing', detail: 'Sample size, uncertainty, the excluded categories, the rows dropped, the period before the chart begins.' },
+          { label: '6. Check the encoding', detail: 'Is magnitude on area, angle or colour? Is a sequential colormap being used for a signed quantity? Is anything 3D?' },
+          { label: '7. Ask who made it and why', detail: 'Not to dismiss it, but because knowing the conclusion the author wanted tells you which choice to inspect first.' },
+        ],
+      },
+      {
+        kind: 'ascii',
+        title: 'The same series, three windows, three stories',
+        caption: 'Identical data. Only the x range changed.',
+        art: `A: last 6 months              B: last 3 years             C: full 10 years
+                                                            
+ |    /\\                        |        /\\                 |               /\\
+ |   /  \\                       |   /\\  /  \\                |          /\\  /  \\
+ |  /    \\___                   |  /  \\/    \\__             |   ___/\\_/  \\/    \\_
+ | /                            | /                         |  /
+ +----------------              +-------------------        +--------------------
+ "Sharp decline!"               "Volatile, no trend"        "Strong long-run rise"
+
+The honest chart is C with the recent window highlighted, plus a
+sentence naming the comparison period and why it was chosen.`,
+      },
+      {
+        kind: 'compare',
+        title: 'Deliberate deception versus an unexamined default',
+        caption:
+          'The distinction matters for how you respond, not for whether the chart needs fixing. Both need fixing.',
+        left: {
+          heading: 'Signs of an unexamined default',
+          points: [
+            'The distortion is exactly what the tool does out of the box, such as an autoscaled bar axis',
+            'The caption and title are neutral and do not push a conclusion',
+            'Other charts in the same document have the same issue regardless of which way it cuts',
+            'The author shows you the data when asked, and is surprised',
+          ],
+        },
+        right: {
+          heading: 'Signs of deliberate framing',
+          points: [
+            'The distortion consistently favours one conclusion across several charts',
+            'The axis range starts at an oddly specific value close to the data minimum',
+            'The time window begins at a local peak or trough with no explanation',
+            'The underlying numbers are not provided, and requests for them are deflected',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'The same failures in machine learning charts',
+        caption: 'None of these are exotic. All of them appear in real model reports.',
+        columns: ['ML chart', 'How it misleads', 'The fix'],
+        rows: [
+          ['Learning curve with a truncated y axis', 'A 0.3 percent improvement fills the panel and looks decisive', 'Show a range that includes the baseline, and state the absolute change'],
+          ['Accuracy bar chart on imbalanced data', 'Every model looks excellent because the majority class dominates', 'Report per-class recall and the majority-class baseline on the same chart'],
+          ['Confusion matrix in raw counts', 'The large classes dominate the colour scale and the errors vanish', 'Row-normalise so the diagonal is recall, and pin the scale to [0, 1]'],
+          ['ROC curve without the class balance', 'AUC looks strong on a heavily imbalanced problem where precision is poor', 'Show a precision-recall curve as well, and state the positive rate'],
+          ['Feature importance without error bars', 'Ranking noise is read as a stable ordering', 'Use permutation importance with repeats and show the spread'],
+          ['Training loss only', 'Hides overfitting entirely, since training loss falls regardless', 'Always plot validation alongside, on the same axes'],
+          ['A single train-test split score', 'One favourable split is presented as the model performance', 'Cross-validate and show the fold-level distribution, not just the mean'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Re-draw a distorted chart honestly',
+        caption: 'Take a truncated bar chart or a dual-axis plot and fix it, then compare the impressions.',
+        widget: 'code-playground',
+      },
+    ],
+
+    formalDefinition:
+      'A graphic is misleading when the ratio of the perceived effect size to the effect size in the data departs materially from one, whether through a non-proportional encoding (a truncated baseline on a length encoding, area scaled by a linear dimension), through selective inclusion (a restricted range, an omitted denominator, an excluded subgroup), or through free parameters that determine apparent association (independent dual scales). Tufte formalised the first of these as the lie factor.',
+
+    math: {
+      intuition:
+        'The lie factor makes "this chart exaggerates" into a number you can compute and quote. Take any change the chart depicts, measure how big that change looks on the page as a proportion, and divide by how big it is in the data as a proportion. If a value rises 6 percent and the bar gets 300 percent longer, the lie factor is 50. For a truncated bar axis the arithmetic collapses to something you can do in your head: the exaggeration is roughly the ratio of the full value range to the range actually shown.',
+      formulas: [
+        {
+          latex: 'L = \\frac{\\text{relative size of effect shown in the graphic}}{\\text{relative size of effect in the data}}',
+          name: 'Lie factor',
+          meaning:
+            'Tufte\'s measure of distortion. A lie factor of 1 means the picture is proportional to the data; 4 means the change looks four times larger than it is.',
+          variables: [
+            { symbol: 'L', meaning: 'the lie factor' },
+            { symbol: '\\text{relative size shown}', meaning: 'the proportional change in the drawn mark, in ink or pixels' },
+            { symbol: '\\text{relative size in data}', meaning: 'the proportional change in the underlying values' },
+          ],
+        },
+        {
+          latex: 'L_{\\text{trunc}} = \\frac{(v_2 - b)/(v_1 - b)}{v_2 / v_1}',
+          name: 'Lie factor of a truncated bar axis',
+          meaning:
+            'With v1 = 102, v2 = 108 and baseline b = 100 this is 4 / 1.059 = 3.8. As b approaches v1 the factor grows without bound, which is why the author can choose any exaggeration they like.',
+          variables: [
+            { symbol: 'v_1, v_2', meaning: 'the two values being compared' },
+            { symbol: 'b', meaning: 'the value the axis starts at' },
+          ],
+        },
+        {
+          latex: 'A \\propto s^2 \\implies \\frac{A_2}{A_1} = \\left(\\frac{v_2}{v_1}\\right)^{2}',
+          name: 'Area double-counting',
+          meaning:
+            'Scaling both width and height by the value squares the ratio: doubling a value paints four times the area. A doubling drawn this way has a lie factor of 2.',
+          variables: [
+            { symbol: 's', meaning: 'the linear dimension, width or height, scaled by the value' },
+            { symbol: 'A', meaning: 'the drawn area, which is what the eye decodes' },
+            { symbol: 'v_1, v_2', meaning: 'the two values' },
+          ],
+        },
+        {
+          latex: 'r(\\alpha y_1,\; \\beta y_2) = r(y_1, y_2) \\quad \\text{for } \\alpha, \\beta > 0',
+          name: 'Why dual axes prove nothing',
+          meaning:
+            'Rescaling either series leaves the correlation unchanged, so the fact that two lines can be made to overlap says nothing about whether they are related. The overlap is a property of the scales chosen, not of the data.',
+          variables: [
+            { symbol: 'y_1, y_2', meaning: 'the two plotted series' },
+            { symbol: '\\alpha, \\beta', meaning: 'the arbitrary positive scale factors implied by the two axes' },
+            { symbol: 'r', meaning: 'the Pearson correlation between the series' },
+          ],
+          category: 'statistics',
+        },
+      ],
+      derivation: [
+        'The eye compares bars by the ratio of their drawn lengths.',
+        'With a baseline b, the drawn lengths are proportional to v1 - b and v2 - b.',
+        'The apparent ratio is therefore (v2 - b) / (v1 - b), while the true ratio is v2 / v1.',
+        'The lie factor is the apparent ratio divided by the true one, and it equals 1 exactly when b = 0.',
+        'As b rises towards v1 the denominator approaches zero and the lie factor diverges, so any exaggeration is achievable by choosing b.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Auditing a chart from a quarterly business review',
+      setup:
+        'A slide shows two bars labelled "Q3: 4.62" and "Q4: 4.71" for average customer satisfaction out of 5. The y axis runs from 4.55 to 4.75. The title reads "Satisfaction up sharply". We audit it with the checklist.',
+      steps: [
+        {
+          label: 'Step 1: read the axes',
+          detail:
+            'The value axis starts at 4.55 on a bar chart. Bars encode magnitude as length, so a non-zero baseline breaks proportionality immediately. This is the finding; everything after it is quantifying the damage.',
+        },
+        {
+          label: 'Compute the lie factor',
+          detail:
+            'Drawn lengths are 4.62 - 4.55 = 0.07 and 4.71 - 4.55 = 0.16, an apparent ratio of 2.29. The true ratio is 4.71 / 4.62 = 1.019. The lie factor is 2.29 / 1.019 = 2.24, so the increase looks roughly 2.2 times larger than it is.',
+          latex: 'L = \\frac{0.16 / 0.07}{4.71 / 4.62} = \\frac{2.286}{1.019} \\approx 2.24',
+        },
+        {
+          label: 'Step 4: ask about the denominator and uncertainty',
+          detail:
+            'Nothing on the slide says how many responses each quarter had. If Q3 had 4,000 responses and Q4 had 300, the difference of 0.09 on a five-point scale is well inside sampling noise. A mean with no interval and no n is not yet a finding.',
+        },
+        {
+          label: 'Step 5: look for what is missing',
+          detail:
+            'Only two quarters are shown. The natural question is what Q1 and Q2 were: if the series reads 4.80, 4.74, 4.62, 4.71 then Q4 is a partial recovery from a decline, and "up sharply" is the wrong headline entirely.',
+        },
+        {
+          label: 'The honest version',
+          detail:
+            'A line or dot chart of all available quarters with 95 percent intervals, a y axis covering a range the reader can interpret, response counts annotated, and a title stating the change in absolute terms: "Satisfaction rose 0.09 points in Q4, within the range of the last two years."',
+        },
+        {
+          label: 'The likely explanation',
+          detail:
+            'Almost certainly not deception. Spreadsheet software autoscales the value axis of a bar chart by default, and the author wrote a headline to match what they saw. That is precisely why you run the checklist on your own slides too.',
+        },
+      ],
+      conclusion:
+        'One chart, three separate problems: a truncated baseline exaggerating by a factor of 2.2, no uncertainty or sample size, and a two-point window hiding the longer trend. None of the numbers were wrong. The audit took under a minute and changed the conclusion.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'The truncated axis, quantified',
+        runnable: true,
+        code: `import numpy as np
+import matplotlib.pyplot as plt
+
+labels = ["Q3", "Q4"]
+values = np.array([4.62, 4.71])
+baseline = 4.55
+
+fig, (ax_bad, ax_good) = plt.subplots(1, 2, figsize=(10.5, 4.2), layout="constrained")
+
+bars_bad = ax_bad.bar(labels, values, color="#e76f51", width=0.55)
+ax_bad.set_ylim(baseline, 4.75)
+ax_bad.set_ylabel("mean satisfaction (of 5)")
+ax_bad.set_title("Axis starts at 4.55: 'up sharply'")
+ax_bad.bar_label(bars_bad, fmt="%.2f", padding=3)
+
+bars_good = ax_good.bar(labels, values, color="#2a9d8f", width=0.55)
+ax_good.set_ylim(0, 5)
+ax_good.set_ylabel("mean satisfaction (of 5)")
+ax_good.set_title("Axis starts at 0: a 0.09 point change")
+ax_good.bar_label(bars_good, fmt="%.2f", padding=3)
+
+fig.suptitle("Same two numbers, two impressions")
+fig.savefig("truncated_axis.png", dpi=200)
+
+drawn_ratio = (values[1] - baseline) / (values[0] - baseline)
+true_ratio = values[1] / values[0]
+print(f"drawn length ratio: {drawn_ratio:.2f}")
+print(f"true value ratio:   {true_ratio:.3f}")
+print(f"lie factor:         {drawn_ratio / true_ratio:.2f}")
+print(f"relative change:    {true_ratio - 1:.2%}")`,
+        output: `drawn length ratio: 2.29
+true value ratio:   1.019
+lie factor:         2.24
+relative change:    1.95%`,
+        explanation:
+          'Two panels, identical numbers. On the left the Q4 bar is more than twice the height of the Q3 bar, and the impression is of a decisive jump; on the right the two bars are all but indistinguishable, which is the honest rendering of a 1.95 percent change. The printed lie factor of 2.24 is the whole argument in one number: the picture exaggerates by a factor of 2.2, and the author chose that factor by choosing where the axis starts. Note the right-hand panel is not a satisfying chart — two nearly equal bars is a boring picture — and that is exactly the point. If the 0.09 difference genuinely matters, the fix is to change what you plot, not how you scale it: plot the difference with a confidence interval, or show all quarters as a line where a non-zero axis is legitimate because a line is read by slope.',
+      },
+      {
+        language: 'python',
+        title: 'Dual axes can make anything look related',
+        runnable: true,
+        code: `import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(77)
+months = np.arange(36)
+
+# Two genuinely unrelated random walks.
+marketing = 50 + np.cumsum(rng.normal(0.5, 3, 36))
+ice_cream = 900 + np.cumsum(rng.normal(-0.2, 40, 36))
+r = float(np.corrcoef(marketing, ice_cream)[0, 1])
+
+fig, (ax_dual, ax_panels) = plt.subplots(1, 2, figsize=(12.5, 4.4), layout="constrained")
+
+ax_left = ax_dual
+ax_right = ax_left.twinx()
+ax_left.plot(months, marketing, color="#264653", linewidth=2, label="marketing spend")
+ax_right.plot(months, ice_cream, color="#e76f51", linewidth=2, label="units sold")
+# The scales are chosen so the two curves overlap. Nothing forced these numbers.
+ax_left.set_ylim(marketing.min() - 5, marketing.max() + 5)
+ax_right.set_ylim(ice_cream.min() - 60, ice_cream.max() + 60)
+ax_left.set_ylabel("marketing spend (thousands)", color="#264653")
+ax_right.set_ylabel("units sold", color="#e76f51")
+ax_left.set_xlabel("month")
+ax_dual.set_title(f"Dual axes: 'they move together' (actual r = {r:+.2f})")
+
+# The honest alternative: index both to 100 at the start, one shared scale.
+ax_panels.plot(months, 100 * marketing / marketing[0], color="#264653", linewidth=2, label="marketing spend")
+ax_panels.plot(months, 100 * ice_cream / ice_cream[0], color="#e76f51", linewidth=2, label="units sold")
+ax_panels.axhline(100, color="grey", linewidth=1, linestyle=":")
+ax_panels.set_ylabel("index (month 0 = 100)")
+ax_panels.set_xlabel("month")
+ax_panels.set_title("One shared scale: the series diverge")
+ax_panels.legend(frameon=False)
+
+fig.savefig("dual_axis.png", dpi=200)
+print(f"correlation between the two series: {r:+.3f}")
+print("both series are independent random walks")`,
+        output: `correlation between the two series: +0.114
+both series are independent random walks
+`,
+        explanation:
+          'The left panel shows a dark line and an orange line weaving around each other through the same vertical band, which reads instantly as "these move together" — and the correlation is +0.11, which is nothing. The apparent relationship was produced entirely by the two set_ylim calls, each of which was free to be anything. The right panel plots the same two series indexed to 100 at month zero on a single shared scale; now they visibly diverge, and the reader can see that one drifts up while the other wanders. The general rule is that a dual-axis chart contains two free parameters that the author sets and the reader cannot see, so any co-movement it displays is uninterpretable. The honest alternatives are indexing both series to a common base, plotting them in two stacked panels sharing the x axis, or plotting one against the other as a scatter and reporting the correlation.',
+      },
+      {
+        language: 'python',
+        title: 'Unequal bins and area double-counting',
+        runnable: true,
+        code: `import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(55)
+ages = np.clip(rng.normal(41, 15, 20_000), 0, 95)
+
+uneven_edges = np.array([0, 18, 25, 30, 35, 40, 45, 50, 60, 95])
+counts, _ = np.histogram(ages, bins=uneven_edges)
+widths = np.diff(uneven_edges)
+density = counts / widths
+
+fig, axes = plt.subplots(1, 3, figsize=(15, 4.2), layout="constrained")
+
+axes[0].bar(uneven_edges[:-1], counts, width=widths, align="edge",
+            color="#e76f51", edgecolor="white")
+axes[0].set_title("Unequal bins, raw counts: the 60-95 bar looks huge")
+axes[0].set_xlabel("age")
+axes[0].set_ylabel("count")
+
+axes[1].bar(uneven_edges[:-1], density, width=widths, align="edge",
+            color="#2a9d8f", edgecolor="white")
+axes[1].set_title("Same bins, plotted as density (count / width)")
+axes[1].set_xlabel("age")
+axes[1].set_ylabel("people per year of age")
+
+# Area double-counting: an icon scaled in BOTH dimensions by the value.
+for i, (value, colour) in enumerate([(1.0, "#8fa7b3"), (2.0, "#e76f51")]):
+    side = 0.35 * value
+    axes[2].add_patch(plt.Rectangle((0.25 + i * 0.45 - side / 2, 0.15), side, side, color=colour))
+    axes[2].text(0.25 + i * 0.45, 0.08, f"value = {value:g}", ha="center", fontsize=10)
+axes[2].set_xlim(0, 1)
+axes[2].set_ylim(0, 1)
+axes[2].axis("off")
+axes[2].set_title("Doubling both dimensions paints 4x the area")
+
+fig.savefig("bins_and_area.png", dpi=200)
+
+for lo, hi, c, d in zip(uneven_edges[:-1], uneven_edges[1:], counts, density):
+    print(f"age {lo:>2}-{hi:<2}  width {hi - lo:>2}  count {c:>5}  density {d:7.1f}")`,
+        output: `age  0-18  width 18  count   983  density    54.6
+age 18-25  width  7  count  1526  density   218.0
+age 25-30  width  5  count  1640  density   328.0
+age 30-35  width  5  count  2115  density   423.0
+age 35-40  width  5  count  2456  density   491.2
+age 40-45  width  5  count  2544  density   508.8
+age 45-50  width  5  count  2288  density   457.6
+age 50-60  width 10  count  3457  density   345.7
+age 60-95  width 35  count  2991  density    85.4`,
+        explanation:
+          'Three panels. The first plots raw counts with unequal bin widths, and the 60-to-95 bar is one of the tallest on the chart — not because that age group is dense, but because the bin is 35 years wide and simply collects more people. A reader concludes the population skews old. The second panel divides each count by its bin width, which is what a histogram means by density, and the picture inverts: the 60-plus bar becomes one of the shortest and the peak sits correctly at 40 to 45. The printed table shows the arithmetic directly, 2,991 people at a density of 85 against 2,544 at a density of 509. The third panel is the pictorial version of the same error: two squares where the second has twice the side length of the first, intended to show a doubling. The eye reads area, the area is four times larger, and the lie factor is 2. The general rule: when bins or icons vary in size, the quantity the reader decodes is area, so plot density rather than counts and scale area rather than length.',
+      },
+      {
+        language: 'python',
+        title: 'The same audit on an ML result',
+        runnable: true,
+        code: `import numpy as np
+import matplotlib.pyplot as plt
+
+# Two models, five cross-validation folds each.
+model_a = np.array([0.9041, 0.9002, 0.9068, 0.8996, 0.9033])
+model_b = np.array([0.9078, 0.9051, 0.9019, 0.9095, 0.9044])
+majority_baseline = 0.887   # always predict the majority class
+
+fig, (ax_bad, ax_good) = plt.subplots(1, 2, figsize=(11.5, 4.4), layout="constrained")
+
+means = [model_a.mean(), model_b.mean()]
+bars = ax_bad.bar(["model A", "model B"], means, color=["#8fa7b3", "#e76f51"], width=0.5)
+ax_bad.set_ylim(0.900, 0.908)
+ax_bad.bar_label(bars, fmt="%.4f", padding=3)
+ax_bad.set_ylabel("accuracy")
+ax_bad.set_title("'Model B is clearly better'")
+
+x = np.array([0, 1])
+for i, scores in enumerate([model_a, model_b]):
+    ax_good.scatter(np.full(scores.size, i) + np.linspace(-0.06, 0.06, scores.size),
+                    scores, s=30, color="#264653", zorder=3)
+    ax_good.hlines(scores.mean(), i - 0.18, i + 0.18, color="#e76f51", linewidth=2.5, zorder=4)
+ax_good.axhline(majority_baseline, color="grey", linestyle="--", linewidth=1.4,
+                label=f"majority-class baseline = {majority_baseline:.3f}")
+ax_good.set_xticks(x, ["model A", "model B"])
+ax_good.set_ylim(0.87, 0.92)
+ax_good.set_ylabel("accuracy per fold")
+ax_good.set_title("Folds shown, baseline shown: the gap is noise")
+ax_good.legend(frameon=False, fontsize=9)
+
+fig.suptitle("A 0.002 accuracy difference on a problem with an 0.887 baseline")
+fig.savefig("ml_audit.png", dpi=200)
+
+diff = model_b.mean() - model_a.mean()
+pooled_sd = np.sqrt((model_a.var(ddof=1) + model_b.var(ddof=1)) / 2)
+print(f"mean A {model_a.mean():.4f}  mean B {model_b.mean():.4f}  difference {diff:+.4f}")
+print(f"fold-to-fold sd: {pooled_sd:.4f}  -> difference is {diff / pooled_sd:.2f} sd")
+print(f"lift over majority baseline: A {model_a.mean() - majority_baseline:+.4f}, "
+      f"B {model_b.mean() - majority_baseline:+.4f}")`,
+        output: `mean A 0.9028  mean B 0.9057  difference +0.0029
+fold-to-fold sd: 0.0029  -> difference is 1.00 sd
+lift over majority baseline: A +0.0154, B +0.0186`,
+        explanation:
+          'The left panel is a chart that gets shown in real model reviews: two bars on an axis running from 0.900 to 0.908, where model B towers over model A and the labels read 0.9028 and 0.9057. The lie factor here is enormous, because the drawn ratio is roughly 2 and the true ratio is 1.003. The right panel shows the same experiment honestly: every fold as a point, the means as short horizontal rules, a y axis wide enough to be interpretable, and a dashed line at the majority-class baseline of 0.887. Three findings appear at once that the bar chart hid. The fold clouds overlap substantially, and the printed output shows the difference is exactly one fold-to-fold standard deviation, which is not evidence of an improvement from five folds. Both models beat the trivial baseline by under two accuracy points, so the headline accuracy of 0.90 is much less impressive than it sounds. And the choice between A and B should be made on cost, latency or interpretability, because the accuracy evidence does not distinguish them.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Financial and news graphics',
+        usage:
+          'Truncated y axes on bar charts and windows chosen to start at a local peak are routine in market commentary. The same series over five years frequently tells the opposite story to the same series over five months.',
+      },
+      {
+        context: 'Product dashboards',
+        usage:
+          'Dual axes are a default in many dashboard tools, so a panel showing "feature adoption and revenue moving together" is extremely common and almost never evidence of anything, because both scales autoscale independently.',
+      },
+      {
+        context: 'Model reports and papers',
+        usage:
+          'Learning curves with truncated y axes make a 0.3 percent improvement fill the panel; accuracy bars on imbalanced data hide that a constant predictor scores nearly as well; single-split results hide fold-to-fold variance.',
+      },
+      {
+        context: 'Public health and crime statistics',
+        usage:
+          'Raw counts across regions of very different population make the largest region look worst by construction. The meaningful quantity is a rate per capita, and switching between the two changes the ranking entirely.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'matplotlib', role: 'ax.set_ylim(bottom=0), ax.twinx() and ax.set_yscale are the three calls that create or prevent most of these distortions.' },
+      { tool: 'seaborn', role: 'Autoscaled heatmap colour ranges and default confidence intervals are conveniences that need checking against the data structure.' },
+      { tool: 'pandas', role: 'Choosing a resample frequency, a rolling window or a groupby level silently determines what a chart can show; each is a defensible choice that must be stated.' },
+      { tool: 'scikit-learn', role: 'Cross-validation, permutation importance and calibration curves supply the uncertainty that turns a single point estimate into an honest chart.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Assuming bad faith when a default is to blame',
+        why: 'Spreadsheet software autoscales bar axes, dashboard tools default to dual axes, and plotting libraries autoscale colormaps. The overwhelming majority of misleading charts were produced by someone who did not look at the axis.',
+        fix: 'Point at the specific choice and ask about it rather than accusing. The correction is the same either way, and framing it as a default keeps the conversation about the chart.',
+      },
+      {
+        mistake: 'Running the checklist on other people charts but not your own',
+        why: 'You already know what you expect to see, so a chart that confirms it does not trigger scrutiny. This is where most self-inflicted errors survive to publication.',
+        fix: 'Audit every chart before you publish it: axis starts, time window, denominators, sample size, uncertainty. Ask a colleague what the chart says before you tell them what you think it says.',
+      },
+      {
+        mistake: 'Believing a non-zero axis is always dishonest',
+        why: 'The rule applies to marks that encode magnitude as length or area. A line chart is read by slope, and slope is unaffected by a vertical shift, so forcing a stock price or a temperature series to include zero usually destroys the information.',
+        fix: 'Apply the rule by encoding: zero baseline for bars and areas, free baseline for lines and dot plots. Say which you used when the range is unusual.',
+      },
+      {
+        mistake: 'Treating co-movement on a dual-axis chart as evidence',
+        why: 'Two independent scales are two free parameters the author chooses and the reader cannot see, so any pair of series can be made to appear to track each other.',
+        fix: 'Index both series to 100 at a common start, use two stacked panels with a shared x axis, or draw a scatter of one against the other and report the correlation.',
+      },
+      {
+        mistake: 'Plotting raw counts across groups of very different sizes',
+        why: 'The largest group wins by construction, so the chart measures group size rather than the phenomenon.',
+        fix: 'Normalise by the relevant denominator — per capita, per thousand requests, per member of the class — and show the group sizes so the reader can judge the reliability of each rate.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'Name three ways a chart can mislead without containing a single incorrect number.',
+        answer:
+          'First, a truncated value axis on a bar chart: bars encode magnitude as length from the baseline, so starting the axis at 95 instead of 0 can make a 2 percent difference look like a doubling, and the author picks the exaggeration factor by picking the baseline. Second, dual axes: two series on two independently chosen vertical scales can be made to appear to move together regardless of their actual correlation, because rescaling a series does not change its correlation with anything. Third, a cherry-picked range: starting a time axis at a local peak turns a normal fluctuation into a dramatic decline, and the same series over a longer window often shows the opposite. I would add a fourth that is less discussed — plotting raw counts across groups of very different sizes, where the chart ends up measuring population rather than the phenomenon.',
+        followUp:
+          'A strong answer mentions the lie factor as a way to quantify the first case, and notes that a non-zero axis on a line chart is legitimate because slope is invariant to a vertical shift.',
+      },
+      {
+        level: 'intermediate',
+        question: 'A colleague shows a learning curve where validation accuracy rises from 0.9012 to 0.9041 and fills the whole panel. What do you say?',
+        answer:
+          'I would start with the axis: if the y range is 0.900 to 0.905, the panel is showing a 0.3 percent relative improvement at a magnification that makes it look decisive, and I would ask for a range that includes a reference point — the previous model, the baseline, or zero error if that is meaningful. Then I would ask what the variance is: a 0.0029 difference from a single run tells you nothing unless the run-to-run or fold-to-fold spread is smaller than that, so I would want several seeds or folds with the individual points shown. Then the baseline question: on an imbalanced problem, the constant predictor might already score 0.89, in which case both numbers represent a small lift and the headline accuracy is not the right metric at all. None of this is an accusation; autoscaling is the default in every plotting library and the author almost certainly did not choose the range deliberately.',
+        followUp:
+          'Mentioning that the fix is to plot the difference with an interval, rather than to rescale the same chart, shows the candidate understands that the problem is what is plotted and not just how.',
+      },
+      {
+        level: 'ai-engineer',
+        question: 'What would you check before publishing a model evaluation chart to a non-technical audience?',
+        answer:
+          'I run the same checklist I would run on someone else chart, which is the point of having one. Axes: does any bar or area axis start at zero, and is the y range on any curve wide enough that the reader can judge the size of the effect rather than just its sign. Uncertainty: is there more than one run, and is the spread shown rather than only the mean, because a non-technical reader will treat a single point as exact. Baselines: is the trivial baseline on the chart, since a 91 percent accuracy means something completely different when the majority class is 50 percent than when it is 89 percent. Denominators: are any counts shown where rates are what matters, and are group sizes visible. Selection: does the chart cover the whole evaluation period and the whole population, or a slice, and if a slice, is that stated on the chart itself rather than in a footnote. Finally, I write the title as the finding in plain language with the absolute magnitude in it, because a non-technical reader will remember the title and nothing else — and if I cannot write an honest title that supports the claim, the claim is not supported.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A bar chart compares 340 and 355 on an axis starting at 330. Compute the lie factor and state the honest way to present the difference.',
+        hint: 'Drawn lengths are the values minus the baseline. Compare their ratio with the ratio of the values.',
+        solution:
+          'Drawn lengths are 340 - 330 = 10 and 355 - 330 = 25, an apparent ratio of 2.5. The true ratio is 355 / 340 = 1.044. The lie factor is 2.5 / 1.044 = 2.39, so the chart makes a 4.4 percent increase look roughly 2.4 times larger than it is.\n\nThe honest presentation depends on what matters. If the levels matter, draw the bars from zero and accept that two nearly equal bars is the correct picture of two nearly equal numbers. If the change is the finding, change what you plot: a single dot plot or bar of the difference, +15 with its confidence interval, where a non-zero axis is legitimate because a dot encodes position rather than length. If there is history, a line chart of the whole series makes the 15-unit move interpretable against normal variation, which is usually the most informative option of the three.',
+      },
+      {
+        prompt:
+          'You are handed a chart titled "Adoption drives revenue" showing feature adoption and revenue as two lines with two y axes over 18 months. List what you would ask for, in order.',
+        hint: 'Start with the structural problem, then move to the causal claim.',
+        solution:
+          'First: both series on one scale, indexed to 100 at month zero, or in two stacked panels sharing the x axis. With two free scales, any apparent tracking is an artefact of the two set_ylim choices and cannot be evidence of anything.\n\nSecond: the correlation itself, and a scatter of one against the other, so the relationship is a number and a shape rather than an impression.\n\nThird: the full available history, not eighteen months, and the reason that window was chosen. If both series simply trend upward over time, they will correlate strongly with each other and with anything else that trends, which is why correlations between two trending series are nearly uninformative.\n\nFourth: the causal question. Adoption and revenue plausibly share confounders — company size, account age, a sales push that drove both — and reverse causation is live, since customers who are already spending more explore more features. The title claims causation from an observational chart of two series. What would settle it is an experiment: randomise which accounts are nudged towards the feature and compare revenue.',
+      },
+      {
+        prompt:
+          'Design a checklist item that would have caught each of these: (a) a histogram with unequal bins, (b) a confusion matrix where the errors are invisible, (c) a regional bar chart that just ranks population.',
+        hint: 'Each maps to one step of the seven-step checklist.',
+        solution:
+          '(a) Step 1, read the axes: check whether the bins are equal width, and if they are not, verify the y axis is a density (count divided by width) rather than a raw count. Unequal bins with raw counts make wide bins look tall for a trivial reason.\n\n(b) Step 6, check the encoding: on a heatmap, ask what the colour scale is pinned to. Raw counts with an autoscaled sequential map let the large diagonal cells absorb the whole range, so every error renders as near-white. Row-normalising and pinning the scale to [0, 1] puts recall on the diagonal and makes rows comparable across classes of different sizes.\n\n(c) Step 4, ask what the denominator is: counts across regions of different population measure population. The check is to ask "per what?" of every count on every chart, and to require that group sizes are shown so the reader can see which rates rest on small samples.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'VIZ-008-q1',
+        type: 'numeric',
+        concept: 'lie factor',
+        prompt:
+          'Two bars show 50 and 60 on an axis starting at 40. The drawn lengths are 10 and 20. What is the lie factor, to two decimal places?',
+        answer: 1.67,
+        tolerance: 0.02,
+        explanation:
+          'The drawn ratio is 20 / 10 = 2. The true ratio is 60 / 50 = 1.2. The lie factor is 2 / 1.2 = 1.67, so the chart exaggerates the difference by about two thirds. Anything meaningfully above 1 means the picture is not proportional to the data.',
+      },
+      {
+        id: 'VIZ-008-q2',
+        type: 'truefalse',
+        concept: 'dual axes',
+        prompt: 'If two lines on a dual-axis chart rise and fall together, the two quantities are strongly correlated.',
+        answer: false,
+        explanation:
+          'Each axis is a free parameter, and rescaling a series does not change its correlation with anything, so any two series can be made to appear to track each other. Index both to a common base on one scale, or draw a scatter and report the coefficient.',
+      },
+      {
+        id: 'VIZ-008-q3',
+        type: 'multi',
+        concept: 'spotting distortion',
+        prompt: 'Which of these should make you suspicious of a chart? Select all that apply.',
+        options: [
+          'A bar chart whose value axis starts at 95',
+          'A time axis that begins at an unexplained date near a local peak',
+          'Icons scaled in both width and height by the value',
+          'A line chart whose y axis does not include zero',
+          'A histogram with unequal bin widths plotted as raw counts',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'Truncated bar baselines, cherry-picked windows, area double-counting and unequal bins with raw counts are all genuine distortions. A line chart with a non-zero y axis is normally fine, because a line is read by slope and slope is unchanged by shifting the axis.',
+      },
+      {
+        id: 'VIZ-008-q4',
+        type: 'order',
+        concept: 'reading checklist',
+        prompt: 'Put the chart-reading checklist into the order that catches the most, soonest.',
+        items: [
+          'Read the axes: units, whether the value axis starts at zero, whether any scale is log or reversed',
+          'Check the range: why does the window start there, and would a longer one change the impression',
+          'Count the vertical scales: one, or two independently chosen ones',
+          'Ask what the denominator is: counts or rates, and per what',
+          'Look for what is missing: sample size, uncertainty, excluded rows or categories',
+          'Check the encoding: is magnitude carried by area, angle or colour, and is anything 3D',
+        ],
+        explanation:
+          'Axes first because truncation is the commonest distortion and takes two seconds to spot. Range and dual scales come next because they are structural. Denominators, omissions and encoding follow, each catching a smaller but still substantial class of problems.',
+      },
+      {
+        id: 'VIZ-008-q5',
+        type: 'mcq',
+        concept: 'area encoding',
+        prompt:
+          'An infographic shows one figure twice as tall and twice as wide as another to represent a value that doubled. How many times larger is the drawn area, and what is the lie factor?',
+        options: [
+          'Four times the area, lie factor 2',
+          'Two times the area, lie factor 1',
+          'Four times the area, lie factor 4',
+          'Two times the area, lie factor 0.5',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Scaling both dimensions by 2 multiplies the area by 4. The eye decodes area, so a doubling is perceived as a quadrupling and the lie factor is 4 / 2 = 2. The fix is to scale area to the value — multiply each linear dimension by the square root — or to use bars and avoid the problem entirely.',
+      },
+      {
+        id: 'VIZ-008-q6',
+        type: 'explain',
+        concept: 'auditing your own work',
+        prompt:
+          'You are about to publish a chart showing your new model beats the previous one. Describe the audit you run on it first, and what would make you change the chart.',
+        rubric: [
+          'Checks the axis range and whether the encoding requires a zero baseline',
+          'Checks that uncertainty and sample size are represented, not just point estimates',
+          'Checks the baseline or reference point and the selection of the data shown',
+          'States a concrete change they would make if a check fails',
+        ],
+        sampleAnswer:
+          'First the axes. If it is a bar chart of scores, does it start at zero, and if it is a curve, is the y range wide enough that a reader can judge the magnitude rather than just the direction. If the improvement only looks convincing because the range is narrow, I change what I plot: the difference with a confidence interval, rather than two bars rescaled. Second, uncertainty. A single number per model is not a comparison, so I want several folds or seeds with the individual points drawn, and if the gap is inside the fold-to-fold spread I have to say so in the title rather than let the chart imply otherwise. Third, the reference points: the trivial baseline belongs on the chart, because an accuracy of 0.90 means something very different when the majority class is 0.89. Fourth, selection: does this cover the whole evaluation set and the whole period, and if I have excluded anything, that goes on the chart and not in a footnote. Finally, I write the title as the finding with the absolute magnitude in it, and if I cannot write an honest title that supports the claim, the claim is not supported and the chart should not be published.',
+        explanation:
+          'A strong answer treats the audit as procedural and self-directed, names the specific checks, and in each case says what would change rather than simply noting the risk.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What is the lie factor?', back: 'The relative size of the effect shown in the graphic divided by its relative size in the data. A truthful chart is near 1.' },
+      { front: 'Why are dual axes untrustworthy?', back: 'Two independently chosen scales are two free parameters, so any two series can be made to appear to move together. Rescaling never changes a correlation.' },
+      { front: 'When is a non-zero y axis legitimate?', back: 'For marks read by position or slope — lines and dot plots. Never for bars or areas, which encode magnitude as length or area from the baseline.' },
+      { front: 'What goes wrong with unequal histogram bins?', back: 'Wide bins collect more observations and look tall for that reason alone. Plot density, the count divided by the bin width, instead of raw counts.' },
+      { front: 'Why is doubling an icon in both dimensions misleading?', back: 'Area grows as the square, so a doubling paints four times the area and the lie factor is 2. Scale area to the value, or use bars.' },
+      { front: 'The first two checklist steps', back: 'Read the axes (units, zero baseline, log or reversed), then check the range (why does the window start there).' },
+      { front: 'The commonest cause of a misleading chart', back: 'An unexamined tool default — autoscaled bar axes, autoscaled colormaps, default dual axes — not deliberate deception.' },
+      { front: 'The ML version of the truncated axis', back: 'A learning curve or accuracy bar chart on a narrow y range, with no baseline and no fold-to-fold variance shown.' },
+    ],
+
+    challenge: {
+      title: 'Build a chart auditor',
+      brief:
+        'Write audit_figure(fig) that inspects a matplotlib Figure and prints a warning for each issue it can detect mechanically: any Axes containing bar containers whose value axis does not start at zero, any Axes with a twin (dual axes), any Axes whose y range spans less than 5 percent of the mean plotted value, any histogram whose bin widths are unequal while the heights are raw counts, and any Axes with no axis label on either dimension. For each warning, print the Axes title, the specific issue and a one-line suggested fix. Then write three deliberately flawed figures and show that your auditor catches each, plus one correct figure it passes clean.',
+      language: 'python',
+      acceptanceCriteria: [
+        'The auditor inspects a Figure object rather than requiring the original data',
+        'It detects at least four distinct issues, including a truncated bar baseline and a dual axis',
+        'Each warning names the offending Axes and gives a concrete suggested fix',
+        'Three flawed demonstration figures each trigger the expected warning',
+        'A correctly drawn figure produces no warnings, so the auditor is not simply warning about everything',
+      ],
+      starterCode:
+        'import matplotlib.pyplot as plt\nfrom matplotlib.container import BarContainer\n\n\ndef audit_figure(fig):\n    problems = []\n    for ax in fig.axes:\n        has_bars = any(isinstance(c, BarContainer) for c in ax.containers)\n        # Check the baseline, the twins, the y range, the bins and the labels.\n    return problems\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone how to read a chart critically: the standard distortions, how to spot each, and the order to check them in.',
+      mustCover: [
+        'A truncated value axis breaks the proportionality that bars depend on, and the exaggeration is chosen by the author',
+        'Dual axes contain two free scales, so apparent co-movement is an artefact rather than evidence',
+        'A cherry-picked range, a missing denominator and area double-counting each distort without any incorrect number',
+        'A repeatable checklist starting with the axes, applied to your own charts as well as other people\'s',
+      ],
+      bonusSignals: [
+        'computes or defines a lie factor',
+        'notes that a non-zero axis is legitimate for lines but not bars',
+        'notes that a tool default is a more likely explanation than deception',
+      ],
+      sampleExplanation:
+        "Most misleading charts contain entirely correct numbers. The distortion is in choices you cannot see unless you look for them, so the defence is a short checklist you run every time. Start with the axes. If it is a bar chart, does the value axis start at zero? A bar says how big something is by how long it is, so if the axis starts at 100 and the values are 102 and 108, the drawn lengths are 2 and 8 and a six percent difference looks fourfold. You can put a number on that — Tufte called it the lie factor, the exaggeration in the picture divided by the change in the data — and here it is nearly four. Note the rule is about bars, not every chart: a line is read by its slope, and shifting the axis up or down leaves every slope alone, so a share price starting at 140 is perfectly honest. Next, the range. Why does the timeline start there? A decline shown from its own peak looks like a collapse, and the same series over ten years often looks like a blip. Next, count the vertical scales: if there are two, with different units, any apparent tracking between the lines was produced by the author's choice of scales and proves nothing. Then ask what the denominator is, because counts across regions of very different size just rank population. Then ask what is missing: sample size, uncertainty, the rows that were excluded. And then run the whole list on your own charts, because the usual cause of all of this is not dishonesty — it is a default in the plotting tool that nobody checked.",
+    },
+  },
+];

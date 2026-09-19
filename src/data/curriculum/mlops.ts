@@ -3304,3 +3304,2620 @@ volumes:
         'A virtual environment pins your Python packages, which solves a real problem, but it says nothing about the operating system, the C libraries those packages were compiled against, or the CUDA runtime a GPU wheel expects. That is exactly the layer where machine learning breaks between a laptop and a server. A container captures all of it. You write a short recipe, build it once, and the result is an image: an immutable stack of filesystem layers plus the command to run. A container is one running instance of that image, and it is meant to be disposable — anything written inside it disappears when it is replaced, which is why data and logs go to a mounted volume or an external store. The layers matter for a practical reason: each instruction produces one, they are cached, and changing one invalidates everything after it. So you copy the requirements file and install dependencies before copying your source, because then editing a line of Python rebuilds one tiny layer instead of reinstalling PyTorch. Two things must never go in: secrets, because a layer can be extracted even if a later instruction deletes the file, and anything huge that you could mount instead.',
     },
   },
+
+  {
+    id: 'OPS-008',
+    domain: 'OPS',
+    module: 'Packaging & Delivery',
+    topic: 'CI/CD',
+    title: 'CI/CD for Machine Learning',
+    slug: 'ci-cd-for-ml',
+    difficulty: 4,
+    estimatedMinutes: 40,
+    prerequisites: ['OPS-002', 'OPS-007'],
+    related: ['OPS-005'],
+    tags: ['ci', 'cd', 'github actions', 'testing', 'canary', 'blue-green', 'shadow', 'model gate'],
+
+    learningObjectives: [
+      'Explain what continuous integration buys a team and why it must run on every pull request',
+      'Write a GitHub Actions workflow that lints, type-checks, tests and builds an image',
+      'Name the tests that are specific to ML: data validation, training smoke tests, and model performance gates',
+      'Explain why the training pipeline is a separate pipeline from the deployment pipeline',
+      'Compare blue-green, canary and shadow deployment, and choose the right one for a model change',
+    ],
+
+    terminology: [
+      {
+        term: 'Continuous integration (CI)',
+        definition:
+          'Automatically building and testing every change as it is proposed, so that defects are found within minutes of being written rather than at integration time.',
+        simple: 'A robot that checks every change before a human merges it.',
+      },
+      {
+        term: 'Continuous delivery / deployment (CD)',
+        definition:
+          'Delivery keeps `main` always releasable and makes shipping a one-click decision; deployment goes further and releases every passing change automatically.',
+        simple: 'Getting the tested change out to users, safely and repeatably.',
+      },
+      {
+        term: 'Model performance gate',
+        definition:
+          'A CI check that fails the pipeline when a candidate model scores worse than the current production model, or worse than a fixed floor, on a held-out evaluation set.',
+        simple: 'A rule that refuses to ship a model that got worse.',
+      },
+      {
+        term: 'Blue-green deployment',
+        definition:
+          'Two complete environments. The new version is deployed to the idle one, verified, then all traffic is switched at once; rollback is switching back.',
+        simple: 'Set up the new one next door, then flip everyone over at once.',
+      },
+      {
+        term: 'Canary deployment',
+        definition:
+          'The new version receives a small slice of live traffic — 1%, then 5%, then 25% — with automated metrics checks at each step and an automatic rollback on regression.',
+        simple: 'Let a few real users try it first and watch closely.',
+      },
+      {
+        term: 'Shadow deployment',
+        definition:
+          'The new model receives a copy of live traffic and its predictions are logged but never returned to users, so it can be compared against production on real data with zero user risk.',
+        simple: 'Let the new model answer silently and grade it afterwards.',
+      },
+    ],
+
+    simpleExplanation:
+      "Continuous integration is a robot that checks every proposed change the moment it is proposed. Somebody opens a pull request; within a couple of minutes the robot has installed the dependencies, run the formatter and linter, checked the types, run the tests and built the container image, and it reports back in the pull request itself. That short feedback loop is the whole value: a mistake caught two minutes after you wrote it costs a minute to fix, and the same mistake found three weeks later in production costs a day and a customer apology. Continuous delivery is the second half — because every change on the main branch has been verified, releasing becomes a routine, boring action rather than an event. Machine learning adds a twist that ordinary software does not have. Your code can be perfectly correct and the system still be broken, because the data changed or the retrained model is simply worse. So an ML pipeline tests more than code: it validates incoming data, it checks that a candidate model beats the one currently in production on a fixed evaluation set, and it treats training and deployment as two separate pipelines that run on different triggers.",
+
+    whyItExists:
+      'When integration and testing are manual, they happen late, inconsistently and under time pressure, so defects are discovered by users and releases become risky events that teams avoid. Automating build, test and deployment makes verification uniform and immediate, which is what lets a team ship small changes often instead of large changes rarely. In machine learning it also closes a gap unique to the field: correct code can still produce a worse model, so the pipeline must gate on measured model quality, not only on tests passing.',
+
+    analogy: {
+      scenario:
+        "Think of a commercial kitchen preparing a new dish for the menu. Nothing goes out on the strength of the chef's confidence. Every plate is tasted before it leaves the pass, the new dish is compared against the version already on the menu rather than merely declared good, and on the first night it is offered to a handful of tables while the head chef watches what comes back. If plates return untouched, the dish is pulled immediately and last week's version is back within minutes because the old recipe and ingredients were never thrown away.",
+      mapping: [
+        { from: 'Tasting every plate at the pass', to: 'CI running lint, types and tests on every pull request' },
+        { from: 'Comparing against the dish already on the menu', to: 'A model performance gate against the production model' },
+        { from: 'Offering it to a handful of tables first', to: 'A canary deployment on a small traffic slice' },
+        { from: 'Cooking it but not serving it, to check timings', to: 'Shadow deployment: predictions logged, never returned' },
+        { from: 'Keeping last week\'s recipe ready', to: 'A previous image digest and model version available for instant rollback' },
+      ],
+      bridge:
+        'The comparison against the existing dish is the part that makes this an ML analogy rather than a general software one. A unit test asks "did the code do what I said?", which a new model can pass while being worse at its actual job. The performance gate asks the question tests cannot: "is this candidate better than what we already have, measured the same way on the same held-out data?" That is why an ML pipeline has an evaluation stage between training and deployment, and why promotion is a decision about metrics rather than a decision about a green tick.',
+      limitations:
+        'A chef can taste a dish instantly; model quality in production is often only measurable weeks later, once labels arrive. That delay is why shadow and canary deployments exist, and why offline metrics are never the whole story.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'The pipeline end to end',
+        caption: 'Commit, check, build, gate, deploy — and what happens when a stage fails.',
+        widget: 'ci-cd-flow',
+      },
+      {
+        kind: 'flow',
+        title: 'What runs on a pull request',
+        caption: 'Fast checks first, so the cheapest failure is discovered first.',
+        steps: [
+          { label: 'Checkout and restore cache', detail: 'Dependencies come from cache keyed on the lockfile hash, so most runs skip installation.' },
+          { label: 'Lint and format check', detail: '`ruff check` and `ruff format --check`. Seconds, and catches the noisiest review comments.' },
+          { label: 'Type check', detail: '`mypy src/`. Catches an entire class of contract mismatches before any test runs.' },
+          { label: 'Unit and contract tests', detail: '`pytest`, including API contract tests against the real application.' },
+          { label: 'Data validation tests', detail: 'Schema, ranges and null rates on a sample. Specific to ML, and the stage that catches upstream breakage.' },
+          { label: 'Build the image', detail: 'Tagged with the commit SHA so the artifact is traceable to the exact source.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Two pipelines, not one',
+        caption: 'Conflating them is the most common ML delivery mistake.',
+        left: {
+          heading: 'Training pipeline',
+          points: [
+            'Triggered by new data, a schedule or a deliberate experiment',
+            'Runs for hours on expensive hardware',
+            'Produces a candidate model and an evaluation report',
+            'Ends by registering the model, not by deploying it',
+          ],
+        },
+        right: {
+          heading: 'Deployment pipeline',
+          points: [
+            'Triggered by a merge to `main` or a model promotion',
+            'Runs in minutes on ordinary runners',
+            'Produces an image and rolls it out progressively',
+            'Can roll back in seconds without retraining anything',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Choosing a release strategy',
+        columns: ['Strategy', 'User risk', 'Cost', 'Use it when'],
+        rows: [
+          ['Blue-green', 'All users at once, but rollback is instant', 'Two full environments', 'The change is verified offline and you want a clean, fast switch and revert.'],
+          ['Canary', 'A small percentage, briefly', 'Traffic splitting and automated metric checks', 'A model change whose real-world effect you cannot fully predict offline.'],
+          ['Shadow', 'None — predictions are never returned', 'Double inference cost, and a logging path', 'A major model or architecture change you want to validate on live traffic first.'],
+          ['Rolling', 'Mixed versions serve simultaneously', 'Cheapest; the orchestrator default', 'Backwards-compatible changes where version mixing is harmless.'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'Continuous integration is the practice of automatically building and verifying every proposed change against the shared mainline, with a defined set of checks whose failure blocks merge. Continuous delivery extends this by keeping the mainline in a permanently releasable state and automating promotion through environments. In machine learning the verified artifact set is extended beyond code to include data (schema and distribution assertions), the trained model (evaluation against a fixed holdout and against the incumbent), and the serving image, and the training and deployment pipelines are separated because they have different triggers, durations, hardware requirements and failure modes.',
+
+    codeExamples: [
+      {
+        language: 'yaml',
+        title: 'A real GitHub Actions workflow for a model service',
+        code: `name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-\${{ github.ref }}
+  cancel-in-progress: true          # a new push supersedes the running job
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check . && ruff format --check .
+
+      - name: Type check
+        run: mypy src/
+
+      - name: Unit and contract tests
+        run: pytest -q --cov=src --cov-report=term-missing --cov-fail-under=80
+
+      - name: Validate data schema on a sample
+        run: python -m src.data.validate --sample data/sample.parquet
+
+  image:
+    needs: quality
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: \${{ github.actor }}
+          password: \${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          push: \${{ github.event_name == 'push' }}
+          tags: ghcr.io/acme/churn:\${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max`,
+        explanation:
+          'Four details separate this from a toy workflow. `concurrency` with `cancel-in-progress` stops five queued runs piling up when somebody pushes five times in a minute. The dependency cache is keyed on the lockfile, so a run that changes no dependencies skips installation entirely. The image is tagged with `github.sha`, never `latest`, so every deployed artifact is traceable to one exact commit and rollback is unambiguous. And the image job `needs: quality`, so a lint failure costs seconds rather than a full container build.',
+      },
+      {
+        language: 'python',
+        title: 'The tests that are specific to machine learning',
+        code: `import pandas as pd
+import pytest
+from sklearn.metrics import roc_auc_score
+
+from src.data.schema import validate_frame
+from src.model import load_candidate, load_production
+
+
+def test_input_schema_and_ranges():
+    """Data tests: upstream can break you without a single code change."""
+    df = pd.read_parquet("data/sample.parquet")
+    validate_frame(df)                                   # types and required columns
+    assert df["age"].between(18, 120).all()
+    assert df["monthly_charges"].ge(0).all()
+    assert df["tenure_months"].isna().mean() < 0.01      # null rate guard
+    assert df["customer_id"].is_unique
+
+
+def test_training_smoke_runs_end_to_end(tmp_path):
+    """Two epochs on 500 rows. Proves the pipeline runs, not that it is good."""
+    from src.train import train
+    metrics = train(rows=500, epochs=2, out_dir=tmp_path)
+    assert (tmp_path / "model.joblib").exists()
+    assert 0.0 <= metrics["auc"] <= 1.0
+
+
+def test_candidate_does_not_regress_against_production():
+    """The gate. A green test suite does not mean a better model."""
+    eval_df = pd.read_parquet("data/holdout.parquet")     # fixed, versioned, never trained on
+    y = eval_df.pop("churned")
+
+    candidate_auc = roc_auc_score(y, load_candidate().predict_proba(eval_df)[:, 1])
+    production_auc = roc_auc_score(y, load_production().predict_proba(eval_df)[:, 1])
+
+    assert candidate_auc >= production_auc - 0.005, (
+        f"candidate {candidate_auc:.4f} < production {production_auc:.4f}"
+    )
+    assert candidate_auc >= 0.78, "absolute floor breached"
+
+
+@pytest.mark.parametrize("segment", ["retail", "business", "under_25", "over_65"])
+def test_no_segment_regresses_badly(segment):
+    """Aggregate metrics hide harm to small groups."""
+    df = pd.read_parquet(f"data/holdout_{segment}.parquet")
+    y = df.pop("churned")
+    auc = roc_auc_score(y, load_candidate().predict_proba(df)[:, 1])
+    assert auc >= 0.70, f"{segment} regressed to {auc:.3f}"`,
+        explanation:
+          'These four tests cover the failure modes ordinary software tests cannot see. The data test catches an upstream schema change that would otherwise poison training silently. The smoke test proves the training code still runs end to end without spending GPU hours. The regression gate is the crucial one: it compares candidate against incumbent on a fixed holdout, with a small tolerance so noise does not block every release, plus an absolute floor. The per-segment test exists because a model can improve overall while getting materially worse for a subgroup, which an aggregate AUC will never reveal.',
+      },
+      {
+        language: 'yaml',
+        title: 'Deployment: build once, promote with a canary',
+        code: `name: cd
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  deploy:
+    if: \${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    environment: production          # requires a human approval in repo settings
+    steps:
+      - name: Deploy canary at 5%
+        run: |
+          ./scripts/deploy.sh --image ghcr.io/acme/churn:\${{ github.sha }} \\
+                              --weight 5
+
+      - name: Watch canary metrics for 10 minutes
+        run: |
+          ./scripts/check_canary.py \\
+            --max-error-rate 0.01 \\
+            --max-p95-ms 250 \\
+            --max-psi 0.2 \\
+            --window 10m
+
+      - name: Promote to 100%
+        run: ./scripts/deploy.sh --image ghcr.io/acme/churn:\${{ github.sha }} --weight 100
+
+      - name: Roll back on failure
+        if: failure()
+        run: ./scripts/deploy.sh --rollback`,
+        explanation:
+          'The artifact is built once in CI and only promoted here — never rebuilt — so the bytes that were tested are the bytes that ship. The canary step is where ML-specific judgement lives: it checks error rate and latency like any service, and also the PSI of the prediction distribution, because a model can be fast, healthy and returning 200 for every request while its outputs have shifted into nonsense. The `if: failure()` rollback matters more than the happy path; a deployment strategy without an automatic revert is just optimism.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'A retraining job that silently shipped a worse model',
+        usage:
+          'A weekly retraining pipeline deployed automatically on completion. An upstream change made a key feature all-null, AUC fell from 0.91 to 0.74, every test passed because the code was fine, and the regression was found eleven days later in a business review. A performance gate comparing against the incumbent would have failed the run in minutes.',
+      },
+      {
+        context: 'Shadow mode before a framework migration',
+        usage:
+          'A team rewrote a ranking model from XGBoost to a neural network. They ran it in shadow for two weeks, comparing predictions on identical live traffic, and discovered a feature-scaling bug that affected only the long tail of session lengths — invisible in offline evaluation because the holdout under-represented long sessions.',
+      },
+      {
+        context: 'CI as the thing that makes review useful',
+        usage:
+          'Before CI, reviews were full of formatting and typo comments. After adding `ruff` and `mypy` to the pull-request checks, the same reviewers started commenting on data leakage and error handling, because the machine had already taken the mechanical work off their plate.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'GitHub Actions', role: 'Runs the checks on every pull request and builds the tagged image on every merge.' },
+      { tool: 'ruff / mypy / pytest', role: 'The three fast gates: style, types, behaviour. Ordered cheapest-first so failures arrive quickly.' },
+      { tool: 'Great Expectations / pandera', role: 'Expresses data assertions as testable rules so upstream breakage fails the pipeline rather than the model.' },
+      { tool: 'MLflow model registry', role: 'Holds candidate and production models so a gate can load both and compare them on the same holdout.' },
+      { tool: 'Argo Rollouts / Flagger', role: 'Implements canary and blue-green traffic shifting with automated metric analysis and rollback.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Deploying a retrained model automatically because the pipeline succeeded',
+        why: 'Pipeline success means the code ran, not that the model is good. Data drift, a broken feature or a bad sample can produce a materially worse model while every stage reports green.',
+        fix: 'Insert an evaluation gate between training and promotion: candidate must match or beat the incumbent on a fixed, versioned holdout, plus an absolute floor and per-segment checks.',
+      },
+      {
+        mistake: 'Rebuilding the image in the deployment pipeline',
+        why: 'A rebuild can resolve different dependency versions or pick up a different base image, so what ships is not what was tested. It also wastes minutes on every deploy.',
+        fix: 'Build once in CI, tag with the commit SHA, push, and have every later environment promote that exact digest.',
+      },
+      {
+        mistake: 'Evaluating the candidate on a holdout that changes each run',
+        why: 'If the evaluation set is resampled every time, a metric difference between candidate and incumbent confounds model change with data change, so the gate measures noise.',
+        fix: 'Version the holdout, keep it fixed between comparisons, and change it deliberately as its own reviewed event. Report confidence intervals so tiny differences are not treated as signal.',
+      },
+      {
+        mistake: 'Tagging images `latest`',
+        why: 'The tag is mutable, so "which version is running?" has no reliable answer and a rollback has nothing specific to roll back to. Two nodes pulling `latest` an hour apart can run different code.',
+        fix: 'Tag with the immutable commit SHA and deploy by digest. Keep `latest` as a convenience alias at most, never as a deployment target.',
+      },
+      {
+        mistake: 'A CI suite that takes forty minutes',
+        why: 'Developers stop waiting for it, start merging on a hopeful glance, and the feedback loop the whole practice depends on disappears.',
+        fix: 'Order checks cheapest-first, cache dependencies on the lockfile hash, parallelise test jobs, and move anything genuinely long — full training, large integration suites — to a nightly or on-demand workflow.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What is different about CI for a machine learning project compared with ordinary software?',
+        answer:
+          'The artifact set is bigger. Ordinary CI verifies code; ML CI must also verify data and the model, because both can break with the code untouched. So alongside lint, types and unit tests I add data validation — schema, ranges, null rates, cardinality of categoricals, unexpected new categories — and a training smoke test that runs the pipeline on a tiny sample to prove it still executes. The stage with no software equivalent is the model performance gate: the candidate is evaluated on a fixed, versioned holdout and must match or beat the current production model, with an absolute floor and per-segment checks so improvements in aggregate cannot hide regressions for a subgroup. The other structural difference is that training and deployment are separate pipelines with different triggers, durations and hardware, and a training run ends by registering a candidate rather than by deploying it.',
+        followUp:
+          'A strong answer mentions that ML CI also needs determinism work — pinned seeds, fixed data snapshots — otherwise the gate flaps and the team learns to ignore it.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Compare blue-green, canary and shadow deployment for shipping a new model, and say which you would choose.',
+        answer:
+          'Blue-green stands up a complete second environment, verifies it, then switches all traffic at once; rollback is a switch back, so recovery is fast, but every user is exposed simultaneously to whatever you failed to catch. Canary routes a small percentage — 1%, then 5%, then 25% — with automated checks on error rate, latency and prediction distribution at each step and an automatic revert on regression, so blast radius is bounded and you learn from real traffic. Shadow sends a copy of live traffic to the new model and logs its predictions without ever returning them, so user risk is zero, at the cost of doubled inference and no signal about downstream business effect. For a routine retrain of an existing architecture I use a canary, because the offline gate has already covered the predictable failures and I mainly want a bounded real-traffic check. For a rewrite or an architecture change I run shadow first for a week to compare prediction distributions and latency on real data, then canary the winner. Whichever I choose, the non-negotiable parts are an immutable artifact, an automated rollback trigger, and a metric that would actually detect the failure.',
+        followUp:
+          'The strongest answers add that for models the canary metric must include prediction distribution and not just HTTP health, because a broken model returns 200s all day.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Why should the training pipeline be separate from the deployment pipeline?',
+        answer:
+          'Because they differ in every operational dimension. Training is triggered by new data, a schedule or an experiment; deployment is triggered by a merge or a promotion decision. Training runs for hours on expensive, often GPU, hardware; deployment runs for minutes on cheap runners. Training failures mean "we have no new candidate", which is usually tolerable; deployment failures mean "users are affected", which is not. Keeping them separate lets you deploy a code fix to the serving layer without retraining, retrain without deploying, and roll back the served model in seconds by repointing at a previous registered version rather than by rerunning a six-hour job. It also makes the promotion decision explicit: training ends by registering a candidate with its evaluation report, and a separate gated pipeline decides whether that candidate becomes production.',
+        followUp:
+          'Mentioning that this separation is what makes model rollback independent of code rollback shows the candidate has thought about incident response, not just happy-path architecture.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Write the failing condition for a model performance gate that will not block releases because of ordinary noise, and justify each number.',
+        hint: 'You need a comparison, a tolerance, a floor, and something about subgroups.',
+        language: 'python',
+        solution:
+          'Fail if `candidate_auc < production_auc - 0.005`, or if `candidate_auc < 0.78`, or if any monitored segment\'s AUC drops below 0.70. The tolerance exists because evaluating two models on a finite holdout has sampling noise; 0.005 should be chosen from the observed run-to-run standard deviation on your holdout rather than picked from the air, and ideally you would compare confidence intervals instead. The absolute floor catches the case where production has already degraded, so "no worse than production" is no longer a sufficient bar. The per-segment check exists because an aggregate improvement can hide a serious regression for a minority group. Add a guard that the holdout hash is unchanged, otherwise the comparison is meaningless.',
+      },
+      {
+        prompt:
+          'Your CI takes 38 minutes and people have started merging without waiting. List, in order of payoff, what you would change.',
+        hint: 'Think about what runs, in what order, and how often it needs to run at all.',
+        solution:
+          'One: reorder so the cheapest checks run first and fail fast — lint and type check in under a minute before anything heavy starts. Two: cache dependencies keyed on the lockfile hash, and cache Docker layers with the GitHub Actions cache backend, which usually removes most of the install and build time. Three: parallelise into separate jobs that run concurrently rather than one long sequential job, and shard the test suite. Four: move genuinely long work off the pull-request path — full training runs, large integration suites, nightly performance benchmarks — to scheduled workflows, keeping only a smoke-sized version in CI. Five: add `concurrency` with `cancel-in-progress` so superseded runs stop consuming runners. The target is under ten minutes for the pull-request path, because that is roughly the limit of a developer\'s patience.',
+      },
+      {
+        prompt:
+          'Design the canary check for a fraud model: which three signals would you monitor over the first ten minutes at 5% traffic, and what threshold aborts the rollout?',
+        hint: 'One signal is about the service, one about the predictions, one about the business.',
+        solution:
+          'Service health: 5xx rate on the canary against the baseline — abort if it exceeds 1% or doubles relative to the stable version. Prediction behaviour: the distribution of fraud scores compared with the stable version over the same window, using PSI with an abort above 0.2, plus the alert rate — abort if the fraction flagged moves by more than, say, 30% relative, because a model that suddenly flags five times as many transactions will swamp the review queue regardless of whether it is technically better. Business proxy: the downstream approval rate or the manual-review queue depth, which reacts within minutes even though true fraud labels take weeks. The label delay is precisely why the canary cannot gate on model accuracy and must gate on distributions and proxies instead.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'OPS-008-q1',
+        type: 'mcq',
+        concept: 'ML-specific CI',
+        prompt: 'Which check exists in an ML pipeline but has no equivalent in ordinary software CI?',
+        options: [
+          'A gate comparing the candidate model against the production model on a fixed holdout',
+          'Running unit tests on every pull request',
+          'Type checking the source',
+          'Building a container image tagged with the commit SHA',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Code tests answer "does it do what I said?". Only an evaluation gate answers "is this model better than the one we already have?", which is the question that actually determines whether shipping is safe.',
+      },
+      {
+        id: 'OPS-008-q2',
+        type: 'truefalse',
+        concept: 'artifact immutability',
+        prompt: 'It is good practice for the deployment pipeline to rebuild the image from source before releasing.',
+        answer: false,
+        explanation:
+          'A rebuild can resolve different dependencies or a different base image, so what ships is not what was tested. Build once in CI, tag with the commit SHA, and promote that exact digest through every environment.',
+      },
+      {
+        id: 'OPS-008-q3',
+        type: 'match',
+        concept: 'release strategies',
+        prompt: 'Match each deployment strategy to its defining property.',
+        pairs: [
+          { left: 'Blue-green', right: 'Two full environments; all traffic switches at once, rollback is a switch back' },
+          { left: 'Canary', right: 'A small traffic percentage first, with automated checks and progressive promotion' },
+          { left: 'Shadow', right: 'Real traffic is duplicated to the new model but its predictions are never returned' },
+          { left: 'Rolling', right: 'Instances are replaced gradually, so both versions serve simultaneously' },
+        ],
+        explanation:
+          'They trade blast radius against cost and against how much real-world signal you get before full exposure. Shadow gives the most signal with zero user risk but doubles inference cost and tells you nothing about downstream effects.',
+      },
+      {
+        id: 'OPS-008-q4',
+        type: 'order',
+        concept: 'pipeline ordering',
+        prompt: 'Order these CI stages so the cheapest failure is discovered first.',
+        items: [
+          'Lint and format check',
+          'Type check',
+          'Unit and contract tests',
+          'Data validation on a sample',
+          'Build and push the container image',
+        ],
+        explanation:
+          'Fail fast. A lint failure should cost seconds, not the minutes a container build takes. Ordering cheapest-first is the single easiest way to shorten the average feedback loop.',
+      },
+      {
+        id: 'OPS-008-q5',
+        type: 'multi',
+        concept: 'canary metrics for models',
+        prompt: 'Which signals should abort a model canary? Select all that apply.',
+        options: [
+          'A jump in the 5xx error rate',
+          'p95 latency exceeding the budget',
+          'Prediction distribution PSI above 0.2 against the stable version',
+          'A large relative change in the fraction of positive predictions',
+          'Offline AUC measured on last quarter\'s holdout',
+        ],
+        answerIndices: [0, 1, 2, 3],
+        explanation:
+          'The offline metric was already checked before the rollout and does not change during it. Canary checks must be live signals, and for a model that means prediction distribution as well as service health — a broken model returns 200 for every request.',
+      },
+      {
+        id: 'OPS-008-q6',
+        type: 'explain',
+        concept: 'separation of pipelines',
+        prompt: 'Explain why a successful training run should not deploy the model automatically.',
+        rubric: [
+          'Distinguishes "the code ran" from "the model is good"',
+          'Names a concrete way a green pipeline produces a worse model',
+          'Describes the gate or promotion step that should sit in between',
+        ],
+        sampleAnswer:
+          'A training pipeline reports success when the code executed without raising, which says nothing about quality. If an upstream change made a feature all-null, or the sampling window caught an anomalous week, or a join silently dropped half the positive examples, the run still completes and produces a model that is materially worse. Deploying on completion therefore ships regressions automatically and quietly, and because model quality in production is often only measurable once labels arrive, nobody notices for weeks. The fix is to make the training pipeline end by registering a candidate together with its evaluation report, and to put a separate gated promotion step in between: the candidate must match or beat the incumbent on a fixed, versioned holdout, clear an absolute floor, and not regress on monitored segments. Only then does the deployment pipeline roll it out, progressively, with an automatic rollback.',
+        explanation:
+          'The core idea is that pipeline success and model quality are different claims, and only an explicit evaluation gate connects them.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does CI check that ordinary tests do not, in ML?', back: 'Data validity (schema, ranges, null rates) and model quality against the incumbent on a fixed holdout — code can be correct while the model is worse.' },
+      { front: 'Why tag images with the commit SHA rather than `latest`?', back: '`latest` is mutable, so nothing identifies what is running and a rollback has no specific target. The SHA makes the artifact traceable and immutable.' },
+      { front: 'Blue-green vs canary vs shadow', back: 'Blue-green: switch everyone at once, revert instantly. Canary: small traffic slice with automated checks. Shadow: duplicate traffic, predictions logged but never returned.' },
+      { front: 'Why separate training and deployment pipelines?', back: 'Different triggers, durations, hardware and failure consequences — and it lets you roll the model back in seconds without rerunning a six-hour job.' },
+      { front: 'What should a model performance gate assert?', back: 'Candidate at least matches the incumbent on a fixed versioned holdout within a noise tolerance, clears an absolute floor, and does not regress on monitored segments.' },
+      { front: 'Why does a model canary need distribution checks?', back: 'Because a broken model keeps returning HTTP 200. Error rate and latency look perfect while the predictions have shifted into nonsense.' },
+    ],
+
+    challenge: {
+      title: 'A pipeline that refuses a worse model',
+      brief:
+        'Add a complete CI workflow to a model repository: lint, type check, tests with a coverage floor, data validation on a sample, and an image build tagged with the commit SHA. Then add the ML gate — a test that loads a candidate and the current production model, evaluates both on a fixed, version-controlled holdout, and fails when the candidate regresses beyond a tolerance you justify in a comment. Prove it works by deliberately training a worse model and showing the pipeline goes red, then by showing that an equal-or-better model passes.',
+      language: 'yaml',
+      acceptanceCriteria: [
+        'The workflow runs on every pull request and completes in under ten minutes',
+        'Checks are ordered cheapest-first and dependencies are cached on the lockfile hash',
+        'A data validation step asserts schema, ranges and null rates',
+        'A performance gate compares candidate against production on a fixed holdout with a justified tolerance and an absolute floor',
+        'A deliberately degraded model makes the pipeline fail, demonstrated in the run log',
+        'The image is tagged with the commit SHA and never with `latest`',
+      ],
+      starterCode: 'name: ci\n\non:\n  pull_request:\n  push:\n    branches: [main]\n\njobs:\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain CI/CD to a data scientist who currently trains models in a notebook and emails the pickle file. Cover what the robot checks, what is different for ML, and how a model gets safely into production.',
+      mustCover: [
+        'CI runs automatically on every proposed change and blocks merge on failure',
+        'ML adds data validation, training smoke tests and a model performance gate',
+        'Training and deployment are separate pipelines with different triggers and durations',
+        'Progressive rollout with an automatic rollback bounds the damage of a bad model',
+      ],
+      bonusSignals: ['mentions building the artifact once and promoting the same digest', 'mentions that a broken model still returns 200', 'mentions per-segment evaluation'],
+      sampleExplanation:
+        'CI is a robot that runs on every proposed change: it installs the dependencies, checks formatting and types, runs the tests and builds the container image, and it reports in the pull request before a human merges anything. The value is the speed of the loop — a mistake found two minutes after you make it is trivial, and the same mistake found in production three weeks later is a day of work and an apology. Machine learning needs two extra things on top. First, the data has to be tested, because upstream can break you without a single line of your code changing: schema, value ranges, null rates, unexpected new categories. Second, and this has no equivalent in ordinary software, a candidate model has to be compared against the model currently in production on a fixed evaluation set, with a floor and per-segment checks, because code tests can all pass while the new model is simply worse. That is why training and deployment are two pipelines: training runs for hours when new data arrives and ends by registering a candidate, while deployment takes an already-tested image and rolls it out in minutes. And the rollout itself is progressive — send 5% of traffic to the new version, watch the error rate, the latency and the shape of the prediction distribution, promote if all three hold and revert automatically if they do not.',
+    },
+  },
+
+  {
+    id: 'OPS-009',
+    domain: 'OPS',
+    module: 'Packaging & Delivery',
+    topic: 'Cloud',
+    title: 'Deployment and Cloud Concepts',
+    slug: 'deployment-and-cloud',
+    difficulty: 3,
+    estimatedMinutes: 35,
+    prerequisites: ['OPS-007'],
+    related: ['OPS-005', 'OPS-008'],
+    tags: ['cloud', 'serverless', 'kubernetes', 'batch', 'edge', 'gpu', 'autoscaling', 'cost'],
+
+    learningObjectives: [
+      'List the five places a model can run — server, container platform, serverless, batch, edge — and the trade-offs of each',
+      'Reason about the cost, latency and scale triangle rather than reaching for a default',
+      'Explain cold starts, autoscaling and why a GPU instance is usually the wrong first choice',
+      'Describe what a managed inference endpoint gives you and what it takes away',
+      'Recognise the cloud vocabulary an intern is expected to understand in a design discussion',
+    ],
+
+    terminology: [
+      {
+        term: 'Serverless',
+        definition:
+          'A model where you supply a function or container and the provider handles provisioning, scaling and idle capacity, billing per request and per unit of compute time. Instances are created on demand, which causes cold starts.',
+        simple: 'You give them the code; they worry about the machines, and you pay only when it runs.',
+      },
+      {
+        term: 'Cold start',
+        definition:
+          'The latency penalty when a request arrives with no warm instance available: the platform must start a container, import the runtime and load the model before serving. For large ML images this is seconds, not milliseconds.',
+        simple: 'The wait while a new copy of your service wakes up.',
+      },
+      {
+        term: 'Horizontal vs vertical scaling',
+        definition:
+          'Horizontal scaling adds more instances; vertical scaling makes one instance bigger. Stateless services scale horizontally almost without limit, which is why keeping a service stateless matters.',
+        simple: 'More machines, versus a bigger machine.',
+      },
+      {
+        term: 'Batch inference',
+        definition:
+          'Scoring a large set of records on a schedule and writing results to a store that applications read. Latency is measured in minutes or hours and cost per prediction is far lower than online serving.',
+        simple: 'Score everyone overnight and look up the answer during the day.',
+      },
+      {
+        term: 'Managed inference endpoint',
+        definition:
+          'A provider service — SageMaker Endpoints, Vertex AI Endpoints, Azure ML Online Endpoints — that hosts a model artifact behind an autoscaling HTTPS endpoint with built-in versioning, traffic splitting and monitoring hooks.',
+        simple: 'A hosted box you hand a model to, which gives you back a URL.',
+      },
+      {
+        term: 'Edge deployment',
+        definition:
+          'Running the model on the device that generates the data — phone, browser, camera, vehicle — so inference needs no network round trip and data need not leave the device.',
+        simple: 'The model runs on the thing in your hand instead of in a data centre.',
+      },
+    ],
+
+    simpleExplanation:
+      "Once your model is in a container, the question becomes where to run it, and there is no single right answer. Five options cover almost everything. A plain virtual machine is the simplest: you rent a computer, run the container and manage it yourself, which is cheap and predictable and entirely your problem when it falls over. A container platform such as Kubernetes or ECS runs many containers across many machines, restarts unhealthy ones and scales them, at the cost of real operational complexity. Serverless runs your container only when a request arrives and charges you nothing while idle, which is wonderful for spiky low-volume traffic and awkward for a two-gigabyte model that takes fifteen seconds to load. Batch does not serve requests at all: it scores everything on a schedule and stores the answers for applications to look up, which is by far the cheapest option when a prediction does not have to be fresh. And edge puts the model on the device itself, so there is no network at all. The choice is driven by three things in tension — how fast the answer must come back, how much traffic there is, and what you are willing to pay.",
+
+    whyItExists:
+      'A model in a container still has to run somewhere, and the options differ by orders of magnitude in cost, latency and operational burden. Cloud platforms exist so that capacity can be rented by the minute and scaled with demand instead of bought in advance, and the various deployment shapes exist because a fraud check needed in 40 milliseconds and a churn score needed once a week are completely different engineering problems that only look similar on a whiteboard.',
+
+    analogy: {
+      scenario:
+        "Think about how a city feeds people. A restaurant with a permanent kitchen and staff is always ready and expensive even when empty. A food truck appears only where there is demand and packs up when there is none, but takes time to set up each morning. A central commissary cooks ten thousand meals overnight and distributes them to shops, so the food is cheap per portion but was made hours ago. And a home kitchen serves exactly one household instantly with no delivery at all.",
+      mapping: [
+        { from: 'The permanent restaurant', to: 'An always-on server or container platform deployment' },
+        { from: 'The food truck that packs up when idle', to: 'Serverless, with a cold start as the set-up time' },
+        { from: 'The overnight commissary', to: 'Batch inference, cheap per prediction and hours stale' },
+        { from: 'The home kitchen', to: 'Edge inference on the user\'s device' },
+        { from: 'Opening a second restaurant at rush hour', to: 'Horizontal autoscaling' },
+      ],
+      bridge:
+        'The mapping holds because each option trades the same three quantities: readiness, cost per unit, and freshness. Concretely, an always-on deployment gives you 20 ms p99 and a bill that arrives whether or not anyone called you; serverless inverts that, giving you a near-zero idle bill and a multi-second first request; batch drives cost per prediction down by orders of magnitude and gives you an answer computed last night. The engineering skill is not knowing which is best — none is — but stating the latency, volume and freshness requirements precisely enough that the choice becomes obvious.',
+      limitations:
+        'Food gets cold in ways predictions do not, and a commissary cannot serve a dish that depends on what the customer just said. That last point is the real constraint on batch: it only works when the features are known in advance.',
+    },
+
+    visuals: [
+      {
+        kind: 'table',
+        title: 'Where a model can run',
+        columns: ['Option', 'Latency', 'Cost shape', 'Operational burden', 'Good for'],
+        rows: [
+          ['Virtual machine', 'Low and predictable', 'Pay for the machine, idle or not', 'You patch, restart and scale it', 'One service, steady traffic, a small team'],
+          ['Container platform (K8s, ECS)', 'Low', 'Pay for the cluster', 'High: nodes, autoscaling, networking', 'Many services, real scale, a platform team'],
+          ['Serverless (Lambda, Cloud Run)', 'Low when warm, seconds when cold', 'Per request; near zero when idle', 'Low', 'Spiky or low-volume traffic, small models'],
+          ['Managed endpoint (SageMaker, Vertex)', 'Low', 'Per instance-hour, usually at a premium', 'Low to medium', 'Teams wanting versioning and traffic splitting without building it'],
+          ['Batch job', 'Minutes to hours', 'Lowest per prediction by far', 'Low', 'Predictions that do not have to be fresh'],
+          ['Edge / on-device', 'No network at all', 'Free at inference time', 'Distribution and update problems', 'Privacy, offline use, camera and phone workloads'],
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'Choosing where to deploy',
+        caption: 'Answer these in order and the choice usually makes itself.',
+        branching: true,
+        steps: [
+          { label: 'Must the prediction reflect what just happened?', detail: 'If not, batch score on a schedule and serve from a lookup. This is the cheapest correct answer and is skipped far too often.' },
+          { label: 'Is the traffic spiky or low volume?', detail: 'If yes and the model is small, serverless removes idle cost — provided a cold start of seconds is acceptable.' },
+          { label: 'Does the data have to stay on the device?', detail: 'Privacy, offline operation or per-frame video argue for edge inference with a quantised model.' },
+          { label: 'Is sustained traffic high and latency tight?', detail: 'Then always-on instances behind a load balancer, on a VM, a container platform or a managed endpoint.' },
+          { label: 'Do you genuinely need a GPU?', detail: 'Measure on CPU first. Most tabular and small-model workloads are cheaper and simpler on CPU.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'GPU versus CPU inference',
+        caption: 'The default should be CPU until measurement says otherwise.',
+        left: {
+          heading: 'CPU inference',
+          points: [
+            'Cheap, abundant, no driver or CUDA compatibility problems',
+            'Ideal for tree models, linear models and small networks',
+            'Scales horizontally with trivially cheap instances',
+            'Often faster end-to-end for small batches, since GPU transfer costs dominate',
+          ],
+        },
+        right: {
+          heading: 'GPU inference',
+          points: [
+            'Wins on large neural networks and large batches',
+            'Ten to thirty times the hourly cost of a comparable CPU instance',
+            'Needs batching to be utilised; a single request wastes most of the device',
+            'Adds driver, CUDA and image-size complexity to every deploy',
+          ],
+        },
+      },
+      {
+        kind: 'annotated',
+        title: 'Cloud vocabulary you are expected to recognise',
+        subject: 'region · availability zone · VPC · load balancer · autoscaling group · object storage · IAM role · managed database',
+        annotations: [
+          { part: 'Region / availability zone', note: 'A geographic location, subdivided into independent data centres. Spreading instances across zones survives one going down.' },
+          { part: 'VPC', note: 'Your private network inside the cloud. Services that should not face the internet live here with no public address.' },
+          { part: 'Load balancer', note: 'Distributes requests across healthy instances, using your readiness probe to decide which ones count.' },
+          { part: 'Autoscaling group', note: 'Adds and removes instances against a target metric such as CPU utilisation or requests per instance.' },
+          { part: 'Object storage (S3, GCS)', note: 'Cheap durable blob storage. Where model artifacts, datasets and prediction logs actually belong.' },
+          { part: 'IAM role', note: 'Identity granting scoped permissions to a service. The correct alternative to putting long-lived keys in environment variables.' },
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'Model deployment is the selection and operation of an execution substrate that satisfies a workload\'s latency, throughput, freshness, privacy and cost constraints. Substrates differ along three axes: provisioning model (always-on capacity versus on-demand instantiation), locality (centralised versus on-device), and invocation pattern (synchronous request-response versus scheduled bulk scoring). Autoscaling policies map an observed load signal to instance count, subject to a start-up latency that bounds how quickly capacity can respond to a change in demand.',
+
+    codeExamples: [
+      {
+        language: 'bash',
+        title: 'The same image on three substrates',
+        code: `# 1. A plain virtual machine: you own the lifecycle
+ssh deploy@api-1.internal
+docker pull ghcr.io/acme/churn:9f2c1a7
+docker run -d --restart=always -p 8000:8000 --memory=2g ghcr.io/acme/churn:9f2c1a7
+
+# 2. Serverless containers (Cloud Run): scales to zero, pay per request
+gcloud run deploy churn \\
+  --image ghcr.io/acme/churn:9f2c1a7 \\
+  --region europe-west1 \\
+  --cpu 2 --memory 2Gi \\
+  --min-instances 1 \\          # 1, not 0: keeps one warm, removes the cold start
+  --max-instances 50 \\
+  --concurrency 8 \\            # requests per instance before a new one starts
+  --allow-unauthenticated
+
+# 3. A managed inference endpoint (SageMaker), with traffic split for a canary
+aws sagemaker create-endpoint-config \\
+  --endpoint-config-name churn-2024-09 \\
+  --production-variants \\
+    VariantName=stable,ModelName=churn-2024-08,InitialInstanceCount=2,InstanceType=ml.m5.large,InitialVariantWeight=95 \\
+    VariantName=canary,ModelName=churn-2024-09,InitialInstanceCount=1,InstanceType=ml.m5.large,InitialVariantWeight=5`,
+        explanation:
+          'One image, three substrates, three very different bills and operational stories. The single most consequential flag here is `--min-instances 1`: scaling to zero is what makes serverless cheap, and it is also what produces a ten-second first request while a 400 MB model is loaded. Keeping one instance warm costs a few pounds a month and removes the worst-case latency entirely, which is almost always the right trade for a user-facing endpoint.',
+      },
+      {
+        language: 'python',
+        title: 'Batch inference: the option people forget',
+        code: `"""Nightly scoring job. Runs for 12 minutes, costs pennies, serves all day."""
+import pandas as pd, joblib
+from datetime import date
+
+model = joblib.load("models/churn.joblib")
+
+customers = pd.read_parquet("s3://acme-lake/customers/current/")     # 4.2M rows
+features = customers[["tenure_months", "monthly_charges", "contract_code"]]
+
+# One vectorised call over the whole table, not 4.2M HTTP requests.
+customers["churn_probability"] = model.predict_proba(features)[:, 1]
+customers["scored_on"] = date.today().isoformat()
+customers["model_version"] = "churn-2024-09-02"
+
+customers[["customer_id", "churn_probability", "scored_on", "model_version"]].to_parquet(
+    f"s3://acme-lake/scores/churn/dt={date.today():%Y-%m-%d}/", index=False
+)
+# Applications now read a score with a key lookup: sub-millisecond and free.`,
+        explanation:
+          'Scoring 4.2 million customers here costs roughly what a single hour of a small always-on endpoint costs, and every application read afterwards is a key lookup rather than an inference. The question that decides whether this is legitimate is freshness: if the features only change daily — tenure, plan, last month\'s usage — then a nightly score is exactly as good as an online one and hundreds of times cheaper. If the features include what the user did four seconds ago, batch cannot work and you need online serving.',
+      },
+      {
+        language: 'yaml',
+        title: 'Autoscaling that accounts for model start-up time',
+        code: `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: churn
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/acme/churn:9f2c1a7
+          resources:
+            requests: { cpu: "1", memory: "1Gi" }     # what the scheduler reserves
+            limits:   { cpu: "2", memory: "2Gi" }     # exceeding memory gets you killed
+          readinessProbe:
+            httpGet: { path: /ready, port: 8000 }
+            periodSeconds: 5
+          startupProbe:                                # model takes ~30s to load
+            httpGet: { path: /health, port: 8000 }
+            failureThreshold: 30
+            periodSeconds: 2
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: churn
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: churn }
+  minReplicas: 3
+  maxReplicas: 30
+  metrics:
+    - type: Pods
+      pods:
+        metric: { name: requests_per_second }
+        target: { type: AverageValue, averageValue: "40" }
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30        # react quickly to a traffic spike
+    scaleDown:
+      stabilizationWindowSeconds: 300       # shrink slowly, to avoid flapping`,
+        explanation:
+          'Three ML-specific details. The `startupProbe` exists because a 30-second model load would otherwise trip the liveness probe and restart the pod forever. The memory limit is a hard kill, so it must account for the model plus per-worker copies, which is the usual cause of a container being terminated mysteriously under load. And the asymmetric scaling behaviour reflects reality: scaling up late means dropped requests, while scaling down late merely costs a little money, so you make it eager to grow and reluctant to shrink.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'A GPU endpoint at 3% utilisation',
+        usage:
+          'A team deployed a gradient-boosted tree model on a GPU instance "because it is machine learning". The model ran faster on two CPU cores, the GPU sat idle, and the bill was about fifteen times higher. Measuring CPU latency first would have taken an afternoon and saved the annual cost of an engineer.',
+      },
+      {
+        context: 'Cold starts breaking an SLA',
+        usage:
+          'A serverless endpoint holding a 1.2 GB transformer scaled to zero overnight. The first request each morning took eleven seconds and blew the 500 ms budget. Setting a minimum of one warm instance fixed it for a few pounds a month.',
+      },
+      {
+        context: 'Batch replacing a real-time service',
+        usage:
+          'A recommendation endpoint served 300 requests per second from always-on instances. Because the recommendations only used features that changed daily, the team switched to overnight batch scoring into a key-value store; latency fell to a lookup, and the monthly compute bill dropped by more than 90%.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'Cloud Run / AWS Lambda', role: 'Serverless container hosting, where scale-to-zero and cold starts are the central trade.' },
+      { tool: 'Kubernetes', role: 'Scheduling, health checking, autoscaling and progressive rollout for services that justify the complexity.' },
+      { tool: 'SageMaker / Vertex AI endpoints', role: 'Managed hosting with built-in model versioning, traffic splitting and capture of request and response payloads.' },
+      { tool: 'S3 / GCS', role: 'Where model artifacts, datasets and prediction logs live, because object storage is cheap, durable and versioned.' },
+      { tool: 'ONNX Runtime / Triton', role: 'Faster inference from the same trained model, often removing the need for a GPU entirely.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Reaching for a GPU before measuring CPU latency',
+        why: 'GPUs help on large neural networks with large batches. For tree models, linear models and small networks the data-transfer overhead often makes them slower end to end, while costing ten to thirty times as much per hour.',
+        fix: 'Benchmark on CPU with realistic batch sizes first. Try ONNX Runtime or quantisation before changing hardware, and move to GPU only when a measurement — not an intuition — demands it.',
+      },
+      {
+        mistake: 'Choosing serverless for a large model and being surprised by latency',
+        why: 'Scale-to-zero means the first request after idleness pays container start plus runtime import plus model load, which for a multi-gigabyte artifact is many seconds.',
+        fix: 'Keep a minimum number of warm instances, shrink the image and the model, load lazily from a mounted cache, or use an always-on substrate if the latency budget is tight.',
+      },
+      {
+        mistake: 'Building a real-time endpoint for predictions nobody needs in real time',
+        why: 'Online serving is the most expensive and most operationally demanding option. If the features only change daily, an always-on endpoint buys nothing over a nightly batch job and a lookup.',
+        fix: 'Ask what the freshest input feature actually is. If none of them changes within the request, batch score on a schedule and serve results from a key-value store.',
+      },
+      {
+        mistake: 'Ignoring the memory limit when setting worker count',
+        why: 'Each uvicorn worker loads its own copy of the model, so four workers with a 1.5 GB model need 6 GB plus overhead. Exceeding a container memory limit is a hard kill with no graceful shutdown.',
+        fix: 'Compute memory as workers times model size plus headroom, set the limit accordingly, and load-test at the limit rather than on an unconstrained laptop.',
+      },
+      {
+        mistake: 'Putting long-lived cloud keys in environment variables',
+        why: 'They leak through logs, images and error reports, they rarely get rotated, and they usually carry far more permission than the service needs.',
+        fix: 'Use workload identity or an instance role so credentials are short-lived and issued automatically, scoped to exactly the buckets and queues the service touches.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'A product manager asks for "real-time recommendations". What do you ask before choosing a deployment?',
+        answer:
+          'I would find out what real-time actually means here, because the word covers four orders of magnitude. Specifically: what is the latency budget end to end, and what happens if we exceed it? What is the request volume, at peak as well as on average? And the decisive question — which input features change within the request? If the recommendation depends only on things known this morning, such as purchase history and profile, then batch scoring overnight into a key-value store gives a sub-millisecond lookup at a fraction of the cost, and nobody can tell the difference. If it depends on the last three clicks in this session, batch cannot work and we need online serving, possibly with a feature store for the session features. I would also ask about freshness of the model itself versus freshness of the features, since they are different questions that often get conflated.',
+        followUp:
+          'The signal is refusing to pick a substrate before the requirements exist. Candidates who immediately say "Kubernetes" have skipped the only part of the problem that matters.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Explain cold starts and three ways to mitigate them for an ML endpoint.',
+        answer:
+          'A cold start is the latency paid when a request arrives with no warm instance: the platform must schedule and start a container, import the Python runtime and libraries, and deserialise the model before any inference happens. For ML the model load usually dominates, so multi-gigabyte artifacts produce start-ups measured in seconds to tens of seconds. Three mitigations, in the order I would try them. First, keep a floor of warm instances, which turns a latency problem into a small fixed cost and is usually the right answer for anything user-facing. Second, shrink what has to load: a slim image, lazy imports, a quantised or distilled model, or a faster format such as ONNX, which can cut load time dramatically. Third, decouple the artifact from the image, pulling weights from a cached mount or a local volume so the container itself is small and start-up does not include a large download. Beyond those, provisioned concurrency and pre-warming on a predictable traffic curve help, and if none of it gets under budget that is strong evidence the workload belongs on always-on capacity.',
+        followUp:
+          'A good answer notes that cold starts also appear during autoscaling, so a slow-starting service is slow to respond to a traffic spike even when it never scales to zero.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'When is a managed inference endpoint worth the premium over running your own containers?',
+        answer:
+          'When the team is small and the features it provides would otherwise be built by hand. A managed endpoint gives you autoscaling, model versioning, traffic splitting for canaries, request and response capture for monitoring, and integration with the provider\'s model registry and IAM, all without a platform engineer. For a two-person ML team with three models, that is easily worth the two-to-three times premium on instance hours, because the alternative is spending months building a worse version. It stops being worth it at scale, where the premium becomes a large absolute number, and where you want control the platform does not give you — custom routing, unusual hardware, batching and caching layers, or running inference next to services you already operate. It is also a lock-in decision: the packaging format, the deployment API and the monitoring are provider-specific, so migrating later is real work. I would start managed, measure the bill, and move only when the numbers justify the engineering.',
+        followUp:
+          'The mature framing is that you are buying engineering time, so the answer depends on the cost of that time relative to the premium, not on an abstract preference.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A churn model scores 5 million customers. Business users look at the scores in a weekly dashboard. Choose a deployment and justify it with numbers.',
+        hint: 'What is the freshest feature, and how often is the answer actually read?',
+        language: 'bash',
+        solution:
+          'Batch. The features — tenure, plan, last month\'s charges — change at most daily, and the consumer reads a dashboard once a week, so an online endpoint would spend 168 hours a week idle to serve a handful of reads. A nightly job scoring 5 million rows with one vectorised call takes minutes on a single machine and writes to object storage or a warehouse table; the dashboard then queries the table. Cost is a few pence per run against hundreds of pounds a month for always-on instances, and there is no service to keep alive, patch or page anyone about. Revisit the decision only if someone needs a score for a customer who signed up an hour ago.',
+      },
+      {
+        prompt:
+          'Your serverless endpoint has a p50 of 60 ms and a p99 of 9 seconds. Explain the shape and give the cheapest fix.',
+        hint: 'What is different about the requests in that top 1%?',
+        solution:
+          'That bimodal profile is the signature of cold starts: most requests hit a warm instance and are fast, while a small fraction arrive when no instance is available and pay container start plus imports plus model load. It correlates with idle gaps and with traffic spikes that force new instances. The cheapest fix is a minimum instance count of one or two, which typically costs a few pounds a month and removes the tail entirely for steady traffic. If spikes rather than idleness are the cause, also raise the per-instance concurrency so a burst does not immediately require new instances, and shrink the image and model so that any instance that does start comes up in a second rather than nine.',
+      },
+      {
+        prompt:
+          'Write the three questions you would put to a team that has asked for GPU inference, and say what answer would change your mind.',
+        hint: 'Model size, batch size, and what has already been measured.',
+        solution:
+          'One: what is the measured CPU latency at your real batch size? If nobody has measured it, that is the first task, since tabular and small-model workloads are usually faster and far cheaper on CPU. Two: how large is the model and can requests be batched? A GPU is only well utilised with substantial batches; single small requests leave most of the device idle while you pay for all of it. Three: have you tried ONNX Runtime, quantisation or distillation? These routinely deliver two to five times on CPU and remove the driver, image size and cost complexity entirely. What would change my mind: a large transformer or vision model where measured CPU p95 exceeds the budget, with batching available and a throughput requirement high enough to keep the device busy — at which point GPU is not a preference but the only option that meets the requirement.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'OPS-009-q1',
+        type: 'mcq',
+        concept: 'deployment choice',
+        prompt: 'Predictions are needed once a day and depend only on features that change daily. What is the most appropriate deployment?',
+        options: [
+          'A scheduled batch job writing scores to a store applications read',
+          'An always-on autoscaling endpoint',
+          'A serverless endpoint with provisioned concurrency',
+          'On-device inference',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Nothing in the requirement needs an answer computed at request time. Batch is orders of magnitude cheaper per prediction and leaves no service to operate, and reads become key lookups.',
+      },
+      {
+        id: 'OPS-009-q2',
+        type: 'truefalse',
+        concept: 'GPU defaults',
+        prompt: 'Inference for a gradient-boosted tree model should normally run on a GPU because it is a machine learning workload.',
+        answer: false,
+        explanation:
+          'Tree models are not the workload GPUs accelerate. They typically run faster on CPU for realistic batch sizes once transfer overhead is counted, at a fraction of the hourly cost and with none of the driver complexity.',
+      },
+      {
+        id: 'OPS-009-q3',
+        type: 'match',
+        concept: 'cloud vocabulary',
+        prompt: 'Match each term to what it means.',
+        pairs: [
+          { left: 'Availability zone', right: 'An independent data centre within a region; spreading instances across zones survives one failing' },
+          { left: 'VPC', right: 'A private network where services can run with no public address' },
+          { left: 'Object storage', right: 'Cheap durable blob storage for artifacts, datasets and logs' },
+          { left: 'IAM role', right: 'Scoped, short-lived identity for a service, instead of long-lived keys' },
+          { left: 'Autoscaling group', right: 'Adds and removes instances against a target load metric' },
+        ],
+        explanation:
+          'These five terms cover most of what an intern needs to follow a design discussion. The IAM one matters most in practice, because it is the correct alternative to putting credentials in environment variables.',
+      },
+      {
+        id: 'OPS-009-q4',
+        type: 'mcq',
+        concept: 'cold starts',
+        prompt: 'A serverless ML endpoint shows p50 of 50 ms and p99 of 8 seconds. What is the most likely cause?',
+        options: [
+          'Cold starts: some requests arrive with no warm instance and pay container start plus model load',
+          'The model is uniformly slow and needs a GPU',
+          'The client is not reusing connections',
+          'The load balancer is misconfigured',
+        ],
+        answerIndex: 0,
+        explanation:
+          'A bimodal latency profile with a fast bulk and a multi-second tail is the classic cold-start signature. A minimum warm instance count usually removes it for a few pounds a month.',
+      },
+      {
+        id: 'OPS-009-q5',
+        type: 'multi',
+        concept: 'managed endpoints',
+        prompt: 'What does a managed inference endpoint typically give you out of the box? Select all that apply.',
+        options: [
+          'Autoscaling and health management',
+          'Model versioning and traffic splitting between variants',
+          'Request and response capture for monitoring',
+          'Freedom from provider-specific packaging and lock-in',
+          'Integration with the provider\'s identity and access management',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'Lock-in is precisely what you accept in exchange. The packaging format, deployment API and monitoring integration are provider-specific, so migrating later is genuine engineering work.',
+      },
+      {
+        id: 'OPS-009-q6',
+        type: 'explain',
+        concept: 'cost, latency and scale',
+        prompt: 'A team wants the lowest possible latency, the lowest possible cost and unlimited scale. Explain why they must choose.',
+        rubric: [
+          'Explains that low latency requires warm capacity, which costs money while idle',
+          'Explains that cheap-per-prediction options are batch or scale-to-zero, both of which sacrifice freshness or first-request latency',
+          'Notes that the requirement, not the preference, should drive the choice',
+        ],
+        sampleAnswer:
+          'Low latency means capacity that is already warm with the model already in memory when the request arrives, and warm capacity costs money whether or not anyone calls it. The cheap options achieve their price by removing exactly that: batch scoring computes answers in bulk ahead of time, so the per-prediction cost collapses but the answer is hours old and cannot depend on anything that happened since; serverless scale-to-zero removes idle cost but makes the first request after a quiet period pay container start and model load. Unlimited scale is available on all of them, but it is bought with instances, so it is a cost question rather than a free property. The way out is not cleverness but specification: state the latency budget, the peak volume and how stale the freshest feature may be, and usually only one option satisfies all three. Frequently the honest answer is that most predictions can be batched and only a small subset genuinely needs online serving.',
+        explanation:
+          'The examinable idea is that latency, cost and freshness form a genuine trade-off, so the engineering work is eliciting the constraint rather than picking a favourite technology.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Five places a model can run', back: 'A virtual machine, a container platform, serverless, a scheduled batch job, or on-device at the edge.' },
+      { front: 'What is a cold start?', back: 'Latency paid when no warm instance exists: container start plus runtime import plus model load. Seconds for large ML artifacts.' },
+      { front: 'When is batch inference the right answer?', back: 'When no input feature changes within the request window. It is orders of magnitude cheaper and reads become key lookups.' },
+      { front: 'Default hardware for inference?', back: 'CPU, until a measurement says otherwise. GPUs win on large neural networks with large batches, and cost ten to thirty times more per hour.' },
+      { front: 'What does a managed endpoint buy and cost?', back: 'Buys autoscaling, versioning, traffic splitting and payload capture without a platform team; costs an instance-hour premium and provider lock-in.' },
+      { front: 'Why not put cloud keys in environment variables?', back: 'They leak through logs and images, are rarely rotated and are usually over-permissioned. Use workload identity or an instance role instead.' },
+    ],
+
+    challenge: {
+      title: 'Cost out three deployments for one model',
+      brief:
+        'Take a model you have containerised and cost three deployments properly: an always-on instance, a serverless deployment with scale-to-zero, and a nightly batch job. For each, work out the monthly bill at 10 requests per minute and again at 1,000 requests per minute, measure or estimate p50 and p99 latency including cold starts, and note the operational burden. Then write a one-page recommendation naming the requirement that decides it — and state what evidence would change your mind.',
+      language: 'text',
+      acceptanceCriteria: [
+        'Three deployments costed at two traffic levels using real provider prices',
+        'Latency measured or estimated for each, with cold starts accounted for explicitly',
+        'Memory per worker and per instance computed from the actual model size',
+        'A recommendation that names the deciding requirement rather than a technology preference',
+        'A stated condition under which the recommendation would change',
+      ],
+      starterCode: '# Workload\n# requests/min:\n# latency budget (p95):\n# freshest feature changes every:\n# model size on disk:\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain to a junior engineer the options for where a model can run, and how to choose between them without simply naming a favourite technology.',
+      mustCover: [
+        'The five substrates: virtual machine, container platform, serverless, batch, edge',
+        'The trade-off triangle of latency, cost and freshness',
+        'Cold starts and why they hurt large models in particular',
+        'That CPU should be the default until measurement justifies a GPU',
+      ],
+      bonusSignals: ['asks which feature is freshest before choosing', 'mentions warm instance floors', 'mentions memory per worker against the container limit'],
+      sampleExplanation:
+        'There are really five places a model can run, and the decision is driven by requirements rather than preference. A plain virtual machine is a computer you rent and manage; cheap and predictable and entirely yours when it breaks. A container platform runs many services across many machines with health checking and autoscaling, which is powerful and operationally heavy. Serverless starts an instance only when a request arrives, so the idle bill is near zero, at the cost of a cold start — the first request after a quiet period waits for the container to start and the model to load, which for a large model is seconds. Batch does not serve requests at all: it scores everything on a schedule and applications read the result from a table, which is by far the cheapest option and is completely legitimate whenever no feature changes within the request. And edge runs the model on the device, which removes the network and keeps data local. The question I would ask first is which input feature is freshest, because if the answer is "nothing since this morning" then batch is almost certainly correct and everything else is overengineering. After that, state the latency budget and the peak volume, and the choice usually narrows to one. And default to CPU: most models people want to put on a GPU run faster and vastly cheaper without one.',
+    },
+  },
+
+  {
+    id: 'OPS-010',
+    domain: 'OPS',
+    module: 'Tracking & Reproducibility',
+    topic: 'Versioning',
+    title: 'Experiment, Model and Data Versioning',
+    slug: 'experiment-and-data-versioning',
+    difficulty: 3,
+    estimatedMinutes: 40,
+    prerequisites: ['OPS-001', 'OPS-003'],
+    related: ['OPS-008'],
+    tags: ['mlflow', 'dvc', 'model registry', 'experiment tracking', 'reproducibility', 'lineage', 'dataset card'],
+
+    learningObjectives: [
+      'Explain why a model is a function of code, data, hyperparameters, environment and seed, so versioning code alone cannot reproduce it',
+      'Track parameters, metrics and artifacts for every run so experiments can be compared months later',
+      'Use a model registry with stages, and explain what promotion means operationally',
+      'Version datasets with DVC-style pointer files and say why the data itself stays out of Git',
+      'Write a dataset card that records provenance, licence, known biases and intended use',
+    ],
+
+    terminology: [
+      {
+        term: 'Run',
+        definition:
+          'One execution of a training script, recorded with its parameters, metrics, artifacts, source commit and environment. The atom of experiment tracking.',
+        simple: 'One attempt at training a model, with everything about it written down.',
+      },
+      {
+        term: 'Experiment tracking',
+        definition:
+          'Systematically recording the inputs and outputs of every run to a queryable store, so that runs can be compared, ranked and reproduced rather than remembered.',
+        simple: 'A lab notebook that fills itself in.',
+      },
+      {
+        term: 'Model registry',
+        definition:
+          'A catalogue of registered models with versions and stages (for example None, Staging, Production, Archived), holding the artifact, the run that produced it and its evaluation metrics.',
+        simple: 'The shelf where finished models live, labelled with which one is live.',
+      },
+      {
+        term: 'Lineage',
+        definition:
+          'The recorded chain from a deployed prediction back to the model version, the run, the code commit, the data version and the environment that produced it.',
+        simple: 'The paper trail from an answer back to everything that made it.',
+      },
+      {
+        term: 'DVC pointer file',
+        definition:
+          'A small text file committed to Git containing the content hash, size and path of a large file stored elsewhere. Checking out an old commit and running `dvc checkout` restores exactly the data that commit used.',
+        simple: 'A receipt in Git that tells you which version of the data to fetch.',
+      },
+      {
+        term: 'Dataset card',
+        definition:
+          'A short document describing a dataset\'s provenance, collection method, licence, schema, known biases, and the uses it is and is not suitable for.',
+        simple: 'The label on the tin, saying what is inside and where it came from.',
+      },
+    ],
+
+    simpleExplanation:
+      "Suppose a model you trained three months ago is performing badly and you want to reproduce it to investigate. You have the code in Git, so you check out the commit and run it again, and you get a different model. That is not a bug. A trained model is the output of at least five inputs: the code, the exact data it saw, the hyperparameters you chose, the library versions, and the random seed. Git versions one of them. Everything else was in your shell history, in a dataframe you filtered by hand, in a package that has since been upgraded, or in an unseeded shuffle. Experiment tracking fixes this by recording all five automatically for every run, together with the metrics and the resulting artifact, so a run is a permanent, queryable record rather than a memory. A model registry is the next step: the promising runs produce registered model versions with stages, so there is one authoritative answer to \"which model is in production and what produced it\". And because data cannot live in Git, you commit a small pointer file with its hash instead.",
+
+    whyItExists:
+      'Comparing models from memory, spreadsheets and filenames such as `model_v3_final_lr001.pkl` fails within weeks: nobody can say which data a model saw, which hyperparameters produced the good number, or whether a metric was computed on the same split. Tracking exists so that every run is a durable record, and registries and data versioning exist so that a deployed prediction can be traced back to an exact model, an exact commit and an exact dataset — which is what auditability, debugging and genuine reproducibility require.',
+
+    analogy: {
+      scenario:
+        "Think of a laboratory notebook in a chemistry group. Every experiment gets an entry: the reagents and their batch numbers, the exact quantities, the temperature, who ran it, what came out and what was measured. The notebook is not bureaucracy — it is what makes it possible, eight months later, to repeat the one reaction that worked, and to notice that the failures all used reagent batch 44B. Samples themselves are not glued into the notebook; they are stored in a freezer, and the notebook records the shelf and the barcode.",
+      mapping: [
+        { from: 'A notebook entry per experiment', to: 'A tracked run with parameters, metrics and artifacts' },
+        { from: 'Reagent batch numbers', to: 'The dataset version hash and the library versions' },
+        { from: 'Measured yield and purity', to: 'Logged metrics such as AUC, calibration and latency' },
+        { from: 'The freezer, with barcodes in the notebook', to: 'Object storage for data and models, with pointer files in Git' },
+        { from: 'The shelf of approved compounds', to: 'The model registry, with a version marked Production' },
+      ],
+      bridge:
+        'The batch numbers carry the load in this analogy. A chemist who records quantities but not which batch of reagent was used cannot explain why the reaction stopped working, and an ML engineer who versions code but not data is in exactly the same position — the experiment is not reproducible and the failure is not diagnosable. That is why the unit of versioning is not the script but the tuple of code commit, data hash, parameters, environment and seed, and why the tracking system records all of them automatically rather than hoping you remember.',
+      limitations:
+        'Chemical reactions are largely deterministic given the same inputs; GPU training often is not, because many cuDNN kernels are non-deterministic by default. Reproducibility in ML therefore sometimes means "statistically equivalent" rather than "bit-identical", and saying which you achieved is part of the record.',
+    },
+
+    visuals: [
+      {
+        kind: 'annotated',
+        title: 'What a model is actually a function of',
+        caption: 'Version one of these and you have reproduced nothing.',
+        subject: 'model = f(code, data, hyperparameters, environment, seed)',
+        annotations: [
+          { part: 'code', note: 'Versioned by Git. The only one most teams handle well.' },
+          { part: 'data', note: 'The exact rows, filters and split. Versioned by a content hash recorded in a pointer file.' },
+          { part: 'hyperparameters', note: 'Learning rate, depth, class weights, early-stopping patience. Logged per run, never retyped from memory.' },
+          { part: 'environment', note: 'Library versions, CUDA, the base image digest. Pinned by a lockfile and captured by the image.' },
+          { part: 'seed', note: 'The random state for shuffling, initialisation and sampling. Unseeded runs cannot be compared to each other.' },
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'From a run to production, traceably',
+        caption: 'Every arrow here is a recorded link you can follow backwards.',
+        steps: [
+          { label: 'Run starts', detail: 'The tracker records the Git commit, the data hash, the parameters and the environment.' },
+          { label: 'Training', detail: 'Metrics are logged per epoch, so curves are comparable across runs rather than screenshotted.' },
+          { label: 'Artifacts logged', detail: 'Model file, preprocessing objects, evaluation plots and the holdout hash.' },
+          { label: 'Register a version', detail: 'A promising run becomes `churn v7`, carrying a link back to the run that produced it.' },
+          { label: 'Promote to Production', detail: 'A deliberate, recorded transition after the evaluation gate passes.' },
+          { label: 'Serve and log', detail: 'Every prediction carries the model version, closing the loop from an answer back to its inputs.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'What to log on every run, and why',
+        columns: ['Logged item', 'Example', 'The question it answers later'],
+        rows: [
+          ['Parameters', 'learning_rate=3e-4, max_depth=8', 'Which settings produced the good number?'],
+          ['Metrics', 'val_auc=0.912, ece=0.031, p95_ms=41', 'Was this actually better, and on which axis?'],
+          ['Source commit', 'git sha 9f2c1a7 and a clean/dirty flag', 'Which code ran? Was the tree uncommitted?'],
+          ['Data version', 'dvc hash of train.parquet, row count, date range', 'Which rows did it see?'],
+          ['Environment', 'lockfile hash, image digest, CUDA version', 'Can this be re-created byte for byte?'],
+          ['Seed', 'seed=42, deterministic=True', 'Is a difference between runs real or noise?'],
+          ['Artifacts', 'model.joblib, scaler.joblib, ROC plot', 'Can I load exactly this model again?'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Git versus DVC for a 4 GB dataset',
+        caption: 'Same workflow, different storage.',
+        left: {
+          heading: 'Committing the data to Git',
+          points: [
+            'Every version stored forever in every clone',
+            'No meaningful diff; binary blobs bloat history permanently',
+            'Clone time grows without bound',
+            'Deleting the file later does not reclaim the space',
+          ],
+        },
+        right: {
+          heading: 'DVC pointer in Git, data in object storage',
+          points: [
+            'A 100-byte `.dvc` file with a content hash is committed',
+            'Data lives in S3 or GCS, deduplicated by hash',
+            '`git checkout` plus `dvc checkout` restores the exact pair',
+            'History stays small and clones stay fast',
+          ],
+        },
+      },
+    ],
+
+    formalDefinition:
+      'Experiment tracking is the systematic persistence of the inputs, outputs and context of each training execution — parameters, metrics, artifacts, source revision, data revision and environment specification — into a queryable store keyed by run identifier. A model registry adds a naming and lifecycle layer above runs, mapping a model name to an ordered set of versions each annotated with a stage and a reference to its originating run. Data versioning attains the same property for large artifacts by committing content-addressed pointers to the source repository while storing the content itself in an external object store, preserving the invariant that a repository revision determines the entire input set of a run.',
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Tracking a run so it can be reproduced and compared',
+        code: `import hashlib, json, random, subprocess
+
+import mlflow
+import numpy as np
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.metrics import roc_auc_score, brier_score_loss
+
+SEED = 42
+random.seed(SEED); np.random.seed(SEED)
+
+def git_sha() -> str:
+    sha = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()
+    dirty = subprocess.check_output(["git", "status", "--porcelain"]).decode().strip()
+    return sha + ("-dirty" if dirty else "")
+
+def file_hash(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()[:16]
+
+mlflow.set_experiment("churn")
+
+with mlflow.start_run(run_name="gbdt-depth8") as run:
+    params = {"max_depth": 8, "learning_rate": 0.05, "n_estimators": 400, "seed": SEED}
+    mlflow.log_params(params)
+
+    # Context that makes the run reproducible rather than merely recorded
+    mlflow.set_tags({
+        "git_sha": git_sha(),
+        "train_data_sha": file_hash("data/train.parquet"),
+        "holdout_sha": file_hash("data/holdout.parquet"),
+        "lockfile_sha": file_hash("uv.lock"),
+    })
+
+    model = GradientBoostingClassifier(**{k: v for k, v in params.items() if k != "seed"},
+                                       random_state=SEED).fit(X_train, y_train)
+
+    p = model.predict_proba(X_val)[:, 1]
+    mlflow.log_metrics({
+        "val_auc": roc_auc_score(y_val, p),
+        "val_brier": brier_score_loss(y_val, p),     # calibration, not just ranking
+        "positive_rate": float((p >= 0.5).mean()),
+    })
+
+    mlflow.sklearn.log_model(model, artifact_path="model",
+                             registered_model_name="churn")
+    mlflow.log_artifact("reports/roc.png")
+    print(run.info.run_id)`,
+        explanation:
+          'The tags are what turn a logged run into a reproducible one. `git_sha` with a dirty flag tells you honestly whether the tree was committed — an uncommitted run is not reproducible and should say so. Hashing the data files means you can prove two runs saw the same rows, which is the single most common hidden difference between an experiment that worked and one that did not. Logging Brier score alongside AUC matters because AUC only measures ranking: a model can rank perfectly and still produce probabilities that are badly calibrated, which breaks any downstream threshold.',
+      },
+      {
+        language: 'python',
+        title: 'Registry stages and promoting a version deliberately',
+        code: `from mlflow import MlflowClient
+
+client = MlflowClient()
+
+# Compare candidates rather than trusting a remembered number
+runs = client.search_runs(
+    experiment_ids=[client.get_experiment_by_name("churn").experiment_id],
+    filter_string="metrics.val_auc > 0.90 and tags.git_sha NOT LIKE '%-dirty'",
+    order_by=["metrics.val_auc DESC"],
+    max_results=5,
+)
+for r in runs:
+    print(r.data.tags["git_sha"][:8], r.data.params["max_depth"],
+          round(r.data.metrics["val_auc"], 4), r.data.tags["train_data_sha"])
+
+# Promote a specific version. This is a recorded, reversible decision.
+client.set_registered_model_alias(name="churn", alias="production", version="7")
+client.set_model_version_tag("churn", "7", "approved_by", "ml-review")
+client.set_model_version_tag("churn", "7", "holdout_sha", "6b21f0c9ad4e1177")
+
+# Serving loads by alias, never by file path
+import mlflow.pyfunc
+model = mlflow.pyfunc.load_model("models:/churn@production")
+
+# Rollback is one call, with no retraining
+client.set_registered_model_alias(name="churn", alias="production", version="6")`,
+        explanation:
+          'Two properties emerge from this that filenames can never give you. First, the service loads `models:/churn@production` rather than a path, so promoting a new model and rolling back are registry operations taking seconds, entirely independent of deploying code. Second, the query filters out runs from a dirty working tree, which is exactly the discipline that stops an unreproducible experiment becoming the production model. The `approved_by` tag turns promotion into an auditable event rather than a silent file copy.',
+      },
+      {
+        language: 'bash',
+        title: 'Versioning data with DVC',
+        code: `pip install "dvc[s3]"
+dvc init
+dvc remote add -d storage s3://acme-ml/dvc
+
+# Track a large file: DVC moves it to cache and writes a small pointer
+dvc add data/train.parquet
+cat data/train.parquet.dvc
+# outs:
+# - md5: 8c1f2b3d4e5a6789abcdef0123456789
+#   size: 4183920640
+#   path: train.parquet
+
+git add data/train.parquet.dvc data/.gitignore
+git commit -m "Track training snapshot 2024-09-02"
+dvc push                     # uploads the content to S3, not to Git
+
+# Six months later, reproduce an old experiment exactly
+git checkout 9f2c1a7         # the code AND the pointer file from that commit
+dvc checkout                 # restores the exact data that commit referenced
+python train.py              # same code, same data
+
+# A pipeline whose stages re-run only when their inputs change
+dvc stage add -n featurize -d src/features.py -d data/raw -o data/train.parquet \\
+  python src/features.py
+dvc repro`,
+        explanation:
+          'The pointer file is the whole trick: Git holds a hundred bytes describing four gigabytes, so history stays small while `git checkout` plus `dvc checkout` restores a matched pair of code and data. `dvc repro` adds a second property — a dependency graph, so changing the feature script re-runs featurisation and training but nothing upstream. That turns "which of these files is stale?" from a memory exercise into a computed answer.',
+      },
+      {
+        language: 'yaml',
+        title: 'A dataset card that a future colleague will thank you for',
+        code: `name: churn-training-snapshot
+version: "2024-09-02"
+content_hash: 8c1f2b3d4e5a6789
+rows: 4183921
+date_range: "2022-01-01 to 2024-08-31"
+
+provenance:
+  source: warehouse.analytics.customer_monthly
+  extracted_by: pipelines/extract_churn.sql
+  extracted_on: "2024-09-02"
+  licence: internal-only
+
+schema:
+  customer_id: {type: string, unique: true, pii: pseudonymised}
+  tenure_months: {type: int, range: [0, 600], null_rate: 0.002}
+  monthly_charges: {type: float, range: [0, 500], null_rate: 0.0}
+  churned: {type: bool, positive_rate: 0.168}
+
+known_issues:
+  - "Customers acquired through the 2023 partner channel lack contract history; the field is imputed as month-to-month."
+  - "Under-18 accounts are excluded by policy, so the model must not be used for that segment."
+  - "A billing migration in March 2023 changed how monthly_charges is computed; values before and after are not directly comparable."
+
+intended_use: "Training and evaluating monthly churn propensity models for retail customers."
+not_suitable_for: "Pricing decisions, credit assessment, or any individual-level adverse action."`,
+        explanation:
+          'Everything in `known_issues` is knowledge that otherwise lives in one person\'s head and leaves with them. The billing migration note in particular is the kind of detail that explains an inexplicable feature drift eighteen months later. `not_suitable_for` is not legal decoration either: it is the record that makes it possible to challenge a proposed reuse of the dataset before rather than after a harmful deployment.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'The unreproducible best model',
+        usage:
+          'A team\'s best AUC came from a run whose script had been edited afterwards. There was no commit, no data hash and no seed, so the result could never be recovered and three weeks were spent trying. Tracking that records a dirty-tree flag would have made the problem visible on day one.',
+      },
+      {
+        context: 'A regulator asking about one decision',
+        usage:
+          'A lender had to explain a specific credit decision from fourteen months earlier. Because every prediction logged its model version, and the version linked to a run with a data hash and a commit, the exact model was reloaded and the decision reconstructed. Without that chain the answer would have been "we cannot say".',
+      },
+      {
+        context: 'Rollback without retraining',
+        usage:
+          'A promoted model caused a spike in false positives. Because serving loaded the model by registry alias, reverting was a single registry call that took effect in seconds, with no rebuild, no redeploy and no six-hour training run.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'MLflow', role: 'Tracks runs and hosts a model registry with versions, aliases and stages that serving loads from.' },
+      { tool: 'Weights & Biases', role: 'An alternative tracker, strong on live training curves, artifact lineage and team-facing reports.' },
+      { tool: 'DVC', role: 'Content-addressed versioning for data and pipeline stages, with pointers committed alongside the code.' },
+      { tool: 'Git', role: 'Versions the code and the pointer files, which is what makes a single commit identify the whole input set.' },
+      { tool: 'Feature store', role: 'Versions feature definitions and their computed values, which extends this same discipline to the serving path.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Recording metrics in a spreadsheet or a filename',
+        why: 'Filenames such as `model_lr001_v3_final.pkl` record one parameter and lose the data version, the commit, the environment and the seed, so nothing can be reproduced or meaningfully compared.',
+        fix: 'Log parameters, metrics, tags and artifacts programmatically in the training script, so recording is automatic rather than something to remember at the end of a long day.',
+      },
+      {
+        mistake: 'Training from a working-tree state that was never committed',
+        why: 'The run cannot be reproduced, and if it becomes the production model there is no source of truth for what it actually does.',
+        fix: 'Capture the commit SHA with a dirty flag on every run, and refuse to promote a model whose run was dirty. Make it a registry-promotion check, not a convention.',
+      },
+      {
+        mistake: 'Comparing two runs that used different data without noticing',
+        why: 'A metric difference then confounds the model change with the data change, so you may adopt a worse model because the newer snapshot happened to be easier.',
+        fix: 'Hash and log the training and evaluation files, and make the comparison assert that the evaluation hash matches before it reports a winner.',
+      },
+      {
+        mistake: 'Serving a model from a file path instead of a registry reference',
+        why: 'Nobody can say which version is live, promotion means copying a file, and rollback requires knowing which file was there before — usually discovered during the incident.',
+        fix: 'Load by registry alias, for example `models:/churn@production`, so promotion and rollback are recorded operations that take seconds.',
+      },
+      {
+        mistake: 'Treating reproducibility as done once seeds are set',
+        why: 'Many GPU kernels are non-deterministic by default, and library upgrades change numerics, so bit-identical results are often unattainable even with a fixed seed.',
+        fix: 'Pin the environment as well as the seed, enable deterministic modes where the cost is acceptable, and record honestly whether a run is bit-reproducible or only statistically equivalent.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Why is versioning code insufficient to reproduce a model?',
+        answer:
+          'Because a trained model is a function of at least five inputs and Git captures one. The data matters most: the same script over a snapshot taken two weeks later sees different rows, a different class balance and possibly a different schema, and nothing in the repository records which snapshot was used. Hyperparameters are frequently passed on the command line and lost. The environment matters because library upgrades change numerics and sometimes behaviour, so the same code on a newer scikit-learn is not the same computation. And the random seed governs shuffling, initialisation and sampling, so unseeded runs differ from each other. Reproducibility therefore means pinning the tuple — commit, data content hash, parameters, lockfile or image digest, and seed — and recording all of it automatically on every run, which is exactly what an experiment tracker does.',
+        followUp:
+          'A strong answer adds that GPU non-determinism means the honest goal is often statistical equivalence rather than bit-identity, and that saying which you achieved is part of the record.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Design the traceability you would need to answer "why did this customer get declined in March?" fourteen months later.',
+        answer:
+          'Work backwards from the prediction. Every served response logs a request id, the input feature values or a hash of them, the output, and the model version — that last field is the hinge. The model version resolves in the registry to the run that produced it, and the run carries the source commit, the hyperparameters, the environment lockfile or image digest, the seed, and content hashes for the training and evaluation data. The data hashes resolve through DVC or a warehouse snapshot to the exact rows. With that chain I can reload the exact model, replay the exact input and reproduce the exact score, and I can also say what the model was trained on and how it was evaluated. Two practical constraints: prediction logs must be retained long enough and be queryable, which usually means object storage partitioned by date rather than an application database, and personal data in those logs needs a retention and access policy agreed in advance.',
+        followUp:
+          'The signal is realising that the whole chain hangs on the model version being present in the prediction log, and that retention policy is part of the design rather than an afterthought.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'What is a model registry for, given that you could just put the file in S3?',
+        answer:
+          'Object storage gives you the bytes; a registry gives you identity, lifecycle and lineage. It provides a stable name with ordered versions, stages or aliases so there is exactly one authoritative answer to "what is in production", a link from each version back to the run that produced it and therefore to the code, data and metrics, and metadata such as who approved a promotion and against which holdout. Operationally the payoff is that serving loads by alias rather than path, which decouples model promotion from code deployment entirely: shipping a new model is a registry transition, rollback is the reverse transition, and neither requires a rebuild or a retrain. You can approximate some of this with conventions on top of S3, but you will end up reimplementing a registry badly, and the part you will get wrong is the audit trail.',
+        followUp:
+          'Mentioning that this separation is what allows a model to be rolled back independently of a code rollback shows incident-response thinking.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Two runs of the same script three weeks apart report AUC 0.91 and 0.87. List, in order, what you would check to find out whether the model got worse.',
+        hint: 'Eliminate the things that are not the model first.',
+        solution:
+          'One: is the evaluation set identical? Compare the holdout content hashes; if they differ, the numbers are simply not comparable and everything else is speculation. Two: is the training data the same snapshot, and did its row count, date range or class balance change? Three: was the code the same commit, and was either tree dirty? Four: were the hyperparameters identical — check the logged parameters rather than memory. Five: did the environment change, comparing lockfile hashes, since a library upgrade can shift numerics. Six: was the seed set, and what is the run-to-run standard deviation, because a 0.04 gap may be within noise for a small holdout. Only after all six are ruled out is "the model got worse" the explanation, and every one of those checks is a lookup rather than an investigation if the run was tracked.',
+      },
+      {
+        prompt:
+          'Your repository is 12 GB because three parquet snapshots were committed. Describe the migration to DVC and what it does and does not fix.',
+        hint: 'Removing a file from the current commit does not remove it from history.',
+        language: 'bash',
+        solution:
+          '`git rm --cached data/*.parquet`, add the paths to `.gitignore`, then `dvc add data/train.parquet` for each, commit the `.dvc` pointer files, configure a remote and `dvc push`. From now on Git holds hundred-byte pointers and `git checkout` plus `dvc checkout` restores a matched code-and-data pair. What this does not fix is history: the old blobs remain reachable from previous commits, so the clone is still 12 GB. Shrinking it requires rewriting history with `git filter-repo`, which changes every commit hash and must be coordinated with everyone who has a clone, so plan it as an announced event rather than a quiet cleanup.',
+      },
+      {
+        prompt:
+          'Write the promotion checklist your team must satisfy before a model version moves to Production.',
+        hint: 'Think about what you would need if the model caused an incident next week.',
+        solution:
+          'One: the run is from a clean, committed tree, with the commit SHA recorded. Two: the evaluation used the registered holdout, verified by hash, and the candidate matches or beats the incumbent within the agreed tolerance plus an absolute floor. Three: per-segment metrics show no material regression for monitored groups. Four: calibration is checked, not just ranking, because thresholds downstream depend on it. Five: the artifact loads in the serving image and passes contract tests at the expected latency. Six: the promotion is tagged with who approved it and against which holdout hash. Seven: the previous production version stays registered so rollback is one call. The checklist is worth automating as a promotion gate, because a checklist that depends on someone remembering it on a Friday afternoon is not a control.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'OPS-010-q1',
+        type: 'multi',
+        concept: 'inputs to a model',
+        prompt: 'Which of these must be pinned to reproduce a trained model? Select all that apply.',
+        options: [
+          'The source code commit',
+          'The exact training data version',
+          'The hyperparameters',
+          'The library and runtime versions',
+          'The random seed',
+        ],
+        answerIndices: [0, 1, 2, 3, 4],
+        explanation:
+          'All five. Git captures only the first, which is why "we have the code" is never an answer to "can you reproduce it", and why trackers record the other four automatically.',
+      },
+      {
+        id: 'OPS-010-q2',
+        type: 'truefalse',
+        concept: 'data in Git',
+        prompt: 'DVC works by committing the dataset into Git in a compressed form.',
+        answer: false,
+        explanation:
+          'DVC commits a small pointer file containing a content hash while the data itself lives in object storage. That is what keeps history small while still letting a commit determine exactly which data a run used.',
+      },
+      {
+        id: 'OPS-010-q3',
+        type: 'mcq',
+        concept: 'registry value',
+        prompt: 'What does a model registry give you that a file in object storage does not?',
+        options: [
+          'Named versions with stages and a recorded link back to the producing run',
+          'Cheaper storage for large artifacts',
+          'Faster model loading at inference time',
+          'Automatic hyperparameter tuning',
+        ],
+        answerIndex: 0,
+        explanation:
+          'It supplies identity, lifecycle and lineage. That is what lets serving load by alias and makes promotion and rollback recorded operations independent of code deployment.',
+      },
+      {
+        id: 'OPS-010-q4',
+        type: 'match',
+        concept: 'tooling roles',
+        prompt: 'Match each tool to what it versions.',
+        pairs: [
+          { left: 'Git', right: 'Source code and small text pointer files' },
+          { left: 'DVC', right: 'Large data and model files, by content hash, stored externally' },
+          { left: 'MLflow tracking', right: 'Runs: parameters, metrics, artifacts and context' },
+          { left: 'Model registry', right: 'Named model versions with stages and lineage to runs' },
+          { left: 'Lockfile / image digest', right: 'The environment the run executed in' },
+        ],
+        explanation:
+          'Each layer versions something the others cannot. Reproducibility is the conjunction of all of them, which is why no single tool advertises itself as the complete answer.',
+      },
+      {
+        id: 'OPS-010-q5',
+        type: 'fill',
+        concept: 'lineage',
+        prompt: 'Which single field must appear in every prediction log for a served decision to be traceable back to its training data?',
+        answers: ['model_version', 'model version', 'the model version', 'version'],
+        explanation:
+          'The model version is the hinge of the whole chain: it resolves in the registry to a run, and the run carries the commit, the data hashes, the parameters and the environment.',
+      },
+      {
+        id: 'OPS-010-q6',
+        type: 'explain',
+        concept: 'dataset cards',
+        prompt: 'Explain what a dataset card is for and name three things it should contain that a schema does not.',
+        rubric: [
+          'Explains that it records context and provenance that code cannot express',
+          'Names at least three: collection method, licence, known biases, intended and unsuitable uses, breaking changes in history',
+          'Connects it to a concrete risk such as misuse or an unexplained drift',
+        ],
+        sampleAnswer:
+          'A schema tells you the columns and types; a dataset card tells you what the data means, where it came from and what it cannot be used for. It should record provenance — which query, which system, extracted when — because that is what lets someone re-derive or debug it later. It should record known issues and biases, such as a segment whose history is imputed or a billing migration that makes a column non-comparable across a date, because those explain otherwise inexplicable model behaviour years later. And it should state intended use and unsuitable use, along with licence and any personal-data handling, so that a proposed reuse can be challenged before the model is built rather than after it has caused harm. All of this is knowledge that otherwise lives in one person\'s head and leaves the company when they do.',
+        explanation:
+          'The examinable idea is that datasets carry context that no schema captures, and writing it down is what makes the data reusable and its limitations enforceable.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'A model is a function of what?', back: 'Code, data, hyperparameters, environment and seed. Git versions only the first, which is why code versioning alone cannot reproduce a model.' },
+      { front: 'What does a DVC pointer file contain?', back: 'A content hash, size and path. It is committed to Git while the data itself lives in object storage, so history stays small.' },
+      { front: 'Why load a model by registry alias rather than file path?', back: 'Promotion and rollback become recorded registry operations taking seconds, entirely independent of deploying code.' },
+      { front: 'What single field makes a prediction traceable?', back: 'The model version in the prediction log — it resolves to the run, and the run to the commit, data hashes and environment.' },
+      { front: 'What belongs in a dataset card?', back: 'Provenance, licence, schema, known issues and biases, breaking changes in history, and intended and unsuitable uses.' },
+      { front: 'Why record a dirty-tree flag on a run?', back: 'A run trained from uncommitted code cannot be reproduced, so it should never be promoted to production.' },
+    ],
+
+    challenge: {
+      title: 'Make one old experiment reproducible',
+      brief:
+        'Choose a model you trained at least a month ago and try to reproduce it exactly. Write down every input you could not recover. Then instrument the project so it could not happen again: log parameters, metrics and artifacts to a tracker; tag each run with the commit SHA and dirty flag, the content hashes of the training and evaluation data, and the lockfile hash; put the data under DVC with a remote; register the resulting model and have your serving code load it by alias. Finish by writing the dataset card for the training snapshot.',
+      language: 'python',
+      acceptanceCriteria: [
+        'A written list of inputs that could not be recovered from the original run',
+        'Every new run logs parameters, metrics, artifacts, commit SHA with dirty flag, data hashes and lockfile hash',
+        'The dataset is tracked by DVC with a configured remote, and `git checkout` plus `dvc checkout` restores a matched pair',
+        'The model is registered and loaded by alias rather than by file path',
+        'Two runs with the same seed and data produce the same metric to a stated tolerance',
+        'A dataset card records provenance, schema, known issues and unsuitable uses',
+      ],
+      starterCode: 'import mlflow\n\nmlflow.set_experiment("reproducibility-audit")\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain to a colleague who keeps models in a folder called `experiments/` why that stops working, and what experiment tracking, a registry and data versioning each solve.',
+      mustCover: [
+        'A model depends on code, data, hyperparameters, environment and seed',
+        'Tracking records all of those automatically per run, making comparison and reproduction possible',
+        'A registry gives named versions, stages and lineage so serving can load by alias',
+        'Data is versioned by committing a content-hash pointer while the bytes live elsewhere',
+      ],
+      bonusSignals: ['mentions dirty working trees', 'mentions comparing runs that used different holdouts', 'mentions rollback without retraining'],
+      sampleExplanation:
+        'A folder of files answers only one question — which files exist — and the questions you will actually have are different. Which data did this model see? Which commit produced it? Was the evaluation set the same as the one used for the model it is being compared against? A filename cannot carry that, and memory stops working after about three weeks. Experiment tracking records it automatically: every run logs its parameters, its metrics, the artifacts it produced, and crucially the context — the commit SHA with a flag saying whether the tree was dirty, content hashes for the training and evaluation data, the lockfile hash and the seed. Then comparing two runs becomes a query rather than an argument. A registry sits above that and gives models names, versions and stages, with a link from each version back to the run that made it, so there is one authoritative answer to what is in production and the serving code can load by alias instead of a path. That last detail is what makes rollback a five-second registry call rather than a retraining job. And because the data cannot go into Git, you commit a small pointer file containing its hash while the bytes live in object storage, so checking out an old commit and running one more command restores exactly the data that run used.',
+    },
+  },
+
+  {
+    id: 'OPS-011',
+    domain: 'OPS',
+    module: 'Monitoring',
+    topic: 'Observability',
+    title: 'Logging, Monitoring and Observability',
+    slug: 'logging-and-monitoring',
+    difficulty: 3,
+    estimatedMinutes: 35,
+    prerequisites: ['OPS-005'],
+    related: ['OPS-009', 'OPS-010'],
+    tags: ['logging', 'metrics', 'observability', 'alerting', 'prometheus', 'slo', 'dashboards'],
+
+    learningObjectives: [
+      'Replace print statements with structured logging, and choose log levels that mean something',
+      'Decide what an ML service should log for every prediction, and what it must not log',
+      'Name the metrics that matter — latency, throughput, error rate, prediction distribution, feature distribution — and why each is there',
+      'Build an alert that fires on user-visible harm rather than on noise, and set a threshold you can defend',
+      'Explain the central point: a broken model keeps returning HTTP 200, so service health is not model health',
+    ],
+
+    terminology: [
+      {
+        term: 'Structured logging',
+        definition:
+          'Emitting log lines as machine-parseable records — usually one JSON object per line — with consistent field names, so logs can be filtered, aggregated and joined rather than only read.',
+        simple: 'Logs written as data instead of as sentences.',
+      },
+      {
+        term: 'Log level',
+        definition:
+          'A severity tag — DEBUG, INFO, WARNING, ERROR, CRITICAL — that lets the same code produce a firehose in development and a trickle in production without editing it.',
+        simple: 'How loud this message is, so you can turn the volume down.',
+      },
+      {
+        term: 'Metric',
+        definition:
+          'A numeric time series such as a counter, gauge or histogram, aggregated across requests and cheap to store for a long time. Metrics answer "how much" and "how often"; logs answer "what exactly happened".',
+        simple: 'A number tracked over time.',
+      },
+      {
+        term: 'The three pillars',
+        definition:
+          'Logs (discrete events), metrics (aggregated numbers over time) and traces (the path of one request across services). Together they let you ask questions you did not anticipate.',
+        simple: 'Events, numbers and journeys.',
+      },
+      {
+        term: 'SLI / SLO',
+        definition:
+          'A service level indicator is a measured quantity such as the fraction of requests served under 200 ms; a service level objective is the target for it, such as 99.5% over 30 days. Alerts are derived from the objective.',
+        simple: 'What you measure, and the promise you make about it.',
+      },
+      {
+        term: 'Cardinality',
+        definition:
+          'The number of distinct label combinations on a metric. A label such as `customer_id` creates one time series per customer and will overwhelm a metrics system.',
+        simple: 'How many separate lines your chart secretly has.',
+      },
+    ],
+
+    simpleExplanation:
+      "When a normal web service breaks, it tells you: requests fail, the error count spikes, someone gets paged. A machine learning service is more dangerous, because the most common way it breaks is completely silent. The code runs, the model loads, every request returns HTTP 200 in forty milliseconds, and the predictions are nonsense — because an upstream team renamed a column and every value now arrives as null, so the model happily scores a row of zeros. No exception, no error rate, no alert. This is why monitoring an ML system means watching two different things. The service layer is the familiar part: latency, throughput and error rate. The model layer is the part people forget: what the inputs look like, what the outputs look like, and how both compare with what you saw during training and last week. Logging is what makes any of this possible. Not print statements, which are unfiltered, untimestamped and unsearchable, but structured log lines with consistent fields, so that when something looks odd on a dashboard you can find the exact requests behind it.",
+
+    whyItExists:
+      'Systems fail in ways nobody predicted, and in machine learning they fail without raising an error at all, so the only way to notice is to have been measuring the right things beforehand. Observability exists to turn a live system from an opaque box into something you can ask new questions of after the fact, and monitoring exists so that the questions you already know matter are answered automatically and loudly enough to wake someone.',
+
+    analogy: {
+      scenario:
+        "Think about the instrumentation of an aircraft. Some instruments report the machine: engine temperature, fuel flow, hydraulic pressure. A different set reports the situation: altitude, airspeed, heading. An engine can be running perfectly within every limit while the aircraft is 3,000 feet below where it should be, which is why an altimeter exists at all. Crews are not asked to watch every dial continuously either; a small number of conditions trigger an audible warning, and everything else is available to be consulted when something needs diagnosing.",
+      mapping: [
+        { from: 'Engine instruments', to: 'Service metrics: latency, throughput, error rate, memory' },
+        { from: 'Altitude and airspeed', to: 'Model metrics: prediction distribution, feature distribution, alert rate' },
+        { from: 'An engine fine while the aircraft is off course', to: 'HTTP 200 on every request while the model has degraded' },
+        { from: 'The small set of audible warnings', to: 'Alerts, tied to user-visible harm rather than to every anomaly' },
+        { from: 'The flight data recorder', to: 'Structured prediction logs, for the investigation afterwards' },
+      ],
+      bridge:
+        'The altimeter is the crux. Engine instruments cannot detect the failure mode that matters most, and service metrics cannot detect model degradation, because degradation is not an error — it is a correct-looking response containing a wrong number. That is why an ML dashboard must show output and input distributions next to latency and error rate, and why the prediction log is the recorder you will be extremely glad to have when somebody asks what the model was doing last Tuesday.',
+      limitations:
+        'A pilot gets altitude instantly; a model\'s true accuracy usually waits for labels that arrive days or weeks later. Live model monitoring is therefore mostly proxies and distributions, with the real accuracy arriving too late to be an alarm.',
+    },
+
+    visuals: [
+      {
+        kind: 'compare',
+        title: 'The two layers you must monitor',
+        caption: 'A green service dashboard says nothing about model quality.',
+        left: {
+          heading: 'Service health',
+          points: [
+            'Request rate, error rate by status class',
+            'Latency percentiles, p50 / p95 / p99',
+            'CPU, memory against the container limit, restarts',
+            'Saturation: queue depth, in-flight requests',
+          ],
+        },
+        right: {
+          heading: 'Model health',
+          points: [
+            'Prediction distribution: mean score, positive rate, histogram',
+            'Input feature distributions and null rates',
+            'Share of requests hitting default or imputed values',
+            'Delayed accuracy once labels arrive, plus calibration',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Log levels, used the way they were designed',
+        columns: ['Level', 'Meaning', 'Example in a model service'],
+        rows: [
+          ['DEBUG', 'Detail for diagnosing, off in production', 'The full feature vector for one request during an investigation.'],
+          ['INFO', 'Normal, noteworthy events', 'Model loaded at startup; one line per prediction with id, score and version.'],
+          ['WARNING', 'Something is wrong but was handled', 'A feature was missing and an imputed default was used.'],
+          ['ERROR', 'An operation failed', 'Inference raised; the request was answered with a 500.'],
+          ['CRITICAL', 'The service cannot function', 'The model failed to load and readiness will never pass.'],
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'From a symptom to a cause',
+        caption: 'Metrics tell you that something changed; logs and traces tell you what.',
+        steps: [
+          { label: 'Alert fires', detail: 'The positive-prediction rate has doubled over a one-hour window.' },
+          { label: 'Dashboard', detail: 'Latency and error rate are normal — so this is a model problem, not a service problem.' },
+          { label: 'Feature panel', detail: 'The null rate for `tenure_months` jumped from 0.2% to 96% at 02:15.' },
+          { label: 'Query the logs', detail: 'Filter structured prediction logs for that window and read the actual payloads.' },
+          { label: 'Trace upstream', detail: 'The request id joins to the caller and to the feature pipeline run that changed.' },
+          { label: 'Act', detail: 'Fail over to the previous model version or reject the affected requests while upstream is fixed.' },
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Watch a distribution move',
+        caption: 'See how a prediction distribution shifts while error rate and latency stay perfectly healthy.',
+        widget: 'drift-monitor',
+      },
+    ],
+
+    formalDefinition:
+      'Monitoring is the collection and evaluation of predefined signals against thresholds, producing alerts; observability is the property of a system that allows arbitrary questions about its internal state to be answered from its external outputs. A production ML system requires instrumentation at two layers: the service layer, characterised by request rate, error rate and latency distribution, and the model layer, characterised by the empirical distributions of input features and output predictions, their divergence from a reference window, and — once ground truth becomes available — realised predictive performance and calibration.',
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Structured logging that you can actually query',
+        code: `import json, logging, sys, time, uuid
+from contextvars import ContextVar
+
+request_id: ContextVar[str] = ContextVar("request_id", default="-")
+
+
+class JsonFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        payload = {
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(record.created)),
+            "level": record.levelname,
+            "logger": record.name,
+            "msg": record.getMessage(),
+            "request_id": request_id.get(),
+        }
+        payload.update(getattr(record, "extra_fields", {}))
+        if record.exc_info:
+            payload["exc"] = self.formatException(record.exc_info)
+        return json.dumps(payload)
+
+
+handler = logging.StreamHandler(sys.stdout)     # stdout: the platform collects it
+handler.setFormatter(JsonFormatter())
+logging.basicConfig(level=logging.INFO, handlers=[handler])
+log = logging.getLogger("churn")
+
+
+def log_prediction(customer_id: str, prob: float, version: str, latency_ms: float,
+                   imputed: list[str]) -> None:
+    log.info("prediction", extra={"extra_fields": {
+        "customer_id_hash": hash_id(customer_id),   # pseudonymised, never raw PII
+        "churn_probability": round(prob, 4),
+        "model_version": version,
+        "latency_ms": round(latency_ms, 2),
+        "imputed_features": imputed,                 # silent degradation, made visible
+    }})
+
+# {"ts":"2024-09-02T11:04:19","level":"INFO","logger":"churn","msg":"prediction",
+#  "request_id":"req_7f3a","customer_id_hash":"9c1e...","churn_probability":0.8123,
+#  "model_version":"churn-2024-09-02","latency_ms":38.4,"imputed_features":["contract"]}`,
+        explanation:
+          'Every field here earns its place. `request_id` lets you join a client complaint to the exact server-side line. `model_version` is what makes the log useful six months later. `imputed_features` is the ML-specific one and the most valuable: it records that the model scored a row where a feature was missing, which is exactly the silent degradation that never shows up as an error. Note that the identifier is hashed — prediction logs are long-lived and widely readable, so raw personal data must not go into them.',
+      },
+      {
+        language: 'python',
+        title: 'Metrics: what to export and how not to blow up the store',
+        code: `from prometheus_client import Counter, Histogram, Gauge, make_asgi_app
+
+REQUESTS = Counter("predictions_total", "Predictions served",
+                   ["model_version", "status"])            # low cardinality labels only
+LATENCY = Histogram("prediction_latency_seconds", "End-to-end latency",
+                    buckets=[.005, .01, .025, .05, .1, .25, .5, 1, 2.5])
+SCORE = Histogram("prediction_score", "Distribution of predicted probabilities",
+                  buckets=[0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1])
+IMPUTED = Counter("feature_imputed_total", "Requests where a feature was missing",
+                  ["feature"])
+POSITIVE_RATE = Gauge("prediction_positive_rate", "Rolling share of scores above threshold")
+
+app.mount("/metrics", make_asgi_app())
+
+@app.post("/predict")
+def predict(req: PredictRequest):
+    with LATENCY.time():
+        prob = score(req)
+    SCORE.observe(prob)                       # the ML-specific series
+    REQUESTS.labels(MODEL_VERSION, "200").inc()
+    return {"churn_probability": prob}
+
+# NEVER do this: one time series per customer will kill the metrics backend.
+# REQUESTS.labels(customer_id, "200").inc()`,
+        explanation:
+          'Histograms rather than pre-computed averages, because percentiles cannot be averaged across instances and a mean hides the tail entirely. `prediction_score` as a histogram is the panel that catches silent model failure: plotted over time it shows the output distribution moving while latency and error rate stay flat. The commented-out line is the mistake that takes down monitoring systems — every distinct label value creates a separate time series, so identifiers belong in logs, never in metric labels.',
+      },
+      {
+        language: 'yaml',
+        title: 'Alerts that are worth waking someone for',
+        code: `groups:
+  - name: churn-service
+    rules:
+      # Service health: user-visible failure
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(predictions_total{status=~"5.."}[5m]))
+            / sum(rate(predictions_total[5m])) > 0.02
+        for: 10m
+        labels: {severity: page}
+        annotations:
+          summary: "5xx rate above 2% for 10 minutes"
+          runbook: "https://wiki.internal/runbooks/churn-5xx"
+
+      - alert: LatencyBudgetBurn
+        expr: histogram_quantile(0.95, sum(rate(prediction_latency_seconds_bucket[5m])) by (le)) > 0.25
+        for: 15m
+        labels: {severity: page}
+
+      # Model health: no errors at all, and still broken
+      - alert: PredictionDistributionShift
+        expr: |
+          abs(
+            avg_over_time(prediction_positive_rate[1h])
+            - avg_over_time(prediction_positive_rate[7d] offset 1h)
+          ) > 0.10
+        for: 30m
+        labels: {severity: ticket}
+        annotations:
+          summary: "Positive-prediction rate moved by more than 10 points versus last week"
+
+      - alert: FeatureSuddenlyMissing
+        expr: rate(feature_imputed_total[10m]) / rate(predictions_total[10m]) > 0.20
+        for: 10m
+        labels: {severity: page}
+        annotations:
+          summary: "Over 20% of requests are missing a feature — upstream is probably broken"`,
+        explanation:
+          'Three design choices make these alerts survivable. Each has a `for` duration, so a thirty-second blip does not page anyone. Severities differ: a distribution shift creates a ticket for working hours because it needs investigation rather than heroics, while a feature vanishing pages immediately because it means the model is scoring garbage right now. And every page has a runbook link, because an alert that wakes someone without telling them what to do is a half-finished alert.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'The all-null feature',
+        usage:
+          'An upstream rename made `tenure_months` null on every request. The service returned 200 at normal latency for eleven days. The only signal that existed was the imputation counter, which nobody had built yet; after the incident it became the first panel on the dashboard and a paging alert.',
+      },
+      {
+        context: 'p99 hidden by an average',
+        usage:
+          'A dashboard showed a comfortable 30 ms mean latency while one in a hundred requests took four seconds and blew a partner\'s timeout. Switching from averages to histogram-derived percentiles made the problem visible in a single panel, and it turned out to be garbage collection on one instance.',
+      },
+      {
+        context: 'An alert everyone learned to ignore',
+        usage:
+          'A prediction-drift alert with no `for` clause fired fifteen times a day on ordinary hourly seasonality. Within two weeks it was muted, and it was still muted when a genuine drift event happened. Thresholds derived from a measured baseline, plus a duration, would have kept it credible.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'structlog / python-json-logger', role: 'Emits structured JSON log lines with consistent fields so logs are queryable rather than merely readable.' },
+      { tool: 'Prometheus + Grafana', role: 'Scrapes and stores metric time series, and renders the dashboards where distribution shifts become visible.' },
+      { tool: 'OpenTelemetry', role: 'Propagates a trace id across services so one prediction can be followed from the caller through the feature store to the model.' },
+      { tool: 'Sentry', role: 'Aggregates exceptions with stack traces and context, which complements metrics that only tell you an error rate rose.' },
+      { tool: 'Evidently / whylogs', role: 'Computes data and prediction drift reports on logged payloads, feeding the model-health half of the dashboard.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Monitoring only service health and declaring the model fine',
+        why: 'A degraded model returns 200 at normal latency. Error rate and p95 are entirely blind to a feature that has gone null or a distribution that has shifted, which are the most common real failures.',
+        fix: 'Put prediction distribution, feature null rates and imputation share on the same dashboard as latency and errors, and alert on them.',
+      },
+      {
+        mistake: 'Using `print` instead of logging',
+        why: '`print` has no level, no timestamp, no module, no structure and cannot be turned down. In a container it is also buffered by default, so output can be lost entirely when the process is killed.',
+        fix: 'Use the `logging` module with a JSON formatter writing to stdout, and set `PYTHONUNBUFFERED=1` in the image so lines are not lost.',
+      },
+      {
+        mistake: 'Logging raw personal data or full feature vectors at INFO',
+        why: 'Prediction logs are retained for months, replicated into log aggregators and readable by many people, so they become the largest uncontrolled store of personal data in the system.',
+        fix: 'Log pseudonymised identifiers and aggregate statistics at INFO; keep full payloads behind DEBUG or a sampled, access-controlled store with an explicit retention policy.',
+      },
+      {
+        mistake: 'High-cardinality metric labels',
+        why: 'Each distinct label combination is a separate time series, so a `customer_id` label creates millions of them and will exhaust the metrics backend\'s memory.',
+        fix: 'Keep labels to small, bounded sets such as model version, endpoint and status class. Per-entity detail belongs in logs or a data warehouse.',
+      },
+      {
+        mistake: 'Alerting on every anomaly',
+        why: 'Alert fatigue is a real failure mode: once people mute a channel, the genuine incident goes unnoticed too, so a noisy alert is worse than no alert.',
+        fix: 'Alert on symptoms of user-visible harm, derive thresholds from measured baselines, add a `for` duration, route non-urgent findings to tickets, and attach a runbook to anything that pages.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What would you monitor for a deployed model that you would not monitor for an ordinary web service?',
+        answer:
+          'Everything about the inputs and outputs, because those are where ML-specific failure shows up and the service layer is blind to it. Concretely: the distribution of predictions over time — mean score, positive rate, a histogram — since a shift there is often the first sign of trouble; the distributions and null rates of key input features, compared against a training reference window; the share of requests where a feature was missing and a default was imputed, which catches upstream breakage directly; and once labels arrive, realised accuracy and calibration, accepting that this signal is delayed by days or weeks. I would also monitor per-segment volumes, because a change in who is calling can shift metrics without anything being wrong with the model. The underlying reason is that a degraded model keeps returning 200 quickly, so error rate and latency cannot detect it.',
+        followUp:
+          'A strong candidate notes that most live model monitoring is necessarily proxies, because ground truth arrives too late to be an alarm, and connects this to the label-delay problem.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Design the alerting for a model service. What pages someone at 3 a.m. and what does not?',
+        answer:
+          'Page on user-visible harm that needs action now: a 5xx rate above a threshold derived from the baseline sustained for ten minutes; p95 latency breaching the budget sustained for fifteen; readiness failing across a majority of instances; and one ML-specific case — a sudden spike in imputed or null features, because that means the model is scoring garbage right now and the right action is to fail over or shed those requests. Do not page on a gradual distribution shift, a small accuracy decline once labels arrive, or a single instance restarting; those become tickets for working hours, because the response is investigation and possibly retraining rather than an immediate fix. Every paging alert needs a duration clause so blips do not fire, a threshold justified by measured baseline variability rather than a round number, and a runbook naming the first three things to check. If an alert fires more than a couple of times a month without action being taken, it should be demoted rather than muted.',
+        followUp:
+          'The mark of experience is explicitly separating "needs a human now" from "needs a human eventually", and treating alert fatigue as a failure mode with its own remedy.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Your model service has been returning 200 for every request for two weeks and business metrics have quietly worsened. How do you investigate, and what should have existed?',
+        answer:
+          'I would start with the output distribution: plot mean predicted score and positive rate over the period and look for a step change or a drift, and compare against the same window a year and a week earlier to rule out seasonality. If the outputs moved, I look at the inputs — null rates, imputation counters, category cardinality, and the distribution of each top feature against its training reference — because a step change in one feature at a specific timestamp usually identifies an upstream deploy. If inputs and outputs both look stable, the world changed rather than the pipeline, so I check realised performance on whatever labels have arrived and compare segment mixes. What should have existed is the model-health half of the dashboard with alerts on it: prediction distribution, feature null and imputation rates, and a scheduled drift report, plus prediction logs carrying the model version so the whole period can be replayed. The deeper lesson is that two weeks of silence was not luck; it was the absence of any signal that could have spoken.',
+        followUp:
+          'Mentioning that prediction logs must retain the model version and enough input detail to recompute distributions afterwards shows the candidate has run this investigation before.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Design the log line your prediction endpoint emits. List the fields and justify each, including one you deliberately leave out.',
+        hint: 'Think about the questions you will ask during an incident and six months later.',
+        language: 'python',
+        solution:
+          'Fields: `ts`; `level`; `request_id` to join client and server views; `customer_id_hash` rather than the raw identifier; the prediction value; `model_version` so the decision is attributable later; `latency_ms` split into featurisation and inference if you can; `imputed_features` as a list, which is the single most valuable ML-specific field because it exposes silent degradation; and `status`. Deliberately left out: the full raw feature vector at INFO level. Prediction logs are retained for months and widely readable, so they become the largest uncontrolled store of personal data in the system; keep full payloads behind DEBUG, or sample them into an access-controlled store with an explicit retention policy.',
+      },
+      {
+        prompt:
+          'Your team\'s only alert is "error rate above 5%". Name three failure modes it cannot detect and give the signal that would.',
+        hint: 'What does a broken model return?',
+        solution:
+          'One: an upstream rename makes a feature null on every request — the model imputes and scores happily at 200. Signal: imputation or null-rate counter per feature, paging above a few percent. Two: the input population changes, for example a marketing campaign brings a new customer segment — errors are zero but the model is extrapolating. Signal: feature distribution divergence against a training reference, as a ticket. Three: latency degrades for a tail of requests while the mean and the error rate look fine, breaking a partner\'s timeout. Signal: p95 and p99 from a histogram, with an alert tied to the latency budget. The common thread is that all three are invisible to status codes, which is the central point of monitoring an ML system.',
+      },
+      {
+        prompt:
+          'Pick a threshold for a prediction-positive-rate alert and defend it. Explain why a round number is not a defence.',
+        hint: 'Measure the baseline before you choose.',
+        solution:
+          'Take four to eight weeks of history for the positive rate at the same granularity the alert will use, and measure its variability including weekly seasonality — for example a mean of 16.8% with an hour-to-hour standard deviation of 1.2% and a clear weekend dip. Set the threshold at roughly three to four standard deviations from the seasonally adjusted expectation, so around 5 percentage points, and require the deviation to persist for thirty minutes so a single unusual hour does not fire. Then check the choice against history: replay the rule over the past two months and count how many times it would have fired and whether any of those were real. A round number such as "alert at 25%" has no relationship to your data\'s natural variability, so it either fires constantly or never fires at all, and both outcomes end with the alert being ignored.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'OPS-011-q1',
+        type: 'truefalse',
+        concept: 'silent failure',
+        prompt: 'If a model service shows a 0% error rate and normal latency, the model is working correctly.',
+        answer: false,
+        explanation:
+          'A degraded model returns 200 quickly with a wrong number. Status codes and latency measure the service, not the predictions, which is why input and output distributions must be monitored separately.',
+      },
+      {
+        id: 'OPS-011-q2',
+        type: 'multi',
+        concept: 'what to log',
+        prompt: 'Which fields belong in a per-prediction log line? Select all that apply.',
+        options: [
+          'The model version',
+          'A request id that the caller also has',
+          'Which features were missing and imputed',
+          'The customer\'s full name and address',
+          'End-to-end latency in milliseconds',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'Raw personal data does not belong in long-lived, widely readable logs. Pseudonymise identifiers and keep full payloads behind DEBUG or in an access-controlled, retention-limited store.',
+      },
+      {
+        id: 'OPS-011-q3',
+        type: 'mcq',
+        concept: 'metric cardinality',
+        prompt: 'Why should `customer_id` never be a Prometheus metric label?',
+        options: [
+          'Each distinct label value creates a separate time series, so millions of customers exhaust the backend',
+          'Prometheus cannot store string labels',
+          'It would make the dashboard colours inconsistent',
+          'Labels are only allowed on counters, not histograms',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Cardinality explosion is one of the classic ways to take down a metrics system. Keep labels bounded — model version, endpoint, status class — and put per-entity detail in logs or a warehouse.',
+      },
+      {
+        id: 'OPS-011-q4',
+        type: 'match',
+        concept: 'log levels',
+        prompt: 'Match each event to the level it should be logged at.',
+        pairs: [
+          { left: 'Model loaded successfully at startup', right: 'INFO' },
+          { left: 'A feature was missing and a default was imputed', right: 'WARNING' },
+          { left: 'Inference raised and the request returned 500', right: 'ERROR' },
+          { left: 'The model file could not be loaded at all', right: 'CRITICAL' },
+          { left: 'The full feature vector during an investigation', right: 'DEBUG' },
+        ],
+        explanation:
+          'Levels exist so the same code can be verbose in development and quiet in production. Using them consistently is what makes filtering possible during an incident.',
+      },
+      {
+        id: 'OPS-011-q5',
+        type: 'mcq',
+        concept: 'alert design',
+        prompt: 'Which alert is most likely to be muted within a month, and why?',
+        options: [
+          'Prediction positive rate deviates by any amount from yesterday, no duration clause, paging severity',
+          '5xx rate above 2% sustained for 10 minutes, paging, with a runbook link',
+          'p95 latency above the budget sustained for 15 minutes, paging',
+          'Over 20% of requests missing a feature for 10 minutes, paging',
+        ],
+        answerIndex: 0,
+        explanation:
+          'No duration, no baseline-derived threshold and a paging severity for something that needs investigation rather than immediate action. It will fire on ordinary seasonality and be muted, which also silences it for the real event.',
+      },
+      {
+        id: 'OPS-011-q6',
+        type: 'explain',
+        concept: 'observability for ML',
+        prompt: 'Explain to a backend engineer why the dashboards they built for the API are not sufficient for the model.',
+        rubric: [
+          'States that model degradation produces successful-looking responses',
+          'Names concrete model-layer signals: prediction distribution, feature distributions, imputation rate',
+          'Acknowledges that true accuracy is delayed and therefore cannot be the primary alarm',
+        ],
+        sampleAnswer:
+          'Your dashboards answer whether the service is up, fast and returning successes, and they answer it well. The problem is that the most common way a model fails produces exactly those readings: the code runs, the response is a valid JSON body with a number in it, the status is 200 and the latency is 40 ms — and the number is wrong, because a feature went null upstream or the population being scored has shifted away from what the model was trained on. Nothing in the service layer can see that. So we need a second set of panels beside yours: the distribution of predictions over time, the distributions and null rates of the important input features against a training reference, and the share of requests where a value was missing and we imputed a default. Those are the signals that move when the model degrades. The one thing we cannot put on a live dashboard is actual accuracy, because the labels arrive days or weeks later, which is precisely why the proxies matter so much.',
+        explanation:
+          'The examinable idea is that ML systems have a second failure surface which is invisible to status codes, and that monitoring it means watching distributions rather than errors.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Why is a 0% error rate not evidence that a model works?', back: 'A degraded model returns HTTP 200 quickly with a wrong number. Status codes measure the service, not the predictions.' },
+      { front: 'Logs vs metrics vs traces', back: 'Logs are discrete events (what happened), metrics are aggregated numbers over time (how much, how often), traces follow one request across services.' },
+      { front: 'Most valuable ML-specific log field?', back: '`imputed_features` — which values were missing and defaulted. It exposes silent degradation that no status code will ever show.' },
+      { front: 'Why histograms rather than average latency?', back: 'Percentiles cannot be averaged across instances, and the mean hides the tail that users and upstream timeouts actually experience.' },
+      { front: 'Why never label a metric with `customer_id`?', back: 'Every distinct label value is a separate time series; high cardinality exhausts the metrics backend. Per-entity detail belongs in logs.' },
+      { front: 'Three properties of an alert worth paging on', back: 'It reflects user-visible harm, it has a duration clause and a baseline-derived threshold, and it links to a runbook.' },
+    ],
+
+    challenge: {
+      title: 'Instrument a service so a silent failure cannot hide',
+      brief:
+        'Take your model service and instrument both layers. Emit structured JSON logs to stdout with request id, model version, latency and imputed features, pseudonymising any identifier. Export metrics for request count by status, a latency histogram, a prediction-score histogram and an imputation counter. Build a dashboard with the service panels on the left and the model panels on the right. Then prove it works: deliberately break a feature so it arrives null on every request, confirm the error rate stays at zero, and show which panel and which alert catch it.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Logs are one JSON object per line on stdout with consistent field names and no raw personal data',
+        'Metrics include a latency histogram and a prediction-score histogram, with bounded label cardinality',
+        'A dashboard shows service health and model health side by side',
+        'At least one alert has a duration clause, a baseline-derived threshold and a runbook link',
+        'A simulated null-feature failure leaves the error rate at zero and is caught by a model-layer signal',
+        'A written note states which alerts page and which create tickets, and why',
+      ],
+      starterCode: 'import logging, json, sys\n\nhandler = logging.StreamHandler(sys.stdout)\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain to someone who has only monitored web services what changes when the service contains a model, and what they should build first.',
+      mustCover: [
+        'Structured logging replaces print: levels, consistent fields, stdout, queryable',
+        'Service metrics — latency percentiles, throughput, error rate — are necessary but not sufficient',
+        'Model metrics — prediction distribution, feature distributions, imputation rate — catch silent failure',
+        'A broken model keeps returning HTTP 200, so alerts must cover both layers',
+      ],
+      bonusSignals: ['mentions cardinality', 'mentions label delay meaning accuracy cannot be the primary alarm', 'mentions alert fatigue and runbooks'],
+      sampleExplanation:
+        'Most of what you already do carries over: structured logs instead of print, with levels and consistent field names written as JSON to stdout so the platform can collect and index them; latency as a histogram so you can read p95 and p99 rather than an average that hides the tail; request and error rates by status class. What changes is that those signals cannot see the failure that matters most. When a model breaks, it usually does not throw — an upstream column gets renamed, every value arrives null, the model imputes defaults and returns a perfectly formatted probability with a 200 status in forty milliseconds. Your dashboard stays green for a fortnight. So you build a second set of panels next to the first: the distribution of predictions over time, the null and imputation rate per feature, and the distributions of the important inputs against the window the model was trained on. Those are the ones that move. Alert on the fast, unambiguous ones — a feature suddenly missing from a fifth of requests should page — and send gradual distribution shifts to a ticket queue, because the response there is investigation and retraining rather than a 3 a.m. fix. And accept that real accuracy is not available live, because the labels arrive weeks later, which is exactly why the proxies have to be good.',
+    },
+  },
+
+  {
+    id: 'OPS-012',
+    domain: 'OPS',
+    module: 'Monitoring',
+    topic: 'Drift',
+    title: 'Model Drift and Data Drift',
+    slug: 'model-and-data-drift',
+    difficulty: 4,
+    estimatedMinutes: 40,
+    prerequisites: ['OPS-011'],
+    related: ['OPS-008', 'OPS-010'],
+    tags: ['drift', 'psi', 'ks test', 'concept drift', 'retraining', 'label delay', 'monitoring'],
+
+    learningObjectives: [
+      'Distinguish data drift, concept drift and label drift, with a concrete example of each',
+      'Detect distribution change with the population stability index and the Kolmogorov-Smirnov test, and read the numbers honestly',
+      'Explain why prediction-distribution monitoring is the first line of defence when labels are delayed',
+      'Describe the label-delay problem and what you can measure before ground truth arrives',
+      'Design a retraining trigger and pipeline, and say when retraining is the wrong response',
+    ],
+
+    terminology: [
+      {
+        term: 'Data drift (covariate shift)',
+        definition:
+          'The input distribution P(X) changes while the relationship P(Y|X) stays the same. The model is still correct about the world but is being asked about a population it saw less of during training.',
+        simple: 'The kind of customers changed, but what makes them churn did not.',
+      },
+      {
+        term: 'Concept drift',
+        definition:
+          'The relationship P(Y|X) itself changes: the same inputs now imply a different outcome. No amount of input monitoring detects this directly, because the inputs may look identical.',
+        simple: 'The rules of the world changed under the model.',
+      },
+      {
+        term: 'Label drift (prior shift)',
+        definition:
+          'The marginal distribution of the target P(Y) changes, for example the base rate of fraud rising from 0.4% to 1.1%, which affects thresholds and calibration even when P(Y|X) is stable.',
+        simple: 'The outcome became more or less common overall.',
+      },
+      {
+        term: 'Population stability index (PSI)',
+        definition:
+          'A binned symmetric measure of divergence between a reference distribution and a current one. Conventional readings: below 0.1 stable, 0.1 to 0.2 worth watching, above 0.2 a material shift.',
+        simple: 'One number saying how far this month\'s distribution has moved from the reference.',
+      },
+      {
+        term: 'Kolmogorov-Smirnov statistic',
+        definition:
+          'The maximum absolute difference between two empirical cumulative distribution functions. Non-parametric, bin-free and suitable for continuous features; its p-value becomes uselessly small at large sample sizes.',
+        simple: 'The biggest gap between two cumulative curves.',
+      },
+      {
+        term: 'Label delay',
+        definition:
+          'The lag between making a prediction and learning whether it was right — weeks for churn, months for credit default, sometimes never for the outcomes of actions the model itself prevented.',
+        simple: 'You find out how good the prediction was long after you made it.',
+      },
+    ],
+
+    simpleExplanation:
+      "A model learns a relationship between inputs and outcomes from data collected in one period, and then it is asked about a world that keeps moving. There are three distinct ways that can go wrong and they need different responses. Sometimes the inputs change while the underlying relationship holds — your customers are suddenly younger because a campaign worked, but young customers still churn for the same reasons. Sometimes the relationship itself changes — a competitor launches a cheaper plan and the same customer profile that was safe last month is now at risk. And sometimes the outcome simply becomes more or less common, which quietly breaks whatever threshold you chose. The cruel part is timing. You usually cannot measure whether the model got worse, because the labels arrive weeks or months later, and by then the damage is done. So drift monitoring is the art of watching what you can see now — the distributions of the inputs and of the predictions — and treating a change in those as an early warning that something you cannot yet measure may have moved.",
+
+    whyItExists:
+      'Models are trained on a snapshot of a world that then keeps changing, so performance decays silently and no error is ever raised. Drift detection exists to provide an early signal from quantities observable today — input and prediction distributions — because the direct measure of quality depends on labels that arrive too late to prevent harm, and without such a signal degradation is discovered by the business rather than by the team.',
+
+    analogy: {
+      scenario:
+        "Think of a doctor who trained twenty years ago in one city and now practises in another. Sometimes the patients are simply different — younger, or from a different occupational background — but the diseases behave as they always did, so the training is still valid, just applied to a population it saw less of. Sometimes the diseases themselves change: a pathogen mutates, a new drug interaction appears, and the pattern that reliably meant one thing now means another. The doctor does not notice either change from the consultations themselves; they notice when outcomes come back weeks later, which is precisely too late.",
+      mapping: [
+        { from: 'A different patient population, same diseases', to: 'Data drift: P(X) moves, P(Y|X) stable' },
+        { from: 'The diseases themselves behaving differently', to: 'Concept drift: P(Y|X) changes' },
+        { from: 'A condition becoming more prevalent overall', to: 'Label drift: P(Y) changes' },
+        { from: 'Outcomes arriving weeks later', to: 'Label delay' },
+        { from: 'Noticing the waiting room looks different', to: 'Input-distribution monitoring as an early warning' },
+      ],
+      bridge:
+        'The doctor analogy makes the asymmetry precise: you can see the waiting room today and you cannot see the outcomes until later, so the only early signal available is the change in who walks in and what you are prescribing. That maps exactly onto monitoring input and prediction distributions rather than accuracy. It also explains why input monitoring alone is insufficient — concept drift can leave the waiting room looking identical while the correct treatment has changed, which is why delayed accuracy measurement remains mandatory even when the distributions look calm.',
+      limitations:
+        'A doctor can ask a patient how they feel; a model gets no feedback at all on cases where its own decision prevented the outcome from being observed, which is the feedback-loop problem that makes drift analysis genuinely hard in fraud and credit.',
+    },
+
+    visuals: [
+      {
+        kind: 'table',
+        title: 'Three kinds of drift, and what to do about each',
+        columns: ['Type', 'What changes', 'Concrete example', 'Detected by', 'Response'],
+        rows: [
+          ['Data drift', 'P(X)', 'A campaign brings in customers 15 years younger than the training population', 'PSI or KS on input features', 'Often retrain; sometimes nothing, if P(Y|X) holds and coverage is adequate'],
+          ['Concept drift', 'P(Y|X)', 'A competitor cuts prices; the same profile now churns at twice the rate', 'Delayed accuracy and calibration; inputs may look unchanged', 'Retrain on recent data; possibly rethink features'],
+          ['Label drift', 'P(Y)', 'Fraud base rate rises from 0.4% to 1.1% after a new attack', 'Positive rate in arriving labels; calibration error', 'Recalibrate and re-tune thresholds before retraining'],
+          ['Upstream breakage', 'Nothing conceptual — a pipeline broke', 'A rename makes a feature null on every request', 'Null and imputation rates; a step change at a timestamp', 'Fix the pipeline. Retraining on broken data makes it permanent'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Watch drift accumulate',
+        caption: 'Move the current window and see PSI and the KS statistic respond.',
+        widget: 'drift-monitor',
+      },
+      {
+        kind: 'flow',
+        title: 'From a drift signal to a decision',
+        caption: 'Retraining is one possible response, and often not the first one.',
+        branching: true,
+        steps: [
+          { label: 'A monitor fires', detail: 'PSI on a feature exceeds 0.2, or the prediction positive rate moves sharply.' },
+          { label: 'Is it a pipeline break?', detail: 'Check null and imputation rates and look for a step change at an exact timestamp. If so, fix upstream — do not retrain on broken data.' },
+          { label: 'Is it seasonal?', detail: 'Compare against the same window last year, not only last month. December is not drift.' },
+          { label: 'Is performance actually affected?', detail: 'Check whatever labels have arrived, and check calibration on the recent slice.' },
+          { label: 'Choose the response', detail: 'Recalibrate for a base-rate move, retrain for a genuine relationship change, or accept and document if the model still meets its objective.' },
+          { label: 'Gate the retrained model', detail: 'A candidate still has to beat the incumbent on a fixed holdout before it is promoted.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'What you can measure now versus what you must wait for',
+        caption: 'Drift monitoring exists because of this gap.',
+        left: {
+          heading: 'Available immediately',
+          points: [
+            'Input feature distributions and null rates',
+            'Prediction distribution and positive rate',
+            'Share of inputs outside the training range',
+            'Fast business proxies: click-through, queue depth, approval rate',
+          ],
+        },
+        right: {
+          heading: 'Available only later',
+          points: [
+            'Accuracy, AUC and calibration against true labels',
+            'Per-segment realised performance',
+            'The cost of false positives and false negatives',
+            'Outcomes for cases the model\'s own decision prevented',
+          ],
+        },
+      },
+    ],
+
+    formalDefinition:
+      'Let a model be fitted on a joint distribution P_train(X, Y). Data drift (covariate shift) is a change in the marginal P(X) with P(Y|X) unchanged; concept drift is a change in the conditional P(Y|X); prior or label drift is a change in the marginal P(Y). Drift detection estimates a divergence between a reference sample and a current window, either feature-wise using binned divergence measures such as the population stability index or bin-free statistics such as the two-sample Kolmogorov-Smirnov statistic, or jointly using a domain classifier whose achievable discrimination between the two samples quantifies the shift.',
+
+    math: {
+      intuition:
+        'Both measures answer the same question — how far has this distribution moved? — in two different ways. PSI chops the reference distribution into bins, compares the share of mass in each bin now against then, and adds up the disagreement, weighting it so that a bin which both gained proportion and differs in log terms contributes more. The Kolmogorov-Smirnov statistic skips bins entirely: it stacks both samples into cumulative curves and reports the widest vertical gap between them. PSI is the practitioner\'s tool because it is stable, interpretable and has conventional thresholds; KS is the statistician\'s, because it needs no binning choice — but its p-value is almost useless at production sample sizes, where a millionth of a percent of difference is "significant". Read the effect size, never the p-value.',
+      formulas: [
+        {
+          latex: 'PSI = \\sum_{i=1}^{B} (a_i - e_i)\\,\\ln\\!\\left(\\frac{a_i}{e_i}\\right)',
+          name: 'Population stability index',
+          meaning: 'Total divergence between the current (actual) and reference (expected) distributions across B bins. Symmetric, and zero only when the two are identical.',
+          variables: [
+            { symbol: 'B', meaning: 'Number of bins, typically 10 deciles taken from the reference distribution' },
+            { symbol: 'a_i', meaning: 'Proportion of the current sample falling in bin i' },
+            { symbol: 'e_i', meaning: 'Proportion of the reference sample in bin i' },
+            { symbol: '\\ln(a_i/e_i)', meaning: 'Log ratio, which makes proportional rather than absolute changes the unit of measurement' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'D_{n,m} = \\sup_{x} \\left| F_n(x) - G_m(x) \\right|',
+          name: 'Two-sample Kolmogorov-Smirnov statistic',
+          meaning: 'The largest vertical distance between the two empirical cumulative distribution functions. It ranges from 0 (identical) to 1 (disjoint supports).',
+          variables: [
+            { symbol: 'F_n(x)', meaning: 'Empirical CDF of the reference sample of size n' },
+            { symbol: 'G_m(x)', meaning: 'Empirical CDF of the current sample of size m' },
+            { symbol: '\\sup_x', meaning: 'The supremum over all values of x — in practice the maximum over the pooled sample points' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'PSI \\approx KL(a\\,\\|\\,e) + KL(e\\,\\|\\,a)',
+          name: 'PSI as symmetrised Kullback-Leibler divergence',
+          meaning: 'PSI equals the sum of the two directed KL divergences between the binned distributions, which is why it is symmetric and why it grows quickly when a bin nearly empties.',
+          variables: [
+            { symbol: 'a', meaning: 'The current binned distribution' },
+            { symbol: 'e', meaning: 'The reference binned distribution' },
+            { symbol: 'KL', meaning: 'Kullback-Leibler divergence, the expected log ratio of one distribution to another' },
+          ],
+          category: 'information-theory',
+        },
+      ],
+      derivation: [
+        'Start from the directed divergence of the current distribution from the reference: KL(a || e) = sum over i of a_i ln(a_i / e_i).',
+        'Take the divergence in the other direction: KL(e || a) = sum over i of e_i ln(e_i / a_i), which equals minus the sum of e_i ln(a_i / e_i).',
+        'Add the two: KL(a || e) + KL(e || a) = sum over i of (a_i - e_i) ln(a_i / e_i), which is exactly PSI.',
+        'Symmetry follows immediately, since swapping a and e leaves both the difference term and the log term jointly unchanged in sign.',
+        'The practical consequence is that an empty bin sends the log term to infinity, so implementations add a small epsilon to every bin — and if a bin is genuinely empty the honest conclusion is that the sample is too small for that bin, not that drift is infinite.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Computing PSI on a tenure feature by hand',
+      setup:
+        'The reference distribution comes from the training snapshot, binned into five buckets of customer tenure. The current window is last week of live traffic. We want one number describing how far the population has moved, and a decision about whether to act.',
+      steps: [
+        {
+          label: 'Bin the reference and the current sample',
+          detail: 'Reference proportions e = [0.20, 0.20, 0.20, 0.20, 0.20] by construction (quintiles). Current proportions a = [0.32, 0.24, 0.18, 0.15, 0.11]. The population has shifted towards shorter tenure.',
+        },
+        {
+          label: 'Compute each bin contribution',
+          detail: 'Bin 1: (0.32 - 0.20) x ln(0.32/0.20) = 0.12 x 0.4700 = 0.0564.',
+          latex: '(a_1 - e_1)\\ln(a_1/e_1) = 0.12 \\times \\ln(1.6) = 0.0564',
+        },
+        {
+          label: 'Repeat for the remaining bins',
+          detail: 'Bin 2: 0.04 x ln(1.2) = 0.0073. Bin 3: -0.02 x ln(0.9) = 0.0021. Bin 4: -0.05 x ln(0.75) = 0.0144. Bin 5: -0.09 x ln(0.55) = 0.0538. Note that every term is positive, because the difference and the log ratio always share a sign.',
+        },
+        {
+          label: 'Sum',
+          detail: 'PSI = 0.0564 + 0.0073 + 0.0021 + 0.0144 + 0.0538 = 0.134.',
+          latex: 'PSI = 0.134',
+        },
+        {
+          label: 'Interpret against the conventions',
+          detail: 'Between 0.1 and 0.2 means a moderate shift: worth investigating, not an emergency. The direction is informative — the mass moved to shorter tenure, which is consistent with a successful acquisition campaign rather than with a broken pipeline.',
+        },
+        {
+          label: 'Decide',
+          detail: 'Check whether tenure is an important feature for this model, whether the new short-tenure region was well represented in training, and whether calibration on recently labelled short-tenure customers has degraded. If coverage is good and calibration holds, document and continue monitoring rather than retraining reflexively.',
+        },
+      ],
+      conclusion:
+        'PSI of 0.134 is a signal, not a verdict. It says the input population moved materially in a specific direction; it says nothing about whether the model is worse. The conventional thresholds — 0.1 and 0.2 — are rules of thumb from credit scoring, not laws, and a team should calibrate its own thresholds by measuring what PSI values historically preceded a real performance drop.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'PSI and KS, implemented and read correctly',
+        code: `import numpy as np
+from scipy.stats import ks_2samp
+
+
+def psi(reference: np.ndarray, current: np.ndarray, bins: int = 10, eps: float = 1e-6) -> float:
+    """Population stability index using quantile bins from the REFERENCE sample."""
+    edges = np.quantile(reference, np.linspace(0, 1, bins + 1))
+    edges[0], edges[-1] = -np.inf, np.inf          # catch values outside training range
+
+    e = np.histogram(reference, bins=edges)[0] / len(reference)
+    a = np.histogram(current, bins=edges)[0] / len(current)
+    e, a = np.clip(e, eps, None), np.clip(a, eps, None)
+
+    return float(np.sum((a - e) * np.log(a / e)))
+
+
+ref = np.random.default_rng(0).normal(36, 12, 50_000)       # training tenure
+cur = np.random.default_rng(1).normal(29, 14, 8_000)        # last week
+
+print(f"PSI  = {psi(ref, cur):.3f}")                 # PSI  = 0.147
+stat, p = ks_2samp(ref, cur)
+print(f"KS   = {stat:.3f}  p = {p:.2e}")             # KS   = 0.238  p = 1.4e-97
+
+# The p-value is meaningless here: with 58,000 samples any difference is 'significant'.
+# Read the effect size (0.238) and PSI (0.147), and compare against YOUR baseline.`,
+        explanation:
+          'Three implementation details decide whether this is useful or misleading. Bin edges come from the reference sample and are then frozen, because re-binning on the current data would hide exactly the shift you are looking for. The outer edges are set to infinity so values outside the training range land somewhere instead of being silently dropped — those out-of-range values are often the most interesting signal. And the epsilon clip prevents an empty bin sending the log term to infinity, though an empty bin usually means your window is too small rather than that drift is infinite.',
+      },
+      {
+        language: 'python',
+        title: 'A scheduled drift report over every feature and the predictions',
+        code: `import pandas as pd
+
+REFERENCE = pd.read_parquet("data/train_snapshot.parquet")    # the model's training data
+MONITORED = ["tenure_months", "monthly_charges", "usage_gb", "support_calls"]
+
+
+def drift_report(window: pd.DataFrame) -> pd.DataFrame:
+    rows = []
+    for col in MONITORED:
+        rows.append({
+            "feature": col,
+            "psi": psi(REFERENCE[col].to_numpy(), window[col].dropna().to_numpy()),
+            "ks": ks_2samp(REFERENCE[col], window[col].dropna()).statistic,
+            "null_rate_now": float(window[col].isna().mean()),
+            "null_rate_ref": float(REFERENCE[col].isna().mean()),
+            "out_of_range": float(((window[col] < REFERENCE[col].min())
+                                   | (window[col] > REFERENCE[col].max())).mean()),
+        })
+
+    # The prediction distribution is the single most valuable series to watch.
+    rows.append({
+        "feature": "__prediction__",
+        "psi": psi(REFERENCE["train_score"].to_numpy(), window["score"].to_numpy()),
+        "ks": ks_2samp(REFERENCE["train_score"], window["score"]).statistic,
+        "null_rate_now": 0.0, "null_rate_ref": 0.0, "out_of_range": 0.0,
+    })
+
+    out = pd.DataFrame(rows).sort_values("psi", ascending=False)
+    out["status"] = pd.cut(out["psi"], [-1, 0.1, 0.2, 99],
+                           labels=["stable", "watch", "investigate"])
+    return out
+
+
+report = drift_report(pd.read_parquet("logs/predictions/dt=2024-09-02/"))
+print(report.to_string(index=False))
+#          feature    psi    ks  null_rate_now  null_rate_ref  out_of_range      status
+#  __prediction__  0.412 0.311          0.000          0.000         0.000 investigate
+#   support_calls  0.386 0.290          0.941          0.002         0.000 investigate
+#   tenure_months  0.147 0.238          0.001          0.002         0.031       watch`,
+        explanation:
+          'The report is deliberately ordered by PSI, because the top row is usually the story. Here it tells a specific one: the prediction distribution has shifted a lot, and `support_calls` has a null rate of 94% against 0.2% in training. That combination is not drift at all — it is a broken upstream pipeline, and retraining on this window would bake the breakage into the model permanently. The `out_of_range` column is the underrated one, since a feature whose values have moved outside the training range means the model is extrapolating, which no PSI threshold captures on its own.',
+      },
+      {
+        language: 'python',
+        title: 'A retraining trigger with the guards that stop it misfiring',
+        code: `from dataclasses import dataclass
+
+@dataclass
+class RetrainDecision:
+    should_retrain: bool
+    reason: str
+
+
+def decide(report, labelled_recent, days_since_train: int, label_coverage: float) -> RetrainDecision:
+    # 1. A broken pipeline is NOT drift. Never retrain on corrupted inputs.
+    broken = report[(report.null_rate_now > 0.2) & (report.null_rate_ref < 0.02)]
+    if not broken.empty:
+        return RetrainDecision(False, f"upstream broken: {list(broken.feature)} — fix the pipeline")
+
+    # 2. Never retrain on too few labels; you will fit noise and pass the gate by luck.
+    if label_coverage < 0.6 or len(labelled_recent) < 5_000:
+        return RetrainDecision(False, "insufficient labelled data in the recent window")
+
+    # 3. Measured performance drop is the strongest trigger available.
+    if labelled_recent.auc < labelled_recent.baseline_auc - 0.02:
+        return RetrainDecision(True, f"AUC {labelled_recent.auc:.3f} below baseline by more than 0.02")
+
+    # 4. Calibration can fail while ranking is fine — recalibrate rather than retrain.
+    if labelled_recent.ece > 0.05:
+        return RetrainDecision(False, "ranking intact, calibration degraded — refit the calibrator")
+
+    # 5. Input drift alone is a weak trigger. Require it to be large and persistent.
+    severe = report[(report.feature != "__prediction__") & (report.psi > 0.25)]
+    if len(severe) >= 2 and days_since_train > 30:
+        return RetrainDecision(True, f"sustained drift on {list(severe.feature)}")
+
+    # 6. Scheduled refresh keeps the model close to the present even without a signal.
+    if days_since_train > 90:
+        return RetrainDecision(True, "scheduled quarterly refresh")
+
+    return RetrainDecision(False, "within tolerance")`,
+        explanation:
+          'The order of these checks is the lesson. The first two guards exist because the most common cause of a drift alert is a broken pipeline and the most common cause of a bad retrain is too few labels — retraining in either case makes things permanently worse. Only then do measured performance and calibration get consulted, and note that a calibration failure with intact ranking is answered by refitting a calibrator, which takes minutes, rather than by retraining, which takes hours. Input drift alone is deliberately the weakest trigger, because P(X) moving does not imply P(Y|X) moved.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'The pandemic breaking every demand model',
+        usage:
+          'In March 2020 essentially every retail and travel forecasting model failed at once. This was concept drift in its purest form: the inputs were still well within training ranges, but what they implied about behaviour had changed completely, so no input-distribution monitor could have raised the alarm before outcomes arrived.',
+      },
+      {
+        context: 'Fraud attackers as an adversary',
+        usage:
+          'Fraud patterns drift because a human opponent is deliberately probing the model. Feature distributions move within weeks and the base rate shifts, so fraud teams retrain frequently, monitor alert rates as a fast proxy, and treat a sudden change in the flagged-transaction rate as a paging signal.',
+      },
+      {
+        context: 'A drift alert that was really a rename',
+        usage:
+          'A team retrained after a large PSI on `support_calls`, and the new model was worse. The cause was an upstream rename that made the field null; the retrain had fitted a model on a feature that no longer existed. The guard that now sits first in their pipeline is a null-rate check that blocks retraining outright.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'Evidently', role: 'Generates drift reports per feature and per prediction with tests and dashboards, from logged payloads.' },
+      { tool: 'whylogs / WhyLabs', role: 'Computes compact statistical profiles of each batch so distributions can be compared without storing raw data.' },
+      { tool: 'Prometheus + Grafana', role: 'Hosts the fast signals — prediction positive rate, null and imputation rates — that catch abrupt breakage within minutes.' },
+      { tool: 'Airflow / Prefect', role: 'Schedules the drift report and the retraining pipeline, and carries the decision logic between them.' },
+      { tool: 'MLflow registry', role: 'Holds the retrained candidate so it can be gated against the incumbent before any promotion.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Treating a PSI threshold as a decision rather than a signal',
+        why: 'PSI above 0.2 says the input population moved; it says nothing about whether the model got worse. Retraining reflexively costs money, introduces risk, and may fit a worse model on a window that merely looks different.',
+        fix: 'Use drift as a trigger to investigate. Confirm with delayed performance and calibration where labels exist, and gate any retrained candidate against the incumbent before promotion.',
+      },
+      {
+        mistake: 'Mistaking a broken pipeline for drift',
+        why: 'An upstream rename or a failed join produces an enormous distribution change that looks exactly like severe drift. Retraining on that window teaches the model that the feature is genuinely absent, making the damage permanent.',
+        fix: 'Check null rates, cardinality and whether the change is a step at an exact timestamp before anything else. A step change at 02:15 is a deploy, not the world moving.',
+      },
+      {
+        mistake: 'Comparing the current window against the previous week only',
+        why: 'Seasonality then reads as drift every December and every Monday morning, and slow year-long drift becomes invisible because each week resembles the one before it.',
+        fix: 'Keep a fixed reference — the training distribution — and compare against it, adding same-period-last-year comparisons for seasonal features.',
+      },
+      {
+        mistake: 'Relying on KS p-values at production sample sizes',
+        why: 'With hundreds of thousands of rows, the p-value is astronomically small for differences far too small to matter, so every feature is permanently "significantly drifted" and the signal is useless.',
+        fix: 'Report effect sizes — the KS statistic itself, PSI, or a shift in mean expressed in reference standard deviations — and set thresholds from historical values that preceded real degradation.',
+      },
+      {
+        mistake: 'Retraining automatically on a fixed schedule with no gate',
+        why: 'A scheduled retrain on a bad window ships a worse model with nothing standing in its way, and because ML failure is silent it can persist for weeks.',
+        fix: 'Always place an evaluation gate between training and promotion: the candidate must beat the incumbent on a fixed holdout, clear an absolute floor, and not regress per segment.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Explain the difference between data drift and concept drift, with an example of each, and say which is more dangerous.',
+        answer:
+          'Data drift is a change in P(X): the input population moves while the relationship between inputs and outcome holds. A marketing campaign brings in customers fifteen years younger, but young customers still churn for the same reasons — the model is being asked about a region it saw less of, so performance may degrade through poor coverage rather than through being wrong about the world. Concept drift is a change in P(Y|X): the same inputs now imply a different outcome. A competitor launches a cheaper plan and the profile that was safe last month now churns at twice the rate, with the input distribution possibly unchanged. Concept drift is more dangerous precisely because it is invisible to input monitoring: every feature can look perfectly stable while the model is increasingly wrong, and you only find out when labels arrive. That is why input drift monitoring is an early-warning system rather than a complete one, and why delayed performance measurement remains mandatory.',
+        followUp:
+          'A strong answer adds label drift as a third case — the base rate moving — and notes that it breaks calibration and thresholds even when P(Y|X) is stable, and is fixed by recalibration rather than retraining.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Labels for your churn model arrive 60 days after the prediction. How do you know today whether the model is working?',
+        answer:
+          'You cannot know directly, so you build a layered set of proxies and accept the uncertainty honestly. Immediately available: the prediction distribution — mean score, positive rate, full histogram — compared against a fixed reference, since a sharp move there is the earliest sign of anything; the input feature distributions and, more urgently, null and imputation rates, which catch pipeline breakage within minutes; and the fraction of inputs falling outside the training range, which indicates extrapolation. Within days: fast business proxies that correlate with the outcome, such as engagement with a retention offer or the volume entering a review queue. At 60 days: the real thing — AUC, calibration and per-segment performance on the labelled cohort, which I would compute on a rolling basis so degradation is measured even though it is measured late. I would also run a small holdout of untreated customers where feasible, because if the model\'s own interventions change outcomes, the labels you get back are not the labels the model was predicting.',
+        followUp:
+          'The last point is the deep one: acting on predictions contaminates the feedback, which is why fraud and credit teams keep a small random control group even at a cost.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Design a retraining strategy for a model whose inputs drift steadily. What triggers it, what guards it, and when do you refuse?',
+        answer:
+          'I would use a hybrid of scheduled and triggered retraining. A scheduled refresh — monthly or quarterly depending on how fast the domain moves — keeps the model close to the present even without a signal, and it exercises the pipeline so it does not rot. On top of that, triggers: a measured performance drop on the labelled cohort is the strongest; sustained large drift on at least two important features over a month is a weaker one; and a base-rate change triggers recalibration rather than retraining. The guards matter as much as the triggers. Refuse to retrain when null or imputation rates indicate a broken pipeline, because you would make the breakage permanent. Refuse when the labelled window is too small or label coverage too low, because the candidate will fit noise and may pass the gate by luck. Refuse when ranking is intact and only calibration has drifted, since refitting a calibrator takes minutes instead of hours. And whatever triggers it, the retrained candidate goes through the same evaluation gate as any other: beat the incumbent on a fixed versioned holdout, clear an absolute floor, no per-segment regression, then a canary rollout.',
+        followUp:
+          'Mentioning that the retraining window length is itself a hyperparameter — too short and you fit noise, too long and you dilute the recent regime — shows the candidate has actually tuned one.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A feature shows PSI 0.41 and its null rate went from 0.1% to 88% overnight. What is your first action, and what must you not do?',
+        hint: 'Does the world change overnight, at an exact timestamp?',
+        solution:
+          'First action: treat it as an upstream breakage, not drift. Find the exact timestamp of the step change and correlate it with deploys and pipeline runs on the producing side; a distribution that moves discontinuously at 02:15 is a code change, whereas genuine drift is gradual. Then decide whether to fail over to a previous model, reject affected requests, or serve with a documented degradation while it is fixed. What you must not do is retrain on this window: the model would learn that the feature is absent, which bakes the outage into the weights and makes recovery require another retrain after the pipeline is fixed. Add a guard that blocks retraining whenever a monitored feature\'s null rate exceeds a threshold far above its reference.',
+      },
+      {
+        prompt:
+          'Your KS test reports p = 3e-140 for every feature every week. Explain why and propose what to report instead.',
+        hint: 'What happens to a hypothesis test as n grows?',
+        solution:
+          'With hundreds of thousands of rows, a two-sample test has enormous power, so it detects differences far too small to matter and the p-value collapses towards zero for any non-identical distributions. The test is answering "are these exactly the same?" — to which the answer is always no — rather than "have they moved enough to care?". Report effect sizes instead: the KS statistic itself, PSI, or the shift in mean expressed in reference standard deviations, alongside the raw shift in a unit a human understands such as "median tenure fell from 36 to 29 months". Then set thresholds empirically by looking back at what values historically preceded a genuine performance drop for this model, rather than adopting a convention from somebody else\'s domain.',
+      },
+      {
+        prompt:
+          'Design the drift monitoring for a fraud model, where the base rate is 0.5%, labels take 45 days and an adversary is actively adapting.',
+        hint: 'Which signals move within hours, and what does adversarial adaptation do to the reference?',
+        solution:
+          'Fast layer, minutes: alert rate — the fraction of transactions flagged — against a seasonal baseline, since an attack or a broken feature moves it immediately and it is the number the review team feels first; the score distribution as a histogram; and null and imputation rates per feature. Medium layer, daily: PSI and out-of-range rates on key features against the training reference, plus cardinality checks on categoricals, because new merchant categories or device types appearing is a classic adversarial signal. Slow layer, 45 days: realised precision and recall on the labelled cohort, per segment, plus calibration. Two fraud-specific points: keep a small random unblocked control group if policy allows, because blocked transactions never reveal whether they were fraudulent, so your labels are censored by your own actions; and treat the reference distribution as needing periodic deliberate refresh, since with an adaptive adversary the training distribution becomes stale faster than in most domains.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'OPS-012-q1',
+        type: 'mcq',
+        concept: 'types of drift',
+        prompt: 'A competitor cuts prices and customers who previously stayed now churn, although the input feature distributions are unchanged. What is this?',
+        options: ['Concept drift', 'Data drift', 'Label drift', 'An upstream pipeline break'],
+        answerIndex: 0,
+        explanation:
+          'P(Y|X) changed while P(X) did not: the same inputs now imply a different outcome. This is exactly the case no input-distribution monitor can detect, which is why delayed performance measurement stays mandatory.',
+      },
+      {
+        id: 'OPS-012-q2',
+        type: 'numeric',
+        concept: 'PSI calculation',
+        prompt: 'A single bin holds 30% of the current sample and 20% of the reference. What is that bin\'s contribution to PSI? Give three decimal places.',
+        answer: 0.041,
+        tolerance: 0.003,
+        explanation:
+          '(0.30 - 0.20) x ln(0.30/0.20) = 0.10 x 0.4055 = 0.0405. Every bin contributes a non-negative amount because the difference and the log ratio always share a sign, which is why PSI is a sum of positive terms.',
+      },
+      {
+        id: 'OPS-012-q3',
+        type: 'truefalse',
+        concept: 'drift and action',
+        prompt: 'A PSI above 0.2 on an input feature means the model has degraded and should be retrained.',
+        answer: false,
+        explanation:
+          'It means the input distribution moved. Whether the model got worse depends on whether P(Y|X) changed and whether the new region was covered in training. Confirm with delayed performance before retraining, and rule out a broken pipeline first.',
+      },
+      {
+        id: 'OPS-012-q4',
+        type: 'multi',
+        concept: 'what to check first',
+        prompt: 'A drift alert fires. Which checks come before any decision to retrain? Select all that apply.',
+        options: [
+          'Null and imputation rates, to rule out a broken upstream pipeline',
+          'Whether the change is a step at an exact timestamp rather than gradual',
+          'Comparison against the same period last year, for seasonality',
+          'Whether enough recent labels exist to train and evaluate honestly',
+          'Whether the drift number exceeds 0.2',
+        ],
+        answerIndices: [0, 1, 2, 3],
+        explanation:
+          'The threshold is what triggered the investigation; it is not itself a check. The other four each identify a situation where retraining would be useless or actively harmful.',
+      },
+      {
+        id: 'OPS-012-q5',
+        type: 'mcq',
+        concept: 'label delay',
+        prompt: 'Labels arrive 60 days after prediction. What is the most useful signal available today?',
+        options: [
+          'The prediction distribution compared against a fixed reference',
+          'AUC on the last 60 days of predictions',
+          'The training-set accuracy',
+          'The number of requests served',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Accuracy is unavailable by construction, and training accuracy says nothing about now. The output distribution is observable immediately and moves early when either inputs or the pipeline change.',
+      },
+      {
+        id: 'OPS-012-q6',
+        type: 'explain',
+        concept: 'retraining judgement',
+        prompt: 'Your monitoring shows clear input drift. Give three situations in which retraining would be the wrong response, and say what to do instead.',
+        rubric: [
+          'Names a broken pipeline as drift-shaped but requiring a fix, not a retrain',
+          'Names insufficient or biased labels in the recent window',
+          'Names a calibration-only failure, or drift with no measured performance impact',
+        ],
+        sampleAnswer:
+          'First, when the apparent drift is an upstream breakage — a rename or a failed join making a feature null. Retraining then teaches the model that the feature does not exist, which makes the outage permanent and requires a second retrain after the fix. The action is to fix the pipeline and, meanwhile, fail over or shed the affected requests. Second, when there are too few recent labels, or the labels are biased by the model\'s own actions, because a candidate fitted on a thin or censored window will fit noise and may pass the gate by luck; the action is to wait, or to weight older data, or to obtain unbiased labels through a small control group. Third, when ranking is intact and only calibration has moved because the base rate changed: refitting a calibrator on recent labelled data takes minutes and fixes the thresholds, whereas a full retrain is hours of risk for the same outcome. A fourth honest case is drift with no measured performance impact at all, where the correct action is to document it and keep watching.',
+        explanation:
+          'The examinable judgement is that drift is a signal to investigate, and that the right response depends on which of several very different underlying causes produced it.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Data drift vs concept drift vs label drift', back: 'P(X) changes; P(Y|X) changes; P(Y) changes. Only the first is visible in input distributions, which is why concept drift is the dangerous one.' },
+      { front: 'PSI thresholds, conventionally', back: 'Below 0.1 stable, 0.1 to 0.2 watch, above 0.2 material shift. They are rules of thumb from credit scoring, not laws — calibrate to your own history.' },
+      { front: 'Why not use the KS p-value in production?', back: 'At large n any difference is significant, so the p-value is always tiny. Read the effect size — the KS statistic or PSI — instead.' },
+      { front: 'What is the label-delay problem?', back: 'Ground truth arrives weeks or months after the prediction, so accuracy cannot be a live alarm. You monitor input and prediction distributions as proxies.' },
+      { front: 'First check when a drift alert fires?', back: 'Null and imputation rates, and whether the change is a step at an exact timestamp. A broken pipeline looks exactly like severe drift.' },
+      { front: 'When does calibration, not retraining, fix the problem?', back: 'When ranking is intact but the base rate moved. Refit a calibrator on recent labelled data — minutes rather than hours, with far less risk.' },
+    ],
+
+    challenge: {
+      title: 'Build a drift monitor and make it lie to you',
+      brief:
+        'Take a dataset with a time column. Train a model on the first period and hold out the rest as a simulated live stream. Build a weekly drift report computing PSI, the KS statistic, null rate and out-of-range rate for every feature and for the predictions. Then inject three faults into the stream: a gradual covariate shift, an abrupt null-feature break, and a concept change where you flip the relationship for one segment. Show which faults your monitor catches, which it misses, and how long each takes to detect — then write the retraining rule you would actually deploy, including the guards.',
+      language: 'python',
+      acceptanceCriteria: [
+        'A weekly report with PSI, KS, null rate and out-of-range rate per feature and for the prediction',
+        'Bin edges are taken from the fixed reference distribution and never recomputed on the current window',
+        'All three injected faults are analysed with the detection delay measured for each',
+        'A written explanation of why the concept-drift fault is hardest to detect from inputs alone',
+        'A retraining rule with explicit guards for broken pipelines and insufficient labels',
+        'Thresholds justified from observed baseline variability rather than copied conventions',
+      ],
+      starterCode: 'import numpy as np\nimport pandas as pd\n\ndef psi(reference, current, bins=10, eps=1e-6):\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain to a colleague why a model that was excellent at launch can be quietly mediocre six months later, how you would notice, and what you would do about it.',
+      mustCover: [
+        'Three kinds of drift: inputs changing, the relationship changing, the base rate changing',
+        'Detection with PSI and KS on inputs and predictions, read as effect sizes',
+        'The label-delay problem and why prediction distributions are the first line of defence',
+        'Retraining is one response among several, and requires guards and a gate',
+      ],
+      bonusSignals: ['distinguishes a broken pipeline from drift', 'mentions seasonality versus drift', 'mentions recalibration as a cheaper fix'],
+      sampleExplanation:
+        'A model learns a relationship from one period of data and is then asked about a world that keeps moving, and there are three distinct ways that hurts. The inputs can change while the relationship holds — a campaign brings in younger customers, who still churn for the same reasons. The relationship itself can change — a competitor cuts prices, and a profile that was safe now is not, with the inputs looking identical. Or the outcome can simply become more or less common, which breaks whatever threshold you set. You would love to detect this by watching accuracy, but you usually cannot, because the labels arrive weeks or months later. So you watch what is observable today: the distributions of the inputs and of the predictions, compared against a fixed reference taken from the training data, using PSI or the KS statistic — and reading the effect size rather than a p-value, which is meaningless at production sample sizes. When something moves, the first question is not "should we retrain" but "is this even real": check the null rates and look for a step change at an exact timestamp, because a broken upstream pipeline looks exactly like catastrophic drift and retraining on it makes the damage permanent. Then check seasonality against last year. Only when it is genuine do you choose a response, and retraining is only one of them — a base-rate shift is often fixed by recalibration in minutes, and whatever you train still has to beat the current model on a fixed holdout before it is allowed near production.',
+    },
+  },

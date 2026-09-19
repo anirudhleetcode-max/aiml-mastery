@@ -3896,3 +3896,3427 @@ HAVING o.status <> 'cancelled';`,
         'Imagine a big stack of cards, one per order, and you are going to sort them into piles by country and then count each pile. There are two different moments when you can throw something away. The first is before you sort: you go through the stack and bin every cancelled order, so those cards never reach a pile at all. That is WHERE. The second is after you have sorted and counted: you look at the finished piles and bin any pile with fewer than five cards in it. That is HAVING. The reason you cannot swap them is that a single card has no idea how big its pile is — you simply cannot ask "is this pile big?" while holding one card. And the reason it matters beyond tidiness is that the two give different answers. If you bin the cancelled cards first, a country with six orders and two cancelled is counted as four. If you keep them and judge the pile instead, it is counted as six but might be disqualified for having any cancelled at all. Same words, different question, so you have to decide which one you actually meant.',
     },
   },
+
+  {
+    id: 'SQL-009',
+    domain: 'SQL',
+    module: 'Joins',
+    topic: 'Combining tables',
+    title: 'INNER and LEFT JOIN',
+    slug: 'inner-and-left-join',
+    difficulty: 3,
+    estimatedMinutes: 45,
+    prerequisites: ['SQL-008'],
+    related: ['SQL-003', 'SQL-005', 'SQL-007'],
+    tags: ['join', 'inner-join', 'left-join', 'anti-join', 'null', 'on-clause'],
+
+    learningObjectives: [
+      'Explain a join as matching rows from two tables on a condition, producing a combined row per match',
+      'Predict exactly which rows an INNER JOIN keeps and which it silently drops',
+      'Use a LEFT JOIN to preserve every row of the left table, and read the NULLs it produces',
+      'Use LEFT JOIN plus IS NULL to find rows with no match — the anti-join pattern',
+      'Explain why a filter on the right table belongs in ON rather than WHERE in a LEFT JOIN',
+    ],
+
+    terminology: [
+      {
+        term: 'Join',
+        definition:
+          'An operation that combines rows from two relations according to a predicate, producing rows containing columns from both.',
+        simple: 'Sticking two tables together where they match.',
+      },
+      {
+        term: 'INNER JOIN',
+        definition:
+          'Keeps only the combinations where the ON condition is TRUE. Rows on either side with no match are excluded entirely.',
+        simple: 'Keep only the pairs that matched.',
+      },
+      {
+        term: 'LEFT OUTER JOIN',
+        definition:
+          'Keeps every row of the left relation. Where no right-hand row satisfies the ON condition, the right-hand columns are filled with NULL.',
+        simple: 'Keep everything on the left; pad with blanks where there is no partner.',
+      },
+      {
+        term: 'ON clause',
+        definition:
+          'The join predicate. In an outer join it decides what counts as a match before padding happens, which is why it is not interchangeable with WHERE.',
+        simple: 'The rule that says which rows go together.',
+      },
+      {
+        term: 'Anti-join',
+        definition:
+          'A query returning rows from one table that have no match in another, classically written as LEFT JOIN plus `WHERE right.key IS NULL`, or as NOT EXISTS.',
+        simple: 'Find the ones with no partner.',
+      },
+      {
+        term: 'Join cardinality',
+        definition:
+          'How many right-hand rows match each left-hand row. One-to-one preserves the row count; one-to-many multiplies it, which changes the grain of the result.',
+        simple: 'How many partners each row finds — and therefore how many rows come out.',
+      },
+    ],
+
+    simpleExplanation:
+      "Data is deliberately split across tables: customers in one, orders in another, with the order holding the customer’s id. A join is how you put them back together for a question that needs both. You name the two tables and the rule for matching them — `ON orders.customer_id = customers.id` — and the engine produces a combined row for every pair that satisfies it. The choice you then have to make is what to do with rows that find no partner. An INNER JOIN drops them, on both sides: a customer with no orders vanishes, and so would an order with no customer. That is often what you want, and it is also the source of a great many quietly wrong reports, because the rows disappear without any indication that they existed. A LEFT JOIN instead keeps every row of the left table and, where no partner was found, fills the right-hand columns with NULL. That NULL is not a nuisance — it is information. Filtering for it is how you answer “which customers have never ordered?”, which is one of the most useful queries there is.",
+
+    whyItExists:
+      'Normalisation splits facts across tables so that each is recorded once and cannot contradict itself, but almost every real question spans several of them. The join is the operation that reassembles those facts on demand, so the storage can stay non-redundant while queries still see whole entities.',
+
+    analogy: {
+      scenario:
+        'Think of two lists at a conference: a list of attendees with their badge numbers, and a list of talk sign-ups with the badge number of whoever signed up. To print name badges for each talk, someone sits with both lists and matches sign-ups to attendees by badge number. The interesting decisions are at the edges: an attendee who signed up for nothing, and a sign-up whose badge number does not appear on the attendee list at all.',
+      mapping: [
+        { from: 'The attendee list', to: 'The left table, e.g. `customers`' },
+        { from: 'The sign-up list', to: 'The right table, e.g. `orders`' },
+        { from: 'Matching on badge number', to: 'The ON condition' },
+        { from: 'Only printing badges for matched pairs', to: 'INNER JOIN' },
+        { from: 'Listing every attendee, marking "no talks" where there are none', to: 'LEFT JOIN, with NULLs where there is no match' },
+        { from: 'Pulling out the attendees marked "no talks"', to: 'The anti-join: LEFT JOIN plus IS NULL' },
+        { from: 'An attendee who signed up for three talks appearing three times', to: 'Row multiplication from a one-to-many join' },
+      ],
+      bridge:
+        'The person with the two lists faces exactly the join decision: match-only, or keep-everyone-and-mark-the-gaps. And the reason the gaps matter is the same in both settings — "which attendees signed up for nothing" is often the question you actually care about, and an INNER JOIN has already thrown those people away before you can ask.',
+      limitations:
+        'A human matcher would notice a badge number that appears on no attendee list and raise it. A join simply drops it, silently, which is why the orphan-detection query from SQL-003 is a deliberate check rather than something the engine warns you about.',
+    },
+
+    visuals: [
+      {
+        kind: 'ascii',
+        title: 'INNER versus LEFT, on four customers and three orders',
+        caption: 'Follow customer 3 (no orders) and customer 1 (two orders) through both joins.',
+        art: `customers                  orders
+id  name                   id  customer_id
+--  ------                 --  -----------
+1   Ada                    10      1
+2   Ben                    11      1
+3   Chen                   12      2
+4   Dee                              (none for 3 or 4)
+
+INNER JOIN customers c ON o.customer_id = c.id
+  -> only matched pairs survive
+  id  name  order_id
+  --  ----  --------
+  1   Ada   10
+  1   Ada   11        <- Ada appears TWICE: one row per order
+  2   Ben   12
+  (Chen and Dee are gone, with no warning)
+
+LEFT JOIN orders o ON o.customer_id = c.id
+  -> every customer survives
+  id  name  order_id
+  --  ----  --------
+  1   Ada   10
+  1   Ada   11
+  2   Ben   12
+  3   Chen  NULL      <- padded, because nothing matched
+  4   Dee   NULL      <- padded
+
+ANTI-JOIN: ... LEFT JOIN ... WHERE o.id IS NULL
+  id  name  order_id
+  --  ----  --------
+  3   Chen  NULL
+  4   Dee   NULL      <- exactly the customers who never ordered`,
+      },
+      {
+        kind: 'table',
+        title: 'What each join keeps',
+        columns: ['Join', 'Left rows with no match', 'Right rows with no match', 'Typical question'],
+        rows: [
+          ['INNER JOIN', 'Dropped', 'Dropped', '"Orders with their customer details"'],
+          ['LEFT JOIN', 'Kept, right columns NULL', 'Dropped', '"Every customer, with their orders if any"'],
+          ['LEFT JOIN + right IS NULL', 'Kept (only these)', 'Dropped', '"Customers who have never ordered"'],
+          ['RIGHT JOIN', 'Dropped', 'Kept, left columns NULL', 'The mirror image; usually rewritten as a LEFT JOIN'],
+          ['FULL OUTER JOIN', 'Kept, padded', 'Kept, padded', '"Reconcile two lists and show what only appears in each"'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Filtering the right table: ON versus WHERE',
+        caption: 'The single most consequential subtlety of outer joins.',
+        left: {
+          heading: "LEFT JOIN orders o ON o.customer_id = c.id AND o.status = 'shipped'",
+          points: [
+            'The status test is part of what counts as a match',
+            'Every customer is still returned',
+            'A customer with only cancelled orders gets NULL order columns',
+            'Answers: "each customer and their shipped orders, if any"',
+            'Row count >= number of customers',
+          ],
+        },
+        right: {
+          heading: "LEFT JOIN orders o ON o.customer_id = c.id WHERE o.status = 'shipped'",
+          points: [
+            'The status test runs after padding',
+            'Padded rows have status NULL, and NULL = ’shipped’ is UNKNOWN',
+            'So every unmatched customer is filtered out again',
+            'The LEFT JOIN has silently become an INNER JOIN',
+            'Answers: "customers who have a shipped order"',
+          ],
+        },
+      },
+      {
+        kind: 'flow',
+        title: 'How a LEFT JOIN is evaluated',
+        caption: 'The padding step is what makes ON and WHERE behave differently.',
+        steps: [
+          { label: 'Take each left row', detail: 'Every row of `customers`, one at a time.' },
+          { label: 'Find right rows satisfying ON', detail: 'All orders whose `customer_id` matches, and which satisfy any other ON conditions.' },
+          { label: 'Emit one combined row per match', detail: 'A customer with three matching orders produces three rows.' },
+          { label: 'If no match, pad with NULL', detail: 'Emit one row with the right-hand columns all NULL. This is what makes it a LEFT join.' },
+          { label: 'Then apply WHERE', detail: 'WHERE runs on the padded result, so a condition on a right-hand column will eliminate the padded rows.' },
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Run both joins side by side',
+        caption: 'Count the rows from `customers INNER JOIN orders` and `customers LEFT JOIN orders`. The difference is the customers who have never ordered.',
+        widget: 'sql-playground',
+      },
+    ],
+
+    formalDefinition:
+      'An inner join of relations R and S on predicate θ is the subset of the Cartesian product R × S for which θ evaluates to TRUE. A left outer join additionally includes, for every tuple r of R having no s in S with θ(r, s) TRUE, one tuple consisting of r extended with NULL in every attribute of S. Because the padding occurs during the join, predicates placed in ON participate in match determination, whereas predicates in WHERE are applied to the already-padded result and therefore can eliminate padded tuples.',
+
+    workedExample: {
+      title: 'Turning a LEFT JOIN into an INNER JOIN by accident',
+      setup:
+        'We want a report of every customer with the number of shipped orders they have, including customers with none, who should show zero. There are 4 customers: Ada has 2 shipped, Ben has 1 cancelled and 0 shipped, Chen has 1 shipped, Dee has no orders at all.',
+      steps: [
+        {
+          label: 'Attempt 1: filter in WHERE',
+          detail:
+            "`FROM customers c LEFT JOIN orders o ON o.customer_id = c.id WHERE o.status = 'shipped' GROUP BY c.id`. The join produces Ada x2, Ben x1 (cancelled), Chen x1, Dee x1 padded with NULLs. Then WHERE tests `o.status = 'shipped'`: Ben's cancelled row is FALSE, and Dee's padded row has status NULL so the test is UNKNOWN. Both are removed.",
+        },
+        {
+          label: 'Result of attempt 1',
+          detail:
+            'Two rows: Ada 2, Chen 1. Ben and Dee have vanished from a report that was specifically meant to include them. The LEFT JOIN has been silently converted into an INNER JOIN by the WHERE clause.',
+        },
+        {
+          label: 'Attempt 2: move the filter into ON',
+          detail:
+            "`LEFT JOIN orders o ON o.customer_id = c.id AND o.status = 'shipped'`. Now the status test decides what counts as a match. Ada matches twice, Chen once, Ben matches nothing so is padded, Dee matches nothing so is padded.",
+        },
+        {
+          label: 'Aggregate correctly',
+          detail:
+            '`COUNT(*)` would give Ben and Dee a count of 1, because the padded row is still a row. `COUNT(o.id)` gives 0, because COUNT of a column skips NULLs. This is the second half of the trap, and it catches people who fixed the first half.',
+          latex: '\\mathrm{COUNT}(o.id) = \\sum_i \\mathbb{1}[o.id_i \\neq \\mathrm{NULL}]',
+        },
+        {
+          label: 'Result of attempt 2',
+          detail: 'Four rows: Ada 2, Ben 0, Chen 1, Dee 0. Every customer is present and the zeros are genuine zeros.',
+        },
+      ],
+      conclusion:
+        'Two rules come out of this, and they always travel together. Conditions on the right-hand table of a LEFT JOIN belong in ON, not WHERE. And when counting through an outer join, count a non-nullable column from the right table, never `*`, or the padded rows will be counted as one instead of zero.',
+    },
+
+    codeExamples: [
+      {
+        language: 'sql',
+        title: 'INNER JOIN: only matched pairs',
+        runnable: true,
+        code: `SELECT
+  o.id          AS order_id,
+  o.order_date,
+  o.status,
+  c.name        AS customer,
+  c.country
+FROM orders    AS o
+JOIN customers AS c ON c.id = o.customer_id
+ORDER BY o.order_date DESC, o.id DESC
+LIMIT 10;`,
+        explanation:
+          'The bare keyword JOIN means INNER JOIN in every dialect, and this is the workhorse query of relational databases: take a fact table and decorate it with attributes from a dimension table. Because `orders.customer_id` has a foreign key and is NOT NULL, no orders can be lost here — but that safety depends entirely on the constraint existing. In a database without enforced foreign keys, this same query silently drops every orphaned order, which is why the orphan audit from SQL-003 is worth running before trusting any report built this way.',
+        output: `order_id  order_date  status   customer    country
+--------  ----------  -------  ----------  -------
+42        2024-03-28  pending  Chen Wei    China
+41        2024-03-27  shipped  Ada Okafor  Nigeria`,
+      },
+      {
+        language: 'sql',
+        title: 'LEFT JOIN: keep every customer, even those with no orders',
+        runnable: true,
+        code: `SELECT
+  c.id,
+  c.name,
+  COUNT(o.id)                      AS order_count,
+  COALESCE(MAX(o.order_date), 'never') AS last_order
+FROM customers AS c
+LEFT JOIN orders AS o ON o.customer_id = c.id
+GROUP BY c.id, c.name
+ORDER BY order_count DESC, c.id;`,
+        explanation:
+          '`COUNT(o.id)` rather than `COUNT(*)` is the detail that makes this correct. A customer with no orders still produces one row — padded with NULLs — so `COUNT(*)` would report 1 order for someone who has none. `COUNT(o.id)` skips the NULL and correctly reports 0. The COALESCE turns the NULL `MAX(order_date)` into a readable label; without it the column is blank and a reader cannot tell "never ordered" from "date missing".',
+        output: `id  name          order_count  last_order
+--  ------------  -----------  ----------
+1   Ada Okafor    6            2024-03-27
+3   Chen Wei      4            2024-03-28
+7   Priya Nair    0            never`,
+      },
+      {
+        language: 'sql',
+        title: 'The anti-join: rows with no match',
+        runnable: true,
+        code: `-- Customers who have never placed an order
+SELECT c.id, c.name, c.country
+FROM customers AS c
+LEFT JOIN orders AS o ON o.customer_id = c.id
+WHERE o.id IS NULL;
+
+-- Products that have never been ordered
+SELECT p.id, p.name, p.category
+FROM products AS p
+LEFT JOIN order_items AS oi ON oi.product_id = p.id
+WHERE oi.id IS NULL;
+
+-- The same thing with NOT EXISTS, which many find clearer
+SELECT p.id, p.name
+FROM products AS p
+WHERE NOT EXISTS (SELECT 1 FROM order_items AS oi WHERE oi.product_id = p.id);`,
+        explanation:
+          'The pattern is always the same: LEFT JOIN so unmatched rows survive, then keep exactly those unmatched rows by testing a right-hand column for NULL. The column you test must be one that can never be NULL in a genuine match — the primary key is the safe choice, since testing a nullable column would also match rows that did join but happened to have a NULL there. All three formulations — LEFT JOIN plus IS NULL, NOT EXISTS, and NOT IN — express the same idea, but NOT IN is unsafe with NULLs as SQL-005 showed, and a modern optimiser usually produces the same anti-join plan for the other two.',
+        output: `id  name          country
+--  ------------  -------
+7   Priya Nair    India
+19  Tom Halloran  Ireland
+
+id  name           category
+--  -------------  -----------
+22  Laptop Stand   peripherals`,
+      },
+      {
+        language: 'sql',
+        title: 'ON versus WHERE, demonstrated',
+        runnable: true,
+        code: `-- CORRECT: every customer, counting only their shipped orders
+SELECT c.name, COUNT(o.id) AS shipped_orders
+FROM customers AS c
+LEFT JOIN orders AS o
+       ON o.customer_id = c.id
+      AND o.status = 'shipped'
+GROUP BY c.id, c.name
+ORDER BY shipped_orders DESC, c.name;
+
+-- WRONG: the WHERE turns this back into an INNER JOIN
+SELECT c.name, COUNT(o.id) AS shipped_orders
+FROM customers AS c
+LEFT JOIN orders AS o ON o.customer_id = c.id
+WHERE o.status = 'shipped'
+GROUP BY c.id, c.name;`,
+        explanation:
+          'In the first query the status test participates in matching, so a customer with no shipped orders is padded and counted as zero. In the second the padding happens first and then WHERE examines `o.status`, which is NULL on every padded row; `NULL = ’shipped’` is UNKNOWN, so those rows are discarded and the customers disappear. The tell-tale symptom in a report is that the number of rows equals the number of customers who have the thing, rather than the total number of customers — a discrepancy nobody notices unless they check.',
+        output: `-- correct
+name          shipped_orders
+------------  --------------
+Ada Okafor    5
+Priya Nair    0
+
+-- wrong (Priya has vanished)
+name          shipped_orders
+------------  --------------
+Ada Okafor    5`,
+      },
+      {
+        language: 'sql',
+        title: 'A three-table join with correct aggregation',
+        runnable: true,
+        code: `SELECT
+  c.name,
+  COUNT(DISTINCT o.id)                       AS orders,
+  COUNT(oi.id)                               AS items,
+  ROUND(COALESCE(SUM(oi.quantity * oi.unit_price), 0), 2) AS revenue
+FROM customers        AS c
+LEFT JOIN orders      AS o  ON o.customer_id = c.id AND o.status <> 'cancelled'
+LEFT JOIN order_items AS oi ON oi.order_id   = o.id
+GROUP BY c.id, c.name
+ORDER BY revenue DESC, c.name;`,
+        explanation:
+          'Two LEFT JOINs chained: the second joins to the result of the first, so a customer with no orders still survives both and ends with NULLs from both. Three details make it correct. The cancellation filter is in ON, so it does not undo the outer join. `COUNT(DISTINCT o.id)` counts orders even though the grain is now one row per item. And COALESCE wraps the SUM, because SUM over an empty set is NULL rather than 0 — a customer with no orders would otherwise show a blank revenue where a zero is what the reader expects.',
+        output: `name          orders  items  revenue
+------------  ------  -----  -------
+Ada Okafor    6       14     2104.50
+Chen Wei      4       9      1330.00
+Priya Nair    0       0      0.00`,
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Assembling a labelled training set',
+        usage:
+          'Features live in one table and labels in another. An INNER JOIN silently drops every unlabelled example, which is usually right; a LEFT JOIN keeps them and reveals how many examples have no label, which is usually worth knowing first.',
+      },
+      {
+        context: 'Churn and re-engagement lists',
+        usage:
+          'The anti-join is the query behind "customers who have not ordered in 90 days" and "users who signed up but never activated". These lists drive marketing campaigns and are produced by LEFT JOIN plus IS NULL.',
+      },
+      {
+        context: 'Reconciling two systems',
+        usage:
+          'Comparing a payments provider’s export with internal orders means finding rows present in one and absent from the other — two anti-joins, or one FULL OUTER JOIN. The rows that appear are precisely the discrepancies to investigate.',
+      },
+      {
+        context: 'Dashboards that must show zeros',
+        usage:
+          'A sales-by-region chart built on an INNER JOIN omits regions with no sales entirely, so a region that collapsed to zero looks identical to a region that does not exist. A LEFT JOIN from a region dimension keeps the zero visible.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'pandas', role: '`df.merge(other, how="inner"|"left", on="customer_id")` is the same operation, and `indicator=True` reveals which side each row came from — a built-in anti-join helper.' },
+      { tool: 'SQLAlchemy', role: '`.join()` and `.outerjoin()` map directly onto INNER and LEFT, with the ON condition passed explicitly.' },
+      { tool: 'dbt', role: 'Staging models join raw tables into entity-level models; a mis-specified join there propagates wrong numbers to every downstream dashboard at once.' },
+      { tool: 'Spark', role: 'Broadcast joins and shuffle joins are physical strategies for the same logical operation, chosen by size — the semantics taught here are unchanged.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Putting a right-table filter in WHERE on a LEFT JOIN',
+        why: 'WHERE runs after padding, and the padded rows have NULL in that column, so the test is UNKNOWN and they are discarded. The outer join degenerates into an inner join with no error.',
+        fix: 'Move the condition into the ON clause, where it participates in match determination instead of filtering the padded result.',
+      },
+      {
+        mistake: 'Using COUNT(*) after a LEFT JOIN',
+        why: 'A padded row is still a row, so an unmatched left row is counted as 1 instead of 0. Every "customers with no orders" figure comes out as one order.',
+        fix: 'Count a column from the right table that cannot be NULL in a real match, normally its primary key: `COUNT(o.id)`.',
+      },
+      {
+        mistake: 'Forgetting that SUM over no rows is NULL, not zero',
+        why: 'Aggregates return NULL for an empty group, so a customer with no orders shows a blank revenue rather than 0.00, and any arithmetic on it propagates the NULL.',
+        fix: 'Wrap it: `COALESCE(SUM(...), 0)`. Decide once whether your report shows blanks or zeros and be consistent.',
+      },
+      {
+        mistake: 'Assuming an INNER JOIN preserves the row count of the left table',
+        why: 'It preserves nothing. A one-to-many join multiplies rows, and unmatched rows disappear, so the output row count can be larger or smaller than either input.',
+        fix: 'Check: compare `COUNT(*)` before and after, and use `COUNT(DISTINCT left.id)` to confirm no entities were lost or duplicated.',
+      },
+      {
+        mistake: 'Testing a nullable right-hand column for the anti-join',
+        why: '`WHERE o.status IS NULL` matches both unmatched rows and genuinely matched rows whose status happens to be NULL, so the result quietly includes rows that did join.',
+        fix: 'Always test the right table’s primary key, which is NOT NULL by definition and therefore NULL only when padding occurred.',
+      },
+      {
+        mistake: 'Writing the join condition in WHERE with a comma-separated FROM',
+        why: 'The old `FROM a, b WHERE a.id = b.a_id` syntax works but makes it easy to omit the condition, producing a silent Cartesian product, and it cannot express outer joins at all.',
+        fix: 'Always use explicit `JOIN ... ON`. The join condition then sits next to the join it belongs to and cannot go missing.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'What is the difference between an INNER JOIN and a LEFT JOIN?',
+        answer:
+          'An INNER JOIN returns only the row combinations where the ON condition is TRUE, so rows on either side with no match are excluded. A LEFT JOIN returns every row of the left table regardless, filling the right-hand columns with NULL where nothing matched. The practical significance is that an INNER JOIN loses data silently: a customer with no orders simply does not appear, with no error and no indication. If your question is about orders, INNER is usually right; if it is about customers and their orders, LEFT is the honest choice, because it lets zero be visible rather than absent.',
+      },
+      {
+        level: 'intermediate',
+        question: 'How do you find rows in table A that have no corresponding row in table B?',
+        answer:
+          'Three equivalent formulations. The classic anti-join is `SELECT a.* FROM a LEFT JOIN b ON b.a_id = a.id WHERE b.id IS NULL` — LEFT JOIN keeps unmatched rows, and testing B’s primary key for NULL keeps exactly those. `NOT EXISTS (SELECT 1 FROM b WHERE b.a_id = a.id)` expresses the same thing and many find it more readable, since it says what it means. `NOT IN` also works but is unsafe: a single NULL in the subquery makes the predicate UNKNOWN for every row and returns nothing. The first two are typically compiled to the same anti-join plan, so the choice is about clarity, not speed. The column tested for NULL must be non-nullable in a real match, which is why you test the key rather than an arbitrary column.',
+        followUp:
+          'A strong answer notes that this is the query behind churn lists, orphan audits and reconciliation between two systems — it is not an exotic pattern.',
+      },
+      {
+        level: 'internship',
+        question: 'A report of "every customer and their shipped order count" is missing customers who have no shipped orders, even though it uses a LEFT JOIN. Diagnose it.',
+        answer:
+          "Almost certainly the status filter is in WHERE rather than in ON. A LEFT JOIN pads unmatched customers with NULLs in every orders column, and then `WHERE o.status = 'shipped'` evaluates NULL against 'shipped', which is UNKNOWN, so WHERE drops those padded rows. The outer join has effectively become an inner join. Moving the condition into the ON clause — `LEFT JOIN orders o ON o.customer_id = c.id AND o.status = 'shipped'` — makes the status part of what counts as a match, so unmatched customers survive with NULLs. There is a second bug that usually accompanies this one: the count must be `COUNT(o.id)` rather than `COUNT(*)`, because a padded row is still a row and would be counted as one order rather than zero.",
+        followUp:
+          'Describing how you would verify — compare the result’s row count against `SELECT COUNT(*) FROM customers` — turns the diagnosis into a repeatable check.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'You join a features table to a labels table and the row count increases. What do you check?',
+        answer:
+          'The join key is not unique on the labels side, so one feature row is matching several label rows and the examples are being duplicated. I would check immediately with `SELECT key, COUNT(*) FROM labels GROUP BY key HAVING COUNT(*) > 1` to see the duplicates and how many there are. The cause is usually one of three things: the labels table has genuine duplicates from a re-run of an upstream job; the intended key is composite and I joined on only part of it, for example on user id when the real grain is user and date; or the labels table is event-level while the features are entity-level, in which case an aggregation is needed before joining. Duplicated training examples are not harmless — they reweight the loss towards whichever rows duplicated, and if the same entity lands in both train and test the evaluation is leaked and optimistic.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'List every product together with the total quantity ever ordered, including products that have never been ordered, which should show 0.',
+        hint: 'LEFT JOIN from products, and remember what SUM returns over an empty set.',
+        language: 'sql',
+        starterCode: 'SELECT p.id, p.name\nFROM products AS p\n-- join to order_items and aggregate\n',
+        solution:
+          'SELECT\n  p.id,\n  p.name,\n  COALESCE(SUM(oi.quantity), 0) AS units_ordered,\n  COUNT(oi.id)                  AS times_ordered\nFROM products AS p\nLEFT JOIN order_items AS oi ON oi.product_id = p.id\nGROUP BY p.id, p.name\nORDER BY units_ordered DESC, p.name;\n\nTwo outer-join details do the work. COALESCE turns the NULL that SUM returns over an empty group into 0, so never-ordered products read as zero rather than blank. And `COUNT(oi.id)` rather than `COUNT(*)` gives 0 instead of 1 for those products, because the padded row is still a row but its `oi.id` is NULL.',
+      },
+      {
+        prompt: 'Find every customer who has placed at least one order but has never ordered anything from the "displays" category.',
+        hint: 'Two conditions: one requires existence, the other requires absence. NOT EXISTS is the cleanest way to say the second.',
+        language: 'sql',
+        solution:
+          "SELECT c.id, c.name\nFROM customers AS c\nWHERE EXISTS (\n        SELECT 1 FROM orders AS o WHERE o.customer_id = c.id\n      )\n  AND NOT EXISTS (\n        SELECT 1\n        FROM orders      AS o\n        JOIN order_items AS oi ON oi.order_id = o.id\n        JOIN products    AS p  ON p.id = oi.product_id\n        WHERE o.customer_id = c.id AND p.category = 'displays'\n      )\nORDER BY c.id;\n\nThe temptation is to write a single join with `WHERE p.category <> 'displays'`, which is wrong: that returns customers who ordered anything that is not a display, including customers who also ordered displays. \"Never ordered X\" is a statement about the absence of any matching row, so it needs NOT EXISTS (or an anti-join), not a negated comparison on one row.",
+      },
+      {
+        prompt: 'Produce a report of every customer with their order count and revenue, counting only orders from 2024 and excluding cancelled ones, with customers who qualify for nothing showing zeros.',
+        hint: 'All three filters concern the right-hand tables of an outer join. Where must they go?',
+        language: 'sql',
+        solution:
+          "SELECT\n  c.id,\n  c.name,\n  COUNT(DISTINCT o.id) AS orders_2024,\n  ROUND(COALESCE(SUM(oi.quantity * oi.unit_price), 0), 2) AS revenue_2024\nFROM customers AS c\nLEFT JOIN orders AS o\n       ON o.customer_id = c.id\n      AND o.status <> 'cancelled'\n      AND o.order_date >= '2024-01-01'\n      AND o.order_date <  '2025-01-01'\nLEFT JOIN order_items AS oi ON oi.order_id = o.id\nGROUP BY c.id, c.name\nORDER BY revenue_2024 DESC, c.id;\n\nAll three conditions sit in the ON clause of the first LEFT JOIN. Moving any one of them into WHERE would eliminate the padded rows and drop exactly the customers the report is meant to show as zero. `COUNT(DISTINCT o.id)` is required because the second join multiplies each order into one row per item, and COALESCE around SUM converts the empty-group NULL into 0.00.",
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'SQL-009-q1',
+        type: 'mcq',
+        concept: 'join semantics',
+        prompt: '`customers` has 40 rows; 7 of them have no orders. How many rows does `SELECT c.id FROM customers c LEFT JOIN orders o ON o.customer_id = c.id` return if the other 33 customers have 120 orders between them?',
+        options: ['127', '120', '40', '33'],
+        answerIndex: 0,
+        explanation:
+          'Matched customers contribute one row per order (120), and each of the 7 unmatched customers contributes one padded row, giving 127. A LEFT JOIN preserves every left row but does not preserve the left row count.',
+      },
+      {
+        id: 'SQL-009-q2',
+        type: 'debug',
+        language: 'sql',
+        concept: 'on vs where',
+        prompt: 'This is meant to show all customers with their shipped-order counts, but customers with no shipped orders are missing. What is wrong?',
+        code: "SELECT c.name, COUNT(o.id) AS shipped\nFROM customers c\nLEFT JOIN orders o ON o.customer_id = c.id\nWHERE o.status = 'shipped'\nGROUP BY c.id, c.name;",
+        options: [
+          "The status filter must move into the ON clause, or WHERE discards the padded rows",
+          'COUNT(o.id) should be COUNT(*)',
+          'The GROUP BY should list only c.name',
+          'LEFT JOIN should be RIGHT JOIN',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Padded rows have `o.status` NULL, and `NULL = ’shipped’` is UNKNOWN, so WHERE removes them and the outer join collapses to an inner join.',
+      },
+      {
+        id: 'SQL-009-q3',
+        type: 'truefalse',
+        concept: 'counting through outer joins',
+        prompt: 'After a LEFT JOIN, `COUNT(*)` correctly reports 0 for left rows that found no match.',
+        answer: false,
+        explanation:
+          'A padded row is still a row, so COUNT(*) reports 1. Count a non-nullable right-hand column instead, normally its primary key: COUNT(o.id).',
+      },
+      {
+        id: 'SQL-009-q4',
+        type: 'fill',
+        concept: 'anti-join',
+        prompt: 'Complete the anti-join that finds customers who have never ordered: `... LEFT JOIN orders o ON o.customer_id = c.id WHERE o.id ____`',
+        answers: ['IS NULL', 'is null'],
+        explanation:
+          'Only unmatched left rows have NULL in the right table’s primary key, so testing it isolates exactly the rows with no match. Testing a nullable column instead would also catch genuine matches.',
+      },
+      {
+        id: 'SQL-009-q5',
+        type: 'multi',
+        concept: 'join pitfalls',
+        prompt: 'Which statements about joins are true? Select all that apply.',
+        options: [
+          'An INNER JOIN can return fewer rows than either input table',
+          'An INNER JOIN can return more rows than either input table',
+          'A LEFT JOIN guarantees at least one output row per left row',
+          'A LEFT JOIN guarantees exactly one output row per left row',
+          'SUM over a group containing only padded rows returns NULL, not 0',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'Unmatched rows are dropped (fewer) and one-to-many matches multiply rows (more). LEFT guarantees at least one row per left row, not exactly one, and aggregates over empty sets return NULL.',
+      },
+      {
+        id: 'SQL-009-q6',
+        type: 'match',
+        concept: 'choosing a join',
+        prompt: 'Match each question to the join that answers it.',
+        pairs: [
+          { left: 'Orders with the customer’s country attached', right: 'INNER JOIN' },
+          { left: 'Every customer, with order counts including zeros', right: 'LEFT JOIN with COUNT(o.id)' },
+          { left: 'Customers who have never ordered', right: 'LEFT JOIN plus WHERE o.id IS NULL' },
+          { left: 'Every customer with only their shipped orders counted', right: 'LEFT JOIN with the status condition in ON' },
+        ],
+        explanation:
+          'The join type follows from which side must be preserved and whether the condition on the other side should determine matching or filter the result.',
+      },
+      {
+        id: 'SQL-009-q7',
+        type: 'explain',
+        concept: 'inner join data loss',
+        prompt: 'Why is an INNER JOIN sometimes described as a silent data-loss operation, and how would you detect it?',
+        rubric: [
+          'Explains that unmatched rows on both sides are dropped with no error or warning',
+          'Gives a concrete consequence, such as a report undercounting or a zero disappearing',
+          'Proposes a check, such as comparing row counts or using a LEFT JOIN with IS NULL to see what was dropped',
+        ],
+        sampleAnswer:
+          'An INNER JOIN keeps only matched pairs, and it discards everything else without raising anything. If some orders reference a customer that no longer exists — which is possible whenever foreign keys were not enforced — those orders vanish from every revenue report built on the join, and the total is simply lower than reality with nothing to indicate why. The same happens in the other direction: regions with no sales disappear from a sales-by-region chart, so a region that collapsed to zero is indistinguishable from a region that was never in the data. To detect it I would compare `COUNT(*)` on the base table with `COUNT(DISTINCT base.id)` on the joined result, and run the LEFT JOIN plus IS NULL anti-join to list exactly which rows failed to match. If the answer is non-empty, I would find out why before trusting any aggregate over that join.',
+        explanation:
+          'The examinable idea is that absence of error is not evidence of correctness, and that joins need an explicit reconciliation check rather than trust.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'INNER JOIN vs LEFT JOIN', back: 'INNER keeps only matched pairs; LEFT keeps every left row, padding right columns with NULL when nothing matched.' },
+      { front: 'How do you find rows with no match?', back: 'LEFT JOIN then `WHERE right.primary_key IS NULL` — the anti-join. Equivalently NOT EXISTS. Never NOT IN if NULLs are possible.' },
+      { front: 'Why put a right-table filter in ON, not WHERE, for a LEFT JOIN?', back: 'WHERE runs after padding and tests NULL columns, discarding the padded rows and turning the outer join into an inner join.' },
+      { front: 'Why COUNT(o.id) not COUNT(*) after a LEFT JOIN?', back: 'A padded row is still a row, so COUNT(*) reports 1 for a left row with no matches. COUNT of a column skips the NULL and reports 0.' },
+      { front: 'What does SUM return over an empty group?', back: 'NULL, not 0. Wrap it in COALESCE when a report should show zeros.' },
+      { front: 'Does a join preserve row counts?', back: 'No. Unmatched rows are dropped and one-to-many matches multiply rows, so the output can be smaller or larger than either input.' },
+    ],
+
+    challenge: {
+      title: 'A customer report that shows the zeros',
+      brief:
+        'Build a single report with one row per customer — every customer, including those who have never ordered — containing: total orders, total non-cancelled orders, total revenue, the date of their first and most recent order, and a `segment` computed with CASE as "never ordered", "one-off", or "repeat". Every numeric column must show 0 rather than blank where appropriate, every date column must show a readable label rather than a bare NULL, and the row count of your result must equal `SELECT COUNT(*) FROM customers`. Prove that last point with a second query.',
+      language: 'sql',
+      acceptanceCriteria: [
+        'Result row count equals the number of customers, verified by a query',
+        'All right-table filters appear in ON, not WHERE',
+        'COUNT uses a right-table key rather than *, and SUM is wrapped in COALESCE',
+        'The segment CASE correctly distinguishes zero orders from one order',
+        'Dates are presented with an explicit label for customers who have never ordered',
+      ],
+      starterCode: "SELECT\n  c.id,\n  c.name,\n  COUNT(o.id) AS orders\nFROM customers AS c\nLEFT JOIN orders AS o ON o.customer_id = c.id\nGROUP BY c.id, c.name;\n",
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Imagine I am nine and I have two lists: children, and the clubs they signed up for. Teach me what a join is, and what happens to a child who signed up for nothing.',
+      mustCover: [
+        'A join matches rows from two tables using a rule, producing combined rows',
+        'An INNER JOIN keeps only the pairs that matched, so unmatched rows disappear entirely',
+        'A LEFT JOIN keeps every row of the first table and puts blanks where there was no match',
+        'Those blanks are useful: filtering for them finds the rows with no match',
+        'A row that matches several times comes out several times',
+      ],
+      bonusSignals: ['uses two concrete lists', 'points out that the disappearing rows vanish with no warning', 'mentions counting the blanks incorrectly as one instead of zero'],
+      sampleExplanation:
+        'You have two lists. One has every child in the school with their number. The other has club sign-ups, and each sign-up just says a number and a club. On their own neither list is much use, so you match them up: for every sign-up, find the child with that number and write the name next to it. That matching is a join. Now, what about Maya, who did not sign up for anything? If you only write down the matched pairs, Maya never appears — she has silently dropped out of the list, and nobody looking at the result would know she existed. That is an inner join, and it is fine when you only care about sign-ups. But if you wanted "every child and what they signed up for", you use a left join instead: you go through the children’s list one by one and write each name down no matter what, leaving the club column blank when there is nothing to put there. The blank is the useful bit. If you now keep only the lines with a blank club, you have exactly the children who signed up for nothing — which was probably the list the teacher wanted all along. One last thing: Tom signed up for three clubs, so his name appears three times. Matching does not keep one line per child; it keeps one line per match.',
+    },
+  },
+
+  {
+    id: 'SQL-010',
+    domain: 'SQL',
+    module: 'Joins',
+    topic: 'Join varieties and pitfalls',
+    title: 'Other Joins and Join Pitfalls',
+    slug: 'other-joins-and-pitfalls',
+    difficulty: 3,
+    estimatedMinutes: 35,
+    prerequisites: ['SQL-009'],
+    related: ['SQL-003', 'SQL-007', 'SQL-009'],
+    tags: ['right-join', 'full-outer-join', 'cross-join', 'self-join', 'fan-out', 'cartesian-product'],
+
+    learningObjectives: [
+      'Describe RIGHT, FULL OUTER, CROSS and SELF joins and when each is the natural tool',
+      'Emulate a FULL OUTER JOIN in SQLite, which lacked it before version 3.39',
+      'Diagnose row multiplication (fan-out) when joining two one-to-many tables and fix it by pre-aggregating',
+      'Recognise an accidental Cartesian product and its symptoms',
+      'Explain why filtering the right table in WHERE converts a LEFT JOIN into an INNER JOIN',
+    ],
+
+    terminology: [
+      {
+        term: 'RIGHT OUTER JOIN',
+        definition:
+          'The mirror of LEFT: every row of the right relation is preserved, padding the left columns with NULL. Semantically redundant, since swapping the table order turns it into a LEFT JOIN.',
+        simple: 'Keep everything on the right instead of the left.',
+      },
+      {
+        term: 'FULL OUTER JOIN',
+        definition:
+          'Preserves unmatched rows from both relations, padding whichever side is missing. The natural tool for reconciling two lists.',
+        simple: 'Keep everything from both sides, blanks where there is no partner.',
+      },
+      {
+        term: 'CROSS JOIN',
+        definition:
+          'The Cartesian product: every row of one relation paired with every row of the other, with no condition. Produces m × n rows.',
+        simple: 'Every possible pairing.',
+      },
+      {
+        term: 'SELF JOIN',
+        definition:
+          'A join of a table to itself using two aliases, used for hierarchies (employee to manager) and for comparing rows within one table.',
+        simple: 'Joining a table to a second copy of itself.',
+      },
+      {
+        term: 'Fan-out',
+        definition:
+          'Row multiplication caused by joining one parent to two or more independent one-to-many children, so the output row count is the product of the child counts rather than their sum.',
+        simple: 'Rows exploding because two lists both multiplied.',
+      },
+      {
+        term: 'Accidental Cartesian product',
+        definition:
+          'A join whose ON condition is missing, incomplete or always true, so every row pairs with every row. Symptoms are an enormous row count and a query that never finishes.',
+        simple: 'Forgetting the matching rule, so everything pairs with everything.',
+      },
+    ],
+
+    simpleExplanation:
+      "Beyond INNER and LEFT there are a few more join shapes, and then there is the part that actually costs people their afternoons. The extra shapes are easy: RIGHT JOIN is LEFT JOIN with the tables the other way round, FULL OUTER JOIN keeps unmatched rows from both sides, CROSS JOIN pairs everything with everything, and a SELF JOIN is just a table joined to a second copy of itself — which is how you connect an employee to their manager when both live in the same table. The dangerous part is what happens to row counts. If one order has three items, joining orders to items gives you three rows for that order, and any sum of an order-level number is now tripled. Worse, if you join an order to its items *and* to its payments in the same query, you get three items times two payments equals six rows, and both totals are wrong in different ways. Nothing errors. The numbers just come out too big, and they look completely plausible. Learning to ask “what does one row of this result mean?” after every join is the single habit that prevents it.",
+
+    whyItExists:
+      'Real questions need more than the two common join shapes: reconciling two systems needs unmatched rows from both sides, generating a complete grid of date-by-category combinations needs a deliberate Cartesian product, and hierarchies stored in one table need that table joined to itself. Knowing the full set also means recognising when you have produced one by accident.',
+
+    analogy: {
+      scenario:
+        'Imagine matching two guest lists for a wedding — the bride’s and the groom’s — to build a seating plan. Keeping only people on both lists is an inner join. Keeping everyone on the bride’s list is a left join. Keeping everyone from both lists, marking who is on only one, is a full outer join. Pairing every guest with every table to consider all seating options is a cross join. And now the expensive mistake: if you separately match each guest to their dietary requirements and to their travel bookings, a guest with two dietary notes and three travel legs appears six times, and if you then count guests you conclude the wedding has six times as many people as it does.',
+      mapping: [
+        { from: 'People on both lists', to: 'INNER JOIN' },
+        { from: 'Everyone from both lists, marked where they appear only once', to: 'FULL OUTER JOIN' },
+        { from: 'Every guest paired with every table', to: 'CROSS JOIN — deliberate m × n' },
+        { from: 'Matching guests to other guests, e.g. who is whose plus-one', to: 'SELF JOIN with two aliases' },
+        { from: 'Two dietary notes times three travel legs giving six lines', to: 'Fan-out from joining two independent one-to-many children' },
+        { from: 'Concluding there are six times as many guests', to: 'Aggregating over a fanned-out result without DISTINCT' },
+      ],
+      bridge:
+        'The seating plan makes the fan-out concrete: the six lines are not wrong as lines — each really is a valid dietary-and-travel combination — they are wrong as guests. That is exactly the situation in SQL: the joined rows are individually correct, and the aggregate over them answers a question nobody asked. The fix in both settings is the same: count the dietary notes and the travel legs separately, then bring the two summaries together.',
+      limitations:
+        'A wedding planner would notice six copies of one guest immediately. A database will not, and neither will a dashboard, because the inflated number is usually just large rather than absurd. The detection has to be deliberate.',
+    },
+
+    visuals: [
+      {
+        kind: 'ascii',
+        title: 'Fan-out: why two one-to-many joins multiply',
+        caption: 'Order 7 has 3 items and 2 payments. The join produces 6 rows, and both totals are wrong.',
+        art: `orders            order_items (3)        payments (2)
+id=7              A  30.00                 P1  50.00
+                  B  40.00                 P2  50.00
+                  C  30.00
+
+SELECT SUM(oi.amount), SUM(p.amount)
+FROM orders o
+JOIN order_items oi ON oi.order_id = o.id
+JOIN payments    p  ON p.order_id  = o.id;
+
+RESULT OF THE JOIN: 3 x 2 = 6 rows
+  item  item_amt   payment  pay_amt
+  ----  --------   -------  -------
+   A      30.00      P1      50.00
+   A      30.00      P2      50.00
+   B      40.00      P1      50.00
+   B      40.00      P2      50.00
+   C      30.00      P1      50.00
+   C      30.00      P2      50.00
+
+SUM(item_amt)  = 200.00   but the true item total is 100.00  (x2)
+SUM(pay_amt)   = 300.00   but the true payment total is 100.00 (x3)
+
+Each side was multiplied by the OTHER side's row count.
+
+FIX: aggregate each child to order grain FIRST, then join the summaries.`,
+      },
+      {
+        kind: 'table',
+        title: 'The full join family',
+        columns: ['Join', 'Rows kept', 'Rows produced', 'When you actually want it'],
+        rows: [
+          ['INNER', 'Matched pairs only', '≤ m × n', 'Decorating facts with dimension attributes'],
+          ['LEFT OUTER', 'All left, padded', '≥ m', 'Reports that must show zeros'],
+          ['RIGHT OUTER', 'All right, padded', '≥ n', 'Rarely — swap the tables and use LEFT instead'],
+          ['FULL OUTER', 'All from both, padded', '≥ max(m, n)', 'Reconciling two systems; finding what is only in one'],
+          ['CROSS', 'Every pairing', 'exactly m × n', 'Generating a complete grid, e.g. every month × every category'],
+          ['SELF', 'Depends on the join used', 'Varies', 'Hierarchies, and comparing rows within one table'],
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'Diagnosing a suspicious join result',
+        caption: 'Run this checklist whenever a number looks too big.',
+        branching: true,
+        steps: [
+          { label: 'Compare row counts', detail: 'Is `COUNT(*)` of the joined result larger than `COUNT(*)` of the base table? If so, something multiplied.' },
+          { label: 'Compare distinct keys', detail: '`COUNT(*)` versus `COUNT(DISTINCT base.id)`. A gap means each base row appears more than once.' },
+          { label: 'Identify the fanning table', detail: 'Group by the join key on each child and look for `HAVING COUNT(*) > 1`.' },
+          { label: 'Decide the target grain', detail: 'What should one row of the answer mean? Usually one order, one customer, or one customer-month.' },
+          { label: 'Pre-aggregate the children', detail: 'Summarise each one-to-many table to the target grain in its own CTE, then join the summaries.' },
+          { label: 'Re-verify', detail: 'Row count of the result should now equal the number of entities at the target grain.' },
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Reproduce a fan-out',
+        caption: 'Join orders to order_items, then compare `COUNT(*)` with `COUNT(DISTINCT orders.id)`. The gap is the multiplication.',
+        widget: 'sql-playground',
+      },
+    ],
+
+    formalDefinition:
+      'A right outer join is the left outer join with operands exchanged; a full outer join is the union of both, preserving unmatched tuples from each relation padded with NULLs. A cross join is the unconstrained Cartesian product R × S of cardinality |R| · |S|. A self join is any join whose operands are the same relation under distinct aliases. When a relation R is joined to two relations S and T that are each in one-to-many relationship with it, the cardinality of the result for a given r is |S_r| · |T_r| rather than |S_r| + |T_r|, so aggregates over either child are scaled by the cardinality of the other.',
+
+    math: {
+      intuition:
+        'Fan-out is multiplication, not addition, and that is the whole reason it is so destructive. Joining a parent to one child with k matching rows repeats the parent k times; joining to a second independent child with j matching rows repeats each of those k rows j times. The parent, and every column belonging to it, now appears k·j times, and any SUM of a parent-level value is inflated by exactly that factor.',
+      formulas: [
+        {
+          latex: '|R \\bowtie_{\\theta} S| = \\sum_{r \\in R} |\\{s \\in S : \\theta(r,s)\\}|',
+          name: 'Join cardinality',
+          meaning: 'The number of rows a join produces is the total number of matches, not the size of either table. It can be larger or smaller than both.',
+          variables: [
+            { symbol: 'R, S', meaning: 'The two relations being joined' },
+            { symbol: '\\theta', meaning: 'The join predicate in the ON clause' },
+            { symbol: '|\\cdot|', meaning: 'Cardinality: the number of rows' },
+          ],
+          category: 'complexity',
+        },
+        {
+          latex: '|R \\bowtie S \\bowtie T| = \\sum_{r \\in R} |S_r| \\cdot |T_r|',
+          name: 'Fan-out with two independent children',
+          meaning: 'Joining a parent to two one-to-many children multiplies their match counts. Three items and two payments give six rows, not five.',
+          variables: [
+            { symbol: 'S_r', meaning: 'Rows of S matching parent row r' },
+            { symbol: 'T_r', meaning: 'Rows of T matching parent row r' },
+          ],
+          category: 'complexity',
+        },
+        {
+          latex: '\\mathrm{SUM}_{\\text{joined}}(s) = |T_r| \\cdot \\mathrm{SUM}_{\\text{true}}(s)',
+          name: 'The inflation factor',
+          meaning: 'A sum over child S computed on the fanned-out result is exactly the true sum multiplied by the number of rows in the other child. The error is systematic, not random, which is why it is invisible.',
+          variables: [
+            { symbol: 's', meaning: 'A value from the first child table' },
+            { symbol: '|T_r|', meaning: 'Number of rows in the second child for that parent' },
+          ],
+        },
+      ],
+      derivation: [
+        'Take one order with items totalling 100 across 3 rows, and payments totalling 100 across 2 rows.',
+        'The inner join emits one row for each (item, payment) pair, so 3 x 2 = 6 rows.',
+        'Each item amount appears in 2 of those rows, once per payment, so SUM(item_amount) = 2 x 100 = 200.',
+        'Each payment amount appears in 3 of those rows, once per item, so SUM(payment_amount) = 3 x 100 = 300.',
+        'Both are exactly the true total multiplied by the other side’s row count — a clean, systematic error.',
+        'Therefore no amount of DISTINCT on the final sum can repair it: the correct fix is to aggregate each child to order grain before joining.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Repairing a fanned-out revenue report',
+      setup:
+        'A report joins customers to orders and to order_items to show, per customer, the number of orders and the total revenue. It reports 3x too many orders for customers with large baskets, and the revenue looks right. We need to understand both halves.',
+      steps: [
+        {
+          label: 'Establish the grain of the join',
+          detail:
+            'customers → orders is one-to-many, and orders → order_items is one-to-many again. After both joins, one row is one order item. That is the grain, and every aggregate must be interpreted against it.',
+        },
+        {
+          label: 'Why the order count is wrong',
+          detail:
+            '`COUNT(*)` counts item rows, so an order with 3 items contributes 3. `COUNT(o.id)` does not help — it also counts 3, because `o.id` is repeated, not NULL. Only `COUNT(DISTINCT o.id)` recovers the order count.',
+        },
+        {
+          label: 'Why the revenue happens to be right',
+          detail:
+            '`SUM(oi.quantity * oi.unit_price)` sums an item-level value at item grain, which is correct. It is right by luck of alignment: had the report summed an order-level `order_total` column, it would have been multiplied by the item count.',
+          latex: '\\mathrm{SUM}(q_i p_i) \\text{ is correct at item grain}',
+        },
+        {
+          label: 'Add a second child and it breaks entirely',
+          detail:
+            'Adding a payments table to the same query makes each item row repeat once per payment. Revenue is now multiplied by the payment count, and payments are multiplied by the item count. Neither COUNT(DISTINCT) nor any other single-column fix rescues both.',
+        },
+        {
+          label: 'The general repair: pre-aggregate to a common grain',
+          detail:
+            'Summarise each child in its own CTE at order grain — `SELECT order_id, SUM(quantity * unit_price) AS order_total FROM order_items GROUP BY order_id` and likewise for payments — then LEFT JOIN both summaries to orders. Each join is now one-to-one, so nothing multiplies.',
+        },
+        {
+          label: 'Verify',
+          detail:
+            'The final result should have exactly one row per order (or per customer after a further GROUP BY). Compare `COUNT(*)` with `COUNT(DISTINCT o.id)`: equality is the proof that no fan-out remains.',
+        },
+      ],
+      conclusion:
+        'Pre-aggregating each one-to-many child to a shared grain before joining is the general solution, and it is worth reaching for by default rather than after a bug. COUNT(DISTINCT) patches a single symptom; restructuring to one-to-one joins removes the whole class of error and makes the query easier to read besides.',
+    },
+
+    codeExamples: [
+      {
+        language: 'sql',
+        title: 'RIGHT JOIN, and why you rarely need it',
+        runnable: true,
+        code: `-- These two are exactly equivalent
+SELECT c.name, o.id
+FROM orders AS o
+RIGHT JOIN customers AS c ON c.id = o.customer_id;
+
+SELECT c.name, o.id
+FROM customers AS c
+LEFT JOIN orders AS o ON o.customer_id = c.id;`,
+        explanation:
+          'RIGHT JOIN preserves the right-hand table instead of the left, so swapping the operand order converts one into the other. Most style guides pick LEFT and stay there, because a reader scanning a long FROM clause builds a mental model of "the table I started from is preserved" and a RIGHT join halfway down breaks it. SQLite only gained RIGHT JOIN in version 3.39; PostgreSQL and MySQL have always had it.',
+        output: `name          id
+------------  ----
+Ada Okafor    10
+Ada Okafor    11
+Priya Nair    NULL`,
+      },
+      {
+        language: 'sql',
+        title: 'FULL OUTER JOIN, and emulating it where it is missing',
+        runnable: true,
+        code: `-- Modern SQLite (3.39+) and PostgreSQL
+SELECT c.id AS customer_id, o.id AS order_id
+FROM customers AS c
+FULL OUTER JOIN orders AS o ON o.customer_id = c.id;
+
+-- Portable emulation: LEFT union the anti-join of the other side
+SELECT c.id AS customer_id, o.id AS order_id
+FROM customers AS c
+LEFT JOIN orders AS o ON o.customer_id = c.id
+UNION ALL
+SELECT NULL AS customer_id, o.id AS order_id
+FROM orders AS o
+LEFT JOIN customers AS c ON c.id = o.customer_id
+WHERE c.id IS NULL;`,
+        explanation:
+          'A full outer join is a left join plus the right-hand rows that matched nothing, which is exactly what the emulation writes out. UNION ALL rather than UNION matters: UNION would deduplicate the whole result, which is both slower and wrong if legitimate duplicate rows exist. The classic use is reconciliation — running a full outer join between two systems’ tables and inspecting rows where either side’s key is NULL shows you precisely what is missing from each.',
+        output: `customer_id  order_id
+-----------  --------
+1            10
+1            11
+7            NULL
+NULL         99`,
+      },
+      {
+        language: 'sql',
+        title: 'CROSS JOIN on purpose: a complete grid with no gaps',
+        runnable: true,
+        code: `-- Every category x every month, with zero where there were no sales
+WITH months AS (
+  SELECT DISTINCT SUBSTR(order_date, 1, 7) AS month FROM orders
+),
+cats AS (
+  SELECT DISTINCT category FROM products
+),
+sales AS (
+  SELECT SUBSTR(o.order_date, 1, 7) AS month,
+         p.category,
+         SUM(oi.quantity * oi.unit_price) AS revenue
+  FROM orders      AS o
+  JOIN order_items AS oi ON oi.order_id = o.id
+  JOIN products    AS p  ON p.id = oi.product_id
+  GROUP BY 1, 2
+)
+SELECT g.month, g.category, COALESCE(s.revenue, 0) AS revenue
+FROM (SELECT m.month, c.category FROM months AS m CROSS JOIN cats AS c) AS g
+LEFT JOIN sales AS s ON s.month = g.month AND s.category = g.category
+ORDER BY g.month, g.category;`,
+        explanation:
+          'This is the legitimate Cartesian product: building a dense grid so that a month with no sales in a category shows an explicit zero rather than being absent. Charts and time-series models both need this, because a missing row and a zero row look identical in a table but behave completely differently in a line chart or a lag calculation. Note `GROUP BY 1, 2`, which groups by the first two selected expressions — convenient in SQLite and PostgreSQL, though naming the expressions is clearer in code that others will maintain.',
+        output: `month    category     revenue
+-------  -----------  -------
+2024-01  cables       210.00
+2024-01  displays     0.00
+2024-01  peripherals  890.00
+2024-02  cables       142.50`,
+      },
+      {
+        language: 'sql',
+        title: 'SELF JOIN: hierarchies and within-table comparisons',
+        runnable: true,
+        code: `-- Each employee with their manager (LEFT so the CEO survives)
+SELECT e.name AS employee, e.department, m.name AS manager
+FROM employees AS e
+LEFT JOIN employees AS m ON m.id = e.manager_id
+ORDER BY m.name, e.name;
+
+-- Employees who earn more than their manager
+SELECT e.name AS employee, e.salary, m.name AS manager, m.salary AS manager_salary
+FROM employees AS e
+JOIN employees AS m ON m.id = e.manager_id
+WHERE e.salary > m.salary;
+
+-- Pairs of colleagues in the same department (each pair once, not twice)
+SELECT a.name AS employee_a, b.name AS employee_b, a.department
+FROM employees AS a
+JOIN employees AS b ON b.department = a.department AND b.id > a.id
+ORDER BY a.department, a.name;`,
+        explanation:
+          'A self join needs two aliases so the engine can tell the two copies apart, and after that it behaves like any other join. The third query shows the standard trick for pair generation: `b.id > a.id` rather than `b.id <> a.id` yields each unordered pair exactly once and automatically excludes self-pairing, where `<>` would give every pair twice in both orders. The second query — employees earning more than their manager — is a perennial interview question and is nothing more than a self join with a comparison in WHERE.',
+        output: `employee     department   manager
+-----------  -----------  ----------
+Dana Ortiz   sales        NULL
+Ivan Petrov  sales        Dana Ortiz
+
+employee     salary  manager      manager_salary
+-----------  ------  -----------  --------------
+Ivan Petrov  95000   Dana Ortiz   88000`,
+      },
+      {
+        language: 'sql',
+        title: 'Fan-out: the wrong query and the right one',
+        runnable: true,
+        code: `-- WRONG: orders are counted once per item
+SELECT c.name,
+       COUNT(*)        AS looks_like_orders,   -- actually item rows
+       COUNT(o.id)     AS also_wrong,          -- o.id repeats, not NULL
+       COUNT(DISTINCT o.id) AS actually_orders
+FROM customers        AS c
+JOIN orders           AS o  ON o.customer_id = c.id
+JOIN order_items      AS oi ON oi.order_id   = o.id
+GROUP BY c.id, c.name;
+
+-- RIGHT: pre-aggregate the child to order grain, then join one-to-one
+WITH order_totals AS (
+  SELECT order_id,
+         SUM(quantity * unit_price) AS order_total,
+         COUNT(*)                   AS item_count
+  FROM order_items
+  GROUP BY order_id
+)
+SELECT c.name,
+       COUNT(o.id)                       AS orders,
+       COALESCE(SUM(t.order_total), 0)   AS revenue,
+       COALESCE(SUM(t.item_count), 0)    AS items
+FROM customers AS c
+LEFT JOIN orders       AS o ON o.customer_id = c.id
+LEFT JOIN order_totals AS t ON t.order_id    = o.id
+GROUP BY c.id, c.name
+ORDER BY revenue DESC, c.name;`,
+        explanation:
+          'In the first query all three counts differ and only the third is the number of orders — note particularly that `COUNT(o.id)` does not save you, because `o.id` is duplicated rather than NULL. The second query eliminates the problem rather than patching it: `order_totals` has exactly one row per order, so joining it to orders is one-to-one and nothing multiplies. Once every join in a query is one-to-one or many-to-one, ordinary COUNT and SUM are safe again, which is why pre-aggregation is worth doing by default rather than only after a bug appears.',
+        output: `-- wrong
+name        looks_like_orders  also_wrong  actually_orders
+----------  -----------------  ----------  ---------------
+Ada Okafor  14                 14          6
+
+-- right
+name        orders  revenue   items
+----------  ------  --------  -----
+Ada Okafor  6       2104.50   14`,
+      },
+      {
+        language: 'sql',
+        title: 'The accidental Cartesian product',
+        code: `-- Missing join condition: every order paired with every customer
+SELECT o.id, c.name
+FROM orders AS o, customers AS c;
+
+-- Incomplete condition on a composite key: only half the key matched
+SELECT *
+FROM daily_stats AS d
+JOIN targets AS t ON t.region = d.region;   -- forgot AND t.month = d.month
+
+-- Explicit and intentional
+SELECT o.id, c.name
+FROM orders AS o
+CROSS JOIN customers AS c;`,
+        explanation:
+          'The first form is the old comma syntax with the condition forgotten, and it is why explicit `JOIN ... ON` is now standard practice: the condition sits next to the join and cannot silently go missing. The second is more insidious — the join looks complete but matches on only part of a composite key, so each daily row pairs with every month’s target. The symptoms are the same: a row count that is a suspiciously round multiple of what you expected, and a query that suddenly takes minutes. If you genuinely want a Cartesian product, write CROSS JOIN, so the next reader knows it was deliberate.',
+        output: `-- 42 orders x 40 customers
+1680 rows returned`,
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Reconciling a payment provider export',
+        usage:
+          'A FULL OUTER JOIN between internal orders and the provider’s settlement file, filtered to rows where either key is NULL, lists exactly the transactions missing from one side — the standard month-end finance query.',
+      },
+      {
+        context: 'Inflated dashboard metrics',
+        usage:
+          'The most common analytics incident is a metric that doubles after someone adds a join to a new table. The cause is fan-out, and the fix is pre-aggregation, which is why mature warehouses build one model per grain.',
+      },
+      {
+        context: 'Dense time series for forecasting',
+        usage:
+          'Models that use lags need a row for every period, including empty ones. A CROSS JOIN of a date spine with the entity list, left-joined to the facts, produces the gap-free grid a lag or rolling window requires.',
+      },
+      {
+        context: 'Org charts and approval chains',
+        usage:
+          'Self joins answer "who reports to whom" one level at a time. Arbitrary depth needs a recursive CTE, which is the subject of SQL-011, but the single-level self join is the building block.',
+      },
+      {
+        context: 'Deduplication and near-duplicate detection',
+        usage:
+          'A self join with `b.id > a.id` and a similarity condition generates candidate duplicate pairs exactly once each, which is the first step of most record-linkage pipelines.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'pandas', role: '`merge(how="outer")` is FULL OUTER, and `validate="one_to_one"` raises when the join would fan out — a guard SQL has no direct equivalent of.' },
+      { tool: 'dbt', role: 'The `unique` test on a model’s key is how teams catch fan-out automatically: if the grain broke, the test fails before anyone sees the dashboard.' },
+      { tool: 'Great Expectations', role: 'Row-count and uniqueness expectations on intermediate tables detect accidental multiplication in a pipeline before it reaches a metric.' },
+      { tool: 'Spark', role: 'An accidental Cartesian product is fatal at scale; Spark can be configured to refuse cross joins unless `CROSS JOIN` is written explicitly.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Joining a parent to two one-to-many children in one query',
+        why: 'The result has |S| × |T| rows per parent, so every sum over either child is multiplied by the other child’s row count. Both numbers are wrong, in different ways, and neither errors.',
+        fix: 'Aggregate each child to the parent grain in its own CTE, then join the one-row-per-parent summaries. Every join is then one-to-one.',
+      },
+      {
+        mistake: 'Reaching for SELECT DISTINCT to fix inflated row counts',
+        why: 'DISTINCT removes duplicate output rows but cannot undo an inflated SUM, and it hides the structural problem so the next person reintroduces it.',
+        fix: 'Find the fanning join and restructure. Use `COUNT(DISTINCT id)` as a diagnostic, not as the fix.',
+      },
+      {
+        mistake: 'Filtering the right table of a LEFT JOIN in WHERE',
+        why: 'The padded rows have NULL in that column, the comparison is UNKNOWN, and they are discarded — converting the outer join to an inner join with no error.',
+        fix: 'Move the condition into ON. If you genuinely want only matched rows, write INNER JOIN so the intent is visible.',
+      },
+      {
+        mistake: 'Joining on only part of a composite key',
+        why: 'Matching region but not month pairs every daily row with every month’s target, producing a silent partial Cartesian product that looks like a normal join.',
+        fix: 'List every column of the key in ON, and verify the result’s row count against the expected grain before using it.',
+      },
+      {
+        mistake: 'Using `<>` instead of `<` when generating pairs in a self join',
+        why: '`a.id <> b.id` produces each unordered pair twice, once in each order, so any count of pairs is doubled.',
+        fix: 'Use `b.id > a.id`, which yields each pair exactly once and excludes self-pairing without a second condition.',
+      },
+      {
+        mistake: 'Forgetting that SQLite before 3.39 has no RIGHT or FULL OUTER JOIN',
+        why: 'The query fails with a syntax error on older builds, and the embedded SQLite inside a phone, browser or older library is frequently older than you assume.',
+        fix: 'Rewrite RIGHT as LEFT with swapped operands, and emulate FULL OUTER with a LEFT JOIN unioned to the opposite anti-join.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What is a Cartesian product, and how would you produce one by accident?',
+        answer:
+          'A Cartesian product pairs every row of one table with every row of another, giving m × n rows. You produce one deliberately with CROSS JOIN and accidentally in two main ways: using the comma syntax `FROM a, b` and forgetting the WHERE condition that was meant to join them, or writing an ON clause that matches on only part of a composite key, so each row on one side matches a whole group on the other. The symptoms are a row count that is a suspiciously round multiple of the expected one and a query that becomes dramatically slower. Legitimate uses exist — crossing a date spine with an entity list to build a dense grid with explicit zeros is the standard one — and writing CROSS JOIN explicitly is how you signal that it was intended.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Why does adding a WHERE condition on the right table turn a LEFT JOIN into an INNER JOIN?',
+        answer:
+          'Because of the order of operations. The LEFT JOIN first produces matched rows and then pads unmatched left rows with NULL in every right-hand column. WHERE runs after that padding, so a condition such as `o.status = ’shipped’` is evaluated against NULL for every padded row, giving UNKNOWN, and WHERE keeps only TRUE — so every padded row is discarded and the only rows left are ones that matched. The join type is now indistinguishable from INNER. If the condition is meant to restrict what counts as a match, it belongs in ON, where it is applied before padding. The one exception is `WHERE right.key IS NULL`, which is deliberately selecting the padded rows — the anti-join.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'A revenue figure doubled after a colleague added a join to a shipments table. Explain what happened and how you would fix it properly.',
+        answer:
+          'The shipments table is one-to-many with orders, so each order that shipped in two parcels now appears twice, and every order-level or item-level amount in the query is summed twice. Revenue has not changed in the source data; the join changed the grain of the rows being summed. The wrong fixes are SELECT DISTINCT, which cannot repair an inflated SUM, and COUNT(DISTINCT), which patches counts but not sums. The right fix is to aggregate shipments to order grain first — a CTE with `SELECT order_id, COUNT(*) AS parcels, MAX(shipped_at) AS last_shipped FROM shipments GROUP BY order_id` — and join that one-row-per-order summary. To stop it recurring I would add an assertion to the pipeline that the model’s key is unique, which is what a dbt `unique` test does, so the next person who breaks the grain finds out from a failing build rather than from a stakeholder.',
+        followUp:
+          'A strong candidate states the general principle: every join in an analytical query should be one-to-one or many-to-one, and any one-to-many relationship should be aggregated before it is joined.',
+      },
+      {
+        level: 'internship',
+        question: 'Write a query to find all employees who earn more than their manager.',
+        answer:
+          '`SELECT e.name AS employee, e.salary, m.name AS manager, m.salary AS manager_salary FROM employees e JOIN employees m ON m.id = e.manager_id WHERE e.salary > m.salary;`. It is a self join: the table appears twice under two aliases, `e` for the report and `m` for the manager, matched through `manager_id`. INNER JOIN is correct here rather than LEFT, because an employee with no manager cannot satisfy the comparison anyway — `NULL > salary` is UNKNOWN and would be filtered out regardless, so the outer join would only add cost. If the question were "list every employee and flag those earning more than their manager", the LEFT JOIN would be required so the top of the hierarchy still appears.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Write a query producing one row per order with the item count, the order total and the customer name, and prove it has not fanned out.',
+        hint: 'Aggregate order_items to order grain in a CTE first. Then compare COUNT(*) with COUNT(DISTINCT id).',
+        language: 'sql',
+        starterCode: 'WITH order_totals AS (\n  SELECT order_id, COUNT(*) AS items, SUM(quantity * unit_price) AS total\n  FROM order_items\n  GROUP BY order_id\n)\nSELECT 1;\n',
+        solution:
+          "WITH order_totals AS (\n  SELECT order_id,\n         COUNT(*)                   AS items,\n         SUM(quantity * unit_price) AS total\n  FROM order_items\n  GROUP BY order_id\n)\nSELECT o.id, o.order_date, c.name AS customer,\n       COALESCE(t.items, 0) AS items,\n       ROUND(COALESCE(t.total, 0), 2) AS order_total\nFROM orders         AS o\nJOIN customers      AS c ON c.id = o.customer_id\nLEFT JOIN order_totals AS t ON t.order_id = o.id\nORDER BY o.id;\n\n-- Proof: these two numbers must be equal\nSELECT COUNT(*) AS rows, COUNT(DISTINCT id) AS distinct_orders FROM (\n  /* the query above */ SELECT o.id FROM orders o\n  LEFT JOIN order_totals t ON t.order_id = o.id\n);\n\nThe CTE collapses order_items to exactly one row per order, so the join to it is one-to-one and cannot multiply. The LEFT JOIN keeps orders that contain no items, and COALESCE turns their NULLs into zeros. The proof query is the habit worth forming: if the row count exceeds the distinct key count, something fanned out.",
+      },
+      {
+        prompt: 'For every department, produce a row for every month in the orders data, showing 0 where no employee was hired. Use a deliberate CROSS JOIN.',
+        hint: 'Build a months CTE and a departments CTE, cross join them, then LEFT JOIN the hire counts.',
+        language: 'sql',
+        solution:
+          "WITH months AS (\n  SELECT DISTINCT SUBSTR(order_date, 1, 7) AS month FROM orders\n),\ndepts AS (\n  SELECT DISTINCT department FROM employees\n),\nhires AS (\n  SELECT department, SUBSTR(hire_date, 1, 7) AS month, COUNT(*) AS n\n  FROM employees\n  GROUP BY department, SUBSTR(hire_date, 1, 7)\n)\nSELECT d.department, m.month, COALESCE(h.n, 0) AS hires\nFROM depts AS d\nCROSS JOIN months AS m\nLEFT JOIN hires AS h ON h.department = d.department AND h.month = m.month\nORDER BY d.department, m.month;\n\nThe CROSS JOIN is the point: it manufactures every department-month combination whether or not any data exists for it, and the LEFT JOIN then attaches the counts that do exist. Without the cross join, months with no hires in a department are simply absent, which breaks line charts and any lag or moving-average calculation that assumes consecutive periods.",
+      },
+      {
+        prompt: 'Find all pairs of products in the same category whose prices differ by less than 5, listing each pair only once.',
+        hint: 'Self join on category, and use an id comparison rather than inequality to avoid duplicate pairs.',
+        language: 'sql',
+        solution:
+          "SELECT a.name AS product_a, b.name AS product_b, a.category,\n       ROUND(ABS(a.price - b.price), 2) AS price_gap\nFROM products AS a\nJOIN products AS b\n  ON b.category = a.category\n AND b.id > a.id\n AND ABS(a.price - b.price) < 5\nORDER BY a.category, price_gap;\n\n`b.id > a.id` does two jobs: it stops a product pairing with itself, and it yields each unordered pair exactly once rather than twice in both orders. Writing `b.id <> a.id` instead would double every row, which is the standard mistake in pair-generation queries — and the doubling is easy to miss because the output still looks sensible.",
+      },
+      {
+        prompt: 'Reconcile two views of the data: list every order id that appears in `orders` but has no rows in `order_items`, and every `order_items.order_id` that matches no order. Return one combined result with a column saying which problem it is.',
+        hint: 'Two anti-joins, combined with UNION ALL. This is the portable form of a FULL OUTER JOIN reconciliation.',
+        language: 'sql',
+        solution:
+          "SELECT 'order with no items' AS issue, o.id AS key\nFROM orders AS o\nLEFT JOIN order_items AS oi ON oi.order_id = o.id\nWHERE oi.id IS NULL\n\nUNION ALL\n\nSELECT 'item referencing a missing order' AS issue, oi.order_id AS key\nFROM order_items AS oi\nLEFT JOIN orders AS o ON o.id = oi.order_id\nWHERE o.id IS NULL\n\nORDER BY issue, key;\n\nThis is a full outer join written as two anti-joins, which is both portable and clearer about intent than a FULL OUTER JOIN with a double IS NULL filter. The first branch finds empty orders, which may be legitimate (an order created but never filled). The second finds genuine referential-integrity violations, which should be impossible if the foreign key is declared and enforced — any rows here mean enforcement is off, and in SQLite that usually means `PRAGMA foreign_keys` was never switched on.",
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'SQL-010-q1',
+        type: 'mcq',
+        concept: 'fan-out',
+        prompt: 'An order has 3 items and 2 payments. Joining orders to both children in one query produces how many rows for that order?',
+        options: ['6', '5', '3', '1'],
+        answerIndex: 0,
+        explanation:
+          'The children multiply rather than add: every item pairs with every payment, giving 3 x 2 = 6. Any sum over either child is inflated by the other child’s row count.',
+      },
+      {
+        id: 'SQL-010-q2',
+        type: 'truefalse',
+        concept: 'distinct as a fix',
+        prompt: 'Adding SELECT DISTINCT repairs a SUM that was inflated by a fan-out.',
+        answer: false,
+        explanation:
+          'DISTINCT deduplicates output rows, but the aggregate has already consumed the duplicated rows. Only restructuring the query — pre-aggregating each child — fixes the sum.',
+      },
+      {
+        id: 'SQL-010-q3',
+        type: 'code-output',
+        language: 'sql',
+        concept: 'left join filtered in where',
+        prompt: '`customers` has 40 rows, 33 of which have at least one shipped order. How many rows does this return?',
+        code: "SELECT DISTINCT c.id\nFROM customers c\nLEFT JOIN orders o ON o.customer_id = c.id\nWHERE o.status = 'shipped';",
+        options: ['33', '40', '7', '0'],
+        answerIndex: 0,
+        explanation:
+          'The WHERE clause discards the padded rows, because NULL = ’shipped’ is UNKNOWN, so the LEFT JOIN behaves as an INNER JOIN and only customers with a shipped order survive.',
+      },
+      {
+        id: 'SQL-010-q4',
+        type: 'match',
+        concept: 'join varieties',
+        prompt: 'Match each join to the task it fits best.',
+        pairs: [
+          { left: 'FULL OUTER JOIN', right: 'Reconciling two systems and seeing what is only in each' },
+          { left: 'CROSS JOIN', right: 'Building a dense month-by-category grid with explicit zeros' },
+          { left: 'SELF JOIN', right: 'Attaching each employee to their manager from one table' },
+          { left: 'LEFT JOIN plus IS NULL', right: 'Listing customers who have never ordered' },
+        ],
+        explanation:
+          'Each shape exists because a class of question needs it. Choosing the right one is usually easier than debugging the wrong one after the numbers look odd.',
+      },
+      {
+        id: 'SQL-010-q5',
+        type: 'debug',
+        language: 'sql',
+        concept: 'self join pairs',
+        prompt: 'This returns every colleague pair twice. What is the minimal fix?',
+        code: "SELECT a.name, b.name\nFROM employees a\nJOIN employees b ON b.department = a.department AND b.id <> a.id;",
+        options: [
+          'Change `b.id <> a.id` to `b.id > a.id`',
+          'Add SELECT DISTINCT',
+          'Change the JOIN to a LEFT JOIN',
+          'Add `ORDER BY a.id, b.id`',
+        ],
+        answerIndex: 0,
+        explanation:
+          '`<>` admits both (a, b) and (b, a). An ordering comparison keeps exactly one of each unordered pair and still excludes self-pairing, with no deduplication cost.',
+      },
+      {
+        id: 'SQL-010-q6',
+        type: 'multi',
+        concept: 'diagnosing joins',
+        prompt: 'Which checks would reveal an unintended fan-out? Select all that apply.',
+        options: [
+          'Comparing COUNT(*) with COUNT(DISTINCT base_table.id) on the joined result',
+          'Comparing the joined row count against the base table’s row count',
+          'Grouping the child table by the join key and looking for counts above 1',
+          'Checking that every column in SELECT has an alias',
+          'Asserting that the result’s intended key is unique',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'All the useful checks compare an actual row count with the grain you intended. Aliasing is a readability concern and says nothing about cardinality.',
+      },
+      {
+        id: 'SQL-010-q7',
+        type: 'explain',
+        concept: 'grain discipline',
+        prompt: 'Explain why "aggregate each one-to-many child before joining" is a better default than fixing counts with COUNT(DISTINCT).',
+        rubric: [
+          'Notes that COUNT(DISTINCT) fixes counts but not sums or averages',
+          'Explains that pre-aggregation makes every join one-to-one, removing the whole class of error',
+          'Mentions that the resulting query is also easier to reason about and to test',
+        ],
+        sampleAnswer:
+          'COUNT(DISTINCT) treats one symptom. It recovers the number of orders from a fanned-out result, but it does nothing for a SUM, an AVG or a median over the same rows, and those are silently inflated by exactly the other child’s row count. Pre-aggregating each one-to-many child into a CTE at the parent grain removes the cause: every remaining join is one-to-one or many-to-one, so ordinary COUNT and SUM are correct again and no future reader has to remember which columns need DISTINCT. It is also easier to test, because each CTE has a stated grain you can assert on — one row per order — and a broken grain then fails a uniqueness check rather than quietly changing a number on a dashboard. The general discipline is to know and state what one row means at every stage of the query.',
+        explanation:
+          'The examinable idea is preferring a structural fix that eliminates a class of bug over a local patch that addresses one instance of it.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What is fan-out?', back: 'Row multiplication from joining a parent to two one-to-many children: 3 items x 2 payments = 6 rows, and both sums are inflated.' },
+      { front: 'How do you fix fan-out properly?', back: 'Pre-aggregate each child to the parent grain in its own CTE, then join the one-row-per-parent summaries so every join is one-to-one.' },
+      { front: 'Why is RIGHT JOIN rarely used?', back: 'Swapping the operand order turns it into a LEFT JOIN, and keeping one direction throughout makes long FROM clauses readable.' },
+      { front: 'How do you emulate FULL OUTER JOIN?', back: 'LEFT JOIN, UNION ALL, then the opposite anti-join (right LEFT JOIN left WHERE left.key IS NULL).' },
+      { front: 'When is a CROSS JOIN correct?', back: 'When you deliberately need every combination — typically a date spine crossed with entities to produce a dense grid with explicit zeros.' },
+      { front: 'Why `b.id > a.id` in a self join?', back: 'It yields each unordered pair exactly once and excludes self-pairing. `<>` would return every pair twice.' },
+      { front: 'What turns a LEFT JOIN into an INNER JOIN?', back: 'A condition on the right table placed in WHERE: the padded rows have NULL there, the test is UNKNOWN, and they are discarded.' },
+    ],
+
+    challenge: {
+      title: 'Find and fix a fan-out',
+      brief:
+        'Write a deliberately broken query that joins customers to orders and to order_items and reports order counts and revenue per customer. Demonstrate that it is wrong by comparing it against correct figures computed separately. Then rewrite it using pre-aggregated CTEs so that every join is one-to-one, and finish with an assertion query that returns zero rows when the grain is correct — the kind of check you would put in a pipeline.',
+      language: 'sql',
+      acceptanceCriteria: [
+        'The broken query and the correct query are both shown, with their differing outputs',
+        'The inflation factor is explained in terms of the other child’s row count',
+        'The fixed version aggregates each one-to-many child to a common grain before joining',
+        'An assertion query returns zero rows when the result key is unique, and is explained',
+        'A comment states the grain of every CTE',
+      ],
+      starterCode: "-- Broken: two one-to-many joins in one query\nSELECT c.name, COUNT(*) AS orders, SUM(oi.quantity * oi.unit_price) AS revenue\nFROM customers c\nJOIN orders o ON o.customer_id = c.id\nJOIN order_items oi ON oi.order_id = o.id\nGROUP BY c.id, c.name;\n",
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Imagine I understand INNER and LEFT joins. Teach me why joining one table to two other tables at once can silently double my numbers.',
+      mustCover: [
+        'A one-to-many join repeats the parent row once per child',
+        'Joining two independent children multiplies rather than adds their counts',
+        'Every parent-level value is then summed once per combination, inflating totals',
+        'DISTINCT cannot undo an inflated SUM, because the aggregate already consumed the extra rows',
+        'The fix is to aggregate each child to the parent grain first, so every join is one-to-one',
+      ],
+      bonusSignals: ['works through a small concrete example with numbers', 'names the inflation factor explicitly', 'mentions checking COUNT(*) against COUNT(DISTINCT key)'],
+      sampleExplanation:
+        'Take one order. It has three items and, separately, two payments. When you join the order to its items you get three lines, which is already a change: the order row is now repeated three times. Now join that result to the payments as well. Each of those three lines has to pair with each of the two payments, so you end up with six lines. Look at what that does to the money. The three item amounts each appear twice, so adding up the item column gives you double the true item total. The two payment amounts each appear three times, so the payment column gives you triple. Neither number is randomly wrong — each is multiplied by exactly how many rows the other side had, which is why the result looks entirely believable. Adding DISTINCT does not rescue it, because by the time you deduplicate, the sum has already added the extra copies. The fix is to stop the multiplication happening at all: total the items on their own, giving one line per order, total the payments on their own, giving one line per order, and then attach both summaries to the order. Now every join matches one row to one row, and the totals are simply the totals.',
+    },
+  },
+
+  {
+    id: 'SQL-011',
+    domain: 'SQL',
+    module: 'Advanced SQL',
+    topic: 'Subqueries and CTEs',
+    title: 'Subqueries and CTEs',
+    slug: 'subqueries-and-ctes',
+    difficulty: 4,
+    estimatedMinutes: 40,
+    prerequisites: ['SQL-010'],
+    related: ['SQL-005', 'SQL-007', 'SQL-008', 'SQL-009'],
+    tags: ['subquery', 'cte', 'with', 'exists', 'correlated', 'recursive', 'hierarchy'],
+
+    learningObjectives: [
+      'Distinguish scalar, IN-list, EXISTS and correlated subqueries and choose the right one',
+      'Rewrite a nested query as a CTE and explain what readability and reuse you gain',
+      'Explain how a correlated subquery is evaluated and when it is worth rewriting as a join',
+      'Write a recursive CTE to walk a hierarchy such as an employee reporting chain',
+      'Recognise when a derived table, a CTE and a window function each solve the problem better',
+    ],
+
+    terminology: [
+      {
+        term: 'Subquery',
+        definition:
+          'A SELECT nested inside another statement. It may appear in SELECT (scalar), in FROM (a derived table), or in WHERE (as a scalar, an IN list or an EXISTS test).',
+        simple: 'A query inside a query.',
+      },
+      {
+        term: 'Scalar subquery',
+        definition:
+          'A subquery guaranteed to return at most one row and one column, usable anywhere a single value is expected. Returning more than one row is a runtime error in PostgreSQL.',
+        simple: 'A little query that produces exactly one value.',
+      },
+      {
+        term: 'Correlated subquery',
+        definition:
+          'A subquery that references a column from the outer query, so it must be conceptually re-evaluated for each outer row rather than computed once.',
+        simple: 'An inner query that depends on the row the outer query is currently looking at.',
+      },
+      {
+        term: 'Derived table',
+        definition:
+          'A subquery in the FROM clause, treated as an anonymous table for the duration of the statement. Must be aliased in most dialects.',
+        simple: 'A temporary table made on the fly inside FROM.',
+      },
+      {
+        term: 'CTE (Common Table Expression)',
+        definition:
+          'A named subquery declared in a WITH clause at the top of a statement, referenceable by name one or more times in the query that follows.',
+        simple: 'A named step you define first and use below.',
+      },
+      {
+        term: 'Recursive CTE',
+        definition:
+          'A CTE that references itself: an anchor query provides the starting rows and a recursive query repeatedly joins back to the accumulated result until it produces nothing new.',
+        simple: 'A CTE that keeps going one level deeper until there is nothing left.',
+      },
+      {
+        term: 'EXISTS',
+        definition:
+          'A predicate that is TRUE when its correlated subquery returns at least one row. It never evaluates the projection, so `SELECT 1` and `SELECT *` are equivalent inside it.',
+        simple: 'Asks only whether any matching row exists.',
+      },
+    ],
+
+    simpleExplanation:
+      "Every query returns a table, which means a query can go anywhere a table can go — and that one fact gives you subqueries. You can put a query in WHERE to compare against something computed elsewhere (“products priced above the overall average”), in FROM to build an intermediate table and query that (“first total each order, then average those totals”), or in SELECT to fetch one related value per row. Some subqueries refer back to the outer row they are being evaluated for — those are called correlated, and conceptually they run once per outer row, which is both powerful and a performance trap. The problem with all of this is readability: nest three subqueries and nobody, including you next month, can follow it. A CTE fixes that. Writing `WITH order_totals AS (...)` at the top gives the intermediate result a name, so the query below reads as a sequence of named steps instead of an onion. The same syntax, with the word RECURSIVE, also lets a query call itself — which is how you walk a chain of managers or a tree of categories of unknown depth.",
+
+    whyItExists:
+      'Many questions are layered: they need a value computed from the whole table before individual rows can be judged, or they need an intermediate result at a different grain. Without nesting you would have to run several queries and stitch them together in application code, losing the ability to filter, join and aggregate the intermediate result inside the engine.',
+
+    analogy: {
+      scenario:
+        'Think about how a recipe is written. A bad recipe is one long sentence: "combine the thing you get by whisking the eggs you separated from the whites you beat until stiff with the mixture you made by melting the chocolate you chopped". A good recipe names its intermediate results first — "1. Make the meringue. 2. Make the ganache. 3. Fold the meringue into the ganache" — and each named step can be referred to later, or even used twice.',
+      mapping: [
+        { from: 'The single impenetrable sentence', to: 'Deeply nested subqueries' },
+        { from: 'A named preparatory step, e.g. "the meringue"', to: 'A CTE declared in WITH' },
+        { from: 'Using the meringue twice in the same dish', to: 'Referencing one CTE from two places in the query' },
+        { from: 'A step that says "taste and adjust for this particular batch"', to: 'A correlated subquery, re-evaluated per outer row' },
+        { from: 'A step that says "reduce until it coats the spoon", repeating until a condition', to: 'A recursive CTE, iterating until no new rows appear' },
+        { from: 'The finished dish', to: 'The final SELECT that consumes the named steps' },
+      ],
+      bridge:
+        'Naming intermediate results is not decoration in either setting — it is what makes a complex thing checkable. You can taste the meringue on its own, and you can run a CTE on its own to confirm its row count and grain before the rest of the query depends on it. That debuggability is the main practical argument for CTEs over nesting, ahead of any question of performance.',
+      limitations:
+        'A recipe’s steps happen in the written order. A CTE is not necessarily materialised or executed in order — most engines inline it into the surrounding query and optimise the whole thing together, so a CTE is a naming device, not a scheduling instruction.',
+    },
+
+    visuals: [
+      {
+        kind: 'table',
+        title: 'Where a subquery can appear, and what it must return',
+        columns: ['Position', 'Example', 'Must return', 'Typical use'],
+        rows: [
+          ['SELECT (scalar)', '`(SELECT AVG(price) FROM products)`', 'One row, one column', 'A constant to compare every row against'],
+          ['FROM (derived table)', '`FROM (SELECT ... ) AS t`', 'Any table', 'Changing grain before aggregating again'],
+          ['WHERE with IN', '`WHERE id IN (SELECT ...)`', 'One column, any rows', 'Membership — unsafe with NULLs when negated'],
+          ['WHERE with EXISTS', '`WHERE EXISTS (SELECT 1 ...)`', 'Anything; only existence matters', 'Semi-join and anti-join; NULL-safe'],
+          ['WHERE comparison', '`WHERE price > (SELECT AVG(price) ...)`', 'Exactly one value', 'Above/below an aggregate'],
+          ['WITH (CTE)', '`WITH t AS (SELECT ...)`', 'Any table, named', 'Naming steps, reuse, recursion'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Nested subqueries versus CTEs',
+        caption: 'Usually the same plan. Very different to read and to debug.',
+        left: {
+          heading: 'Nested subqueries',
+          points: [
+            'Read inside-out, which is not how anyone reads',
+            'The same subquery must be repeated if needed twice',
+            'Hard to test a middle layer in isolation',
+            'Deep nesting quickly exceeds what a reviewer will check',
+            'No recursion',
+          ],
+        },
+        right: {
+          heading: 'CTEs with WITH',
+          points: [
+            'Read top to bottom as named steps',
+            'Defined once, referenced many times',
+            'Each CTE can be run alone to check its grain and row count',
+            'Reviewable: each step has a name stating its intent',
+            'RECURSIVE enables hierarchy traversal',
+          ],
+        },
+      },
+      {
+        kind: 'flow',
+        title: 'How a recursive CTE runs',
+        caption: 'Walking an employee reporting chain downwards from the top.',
+        steps: [
+          { label: 'Anchor query', detail: 'Select the starting rows — employees with no manager — and label them level 1.' },
+          { label: 'Recursive query', detail: 'Join `employees` to the rows produced on the previous pass, matching manager_id to the previous level’s id.' },
+          { label: 'Accumulate', detail: 'The new rows are added to the result and become the input for the next pass.' },
+          { label: 'Repeat', detail: 'Each pass descends one level, incrementing the level counter.' },
+          { label: 'Terminate', detail: 'When a pass produces no new rows, recursion stops and the accumulated result is returned.' },
+          { label: 'Guard', detail: 'A cycle in the data would never terminate, so production queries add a depth limit or track the visited path.' },
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Build a query in named steps',
+        caption: 'Write a CTE that totals each order, then run just the CTE with a SELECT to check its row count before using it.',
+        widget: 'sql-playground',
+      },
+    ],
+
+    formalDefinition:
+      'A subquery is a SELECT expression nested within another SQL statement, evaluated as a relation. An uncorrelated subquery references no outer columns and may be evaluated once; a correlated subquery references at least one outer column and is semantically evaluated once per candidate outer tuple, though optimisers commonly rewrite it as a semi-join or anti-join. A common table expression is a named subquery bound in a WITH clause and visible to the statement that follows; a recursive CTE consists of an anchor term unioned with a recursive term that references the CTE itself, evaluated to a fixed point.',
+
+    workedExample: {
+      title: 'Second-highest salary, four ways',
+      setup:
+        'The archetypal interview question: find the second-highest salary in `employees`. It looks trivial and it is a genuinely good question, because every approach exposes a different edge case — ties, fewer than two distinct salaries, and NULLs.',
+      steps: [
+        {
+          label: 'Approach 1: ORDER BY with OFFSET',
+          detail:
+            '`SELECT DISTINCT salary FROM employees ORDER BY salary DESC LIMIT 1 OFFSET 1`. DISTINCT is essential: without it, two people on the top salary would make the "second" row still the top salary. Returns no rows at all when there is only one distinct salary, which may or may not be what the caller wants.',
+        },
+        {
+          label: 'Approach 2: the maximum below the maximum',
+          detail:
+            '`SELECT MAX(salary) FROM employees WHERE salary < (SELECT MAX(salary) FROM employees)`. An uncorrelated scalar subquery computed once. This returns NULL rather than no rows when there is no second salary, which is often preferable because the caller always gets exactly one row.',
+          latex: 's_{(2)} = \\max\\{s : s < \\max(s)\\}',
+        },
+        {
+          label: 'Approach 3: a correlated count',
+          detail:
+            '`SELECT DISTINCT salary FROM employees e WHERE 1 = (SELECT COUNT(DISTINCT salary) FROM employees x WHERE x.salary > e.salary)`. This generalises to Nth highest by changing 1 to N-1, but it is conceptually O(n²) and the worst performer of the four.',
+        },
+        {
+          label: 'Approach 4: a window function',
+          detail:
+            '`WITH r AS (SELECT salary, DENSE_RANK() OVER (ORDER BY salary DESC) AS rk FROM employees) SELECT DISTINCT salary FROM r WHERE rk = 2`. DENSE_RANK treats tied salaries as one rank, which matches what "second-highest salary" normally means. Window functions are the subject of SQL-012.',
+        },
+        {
+          label: 'Decide which to ship',
+          detail:
+            'Approach 2 for a one-off answer: shortest, clearest, one row guaranteed. Approach 4 when the requirement will generalise to "top N per department", because only the window version extends cleanly. Approach 3 is worth knowing to explain in an interview and worth avoiding in production.',
+        },
+      ],
+      conclusion:
+        'The real content of this question is not the SQL but the edge cases: are ties one salary or two, what should happen when there is no second salary, and does NULL count. A candidate who asks those questions before writing anything is demonstrating exactly the judgement the question is designed to test.',
+    },
+
+    codeExamples: [
+      {
+        language: 'sql',
+        title: 'Scalar and IN subqueries',
+        runnable: true,
+        code: `-- Scalar: compare each row against a value computed over the whole table
+SELECT name, category, price,
+       ROUND(price - (SELECT AVG(price) FROM products), 2) AS vs_average
+FROM products
+WHERE price > (SELECT AVG(price) FROM products)
+ORDER BY price DESC;
+
+-- IN: membership in a set computed by another query
+SELECT id, name, country
+FROM customers
+WHERE id IN (
+  SELECT customer_id FROM orders WHERE status = 'cancelled'
+);`,
+        explanation:
+          'The scalar subquery is uncorrelated — it references nothing from the outer query — so the engine evaluates it once and reuses the value, which is why it is cheap despite appearing inside a per-row comparison. The IN form is a semi-join: it keeps an outer row if at least one inner row matches, and it never duplicates the outer row even when several inner rows match, which is precisely the difference between IN and an INNER JOIN on the same condition.',
+        output: `name        category  price  vs_average
+----------  --------  -----  ----------
+4K Monitor  displays  349.0  272.58
+
+id  name        country
+--  ----------  -------
+2   Ben Torres  Spain`,
+      },
+      {
+        language: 'sql',
+        title: 'EXISTS and NOT EXISTS: correlated existence tests',
+        runnable: true,
+        code: `-- Customers with at least one shipped order
+SELECT c.id, c.name
+FROM customers AS c
+WHERE EXISTS (
+  SELECT 1 FROM orders AS o
+  WHERE o.customer_id = c.id AND o.status = 'shipped'
+);
+
+-- Customers who have never ordered anything (NULL-safe anti-join)
+SELECT c.id, c.name
+FROM customers AS c
+WHERE NOT EXISTS (
+  SELECT 1 FROM orders AS o WHERE o.customer_id = c.id
+);`,
+        explanation:
+          'The `o.customer_id = c.id` reference makes these correlated: the inner query depends on the outer row. EXISTS stops at the first matching row rather than counting them all, which makes it the right way to express "has at least one" — `COUNT(*) > 0` would count every match unnecessarily. The projection inside is irrelevant, so `SELECT 1` is conventional. NOT EXISTS is the robust anti-join: unlike NOT IN, a NULL anywhere in the inner query cannot poison the predicate.',
+        output: `id  name
+--  ----------
+1   Ada Okafor
+3   Chen Wei
+
+id  name
+--  ------------
+7   Priya Nair
+19  Tom Halloran`,
+      },
+      {
+        language: 'sql',
+        title: 'Derived table versus CTE: the same query twice',
+        runnable: true,
+        code: `-- Derived table: read it inside-out
+SELECT ROUND(AVG(order_total), 2) AS avg_order_value
+FROM (
+  SELECT order_id, SUM(quantity * unit_price) AS order_total
+  FROM order_items
+  GROUP BY order_id
+) AS t;
+
+-- CTE: read it top to bottom
+WITH order_totals AS (
+  SELECT order_id, SUM(quantity * unit_price) AS order_total
+  FROM order_items
+  GROUP BY order_id
+)
+SELECT ROUND(AVG(order_total), 2) AS avg_order_value
+FROM order_totals;`,
+        explanation:
+          'Both compute the average order value correctly, by first collapsing items to one row per order and only then averaging — averaging `unit_price` directly would weight by basket size instead of by order, which is the mistake from SQL-007. The CTE version is identical in meaning and usually identical in plan, but it can be developed incrementally: run `SELECT * FROM order_totals LIMIT 5` first, confirm the grain is one row per order, and only then write the outer query.',
+        output: `avg_order_value
+---------------
+187.34`,
+      },
+      {
+        language: 'sql',
+        title: 'Multiple CTEs, one referencing another',
+        runnable: true,
+        code: `WITH order_totals AS (
+  SELECT order_id, SUM(quantity * unit_price) AS order_total
+  FROM order_items
+  GROUP BY order_id
+),
+customer_stats AS (
+  SELECT o.customer_id,
+         COUNT(*)              AS orders,
+         SUM(t.order_total)    AS revenue,
+         AVG(t.order_total)    AS avg_order,
+         MAX(o.order_date)     AS last_order
+  FROM orders AS o
+  JOIN order_totals AS t ON t.order_id = o.id
+  WHERE o.status <> 'cancelled'
+  GROUP BY o.customer_id
+)
+SELECT c.name, c.country,
+       COALESCE(s.orders, 0)             AS orders,
+       ROUND(COALESCE(s.revenue, 0), 2)  AS revenue,
+       ROUND(s.avg_order, 2)             AS avg_order,
+       COALESCE(s.last_order, 'never')   AS last_order
+FROM customers AS c
+LEFT JOIN customer_stats AS s ON s.customer_id = c.id
+ORDER BY revenue DESC, c.name;`,
+        explanation:
+          'Each CTE has a stated grain: `order_totals` is one row per order, `customer_stats` is one row per customer who has a non-cancelled order. Because both are already collapsed, the final LEFT JOIN is one-to-one and cannot fan out — the structural fix from SQL-010, expressed readably. The LEFT JOIN plus COALESCE keeps customers with no qualifying orders in the report showing zeros, which an INNER JOIN would have removed silently.',
+        output: `name        country  orders  revenue   avg_order  last_order
+----------  -------  ------  --------  ---------  ----------
+Ada Okafor  Nigeria  6       2104.50   350.75     2024-03-27
+Priya Nair  India    0       0.00                 never`,
+      },
+      {
+        language: 'sql',
+        title: 'Recursive CTE: walking the reporting hierarchy',
+        runnable: true,
+        code: `WITH RECURSIVE chain AS (
+  -- Anchor: everyone with no manager is at level 1
+  SELECT id, name, manager_id, department, 1 AS level, name AS path
+  FROM employees
+  WHERE manager_id IS NULL
+
+  UNION ALL
+
+  -- Recursive step: attach each employee to the level above
+  SELECT e.id, e.name, e.manager_id, e.department,
+         c.level + 1,
+         c.path || ' > ' || e.name
+  FROM employees AS e
+  JOIN chain AS c ON e.manager_id = c.id
+  WHERE c.level < 20            -- guard against a cycle in the data
+)
+SELECT level, name, department, path
+FROM chain
+ORDER BY path;`,
+        explanation:
+          'The anchor supplies the starting rows and the recursive term joins the table back to whatever the previous pass produced, descending one level per pass until a pass returns nothing. The accumulated `path` string is what turns the result into a readable org chart, and `level` gives you depth for indentation or filtering. The depth guard matters: if the data ever contains a cycle — two employees managing each other, which no foreign key prevents — the recursion never terminates, and a bounded level is the simplest defence. PostgreSQL uses the same syntax; note that in PostgreSQL `WITH RECURSIVE` is required while SQLite accepts it and also tolerates plain WITH for recursive queries.',
+        output: `level  name          department  path
+-----  ------------  ----------  --------------------------------
+1      Dana Ortiz    sales       Dana Ortiz
+2      Ivan Petrov   sales       Dana Ortiz > Ivan Petrov
+3      Mei Tanaka    sales       Dana Ortiz > Ivan Petrov > Mei Tanaka`,
+      },
+      {
+        language: 'sql',
+        title: 'Recursive CTE as a generator: a gap-free date spine',
+        runnable: true,
+        code: `WITH RECURSIVE months(month) AS (
+  SELECT '2024-01'
+  UNION ALL
+  SELECT CASE
+           WHEN SUBSTR(month, 6, 2) = '12'
+           THEN CAST(CAST(SUBSTR(month, 1, 4) AS INTEGER) + 1 AS TEXT) || '-01'
+           ELSE SUBSTR(month, 1, 5) ||
+                SUBSTR('0' || CAST(CAST(SUBSTR(month, 6, 2) AS INTEGER) + 1 AS TEXT), -2)
+         END
+  FROM months
+  WHERE month < '2024-12'
+)
+SELECT m.month, COALESCE(COUNT(o.id), 0) AS orders
+FROM months AS m
+LEFT JOIN orders AS o ON SUBSTR(o.order_date, 1, 7) = m.month
+GROUP BY m.month
+ORDER BY m.month;`,
+        explanation:
+          'Recursion is not only for hierarchies — it generates sequences too. Here it manufactures every month of 2024 so that months with no orders appear with a count of zero rather than being absent, which is exactly the dense-grid requirement from SQL-010, built without a separate calendar table. In PostgreSQL this is far simpler: `generate_series(’2024-01-01’::date, ’2024-12-01’::date, ’1 month’)` does it in one call, and the recursive version is the portable fallback for engines without a series generator.',
+        output: `month    orders
+-------  ------
+2024-01  9
+2024-02  14
+2024-03  17
+2024-04  0`,
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Multi-step feature pipelines',
+        usage:
+          'A feature query typically stacks CTEs: filter the event window, aggregate per user, join to labels, then filter again. Each step is a named CTE that can be unit-tested by running it alone.',
+      },
+      {
+        context: 'Category and org hierarchies',
+        usage:
+          'E-commerce category trees and staff reporting lines are stored with a parent id and traversed with recursive CTEs — "all descendants of Electronics" is a single query rather than a loop in application code.',
+      },
+      {
+        context: 'Cohort and funnel analysis',
+        usage:
+          'Defining a cohort in one CTE and their subsequent behaviour in another, then joining, is the standard shape. Trying to express it with nested subqueries produces something no reviewer can check.',
+      },
+      {
+        context: 'Graph and path queries',
+        usage:
+          'Recursive CTEs handle friend-of-a-friend traversal, bill-of-materials explosion and dependency resolution — anything with an unbounded chain — without leaving the database.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'dbt', role: 'A dbt model is essentially a named CTE promoted to a table or view, with the same argument for it: naming intermediate steps makes them testable.' },
+      { tool: 'pandas', role: 'Chained assignments and `.pipe()` play the CTE role; an intermediate DataFrame you can inspect is the same debugging affordance.' },
+      { tool: 'SQLAlchemy', role: '`select(...).cte("order_totals")` builds a real CTE, and `.exists()` builds an EXISTS predicate with correct correlation.' },
+      { tool: 'PostgreSQL 12+', role: 'CTEs are inlined by default rather than always materialised; `MATERIALIZED` and `NOT MATERIALIZED` let you override the optimiser when it matters.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Using a scalar subquery that can return more than one row',
+        why: 'PostgreSQL raises "more than one row returned by a subquery used as an expression". SQLite silently takes the first row, so the query returns a plausible wrong answer.',
+        fix: 'Guarantee singularity with an aggregate, a LIMIT 1 plus a deterministic ORDER BY, or by restructuring as a join.',
+      },
+      {
+        mistake: 'Using NOT IN with a subquery that can produce NULL',
+        why: 'One NULL makes the predicate UNKNOWN for every row, so the query returns nothing and an empty result looks like a legitimate answer.',
+        fix: 'Use NOT EXISTS, which is NULL-safe, or add `WHERE col IS NOT NULL` inside the subquery.',
+      },
+      {
+        mistake: 'Writing a correlated subquery in SELECT that runs for every row',
+        why: 'A per-row lookup against a large table can be orders of magnitude slower than one join, particularly without an index on the correlation column.',
+        fix: 'Rewrite as a join to a pre-aggregated CTE, or as a window function. Check the plan; modern optimisers decorrelate some of these but not all.',
+      },
+      {
+        mistake: 'Assuming a CTE is materialised and therefore computed once',
+        why: 'Most engines inline a CTE into the surrounding query, so a CTE referenced twice may be executed twice, and a CTE is not a barrier to predicate pushdown.',
+        fix: 'Do not rely on materialisation for performance. In PostgreSQL use `MATERIALIZED` explicitly if you need it; otherwise write to a temporary table when reuse is genuinely expensive.',
+      },
+      {
+        mistake: 'Writing a recursive CTE with no termination guard',
+        why: 'A cycle in the data — two employees managing each other — makes the recursion run for ever, or until the engine’s limit is hit and the query fails after consuming a great deal of memory.',
+        fix: 'Bound the depth with `WHERE level < n`, or track the visited path and exclude rows already on it. Treat any hierarchy as potentially cyclic unless a constraint prevents it.',
+      },
+      {
+        mistake: 'Forgetting to alias a derived table',
+        why: 'PostgreSQL requires an alias for a subquery in FROM and reports "subquery in FROM must have an alias", which stops the query outright.',
+        fix: 'Always alias: `FROM (SELECT ...) AS t`. SQLite does not require it, which makes this another portability trap.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What is the difference between a correlated and an uncorrelated subquery?',
+        answer:
+          'An uncorrelated subquery references nothing from the outer query, so it can be evaluated once and its result reused for every outer row — `(SELECT AVG(price) FROM products)` is the classic case. A correlated subquery references an outer column, so semantically it must be re-evaluated for each candidate outer row: `EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id)` cannot be computed without knowing which customer is being considered. The performance implication is that a correlated subquery is conceptually a nested loop, though modern optimisers frequently rewrite EXISTS and IN forms into semi-joins or hash joins, so the naive O(n²) reading is often pessimistic. The way to know is to read the plan rather than to guess.',
+      },
+      {
+        level: 'intermediate',
+        question: 'When would you use a CTE rather than a subquery, and does it make the query faster?',
+        answer:
+          'Use a CTE when the query has more than one logical step, when an intermediate result is needed twice, or when recursion is required. The main benefit is readability and debuggability: named steps read top to bottom, each can be run in isolation to verify its grain and row count, and a reviewer can follow it. It generally does not make the query faster. In PostgreSQL before version 12, CTEs were always materialised, which acted as an optimisation fence and sometimes helped and sometimes hurt; from 12 onwards they are inlined by default, with `MATERIALIZED` available to force the old behaviour. SQLite has always inlined them where it can. So a CTE is a naming construct, and treating it as a performance hint is a mistake in both directions.',
+        followUp:
+          'A strong answer mentions that the inlining change in PostgreSQL 12 broke some queries that had relied on CTEs as an optimisation fence, which is a good illustration of why undocumented performance assumptions are fragile.',
+      },
+      {
+        level: 'internship',
+        question: 'Find the second-highest salary in the employees table.',
+        answer:
+          'The compact version is `SELECT MAX(salary) FROM employees WHERE salary < (SELECT MAX(salary) FROM employees)`: the inner scalar subquery finds the top salary and the outer takes the largest strictly below it. It returns NULL rather than no rows when there is no second distinct salary, which is usually the better behaviour because the caller always gets one row. The alternative `SELECT DISTINCT salary FROM employees ORDER BY salary DESC LIMIT 1 OFFSET 1` is equally valid, and DISTINCT is essential there — without it, two employees sharing the top salary would make row two the top salary again. Before writing either I would ask what "second-highest" means when there are ties, since that decides between DENSE_RANK and ROW_NUMBER semantics, and whether NULL salaries can occur.',
+        followUp:
+          'Asking about ties before writing code is the signal interviewers are actually looking for; jumping straight to LIMIT 1 OFFSET 1 without DISTINCT is the commonest failure.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'How would you find all employees beneath a given manager, at any depth?',
+        answer:
+          'A recursive CTE. The anchor selects the manager’s direct reports (or the manager themselves, depending on whether they should be included), and the recursive term joins `employees` to the rows produced on the previous pass, matching `manager_id` to the previous level’s `id`. Each pass descends one level and recursion stops when a pass adds no new rows. Two practical points: carry a `level` column so you can report depth or limit it, and add a termination guard, because a cycle in the data would otherwise loop for ever and no foreign key prevents two employees managing each other. If this query runs constantly — for permission checks, say — the alternative is to denormalise the hierarchy into a closure table storing every ancestor-descendant pair, trading write cost for constant-time reads.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Find every product whose price is above the average price of its own category.',
+        hint: 'The comparison value differs per row, so the subquery must reference the outer row — or you can pre-aggregate per category in a CTE.',
+        language: 'sql',
+        starterCode: '-- Two approaches: a correlated subquery, and a CTE join\n',
+        solution:
+          'WITH category_avg AS (\n  SELECT category, AVG(price) AS avg_price\n  FROM products\n  GROUP BY category\n)\nSELECT p.name, p.category, p.price, ROUND(a.avg_price, 2) AS category_avg\nFROM products AS p\nJOIN category_avg AS a ON a.category = p.category\nWHERE p.price > a.avg_price\nORDER BY p.category, p.price DESC;\n\n-- Correlated equivalent\nSELECT name, category, price\nFROM products AS p\nWHERE price > (SELECT AVG(price) FROM products AS x WHERE x.category = p.category);\n\nBoth are correct. The CTE version computes each category average once and joins, which scales better and lets you display the average alongside the price; the correlated version is shorter but conceptually recomputes the average per row, and only a good optimiser saves it. In SQL-012 you will see a third form using a window function, `AVG(price) OVER (PARTITION BY category)`, which needs no join at all.',
+      },
+      {
+        prompt: 'Find customers who have ordered from every product category. Explain the shape of the solution before writing it.',
+        hint: '"For all X" is usually expressed as "there is no X for which not...". Two nested NOT EXISTS.',
+        language: 'sql',
+        solution:
+          "SELECT c.id, c.name\nFROM customers AS c\nWHERE NOT EXISTS (\n  SELECT 1 FROM (SELECT DISTINCT category FROM products) AS cat\n  WHERE NOT EXISTS (\n    SELECT 1\n    FROM orders      AS o\n    JOIN order_items AS oi ON oi.order_id = o.id\n    JOIN products    AS p  ON p.id = oi.product_id\n    WHERE o.customer_id = c.id AND p.category = cat.category\n  )\n);\n\nSQL has no FOR ALL quantifier, so universal statements are expressed by double negation: a customer qualifies if there is no category that they have not ordered from. This is called relational division, and it is worth recognising by shape because the alternative formulation — `GROUP BY c.id HAVING COUNT(DISTINCT p.category) = (SELECT COUNT(DISTINCT category) FROM products)` — is shorter, usually faster, and easier to read. Knowing both, and knowing why they agree, is what the question is really testing.",
+      },
+      {
+        prompt: 'Using a recursive CTE, list every employee with their depth in the reporting hierarchy and the full chain of names from the top down.',
+        hint: 'Anchor on employees with no manager; accumulate a path string and a level counter in the recursive term.',
+        language: 'sql',
+        solution:
+          "WITH RECURSIVE chain AS (\n  SELECT id, name, manager_id, 1 AS level, name AS path\n  FROM employees\n  WHERE manager_id IS NULL\n  UNION ALL\n  SELECT e.id, e.name, e.manager_id, c.level + 1, c.path || ' > ' || e.name\n  FROM employees AS e\n  JOIN chain AS c ON e.manager_id = c.id\n  WHERE c.level < 20\n)\nSELECT level, name, path FROM chain ORDER BY path;\n\nThe anchor establishes the roots, the recursive term descends one level per pass, and the query stops when a pass adds nothing. Two details earn their place: `path` makes the output readable and sortable into tree order, and the `level < 20` guard prevents an infinite loop if the data ever contains a cycle. Note that any employee whose manager_id points to a non-existent id will never be reached by the recursion and will silently be missing from the result — worth checking with an anti-join before trusting the output.",
+      },
+      {
+        prompt: 'Compute month-over-month order growth as a percentage, using CTEs and a self join.',
+        hint: 'Aggregate per month in one CTE, then join that CTE to itself offset by one month. A window function would be cleaner — note why.',
+        language: 'sql',
+        solution:
+          "WITH monthly AS (\n  SELECT SUBSTR(order_date, 1, 7) AS month, COUNT(*) AS orders\n  FROM orders\n  GROUP BY SUBSTR(order_date, 1, 7)\n),\nnumbered AS (\n  SELECT month, orders,\n         ROW_NUMBER() OVER (ORDER BY month) AS rn\n  FROM monthly\n)\nSELECT curr.month,\n       curr.orders,\n       prev.orders AS prev_orders,\n       ROUND(100.0 * (curr.orders - prev.orders) / prev.orders, 1) AS pct_change\nFROM numbered AS curr\nLEFT JOIN numbered AS prev ON prev.rn = curr.rn - 1\nORDER BY curr.month;\n\nThe self join on a row number is the pre-window-function way to reach the previous row, and it is worth writing once to understand what LAG does. Two details: `100.0 *` forces floating-point arithmetic, because integer division would truncate every percentage to zero, and the LEFT JOIN keeps the first month with a NULL change rather than dropping it. In SQL-012 this whole query collapses to `LAG(orders) OVER (ORDER BY month)`, which is both shorter and immune to gaps in the month sequence.",
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'SQL-011-q1',
+        type: 'mcq',
+        concept: 'correlation',
+        prompt: 'Which subquery is correlated?',
+        options: [
+          '`SELECT 1 FROM orders o WHERE o.customer_id = c.id`',
+          '`SELECT AVG(price) FROM products`',
+          '`SELECT customer_id FROM orders WHERE status = ’shipped’`',
+          '`SELECT MAX(salary) FROM employees`',
+        ],
+        answerIndex: 0,
+        explanation:
+          'It references `c.id` from the outer query, so it cannot be evaluated without knowing the current outer row. The others depend on nothing outside themselves and can be computed once.',
+      },
+      {
+        id: 'SQL-011-q2',
+        type: 'truefalse',
+        concept: 'cte performance',
+        prompt: 'Wrapping part of a query in a CTE guarantees it will be computed only once.',
+        answer: false,
+        explanation:
+          'Most engines inline CTEs into the surrounding query, so one referenced twice may be executed twice. PostgreSQL 12+ inlines by default and offers MATERIALIZED to force the older behaviour.',
+      },
+      {
+        id: 'SQL-011-q3',
+        type: 'order',
+        concept: 'recursive cte',
+        prompt: 'Order the steps by which a recursive CTE is evaluated.',
+        items: [
+          'The anchor query produces the initial rows',
+          'The recursive term joins the table to the rows from the previous pass',
+          'New rows are added to the accumulated result',
+          'The new rows become the input to the next pass',
+          'A pass produces no new rows and recursion stops',
+        ],
+        explanation:
+          'Each pass descends one level. Because termination depends on a pass producing nothing new, a cycle in the data loops for ever unless a depth guard is written.',
+      },
+      {
+        id: 'SQL-011-q4',
+        type: 'code-output',
+        language: 'sql',
+        concept: 'scalar subqueries',
+        prompt: 'In PostgreSQL, what happens when the subquery returns three rows?',
+        code: 'SELECT name, (SELECT id FROM orders WHERE customer_id = customers.id) AS an_order\nFROM customers;',
+        options: [
+          'An error: more than one row returned by a subquery used as an expression',
+          'The three ids are returned as a list',
+          'The first id is returned silently',
+          'The query returns no rows',
+        ],
+        answerIndex: 0,
+        explanation:
+          'A scalar subquery must return at most one row. PostgreSQL raises an error; SQLite silently takes one row, which produces a plausible but arbitrary answer — the more dangerous behaviour.',
+      },
+      {
+        id: 'SQL-011-q5',
+        type: 'multi',
+        concept: 'choosing a construct',
+        prompt: 'When is a CTE clearly the right choice over a nested subquery? Select all that apply.',
+        options: [
+          'The intermediate result is needed in two places',
+          'The query has several logical steps you want named',
+          'You need recursion to walk a hierarchy',
+          'You want to guarantee the step is computed only once',
+          'You want to check the intermediate grain by running the step alone',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'Reuse, readability, recursion and testability are all genuine. Guaranteed single evaluation is not — that depends on the engine’s inlining behaviour.',
+      },
+      {
+        id: 'SQL-011-q6',
+        type: 'debug',
+        language: 'sql',
+        concept: 'not in with nulls',
+        prompt: 'This returns no rows even though several products have never been ordered. Why?',
+        code: 'SELECT id, name FROM products\nWHERE id NOT IN (SELECT product_id FROM order_items);',
+        options: [
+          'Some `order_items.product_id` values are NULL, making the predicate UNKNOWN for every row',
+          'NOT IN cannot be used with a subquery',
+          'The subquery needs a GROUP BY',
+          '`products.id` must be cast to match the subquery type',
+        ],
+        answerIndex: 0,
+        explanation:
+          'NOT IN expands into a chain of `<>` comparisons, and a NULL makes one of them UNKNOWN, so the conjunction can never be TRUE. NOT EXISTS is the NULL-safe alternative.',
+      },
+      {
+        id: 'SQL-011-q7',
+        type: 'explain',
+        concept: 'structuring complex queries',
+        prompt: 'A colleague sends you a query with four levels of nested subqueries and asks you to review it. Explain how you would restructure it and why that helps.',
+        rubric: [
+          'Proposes converting the nesting into sequential named CTEs',
+          'Explains that each CTE can be run alone to verify grain and row count',
+          'Notes that naming the steps documents intent for the reviewer and for future readers',
+        ],
+        sampleAnswer:
+          'I would rewrite it as a chain of CTEs, one per logical step, each with a name stating what it produces — `filtered_orders`, `order_totals`, `customer_stats` — so the query reads top to bottom instead of inside out. That is not cosmetic. Each CTE can be executed on its own, so I can check that `order_totals` really has one row per order before anything downstream depends on it, and if a number is wrong I can bisect the query rather than reason about the whole thing at once. It also makes review possible: a reviewer can check each step against its stated intent, whereas four levels of nesting force them to hold the entire structure in their head. Performance is usually unchanged, because engines inline CTEs, so this is a readability and correctness argument rather than a speed one — though queries you can understand do tend to be the ones whose bugs get found.',
+        explanation:
+          'The examinable idea is that naming intermediate results makes a query testable and reviewable, which matters more than the micro-optimisation people usually ask about first.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What makes a subquery correlated?', back: 'It references a column from the outer query, so it must be evaluated per outer row rather than once.' },
+      { front: 'Why prefer NOT EXISTS over NOT IN?', back: 'NOT IN returns nothing at all if the subquery yields a single NULL. NOT EXISTS gives a definite answer regardless.' },
+      { front: 'What is a CTE for?', back: 'Naming an intermediate result so a query reads as steps, can be reused, can be tested alone, and can recurse.' },
+      { front: 'Does a CTE make a query faster?', back: 'Generally no. Engines usually inline them. PostgreSQL 12+ inlines by default with MATERIALIZED available to override.' },
+      { front: 'What are the two parts of a recursive CTE?', back: 'An anchor query producing the starting rows, and a recursive term that joins back to the previous pass, unioned with UNION ALL.' },
+      { front: 'Why guard a recursive CTE with a depth limit?', back: 'A cycle in the data makes recursion non-terminating, and no foreign key prevents two rows referencing each other.' },
+      { front: 'Second-highest salary in one line?', back: '`SELECT MAX(salary) FROM employees WHERE salary < (SELECT MAX(salary) FROM employees)` — returns NULL rather than no rows when there is no second.' },
+    ],
+
+    challenge: {
+      title: 'A customer lifetime-value model in named steps',
+      brief:
+        'Build a single query, structured entirely as CTEs, producing one row per customer with: total non-cancelled orders, lifetime revenue, average order value computed at order grain, days between first and last order, and a `tier` of bronze, silver or gold based on revenue quantiles you compute rather than hard-code. Every customer must appear, including those with no orders. Each CTE must carry a comment stating its grain, and you must include a final assertion query proving the result has exactly one row per customer.',
+      language: 'sql',
+      acceptanceCriteria: [
+        'The query uses at least three CTEs, each with its grain documented in a comment',
+        'Average order value is computed from order totals, not from item prices',
+        'Tier thresholds are derived from the data rather than hard-coded numbers',
+        'Customers with no orders appear with zeros rather than being dropped',
+        'An assertion query demonstrates that COUNT(*) equals COUNT(DISTINCT customer_id)',
+      ],
+      starterCode: "-- grain: one row per order\nWITH order_totals AS (\n  SELECT order_id, SUM(quantity * unit_price) AS order_total\n  FROM order_items\n  GROUP BY order_id\n)\nSELECT 1;\n",
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Imagine I can write basic SELECT, WHERE and GROUP BY. Teach me what a subquery is, and why people write WITH at the top of big queries.',
+      mustCover: [
+        'Every query returns a table, so a query can be used wherever a table or a value can',
+        'A subquery can supply a value to compare against, a set to test membership in, or a whole intermediate table',
+        'A correlated subquery refers to the current outer row and is evaluated per row',
+        'A CTE gives an intermediate result a name so the query reads as steps and can be tested piece by piece',
+        'A recursive CTE repeats itself to walk a chain of unknown length',
+      ],
+      bonusSignals: ['gives a concrete two-step example such as total each order then average the totals', 'mentions running a CTE alone to check it', 'explains that CTEs are about clarity rather than speed'],
+      sampleExplanation:
+        'The key fact is that a query always hands back a table. Once you notice that, you can put a query anywhere a table would go. Need to compare every product against the average price? Put a little query in the middle of your condition that works out the average, and compare against that. Need to answer a question in two stages — first total up each order, then take the average of those totals — put the first stage in the FROM clause and treat its result as if it were a table. That is a subquery. The problem is that after three of these, the query reads from the inside out and nobody can follow it, including whoever wrote it. So instead you put the steps at the top with names: WITH order_totals AS (...), and then the rest of the query just says order_totals as though it were a real table. Same result, but now it reads downwards like a recipe, and you can run each step on its own to check it produced what you expected before building on it. And if you add the word RECURSIVE, the named step is allowed to refer to itself, which is how you follow a chain — this person’s manager, and their manager, and theirs — without knowing in advance how long the chain is.',
+    },
+  },
+
+  {
+    id: 'SQL-012',
+    domain: 'SQL',
+    module: 'Advanced SQL',
+    topic: 'Window functions',
+    title: 'Window Functions',
+    slug: 'window-functions',
+    difficulty: 4,
+    estimatedMinutes: 45,
+    prerequisites: ['SQL-011'],
+    related: ['SQL-006', 'SQL-007', 'SQL-011'],
+    tags: ['window-function', 'over', 'partition-by', 'row-number', 'rank', 'lag', 'running-total', 'moving-average'],
+
+    learningObjectives: [
+      'Explain how a window function differs from GROUP BY: it adds a column without collapsing rows',
+      'Use OVER with PARTITION BY and ORDER BY, and say what each part controls',
+      'Distinguish ROW_NUMBER, RANK and DENSE_RANK by their behaviour on ties',
+      'Use LAG and LEAD for period-over-period comparisons without a self join',
+      'Write running totals and moving averages with an explicit frame clause',
+      'Solve top-N-per-group by ranking in a CTE and filtering in the outer query',
+    ],
+
+    terminology: [
+      {
+        term: 'Window function',
+        definition:
+          'A function computed over a set of rows related to the current row — its window — returning one value per input row rather than one per group. Written with an OVER clause.',
+        simple: 'A calculation over nearby rows that adds a column instead of squashing rows together.',
+      },
+      {
+        term: 'OVER clause',
+        definition:
+          'Defines the window: `PARTITION BY` splits rows into independent groups, `ORDER BY` orders rows within each, and the frame clause bounds which rows around the current one are included.',
+        simple: 'The instruction saying which rows count as "nearby".',
+      },
+      {
+        term: 'PARTITION BY',
+        definition:
+          'Divides the rows into partitions processed independently, so the function restarts for each. Analogous to GROUP BY except that rows are preserved.',
+        simple: 'Restart the calculation for each category.',
+      },
+      {
+        term: 'Frame clause',
+        definition:
+          '`ROWS BETWEEN ... AND ...` or `RANGE BETWEEN ...` bounds the window relative to the current row. Defaults to `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW` when ORDER BY is present.',
+        simple: 'How far back and forward the window reaches.',
+      },
+      {
+        term: 'ROW_NUMBER / RANK / DENSE_RANK',
+        definition:
+          'Ranking functions. ROW_NUMBER is always 1, 2, 3 with arbitrary tie-breaking; RANK gives ties the same number and skips the next (1, 1, 3); DENSE_RANK gives ties the same number without skipping (1, 1, 2).',
+        simple: 'Three ways of numbering rows, differing in what happens to ties.',
+      },
+      {
+        term: 'LAG / LEAD',
+        definition:
+          'Return a value from a row a given number of positions before or after the current row within the partition, with an optional default when there is no such row.',
+        simple: 'Look at the previous or next row directly.',
+      },
+      {
+        term: 'ROWS vs RANGE',
+        definition:
+          'ROWS counts physical rows; RANGE groups rows with equal ORDER BY values as peers and includes them all. With duplicate sort keys the two give different answers.',
+        simple: 'Count rows, or count everything that ties with this row too.',
+      },
+    ],
+
+    simpleExplanation:
+      "GROUP BY answers questions about groups by destroying the rows: twenty orders become one row per country, and the individual orders are gone. Very often that is not what you want. You want each order to stay exactly where it is, with an extra column next to it saying “this order is 12% of its country’s total”, or “this is the third order this customer placed”, or “the previous month had 40 orders”. That is what a window function does: it computes over a set of related rows — the window — and returns one value per row, adding a column instead of collapsing anything. You write it with OVER. Inside the OVER you say PARTITION BY to restart the calculation for each customer or each category, ORDER BY to give the rows within a partition a sequence, and optionally a frame to say how far the window reaches — all rows so far for a running total, the last three rows for a moving average. Once this clicks, a whole class of queries that used to need self joins or correlated subqueries becomes two lines, and running totals, rankings and period-over-period growth all stop being hard.",
+
+    whyItExists:
+      'Before window functions, any calculation relating a row to its neighbours — rank within a group, running total, change since last month — required a correlated subquery or a self join, which were slow, hard to read and easy to get subtly wrong. The SQL:2003 window clause expresses these directly, computed in a single pass over ordered data.',
+
+    analogy: {
+      scenario:
+        'Think of a marathon results sheet. Each runner keeps their own line — nothing is summarised away — but the sheet carries extra columns computed by looking at other runners: overall position, position within age category, gap to the runner ahead, and cumulative number of finishers at that point. Every one of those columns needs information from other rows, yet the sheet still has one line per runner.',
+      mapping: [
+        { from: 'One line per runner, preserved', to: 'A window function returns one value per row — no collapsing' },
+        { from: 'Overall position', to: 'RANK() OVER (ORDER BY time)' },
+        { from: 'Position within the 40–49 age category', to: 'RANK() OVER (PARTITION BY age_group ORDER BY time)' },
+        { from: 'Gap to the runner ahead', to: 'time - LAG(time) OVER (ORDER BY time)' },
+        { from: 'Cumulative finishers so far', to: 'COUNT(*) OVER (ORDER BY time ROWS UNBOUNDED PRECEDING)' },
+        { from: 'A summary sheet with only category winners', to: 'GROUP BY — rows are gone' },
+      ],
+      bridge:
+        'The results sheet is exactly the distinction: both the sheet and a GROUP BY summary consult the whole field, but the sheet keeps every runner and annotates them, while the summary replaces them. PARTITION BY is literally "work out the positions separately within each age category", and the frame clause is "how much of the field to look at" — everyone so far for a cumulative count, the person immediately ahead for a gap.',
+      limitations:
+        'On a results sheet a tie is resolved by a judge. SQL has three different conventions — ROW_NUMBER, RANK and DENSE_RANK — and choosing the wrong one silently changes the answer, so the analogy hides a decision you have to make deliberately.',
+    },
+
+    visuals: [
+      {
+        kind: 'ascii',
+        title: 'GROUP BY collapses; OVER annotates',
+        caption: 'Same input, same totals, completely different output shape.',
+        art: `INPUT                       GROUP BY country               OVER (PARTITION BY country)
+id  country  amount           country  total                 id country amount total  share
+--  -------  ------           -------  -----                 -- ------- ------ -----  -----
+ 1  NG        120             NG        245                   1 NG       120    245    0.49
+ 2  ES         55       -->   ES         95        vs.        2 ES        55     95    0.58
+ 3  NG         40             CN        190                   3 NG        40    245    0.16
+ 4  CN        120                                             4 CN       120    190    0.63
+ 5  ES         40             3 rows out                      5 ES        40     95    0.42
+ 6  NG         85             (rows destroyed)                6 NG        85    245    0.35
+ 7  CN         70                                             7 CN        70    190    0.37
+
+                                                              7 rows out - every row kept,
+                                                              with group facts attached
+
+RANKING FUNCTIONS ON TIED VALUES
+
+ value  ROW_NUMBER  RANK  DENSE_RANK
+ -----  ----------  ----  ----------
+  100        1        1        1
+   90        2        2        2
+   90        3        2        2      <- tie
+   80        4        4        3      <- RANK skips 3, DENSE_RANK does not
+   70        5        5        4`,
+      },
+      {
+        kind: 'table',
+        title: 'The window function toolkit',
+        columns: ['Function', 'Returns', 'Typical use'],
+        rows: [
+          ['`ROW_NUMBER()`', 'A unique sequential number, ties broken arbitrarily', 'Deduplication; picking exactly one row per group'],
+          ['`RANK()`', 'Ties share a rank, the next rank is skipped', 'Competition rankings where position reflects how many beat you'],
+          ['`DENSE_RANK()`', 'Ties share a rank, no gaps', '"Second-highest salary" where tied salaries count once'],
+          ['`LAG(x, n, default)`', 'x from n rows earlier in the partition', 'Change since last period, without a self join'],
+          ['`LEAD(x, n, default)`', 'x from n rows later', 'Time to next event; gap analysis'],
+          ['`SUM(x) OVER (ORDER BY ...)`', 'Running total up to the current row', 'Cumulative revenue, inventory balance'],
+          ['`AVG(x) OVER (... ROWS 2 PRECEDING)`', 'Moving average over a fixed window', 'Smoothing a noisy daily series'],
+          ['`NTILE(4)`', 'Bucket number from 1 to n', 'Quartiles, deciles, customer value tiers'],
+          ['`FIRST_VALUE` / `LAST_VALUE`', 'The first/last value in the frame', 'Comparing every row to the partition’s best'],
+        ],
+      },
+      {
+        kind: 'annotated',
+        title: 'Anatomy of an OVER clause',
+        subject: 'SUM(amount) OVER (PARTITION BY customer_id ORDER BY order_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)',
+        annotations: [
+          { part: 'SUM(amount)', note: 'The aggregate being computed — but over a window, so it returns a value per row instead of per group.' },
+          { part: 'OVER', note: 'The keyword that turns an aggregate into a window function. Its presence is the whole difference.' },
+          { part: 'PARTITION BY customer_id', note: 'Restart the calculation for each customer. Omit it and the whole result is one partition.' },
+          { part: 'ORDER BY order_date', note: 'Gives rows a sequence within the partition. Required for anything cumulative, and for LAG/LEAD.' },
+          { part: 'ROWS BETWEEN 2 PRECEDING AND CURRENT ROW', note: 'The frame: this row and the two before it — a three-row moving window. Without it, ORDER BY implies everything up to the current row.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'GROUP BY versus window functions',
+        caption: 'They are not competitors; they answer different shapes of question.',
+        left: {
+          heading: 'GROUP BY',
+          points: [
+            'Collapses rows: one output row per group',
+            'Individual rows are no longer addressable',
+            'Non-grouped columns are illegal in SELECT',
+            'Answers "what is the total per country?"',
+            'Evaluated before SELECT',
+          ],
+        },
+        right: {
+          heading: 'Window function',
+          points: [
+            'Preserves rows: one output row per input row',
+            'Every original column remains available',
+            'Any column may appear alongside it',
+            'Answers "what share of its country is this order?"',
+            'Evaluated after HAVING, before ORDER BY — so not usable in WHERE',
+          ],
+        },
+      },
+      {
+        kind: 'widget',
+        title: 'Experiment with a window',
+        caption: 'Run a query with `SUM(price) OVER (PARTITION BY category)` and compare the row count with the same query using GROUP BY.',
+        widget: 'sql-playground',
+      },
+    ],
+
+    formalDefinition:
+      'A window function computes a value for each row of a partition of the result set, over a frame of rows defined relative to the current row. The OVER clause specifies an optional PARTITION BY (partitioning the rows into independent sets), an optional ORDER BY (imposing an order within each partition) and an optional frame specification bounding the rows contributing to the computation. Window functions are evaluated logically after FROM, WHERE, GROUP BY and HAVING but before ORDER BY and LIMIT, which is why they may not appear in WHERE or HAVING and must be filtered via a subquery or CTE.',
+
+    math: {
+      intuition:
+        'A window function is a mapping from each row to a value computed over a subset of rows determined by that row’s position. Where an aggregate is a many-to-one reduction, a window function is a many-to-many transformation: the same reduction is applied once per row, over a frame that moves with the row. A running total is the prefix sum of the ordered partition; a moving average is that same idea with both ends of the frame sliding.',
+      formulas: [
+        {
+          latex: 'w_i = f\\big(\\{x_j : j \\in F(i)\\}\\big)',
+          name: 'General form of a window function',
+          meaning: 'The value for row i is an aggregate f applied to the rows in that row’s frame F(i). The frame depends on i, which is what distinguishes a window function from a plain aggregate.',
+          variables: [
+            { symbol: 'w_i', meaning: 'The window function’s output for row i' },
+            { symbol: 'f', meaning: 'The aggregate: SUM, AVG, COUNT, MIN, MAX' },
+            { symbol: 'F(i)', meaning: 'The set of row indices in row i’s frame' },
+          ],
+        },
+        {
+          latex: 'R_i = \\sum_{j=1}^{i} x_j \\quad \\text{(running total: } F(i) = \\{1, \\dots, i\\}\\text{)}',
+          name: 'Running total as a prefix sum',
+          meaning: 'With `ORDER BY` and the default frame, the frame is everything from the start of the partition to the current row, so SUM becomes a cumulative sum.',
+          variables: [
+            { symbol: 'R_i', meaning: 'The running total at row i' },
+            { symbol: 'x_j', meaning: 'The value in row j of the ordered partition' },
+          ],
+        },
+        {
+          latex: 'M_i = \\frac{1}{k}\\sum_{j=i-k+1}^{i} x_j \\quad \\text{(k-row moving average)}',
+          name: 'Moving average with a sliding frame',
+          meaning: '`ROWS BETWEEN k-1 PRECEDING AND CURRENT ROW` gives a window of fixed width that slides with the row. The first k-1 rows average over fewer values unless you exclude them deliberately.',
+          variables: [
+            { symbol: 'M_i', meaning: 'The moving average at row i' },
+            { symbol: 'k', meaning: 'The window width in rows' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\text{RANK}(i) = 1 + |\\{j : x_j > x_i\\}| \\quad\\text{vs}\\quad \\text{DENSE\\_RANK}(i) = 1 + |\\{\\text{distinct } x_j > x_i\\}|',
+          name: 'RANK versus DENSE_RANK',
+          meaning: 'RANK counts how many rows beat you, so ties create gaps. DENSE_RANK counts how many distinct values beat you, so there are no gaps.',
+          variables: [
+            { symbol: 'x_i', meaning: 'The ordering value for row i' },
+            { symbol: '|\\cdot|', meaning: 'The number of elements in the set' },
+          ],
+        },
+      ],
+      derivation: [
+        'Take salaries 100, 90, 90, 80 in descending order.',
+        'For the 80: rows strictly greater are 100, 90, 90 — three of them — so RANK = 1 + 3 = 4.',
+        'Distinct values strictly greater are 100 and 90 — two — so DENSE_RANK = 1 + 2 = 3.',
+        'ROW_NUMBER ignores values entirely and simply counts position, giving 4, with the two 90s ordered arbitrarily.',
+        'Hence "the second-highest salary" means DENSE_RANK = 2: tied salaries are one salary, and the next distinct value is second.',
+        'Using ROW_NUMBER = 2 would return one of the tied 90s, which is right by accident here and wrong whenever the top salary is tied.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Top 2 products per category by revenue',
+      setup:
+        'A perennial interview question and a genuinely common reporting task. We need, for each product category, the two products that generated the most revenue. The trap is that LIMIT applies to the whole result, not per group, so there is no way to do this with ORDER BY and LIMIT alone.',
+      steps: [
+        {
+          label: 'Aggregate to the right grain first',
+          detail:
+            'Revenue lives at item grain, so a CTE computes `SUM(oi.quantity * oi.unit_price)` grouped by product. Its grain is one row per product, with the category carried along.',
+        },
+        {
+          label: 'Rank within each category',
+          detail:
+            '`ROW_NUMBER() OVER (PARTITION BY category ORDER BY revenue DESC, product_id)` restarts the numbering for every category. The secondary sort key makes the ranking deterministic when two products tie on revenue.',
+          latex: 'r_p = \\text{position of } p \\text{ within its category}',
+        },
+        {
+          label: 'Choose the ranking function deliberately',
+          detail:
+            'ROW_NUMBER returns exactly two rows per category even under ties, which is what "top 2" usually means operationally. RANK would return three if two products tied for second, and DENSE_RANK would return every product sharing the top two revenue values. All three are defensible; the requirement decides.',
+        },
+        {
+          label: 'Filter in an outer query',
+          detail:
+            'A window function cannot appear in WHERE, because WHERE is evaluated before windows. So the ranking goes in a CTE and the filter `WHERE rn <= 2` goes in the query that selects from it. This two-step shape is the signature of every top-N-per-group query.',
+        },
+        {
+          label: 'Order the output for humans',
+          detail:
+            '`ORDER BY category, rn` groups the pairs together and puts the winner first within each category.',
+        },
+      ],
+      conclusion:
+        'The pattern is: aggregate to grain, rank with a window in a CTE, filter on the rank outside. It generalises immediately — top 3 per customer, latest order per customer (rank by date descending, keep rank 1), first touchpoint per session. Recognising that "per group, take the best N" always has this shape is worth more than memorising any single query.',
+    },
+
+    codeExamples: [
+      {
+        language: 'sql',
+        title: 'The core distinction: OVER adds a column, GROUP BY removes rows',
+        runnable: true,
+        code: `-- GROUP BY: 6 rows out, one per category
+SELECT category, SUM(price) AS category_total
+FROM products
+GROUP BY category;
+
+-- OVER: 24 rows out, every product kept, totals attached
+SELECT
+  name,
+  category,
+  price,
+  SUM(price)   OVER (PARTITION BY category) AS category_total,
+  COUNT(*)     OVER (PARTITION BY category) AS products_in_category,
+  ROUND(100.0 * price / SUM(price) OVER (PARTITION BY category), 1) AS pct_of_category
+FROM products
+ORDER BY category, price DESC;`,
+        explanation:
+          'The second query is the one that is hard to express any other way: each product keeps its own row while gaining facts about its category. Achieving the same with GROUP BY would require aggregating to category level and then joining back to products — two passes and a join, where the window does it in one. The percentage column shows the real payoff: a row-level value divided by a group-level value, side by side, which is precisely what a window function makes trivial.',
+        output: `name             category     price  category_total  products_in_category  pct_of_category
+---------------  -----------  -----  --------------  --------------------  ---------------
+4K Monitor       displays     349.0  868.0           3                     40.2
+27" Monitor      displays     319.0  868.0           3                     36.8
+Mechanical Keys  peripherals  89.0   387.0           6                     23.0`,
+      },
+      {
+        language: 'sql',
+        title: 'ROW_NUMBER, RANK and DENSE_RANK on the same data',
+        runnable: true,
+        code: `SELECT
+  name,
+  department,
+  salary,
+  ROW_NUMBER() OVER (ORDER BY salary DESC)                     AS row_num,
+  RANK()       OVER (ORDER BY salary DESC)                     AS rank_,
+  DENSE_RANK() OVER (ORDER BY salary DESC)                     AS dense_rank_,
+  RANK()       OVER (PARTITION BY department ORDER BY salary DESC) AS rank_in_dept
+FROM employees
+ORDER BY salary DESC;`,
+        explanation:
+          'Put side by side, the difference is unmissable. Where two employees earn the same, ROW_NUMBER gives them 3 and 4 arbitrarily, RANK gives both 3 and then jumps to 5, and DENSE_RANK gives both 3 and continues at 4. The last column shows PARTITION BY: the ranking restarts inside each department, which is how "top earner in each team" is expressed. Choose ROW_NUMBER when you need exactly one row per group, RANK when position should reflect how many people beat you, and DENSE_RANK when you are counting distinct values, as in "the second-highest salary".',
+        output: `name          department  salary  row_num  rank_  dense_rank_  rank_in_dept
+------------  ----------  ------  -------  -----  -----------  ------------
+Ivan Petrov   sales       95000   1        1      1            1
+Dana Ortiz    sales       88000   2        2      2            2
+Mei Tanaka    support     72000   3        3      3            1
+Omar Haddad   support     72000   4        3      3            1
+Lia Fernandes support     65000   5        5      4            3`,
+      },
+      {
+        language: 'sql',
+        title: 'LAG and LEAD: period-over-period without a self join',
+        runnable: true,
+        code: `WITH monthly AS (
+  SELECT SUBSTR(order_date, 1, 7) AS month, COUNT(*) AS orders
+  FROM orders
+  GROUP BY SUBSTR(order_date, 1, 7)
+)
+SELECT
+  month,
+  orders,
+  LAG(orders)  OVER (ORDER BY month) AS prev_month,
+  orders - LAG(orders) OVER (ORDER BY month) AS change,
+  ROUND(100.0 * (orders - LAG(orders) OVER (ORDER BY month))
+        / NULLIF(LAG(orders) OVER (ORDER BY month), 0), 1) AS pct_growth,
+  LEAD(orders) OVER (ORDER BY month) AS next_month
+FROM monthly
+ORDER BY month;`,
+        explanation:
+          'This replaces the self join from SQL-011 with one clause, and it is both shorter and more robust. Three details matter. `100.0 *` forces float arithmetic, without which integer division truncates every growth figure to zero. NULLIF guards against a division by zero when the previous month had no orders. And the first row has no predecessor, so LAG returns NULL and the growth column is correctly blank rather than fabricated — you can supply a third argument, `LAG(orders, 1, 0)`, if a zero default suits the report better.',
+        output: `month    orders  prev_month  change  pct_growth  next_month
+-------  ------  ----------  ------  ----------  ----------
+2024-01  9                                       14
+2024-02  14      9           5       55.6        17
+2024-03  17      14          3       21.4`,
+      },
+      {
+        language: 'sql',
+        title: 'Running totals and moving averages with explicit frames',
+        runnable: true,
+        code: `WITH daily AS (
+  SELECT o.order_date AS day,
+         SUM(oi.quantity * oi.unit_price) AS revenue
+  FROM orders      AS o
+  JOIN order_items AS oi ON oi.order_id = o.id
+  GROUP BY o.order_date
+)
+SELECT
+  day,
+  ROUND(revenue, 2) AS revenue,
+  ROUND(SUM(revenue) OVER (
+          ORDER BY day
+          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), 2) AS running_total,
+  ROUND(AVG(revenue) OVER (
+          ORDER BY day
+          ROWS BETWEEN 6 PRECEDING AND CURRENT ROW), 2)        AS moving_avg_7d,
+  ROUND(MAX(revenue) OVER (
+          ORDER BY day
+          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), 2) AS best_day_so_far
+FROM daily
+ORDER BY day;`,
+        explanation:
+          'The frame clause is what turns SUM into a running total and AVG into a moving average — same function, different window. `UNBOUNDED PRECEDING AND CURRENT ROW` is actually the default once ORDER BY is present, but writing it out is worth the characters because the default is a frequent source of confusion. ROWS rather than RANGE matters here: with RANGE, all rows sharing the same date would be treated as peers and included together, which changes the answer whenever there are duplicate dates. Note also that the first six rows of the moving average are computed over fewer than seven days, so an honest chart either marks them or excludes them.',
+        output: `day         revenue  running_total  moving_avg_7d  best_day_so_far
+----------  -------  -------------  -------------  ---------------
+2024-01-04  210.00   210.00         210.00         210.00
+2024-01-09  145.50   355.50         177.75         210.00
+2024-01-15  390.00   745.50         248.50         390.00`,
+      },
+      {
+        language: 'sql',
+        title: 'Top N per group, and the latest row per group',
+        runnable: true,
+        code: `-- Top 2 products per category by revenue
+WITH product_revenue AS (
+  SELECT p.id, p.name, p.category,
+         SUM(oi.quantity * oi.unit_price) AS revenue
+  FROM products    AS p
+  JOIN order_items AS oi ON oi.product_id = p.id
+  GROUP BY p.id, p.name, p.category
+),
+ranked AS (
+  SELECT *,
+         ROW_NUMBER() OVER (PARTITION BY category ORDER BY revenue DESC, id) AS rn
+  FROM product_revenue
+)
+SELECT category, name, ROUND(revenue, 2) AS revenue, rn
+FROM ranked
+WHERE rn <= 2
+ORDER BY category, rn;
+
+-- The most recent order for each customer
+WITH ranked_orders AS (
+  SELECT o.*,
+         ROW_NUMBER() OVER (PARTITION BY customer_id
+                            ORDER BY order_date DESC, id DESC) AS rn
+  FROM orders AS o
+)
+SELECT customer_id, id AS order_id, order_date, status
+FROM ranked_orders
+WHERE rn = 1
+ORDER BY customer_id;`,
+        explanation:
+          'Both queries share one shape: rank inside a CTE, filter on the rank outside. The filter must be outside because window functions are evaluated after WHERE, so `WHERE rn <= 2` in the same SELECT would fail with "window functions are not allowed in WHERE". The secondary sort keys (`id`, `id DESC`) are not decoration — without them, two products with identical revenue or two orders on the same date could swap between runs, making the result non-reproducible. "Latest row per group" is the single most reused query in analytics, appearing wherever you need the current state of an entity from an append-only history table.',
+        output: `category     name             revenue  rn
+-----------  ---------------  -------  --
+cables       USB-C Cable      612.50   1
+cables       HDMI Cable       288.00   2
+displays     4K Monitor       2094.00  1
+displays     27" Monitor      957.00   2`,
+      },
+      {
+        language: 'sql',
+        title: 'Deduplication and bucketing',
+        runnable: true,
+        code: `-- Keep one row per duplicate name, the lowest id
+WITH numbered AS (
+  SELECT id, name, country,
+         ROW_NUMBER() OVER (PARTITION BY name ORDER BY id) AS rn
+  FROM customers
+)
+SELECT id, name, country FROM numbered WHERE rn = 1;
+
+-- Which rows WOULD be deleted as duplicates
+SELECT id, name FROM (
+  SELECT id, name, ROW_NUMBER() OVER (PARTITION BY name ORDER BY id) AS rn
+  FROM customers
+) WHERE rn > 1;
+
+-- Customer value quartiles
+WITH spend AS (
+  SELECT o.customer_id, SUM(oi.quantity * oi.unit_price) AS total
+  FROM orders      AS o
+  JOIN order_items AS oi ON oi.order_id = o.id
+  GROUP BY o.customer_id
+)
+SELECT customer_id, ROUND(total, 2) AS total,
+       NTILE(4) OVER (ORDER BY total DESC) AS value_quartile
+FROM spend
+ORDER BY total DESC;`,
+        explanation:
+          'ROW_NUMBER partitioned by the duplicate key is the standard deduplication tool: rank 1 is the row to keep and everything above 1 is a duplicate, and running the second query first is how you inspect what a delete would remove before running it. NTILE divides an ordered partition into roughly equal buckets, which is how value tiers and deciles are built without hard-coding thresholds — and, importantly, it adapts as the data changes, where a fixed threshold silently goes stale.',
+        output: `id  name        country
+--  ----------  -------
+1   Ada Okafor  Nigeria
+
+customer_id  total    value_quartile
+-----------  -------  --------------
+1            2104.50  1
+3            1330.00  1
+5            820.00   2`,
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Deduplicating an ingested table',
+        usage:
+          'Pipelines that re-run produce duplicate rows. `ROW_NUMBER() OVER (PARTITION BY natural_key ORDER BY ingested_at DESC)` keeping rank 1 is the standard deduplication step in virtually every warehouse.',
+      },
+      {
+        context: 'Sessionisation of event logs',
+        usage:
+          'LAG on the event timestamp gives the gap since the previous event; a running SUM of "gap > 30 minutes" flags new sessions, producing session ids in two window functions without any procedural code.',
+      },
+      {
+        context: 'Time-series features for models',
+        usage:
+          'Lagged values, rolling means and cumulative counts are the standard feature set for forecasting and churn. Computing them in SQL with windows keeps the training and serving definitions identical.',
+      },
+      {
+        context: 'Leaderboards and cohort reporting',
+        usage:
+          'Rank within segment, percentage of segment total and movement since last period are all one-line window expressions, where the pre-2003 equivalents were correlated subqueries that did not scale.',
+      },
+      {
+        context: 'Detecting data gaps',
+        usage:
+          'LEAD on a date column compared against the current date exposes missing periods in a series, which is how monitoring jobs notice that an upstream feed stopped delivering.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'pandas', role: '`groupby().rank()`, `.shift()`, `.rolling()` and `.expanding()` are the direct counterparts of RANK, LAG, moving frames and running totals.' },
+      { tool: 'dbt', role: 'Deduplication and latest-record-per-key models are almost always ROW_NUMBER windows; dbt snapshots encode the same idea as a materialisation.' },
+      { tool: 'Feature stores', role: 'Point-in-time correct features are windows bounded by the prediction timestamp — getting the frame wrong is precisely how label leakage happens.' },
+      { tool: 'DuckDB / BigQuery', role: 'Both implement the full window standard including RANGE frames and named windows, so complex analytics ports from PostgreSQL with little change.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Putting a window function in WHERE or HAVING',
+        why: 'Windows are evaluated after WHERE, GROUP BY and HAVING, so the value does not exist yet. PostgreSQL reports "window functions are not allowed in WHERE".',
+        fix: 'Compute the window in a CTE or subquery and filter in the outer query. This is the mandatory shape for every top-N-per-group problem.',
+      },
+      {
+        mistake: 'Using ROW_NUMBER when the question implies ties should share a position',
+        why: 'ROW_NUMBER breaks ties arbitrarily, so "the second-highest salary" returns one of two tied employees and may return the top salary again when the top is tied.',
+        fix: 'Use DENSE_RANK for "second-highest distinct value", RANK for competition position, and ROW_NUMBER only when you genuinely want exactly one row per group.',
+      },
+      {
+        mistake: 'Forgetting a deterministic tiebreak in the window ORDER BY',
+        why: 'Rows tied on the ordering column have undefined relative order, so which row gets rank 1 can change between runs and any "latest per group" result becomes non-reproducible.',
+        fix: 'Always append a unique column: `ORDER BY order_date DESC, id DESC`.',
+      },
+      {
+        mistake: 'Relying on the default frame without knowing what it is',
+        why: 'With ORDER BY present the default is `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`, so `AVG(x) OVER (ORDER BY d)` is a running average, not the partition average that many expect.',
+        fix: 'Write the frame explicitly when it matters, and omit ORDER BY entirely when you want the whole-partition aggregate.',
+      },
+      {
+        mistake: 'Using RANGE where ROWS is meant',
+        why: 'RANGE treats rows with equal ORDER BY values as peers and includes all of them, so with duplicate dates a "3 preceding rows" moving average silently includes more rows than three.',
+        fix: 'Use ROWS for physical row counts. Reserve RANGE for genuine value-based frames, such as an interval of time.',
+      },
+      {
+        mistake: 'Mixing a window function with GROUP BY and expecting it to see the raw rows',
+        why: 'Windows are evaluated after grouping, so a window in a grouped query operates on the group rows, not the original ones. `SUM(SUM(x)) OVER ()` is legal and often surprising.',
+        fix: 'Be explicit about the order: aggregate in a CTE, then apply windows to the aggregated result, so the input to the window is unambiguous.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What is the difference between a window function and GROUP BY?',
+        answer:
+          'GROUP BY collapses rows: each group becomes a single output row, and the individual rows are no longer available, which is why non-grouped columns are illegal in SELECT. A window function computes over a related set of rows but returns a value for every input row, so nothing is collapsed and every original column remains available. That makes them complementary rather than competing: GROUP BY answers "what is the total per country", while a window answers "what share of its country’s total is this order". A practical consequence is that a query needing both a row and its group’s aggregate needs either a window function or a self join back to an aggregated CTE — and the window is one pass instead of two.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Explain ROW_NUMBER, RANK and DENSE_RANK with an example.',
+        answer:
+          'Take salaries 100, 90, 90, 80. ROW_NUMBER gives 1, 2, 3, 4 — always distinct, with the tie broken arbitrarily unless you add a tiebreak column. RANK gives 1, 2, 2, 4: the tied rows share a rank and the next rank skips, because rank counts how many rows beat you. DENSE_RANK gives 1, 2, 2, 3: ties share a rank and no numbers are skipped, because it counts how many distinct values beat you. The choice follows the requirement. "Second-highest salary" means DENSE_RANK = 2, since tied salaries are one salary. "Who finished third in the race" means RANK. "Give me exactly one row per customer" means ROW_NUMBER, because it is the only one guaranteed to produce a single row per partition.',
+        followUp:
+          'A strong candidate adds that ROW_NUMBER without a deterministic tiebreak makes the result non-reproducible between runs, which matters for pagination and for tests.',
+      },
+      {
+        level: 'internship',
+        question: 'Write a query to find the top 3 highest-paid employees in each department.',
+        answer:
+          '`WITH ranked AS (SELECT name, department, salary, DENSE_RANK() OVER (PARTITION BY department ORDER BY salary DESC) AS rk FROM employees) SELECT department, name, salary, rk FROM ranked WHERE rk <= 3 ORDER BY department, rk, name;`. PARTITION BY restarts the ranking for each department and the filter must live in an outer query because window functions cannot appear in WHERE. I chose DENSE_RANK deliberately: if two people tie for third, both are genuinely in the top three by salary and it would be arbitrary to drop one. If the requirement is instead exactly three rows per department — say, for a fixed-size report — ROW_NUMBER with a tiebreak column is the right choice. That is the question I would ask before writing it.',
+        followUp:
+          'Naming the tie behaviour as a requirements question rather than a detail is what separates a strong answer here.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'How would you compute a 7-day moving average of daily revenue, and what should you watch out for?',
+        answer:
+          '`AVG(revenue) OVER (ORDER BY day ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)` over a daily-aggregated CTE. Three cautions. First, ROWS counts rows, not days, so if a day with no revenue is simply absent from the table, the window silently spans more than seven calendar days — the fix is a date spine cross-joined and left-joined so every day has a row, even a zero one. Second, the first six rows average over fewer than seven values, so a chart should either exclude or mark them rather than present a warm-up artefact as data. Third, for a model this window must not include the current or future rows relative to the prediction point, or you have leaked the label; a feature window should generally end at `1 PRECEDING`. The equivalent `RANGE BETWEEN INTERVAL ’6 days’ PRECEDING AND CURRENT ROW` in PostgreSQL handles gaps natively and is the better choice where available.',
+      },
+      {
+        level: 'internship',
+        question: 'How do you find duplicate rows and keep only one of each?',
+        answer:
+          '`WITH numbered AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY natural_key ORDER BY updated_at DESC, id) AS rn FROM t) SELECT * FROM numbered WHERE rn = 1;`. PARTITION BY the columns that should have been unique, order within each partition by whatever decides which copy wins — most recent, lowest id — and keep rank 1. Selecting `WHERE rn > 1` instead lists exactly the rows a delete would remove, and running that first is a habit worth keeping before any destructive operation. ROW_NUMBER is the right function here rather than RANK, because it guarantees exactly one row per partition even when the ordering column ties; with RANK, tied rows would both get rank 1 and both survive.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'For every order, show the customer, the order total, and that order’s rank among that customer’s orders by value.',
+        hint: 'Aggregate to order grain first, then PARTITION BY customer_id in the window.',
+        language: 'sql',
+        starterCode: 'WITH order_totals AS (\n  SELECT o.id, o.customer_id, o.order_date,\n         SUM(oi.quantity * oi.unit_price) AS total\n  FROM orders o JOIN order_items oi ON oi.order_id = o.id\n  GROUP BY o.id, o.customer_id, o.order_date\n)\nSELECT 1;\n',
+        solution:
+          'WITH order_totals AS (\n  SELECT o.id, o.customer_id, o.order_date,\n         SUM(oi.quantity * oi.unit_price) AS total\n  FROM orders AS o\n  JOIN order_items AS oi ON oi.order_id = o.id\n  GROUP BY o.id, o.customer_id, o.order_date\n)\nSELECT c.name, t.id AS order_id, t.order_date, ROUND(t.total, 2) AS total,\n       RANK() OVER (PARTITION BY t.customer_id ORDER BY t.total DESC) AS rank_for_customer,\n       ROUND(100.0 * t.total / SUM(t.total) OVER (PARTITION BY t.customer_id), 1) AS pct_of_customer\nFROM order_totals AS t\nJOIN customers AS c ON c.id = t.customer_id\nORDER BY c.name, rank_for_customer;\n\nTwo windows over the same partition: one ranks, one totals. Neither collapses the rows, so each order keeps its own line with both facts attached. Note that the second window has no ORDER BY, which is deliberate — adding one would turn it into a running total rather than the partition total, because of the default frame.',
+      },
+      {
+        prompt: 'Find the second-highest salary in each department. State which ranking function you chose and why.',
+        hint: 'Ties matter. Decide whether two people on the top salary should make the second-highest the same value or the next one down.',
+        language: 'sql',
+        solution:
+          "WITH ranked AS (\n  SELECT department, salary,\n         DENSE_RANK() OVER (PARTITION BY department ORDER BY salary DESC) AS rk\n  FROM employees\n)\nSELECT DISTINCT department, salary AS second_highest\nFROM ranked\nWHERE rk = 2\nORDER BY department;\n\nDENSE_RANK is the right choice because \"second-highest salary\" is a statement about distinct salary values: if two people both earn the top salary, the second-highest salary is the next value down, not the other top earner. ROW_NUMBER would return one of the tied top earners and be wrong; RANK would skip rank 2 entirely in that case and return nothing. DISTINCT is needed because several employees may share the second-highest salary and the question asks for the salary, not the people. A department with only one distinct salary correctly returns no row.",
+      },
+      {
+        prompt: 'Compute month-over-month percentage growth in revenue, handling the first month and any zero months safely.',
+        hint: 'LAG for the previous value, NULLIF to guard the division, and 100.0 to force float arithmetic.',
+        language: 'sql',
+        solution:
+          "WITH monthly AS (\n  SELECT SUBSTR(o.order_date, 1, 7) AS month,\n         SUM(oi.quantity * oi.unit_price) AS revenue\n  FROM orders AS o\n  JOIN order_items AS oi ON oi.order_id = o.id\n  GROUP BY SUBSTR(o.order_date, 1, 7)\n)\nSELECT month,\n       ROUND(revenue, 2) AS revenue,\n       ROUND(LAG(revenue) OVER (ORDER BY month), 2) AS prev_revenue,\n       ROUND(100.0 * (revenue - LAG(revenue) OVER (ORDER BY month))\n             / NULLIF(LAG(revenue) OVER (ORDER BY month), 0), 1) AS pct_growth\nFROM monthly\nORDER BY month;\n\nThree guards earn their place. `100.0 *` prevents integer truncation, which would silently render every growth figure as 0. NULLIF turns a zero denominator into NULL rather than an error in PostgreSQL. And the first month has no LAG, so its growth is correctly NULL — reporting 0% there would assert a fact that is not in the data. One structural caveat: if a month has no orders it is absent from `monthly` entirely, so LAG reaches back to the previous month present rather than the previous calendar month; a date spine fixes that.",
+      },
+      {
+        prompt: 'Identify each customer’s first and most recent order date, and the number of days between them, using window functions rather than GROUP BY.',
+        hint: 'FIRST_VALUE and LAST_VALUE, watching the default frame carefully. In SQLite, JULIANDAY converts dates for subtraction.',
+        language: 'sql',
+        solution:
+          "SELECT DISTINCT\n  customer_id,\n  FIRST_VALUE(order_date) OVER w AS first_order,\n  LAST_VALUE(order_date)  OVER w AS last_order,\n  CAST(JULIANDAY(LAST_VALUE(order_date) OVER w)\n     - JULIANDAY(FIRST_VALUE(order_date) OVER w) AS INTEGER) AS days_active\nFROM orders\nWINDOW w AS (\n  PARTITION BY customer_id ORDER BY order_date\n  ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING\n)\nORDER BY customer_id;\n\nThe explicit frame is essential here and is the classic LAST_VALUE trap: with the default frame of UNBOUNDED PRECEDING to CURRENT ROW, LAST_VALUE returns the current row’s own value on every row rather than the partition’s last. Widening the frame to UNBOUNDED FOLLOWING fixes it. The named WINDOW clause avoids repeating the same specification four times. In practice `MIN(order_date), MAX(order_date)` with GROUP BY is simpler for this particular question — the window version is worth writing once to internalise the frame behaviour.",
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'SQL-012-q1',
+        type: 'mcq',
+        concept: 'windows vs group by',
+        prompt: 'A table has 24 products in 6 categories. How many rows does `SELECT name, SUM(price) OVER (PARTITION BY category) FROM products` return?',
+        options: ['24', '6', '1', '144'],
+        answerIndex: 0,
+        explanation:
+          'A window function returns one value per input row without collapsing anything, so all 24 products come back, each carrying its category total. GROUP BY would have returned 6.',
+      },
+      {
+        id: 'SQL-012-q2',
+        type: 'code-output',
+        language: 'sql',
+        concept: 'ranking functions',
+        prompt: 'Salaries are 100, 90, 90, 80. What does DENSE_RANK give for the salary of 80?',
+        code: 'SELECT salary, DENSE_RANK() OVER (ORDER BY salary DESC) AS dr FROM employees;',
+        options: ['3', '4', '2', '5'],
+        answerIndex: 0,
+        explanation:
+          'DENSE_RANK counts distinct values above: 100 and 90, so 1 + 2 = 3. RANK would give 4 because three rows beat it, and ROW_NUMBER would also give 4.',
+      },
+      {
+        id: 'SQL-012-q3',
+        type: 'truefalse',
+        concept: 'evaluation order',
+        prompt: 'You can filter on a window function directly in the WHERE clause of the same SELECT.',
+        answer: false,
+        explanation:
+          'Window functions are evaluated after WHERE, GROUP BY and HAVING, so the value does not exist yet. Compute it in a CTE or subquery and filter in the outer query.',
+      },
+      {
+        id: 'SQL-012-q4',
+        type: 'match',
+        concept: 'choosing a window function',
+        prompt: 'Match each task to the window function that fits.',
+        pairs: [
+          { left: 'Keep exactly one row per duplicate key', right: 'ROW_NUMBER()' },
+          { left: 'Second-highest distinct salary', right: 'DENSE_RANK()' },
+          { left: 'Change since the previous month', right: 'LAG()' },
+          { left: 'Cumulative revenue to date', right: 'SUM() OVER (ORDER BY day)' },
+          { left: 'Split customers into four value tiers', right: 'NTILE(4)' },
+        ],
+        explanation:
+          'Each task implies a different tie behaviour or frame. Picking by what the question means about ties and about which rows count is the whole skill.',
+      },
+      {
+        id: 'SQL-012-q5',
+        type: 'fill',
+        concept: 'partitioning',
+        prompt: 'Complete the clause that restarts a ranking for each department: `RANK() OVER (________ department ORDER BY salary DESC)`',
+        answers: ['PARTITION BY', 'partition by'],
+        explanation:
+          'PARTITION BY divides the rows into independent sets so the function restarts in each. It is the window equivalent of GROUP BY, except that rows are preserved.',
+      },
+      {
+        id: 'SQL-012-q6',
+        type: 'multi',
+        concept: 'frames',
+        prompt: 'Which statements about window frames are true? Select all that apply.',
+        options: [
+          'With ORDER BY and no frame clause, the default frame runs from the start of the partition to the current row',
+          '`ROWS BETWEEN 6 PRECEDING AND CURRENT ROW` gives a seven-row moving window',
+          'ROWS counts physical rows while RANGE includes all rows tied on the ORDER BY value',
+          'Omitting ORDER BY entirely makes the frame the whole partition',
+          'The frame clause is required whenever PARTITION BY is used',
+        ],
+        answerIndices: [0, 1, 2, 3],
+        explanation:
+          'The frame defaults sensibly but surprisingly, which is why writing it explicitly is good practice. It is never required; PARTITION BY alone with no ORDER BY gives a whole-partition aggregate.',
+      },
+      {
+        id: 'SQL-012-q7',
+        type: 'debug',
+        language: 'sql',
+        concept: 'last_value frame trap',
+        prompt: 'This returns each row’s own date instead of the partition’s last date. Why?',
+        code: 'SELECT customer_id, order_date,\n       LAST_VALUE(order_date) OVER (PARTITION BY customer_id ORDER BY order_date) AS last_order\nFROM orders;',
+        options: [
+          'The default frame ends at the current row, so the last value in the frame is the current row',
+          'LAST_VALUE requires DISTINCT',
+          'PARTITION BY and ORDER BY cannot be combined',
+          'order_date must be cast to a date type first',
+        ],
+        answerIndex: 0,
+        explanation:
+          'With ORDER BY present the frame defaults to UNBOUNDED PRECEDING to CURRENT ROW. Adding `ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING` makes LAST_VALUE see the whole partition.',
+      },
+      {
+        id: 'SQL-012-q8',
+        type: 'explain',
+        concept: 'top n per group',
+        prompt: 'Explain the general shape of a "top N per group" query and why it cannot be written with ORDER BY and LIMIT alone.',
+        rubric: [
+          'States that LIMIT applies to the whole result, not per group',
+          'Describes ranking with a window function partitioned by the group',
+          'Explains that the rank filter must go in an outer query because windows run after WHERE',
+        ],
+        sampleAnswer:
+          'ORDER BY and LIMIT operate on the final result as a whole, so `LIMIT 3` gives three rows overall rather than three per category — there is no per-group form of LIMIT in standard SQL. The shape that works is to rank within each group using a window function partitioned by the grouping column and ordered by the ranking measure, then filter on that rank. The filter has to live in an outer query or a CTE, because window functions are evaluated after WHERE and so cannot be referenced there. Two choices remain: which ranking function, since ROW_NUMBER returns exactly N rows while RANK and DENSE_RANK may return more when there are ties, and what the tiebreak column is, without which the result is not reproducible between runs. The same shape solves "the latest row per entity", which is the most reused query in analytics.',
+        explanation:
+          'The examinable idea is the rank-then-filter pattern and the reason for its two-step structure, which follows directly from where window functions sit in the evaluation order.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Window function vs GROUP BY', back: 'GROUP BY collapses rows into one per group. A window function returns a value per row, adding a column while keeping every row.' },
+      { front: 'What do PARTITION BY and ORDER BY do inside OVER?', back: 'PARTITION BY restarts the calculation for each group; ORDER BY sequences rows within a partition and enables cumulative frames, LAG and LEAD.' },
+      { front: 'ROW_NUMBER vs RANK vs DENSE_RANK on 100, 90, 90, 80', back: 'ROW_NUMBER: 1,2,3,4. RANK: 1,2,2,4 (skips). DENSE_RANK: 1,2,2,3 (no gaps).' },
+      { front: 'Why can you not filter on a window function in WHERE?', back: 'Windows are evaluated after WHERE, GROUP BY and HAVING. Compute in a CTE and filter in the outer query.' },
+      { front: 'How do you write a running total?', back: '`SUM(x) OVER (ORDER BY d ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)` — which is also the default frame when ORDER BY is present.' },
+      { front: 'Why does LAST_VALUE usually return the current row?', back: 'The default frame ends at the current row. Widen it with `ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING`.' },
+      { front: 'What is the top-N-per-group pattern?', back: 'Rank with `ROW_NUMBER()/DENSE_RANK() OVER (PARTITION BY g ORDER BY m DESC)` in a CTE, then `WHERE rn <= N` outside.' },
+      { front: 'ROWS vs RANGE', back: 'ROWS counts physical rows; RANGE includes every row tied on the ORDER BY value. They differ whenever the sort key has duplicates.' },
+    ],
+
+    challenge: {
+      title: 'A cohort retention and growth report',
+      brief:
+        'Using only window functions and CTEs, build a report over the sample data containing, for each customer: their order sequence number, days since their previous order, running lifetime revenue after each order, their rank among all customers by lifetime revenue, and a value quartile. Then produce a second result showing month-over-month revenue growth with a three-month moving average. Every ranking must be deterministic, every division must be guarded, and the first row of each series must be handled honestly rather than defaulted to zero.',
+      language: 'sql',
+      acceptanceCriteria: [
+        'Order sequence uses ROW_NUMBER partitioned by customer with a deterministic tiebreak',
+        'Days since previous order uses LAG and is NULL for a customer’s first order',
+        'Running revenue uses an explicit frame rather than relying on the default',
+        'The moving average uses ROWS, and the warm-up rows are identified rather than presented as complete',
+        'Every percentage uses float arithmetic and NULLIF guards the denominator',
+      ],
+      starterCode: "WITH order_totals AS (\n  SELECT o.id, o.customer_id, o.order_date,\n         SUM(oi.quantity * oi.unit_price) AS total\n  FROM orders o JOIN order_items oi ON oi.order_id = o.id\n  GROUP BY o.id, o.customer_id, o.order_date\n)\nSELECT customer_id, order_date,\n       ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY order_date, id) AS seq\nFROM order_totals;\n",
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Imagine I understand GROUP BY well. Teach me what a window function is and why I would use one instead.',
+      mustCover: [
+        'A window function computes over related rows but returns a value per row, so nothing is collapsed',
+        'PARTITION BY restarts the calculation per group; ORDER BY sequences rows within a partition',
+        'The frame decides how many rows around the current one are included, which is how running totals and moving averages work',
+        'Ranking functions differ in how they handle ties: ROW_NUMBER, RANK, DENSE_RANK',
+        'Windows run after WHERE, so filtering on one needs a CTE and an outer query',
+      ],
+      bonusSignals: ['gives a concrete example such as each order’s share of its country total', 'mentions top-N-per-group as the canonical pattern', 'notes that LAG replaces a self join'],
+      sampleExplanation:
+        'GROUP BY answers questions about groups by throwing the rows away: twenty orders become one line per country. That is often exactly wrong, because what you wanted was to keep every order and write something extra beside it — "this order is 12% of its country’s total", "this is Ada’s third order", "last month had 40". A window function does that. You write a normal aggregate but follow it with OVER, and instead of collapsing the rows it computes a value for each one and adds it as a column. Inside the OVER you describe which rows count as the window: PARTITION BY country means start the calculation again for each country, ORDER BY date puts the rows of each partition in sequence, and a frame clause says how far the window reaches — everything so far gives a running total, the last seven rows gives a moving average. Once you have the sequence, LAG hands you the previous row’s value directly, so month-over-month growth stops needing a self join. The one rule to remember is that all of this happens after WHERE, so you cannot filter on a window result in the same query. Rank in a CTE, filter outside — and that two-step shape is how every "top three per category" query is written.',
+    },
+  },
+
+  {
+    id: 'SQL-013',
+    domain: 'SQL',
+    module: 'Design & Performance',
+    topic: 'Indexes, normalisation and transactions',
+    title: 'Indexes, Normalisation and Transactions',
+    slug: 'indexes-normalisation-transactions',
+    difficulty: 4,
+    estimatedMinutes: 45,
+    prerequisites: ['SQL-012'],
+    related: ['SQL-003', 'SQL-005', 'SQL-009'],
+    tags: ['index', 'b-tree', 'normalisation', 'acid', 'transaction', 'isolation', 'query-plan'],
+
+    learningObjectives: [
+      'Explain a B-tree index as a sorted structure that turns a scan into a seek, and reason about when one will be used',
+      'Describe the write cost of an index and decide when not to add one',
+      'Apply 1NF, 2NF and 3NF to a badly designed table, and argue for deliberate denormalisation',
+      'State the four ACID properties and what each one actually guarantees',
+      'Describe the standard isolation levels and the read anomalies they prevent',
+      'Read a query plan well enough to tell a scan from an index seek',
+    ],
+
+    terminology: [
+      {
+        term: 'Index',
+        definition:
+          'An auxiliary data structure, typically a B-tree, holding column values in sorted order with pointers back to their rows, so the engine can locate matching rows without scanning the table.',
+        simple: 'A sorted lookup table that saves reading everything.',
+      },
+      {
+        term: 'B-tree',
+        definition:
+          'A balanced, high-fanout tree keeping keys sorted, with all leaves at the same depth. Lookup, range scan and insert are all O(log n) in the number of rows.',
+        simple: 'A tree that stays shallow and sorted no matter how much you add.',
+      },
+      {
+        term: 'Composite index',
+        definition:
+          'An index over several columns in a defined order. It can serve queries filtering on a leading prefix of those columns, but not ones that skip the first column.',
+        simple: 'An index on several columns, usable left to right.',
+      },
+      {
+        term: 'Covering index',
+        definition:
+          'An index containing every column a query needs, so the engine can answer entirely from the index without visiting the table. Also called an index-only scan.',
+        simple: 'An index that already has everything the query asked for.',
+      },
+      {
+        term: 'Normalisation',
+        definition:
+          'Organising tables so each fact is stored once, eliminating update anomalies. 1NF requires atomic values, 2NF removes partial dependencies on a composite key, 3NF removes transitive dependencies on non-key columns.',
+        simple: 'Storing each fact in exactly one place.',
+      },
+      {
+        term: 'Denormalisation',
+        definition:
+          'Deliberately duplicating data to avoid joins or to preserve a historical value. Correct when the duplication is a different fact (a price at time of sale) or a measured performance need.',
+        simple: 'Repeating data on purpose, for speed or for history.',
+      },
+      {
+        term: 'Transaction',
+        definition:
+          'A unit of work that either commits entirely or is rolled back entirely, with ACID guarantees: atomicity, consistency, isolation, durability.',
+        simple: 'A group of changes that all happen or none do.',
+      },
+      {
+        term: 'Isolation level',
+        definition:
+          'How much concurrent transactions may see of each other’s uncommitted or in-flight work. Read committed, repeatable read and serializable each forbid successively more anomalies at successively higher cost.',
+        simple: 'How much other people’s half-finished work you are allowed to see.',
+      },
+    ],
+
+    simpleExplanation:
+      "This unit is about the three things that decide whether a database stays fast and stays correct. Indexes are the speed part. Without one, finding the rows where `country = 'Spain'` means reading every row; with one, the engine consults a sorted structure and goes straight there — the difference between reading a book cover to cover and using its index. The catch is that every index must be updated on every insert, update and delete, so indexes are not free and a table with fifteen of them writes slowly. Normalisation is the correctness part. If a customer's city is written on every one of their orders, then changing their city means changing hundreds of rows, and missing one leaves the database disagreeing with itself. Normalising means storing each fact once and joining when you need it. And transactions are the safety part: they let you group several changes so that either all of them happen or none do, which is why money cannot be taken from one account without arriving in the other, even if the power fails between the two statements.",
+
+    whyItExists:
+      'A database that is merely correct becomes unusable once it is large, and one that is merely fast becomes untrustworthy once it is shared. Indexes buy read speed at a write cost, normalisation buys consistency at a join cost, and transactions buy correctness under concurrency and failure at a coordination cost — and every real schema is a set of deliberate positions on those three trade-offs.',
+
+    analogy: {
+      scenario:
+        'Picture a large reference library. The index at the back of each book lets you jump to page 412 rather than reading everything, but every time a page is edited the index must be corrected too. The library keeps one authoritative card per author rather than repeating the author’s address inside every book, so a change of address is one edit rather than four hundred. And when a book is transferred between branches, the removal from one catalogue and the addition to the other must both happen — a book recorded nowhere, or in two places at once, is worse than one that never moved.',
+      mapping: [
+        { from: 'The index at the back of a book', to: 'A B-tree index: sorted keys pointing at locations' },
+        { from: 'Re-editing the index after every change to the text', to: 'Index maintenance cost on every write' },
+        { from: 'One authoritative card per author', to: 'Normalisation: each fact stored once' },
+        { from: 'The address repeated inside four hundred books', to: 'An update anomaly from denormalised data' },
+        { from: 'A transfer that must remove and add together', to: 'A transaction: atomic, all or nothing' },
+        { from: 'A book recorded in two branches at once', to: 'A consistency violation the transaction prevents' },
+        { from: 'Two librarians editing the same card simultaneously', to: 'Concurrency, handled by the isolation level' },
+      ],
+      bridge:
+        'Each library practice maps onto a database mechanism and, crucially, onto its cost. The book index really does have to be rebuilt when the text changes, which is exactly why you do not index every column. The single author card really does make a change of address trivial and a lookup slightly slower, which is exactly the normalisation trade-off. And the transfer really must be atomic, which is exactly what a transaction gives you.',
+      limitations:
+        'A library is mostly read and rarely written, which flatters indexes. A high-volume transactional system writes constantly, so the index cost is far more visible there, and the right number of indexes depends on the read/write ratio rather than on any universal rule.',
+    },
+
+    visuals: [
+      {
+        kind: 'ascii',
+        title: 'A B-tree index, and what it saves',
+        caption: 'Finding country = "Spain" among a million rows: three page reads instead of a million.',
+        art: `WITHOUT AN INDEX                     WITH A B-TREE INDEX ON country
+
+read row 1   ... no                            [ M ]              <- root
+read row 2   ... no                           /     \\
+read row 3   ... YES                    [ C | G ]  [ R | T ]      <- internal
+    ...                                  /   |  \\    /   |  \\
+read row 999,999 ... no           Chile ..  France  Nigeria  Spain ...
+read row 1,000,000 ... no              (leaves, in sorted order,
+                                        each pointing at its rows)
+1,000,000 reads
+                                   root -> internal -> leaf = 3 reads
+                                   then follow the pointers to the rows
+
+WHY IT WORKS                       WHAT IT COSTS
+- leaves are kept sorted           - every INSERT/UPDATE/DELETE must
+- fanout is high (hundreds of        also update every affected index
+  keys per page), so depth is      - the index consumes disk space
+  3-4 even for billions of rows    - the optimiser may still ignore it
+- ranges are contiguous, so          if the predicate matches most rows
+  BETWEEN and ORDER BY work too      (a scan is cheaper than many seeks)`,
+      },
+      {
+        kind: 'table',
+        title: 'Will this predicate use an index on the column?',
+        columns: ['Predicate', 'Index usable?', 'Why'],
+        rows: [
+          ["`country = 'Spain'`", 'Yes', 'Equality on a bare column: a direct seek'],
+          ["`price BETWEEN 10 AND 50`", 'Yes', 'A range over sorted keys is a contiguous scan of leaves'],
+          ["`name LIKE 'Ada%'`", 'Yes', 'A prefix is a range; the index is sorted lexicographically'],
+          ["`name LIKE '%Okafor'`", 'No', 'A leading wildcard has no starting point in the sort order'],
+          ["`UPPER(name) = 'ADA'`", 'No', 'The index stores name, not UPPER(name); use an expression index'],
+          ['`status <> ’shipped’`', 'Rarely', 'Matches most rows, so a full scan is usually cheaper'],
+          ['`(a, b)` index, filter on `b` only', 'No', 'A composite index is usable only on a leading prefix'],
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'Normalising a spreadsheet-shaped table',
+        caption: 'Each step removes a specific class of anomaly.',
+        steps: [
+          { label: 'Unnormalised', detail: 'One wide row per order holding `product_names = ’keyboard, cable, monitor’` and the customer’s city repeated on every row.' },
+          { label: '1NF — atomic values', detail: 'No repeating groups or lists in a cell. The product list becomes one row per product in `order_items`.' },
+          { label: '2NF — no partial dependencies', detail: 'With a composite key (order_id, product_id), `product_name` depends on product_id alone, so it moves to `products`.' },
+          { label: '3NF — no transitive dependencies', detail: '`customer_city` depends on customer_id, not on the order, so it moves to `customers`. Changing a city is now one update.' },
+          { label: 'Deliberate denormalisation', detail: '`order_items.unit_price` stays, because the price charged then is a different fact from the price now. This is history, not redundancy.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'ACID, and what each letter actually promises',
+        columns: ['Property', 'Guarantee', 'What breaks without it'],
+        rows: [
+          ['Atomicity', 'All statements in the transaction commit, or none do', 'Money leaves one account and never arrives in the other'],
+          ['Consistency', 'Constraints hold before and after; invalid states are rejected', 'An order exists for a deleted customer; a negative stock level'],
+          ['Isolation', 'Concurrent transactions do not observe each other’s partial work', 'Two buyers both purchase the last item in stock'],
+          ['Durability', 'Once committed, the change survives a crash or power loss', 'A confirmed order disappears when the server reboots'],
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Isolation levels and the anomalies they prevent',
+        caption: 'Higher levels forbid more, at the cost of more blocking or more retries.',
+        columns: ['Level', 'Dirty read', 'Non-repeatable read', 'Phantom read'],
+        rows: [
+          ['Read uncommitted', 'Possible', 'Possible', 'Possible'],
+          ['Read committed (PostgreSQL default)', 'Prevented', 'Possible', 'Possible'],
+          ['Repeatable read', 'Prevented', 'Prevented', 'Possible in theory; prevented in PostgreSQL'],
+          ['Serializable (SQLite default)', 'Prevented', 'Prevented', 'Prevented'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Look at a query plan',
+        caption: 'Run `EXPLAIN QUERY PLAN SELECT * FROM customers WHERE country = ’Spain’;` before and after creating an index on country.',
+        widget: 'sql-playground',
+      },
+    ],
+
+    formalDefinition:
+      'An index is a persistent auxiliary structure mapping key values to row locators, maintained transactionally with the base table, enabling the optimiser to substitute a logarithmic-cost seek or a bounded range scan for a linear table scan when the predicate is sargable and sufficiently selective. A relation is in third normal form when it is in first normal form (all attribute values atomic), second normal form (no non-prime attribute is functionally dependent on a proper subset of any candidate key), and no non-prime attribute is transitively dependent on a candidate key. A transaction is a sequence of operations executed with atomicity, consistency, isolation and durability, where the isolation level defines which concurrency anomalies — dirty reads, non-repeatable reads and phantoms — are permitted.',
+
+    math: {
+      intuition:
+        'The reason an index is transformative is that logarithmic growth is almost flat. Doubling the size of a table adds one level to a binary structure, and because a B-tree page holds hundreds of keys rather than two, doubling the table barely changes the depth at all. A table of a thousand rows and a table of a billion are typically three and four page reads away from any given key.',
+      formulas: [
+        {
+          latex: 'T_{\\text{scan}} = O(n) \\qquad T_{\\text{index}} = O(\\log_f n) + O(k)',
+          name: 'Scan versus index lookup',
+          meaning: 'A scan reads every row. An index descends the tree once and then reads the k matching rows, so it wins dramatically when k is small relative to n and not at all when k approaches n.',
+          variables: [
+            { symbol: 'n', meaning: 'Rows in the table' },
+            { symbol: 'f', meaning: 'Fanout — keys per index page, typically in the hundreds' },
+            { symbol: 'k', meaning: 'Rows actually matching the predicate' },
+          ],
+          category: 'complexity',
+        },
+        {
+          latex: 'd = \\lceil \\log_f n \\rceil',
+          name: 'B-tree depth',
+          meaning: 'With a fanout of 200, a billion rows gives a depth of four. This is why index lookups feel constant-time in practice even though they are logarithmic.',
+          variables: [
+            { symbol: 'd', meaning: 'Depth: page reads to reach a leaf' },
+            { symbol: 'f', meaning: 'Fanout per page' },
+            { symbol: 'n', meaning: 'Number of indexed keys' },
+          ],
+          category: 'complexity',
+        },
+        {
+          latex: 's = \\frac{k}{n}',
+          name: 'Selectivity',
+          meaning: 'The fraction of rows a predicate matches. Roughly, an index is worth using below a few per cent; above that the random row fetches cost more than a sequential scan, which is why the optimiser sometimes ignores a perfectly good index.',
+          variables: [
+            { symbol: 's', meaning: 'Selectivity: lower is more selective' },
+            { symbol: 'k', meaning: 'Matching rows' },
+            { symbol: 'n', meaning: 'Total rows' },
+          ],
+        },
+        {
+          latex: 'C_{\\text{write}} \\approx C_{\\text{table}} + \\sum_{i=1}^{m} C_{\\text{index}_i}',
+          name: 'The write cost of indexes',
+          meaning: 'Every insert, update of an indexed column, and delete must maintain every affected index, so write cost grows roughly linearly in the number of indexes.',
+          variables: [
+            { symbol: 'm', meaning: 'Number of indexes on the table' },
+            { symbol: 'C_{\\text{index}_i}', meaning: 'Maintenance cost of index i' },
+          ],
+        },
+      ],
+      derivation: [
+        'Take a table of one billion rows with an index fanout of 200 keys per page.',
+        'Depth is ceil(log_200 of 10^9) = ceil(9 / log10(200)) = ceil(9 / 2.3) = 4.',
+        'So any single key is found in about four page reads, versus roughly 10^9 row reads for a full scan.',
+        'Now double the table to two billion rows: log_200 of 2x10^9 is about 4.04, so the depth is still 4.',
+        'Doubling the data did not measurably change lookup cost — that flatness is the whole value of the structure.',
+        'But if the predicate matches 400 million rows, the index requires 400 million random row fetches, which is slower than one sequential scan — hence selectivity, not merely sargability, decides whether the index is used.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Diagnosing a slow query end to end',
+      setup:
+        'A dashboard query that lists a customer’s recent orders has degraded from 20 ms to 4 seconds as the orders table grew to 20 million rows. The query is `SELECT * FROM orders WHERE customer_id = 4812 AND order_date >= ’2024-01-01’ ORDER BY order_date DESC LIMIT 20`.',
+      steps: [
+        {
+          label: 'Read the plan before changing anything',
+          detail:
+            '`EXPLAIN QUERY PLAN` in SQLite, `EXPLAIN (ANALYZE, BUFFERS)` in PostgreSQL. It reports `SCAN orders`, meaning every one of the 20 million rows is being read and 19,999,980 of them discarded.',
+        },
+        {
+          label: 'Check whether the predicate is sargable',
+          detail:
+            'Both conditions leave the column bare, so an index is usable. Had the query written `WHERE strftime(’%Y’, order_date) = ’2024’`, no index on order_date could help and the rewrite would come first.',
+        },
+        {
+          label: 'Choose the index columns and their order',
+          detail:
+            '`CREATE INDEX idx_orders_cust_date ON orders(customer_id, order_date DESC)`. The equality column goes first so the seek lands on a contiguous block; the range column second so the block can be scanned in order. Reversing them would force a scan of every customer within the date range.',
+          latex: 'k \\approx 20 \\text{ of } n = 2\\times10^7 \\Rightarrow s = 10^{-6}',
+        },
+        {
+          label: 'Note the second win: the sort disappears',
+          detail:
+            'Because the index stores order_date descending within each customer, the ORDER BY is satisfied by reading the index in order, and the LIMIT stops after 20 rows. The engine never sorts and never touches the other rows at all.',
+        },
+        {
+          label: 'Measure the write cost',
+          detail:
+            'One more index on a high-write table means every insert updates one more B-tree. On an orders table taking a few hundred inserts per second this is negligible; on an events table taking fifty thousand it may not be, and the honest answer is to measure rather than assume.',
+        },
+        {
+          label: 'Re-read the plan to confirm',
+          detail:
+            'It should now show `SEARCH orders USING INDEX idx_orders_cust_date (customer_id=? AND order_date>?)`. If it still says SCAN, the optimiser judged the index unhelpful — usually stale statistics (run ANALYZE) or a predicate less selective than you believed.',
+        },
+      ],
+      conclusion:
+        'The discipline is plan, diagnose, change one thing, re-plan. Column order in a composite index follows the shape of the predicate — equality columns first, then ranges, then columns needed only for ordering — and the biggest single win is often not the seek but the sort you no longer have to perform.',
+    },
+
+    codeExamples: [
+      {
+        language: 'sql',
+        title: 'Creating indexes and reading the plan',
+        runnable: true,
+        code: `-- Before: a full scan
+EXPLAIN QUERY PLAN
+SELECT * FROM customers WHERE country = 'Spain';
+
+CREATE INDEX idx_customers_country ON customers(country);
+
+-- After: a seek
+EXPLAIN QUERY PLAN
+SELECT * FROM customers WHERE country = 'Spain';
+
+-- Composite index: equality column first, range column second
+CREATE INDEX idx_orders_cust_date ON orders(customer_id, order_date);
+
+-- Unique index doubles as a constraint
+CREATE UNIQUE INDEX idx_products_name ON products(name);
+
+-- Partial index: smaller and cheaper when you only query a subset
+CREATE INDEX idx_orders_pending ON orders(order_date) WHERE status = 'pending';`,
+        explanation:
+          'Reading the plan is the only reliable way to know what the engine is doing; timings alone confound caching with algorithmic change. The composite index serves `WHERE customer_id = ?`, `WHERE customer_id = ? AND order_date > ?` and ordering by date within a customer, but not `WHERE order_date > ?` alone — a composite index is usable only on a leading prefix. The partial index is a genuinely underused tool: if 95% of orders are shipped and you only ever query pending ones, an index over just those rows is a twentieth of the size and is maintained only when a pending row changes.',
+        output: `-- before
+SCAN customers
+
+-- after
+SEARCH customers USING INDEX idx_customers_country (country=?)`,
+      },
+      {
+        language: 'sql',
+        title: 'Normalising an unnormalised table',
+        runnable: true,
+        code: `-- Unnormalised: repeating groups and redundant facts
+CREATE TABLE bad_orders (
+  order_id      INTEGER,
+  customer_name TEXT,
+  customer_city TEXT,      -- repeated on every order of that customer
+  product_names TEXT,      -- 'keyboard, cable, monitor' - not atomic
+  total         REAL
+);
+
+-- 3NF: each fact lives in exactly one place
+CREATE TABLE customers_n (
+  id   INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  city TEXT
+);
+CREATE TABLE products_n (
+  id    INTEGER PRIMARY KEY,
+  name  TEXT NOT NULL,
+  price REAL NOT NULL CHECK (price >= 0)
+);
+CREATE TABLE orders_n (
+  id          INTEGER PRIMARY KEY,
+  customer_id INTEGER NOT NULL REFERENCES customers_n(id),
+  order_date  TEXT NOT NULL
+);
+CREATE TABLE order_items_n (
+  order_id   INTEGER NOT NULL REFERENCES orders_n(id)   ON DELETE CASCADE,
+  product_id INTEGER NOT NULL REFERENCES products_n(id),
+  quantity   INTEGER NOT NULL CHECK (quantity > 0),
+  unit_price REAL    NOT NULL,   -- deliberate: the price charged THEN
+  PRIMARY KEY (order_id, product_id)
+);`,
+        explanation:
+          'Three anomalies disappear. The update anomaly: a customer moving city was previously hundreds of edits and is now one. The insertion anomaly: a product can now exist before anyone has ordered it, which the wide table made impossible. The deletion anomaly: deleting the last order for a customer no longer erases the customer’s city. Note the one deliberate exception — `unit_price` is kept on the item even though `products_n.price` exists, because the price charged on a past order is a genuinely different fact from the current price, and re-deriving it by join would silently rewrite history every time a price changed.',
+        output: `-- the wide table's update anomaly
+UPDATE bad_orders SET customer_city = 'Bilbao' WHERE customer_name = 'Ben Torres';
+-- 412 rows affected; miss one and the database contradicts itself
+
+-- the normalised equivalent
+UPDATE customers_n SET city = 'Bilbao' WHERE id = 2;
+-- 1 row affected`,
+      },
+      {
+        language: 'sql',
+        title: 'Transactions: all or nothing',
+        runnable: true,
+        code: `BEGIN TRANSACTION;
+
+  -- Take the last unit of stock
+  UPDATE products SET stock = stock - 1 WHERE id = 14 AND stock >= 1;
+
+  -- Record the order
+  INSERT INTO orders (id, customer_id, order_date, status)
+  VALUES (500, 1, '2024-06-01', 'pending');
+
+  INSERT INTO order_items (id, order_id, product_id, quantity, unit_price)
+  VALUES (900, 500, 14, 1, 89.0);
+
+COMMIT;
+
+-- If anything failed, ROLLBACK undoes every statement above.
+
+-- A savepoint allows partial rollback inside a larger transaction
+BEGIN;
+  INSERT INTO customers (id, name, country) VALUES (99, 'Test User', 'Ireland');
+  SAVEPOINT before_risky;
+  UPDATE products SET price = price * 10;   -- oops
+  ROLLBACK TO before_risky;                 -- undo only the update
+COMMIT;                                     -- the customer insert survives`,
+        explanation:
+          'Without the transaction, a failure between the stock decrement and the order insert would leave stock reduced for an order that does not exist — inventory quietly disappearing. Atomicity makes the three statements one unit. Note the `AND stock >= 1` guard on the update: it prevents stock going negative even under concurrency, because the condition is evaluated against the row as locked by this transaction. Savepoints give partial rollback within a transaction, which is how ORMs implement nested transactions, since true nesting is not supported.',
+        output: `-- with the guard, if another session already took the last unit:
+0 rows updated  -> application detects this and rolls back the whole order`,
+      },
+      {
+        language: 'sql',
+        title: 'The lost update, and two ways to prevent it',
+        code: `-- DANGEROUS: read, compute in the application, write back
+-- Session A                          Session B
+SELECT stock FROM products            SELECT stock FROM products
+WHERE id = 14;        -- 1            WHERE id = 14;        -- 1
+-- app computes 1 - 1 = 0             -- app computes 1 - 1 = 0
+UPDATE products SET stock = 0         UPDATE products SET stock = 0
+WHERE id = 14;                        WHERE id = 14;
+-- two sales, one unit of stock sold twice
+
+-- FIX 1: let the database do the arithmetic (atomic read-modify-write)
+UPDATE products SET stock = stock - 1 WHERE id = 14 AND stock >= 1;
+
+-- FIX 2: optimistic concurrency with a version column
+UPDATE products SET stock = 0, version = version + 1
+WHERE id = 14 AND version = 7;   -- 0 rows updated means someone beat you`,
+        explanation:
+          'The lost update is the most common concurrency bug in application code, and it is invisible in testing because it needs two sessions to interleave. Fix 1 works because the whole read-modify-write happens inside one statement, which the engine executes atomically against a locked row; the `stock >= 1` guard then turns a race into a clean zero-rows-updated that the application can detect. Fix 2 generalises to cases where the new value cannot be expressed as an increment: the version check fails if anyone changed the row since you read it, and your application retries. Raising the isolation level to serializable is a third option, and PostgreSQL will then abort one of the transactions with a serialization failure that you must be prepared to retry.',
+        output: `-- Fix 1, when another session already took the unit
+0 rows updated
+
+-- Fix 2, when the version has moved on
+0 rows updated  -> reload and retry`,
+      },
+      {
+        language: 'sql',
+        title: 'When denormalisation is the right call',
+        runnable: true,
+        code: `-- Fully normalised: correct, but this join runs on every page view
+SELECT c.name, COUNT(o.id) AS lifetime_orders
+FROM customers AS c
+LEFT JOIN orders AS o ON o.customer_id = c.id
+GROUP BY c.id, c.name;
+
+-- Denormalised: a maintained counter, read in O(1)
+ALTER TABLE customers ADD COLUMN lifetime_orders INTEGER NOT NULL DEFAULT 0;
+
+-- Maintained inside the same transaction that creates the order
+BEGIN;
+  INSERT INTO orders (id, customer_id, order_date, status)
+  VALUES (501, 1, '2024-06-02', 'pending');
+  UPDATE customers SET lifetime_orders = lifetime_orders + 1 WHERE id = 1;
+COMMIT;`,
+        explanation:
+          'This is a legitimate denormalisation and also a cautionary one. It is legitimate because an aggregate recomputed on every page view is real, measurable cost, and the counter turns it into a single column read. It is cautionary because the counter is now a second copy of a derived fact, and the only thing keeping it true is that every write path remembers to maintain it inside the same transaction. A bulk import that bypasses the application, or a delete that forgets the decrement, silently desynchronises it. If you denormalise, you owe the system a reconciliation job that recomputes the truth and reports drift — otherwise the optimisation becomes a slowly accumulating lie.',
+        output: `-- reconciliation query you should run on a schedule
+SELECT c.id, c.lifetime_orders AS stored, COUNT(o.id) AS actual
+FROM customers c LEFT JOIN orders o ON o.customer_id = c.id
+GROUP BY c.id, c.lifetime_orders
+HAVING c.lifetime_orders <> COUNT(o.id);`,
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'A slow endpoint traced to a missing index',
+        usage:
+          'The single most common production performance fix is adding an index on a foreign key that is joined or filtered constantly. PostgreSQL does not create one automatically for the referencing side, so it is a routine oversight.',
+      },
+      {
+        context: 'Analytical warehouses that denormalise on purpose',
+        usage:
+          'Star schemas flatten dimensions into fact tables because analytical queries are read-mostly and joins dominate cost. The normalisation rules are not abandoned — they are traded away knowingly, with the source of truth still normalised upstream.',
+      },
+      {
+        context: 'Double-booking in a reservation system',
+        usage:
+          'Two users seeing the last seat available and both booking it is the lost-update anomaly. It is prevented by a conditional update, a unique constraint on the seat, or serializable isolation with retry — not by checking availability first.',
+      },
+      {
+        context: 'Training-data snapshots',
+        usage:
+          'Extracting a dataset inside a transaction, or from a point-in-time snapshot, is what makes the extraction reproducible. Without it, a long-running query sees rows written mid-scan and the dataset cannot be regenerated.',
+      },
+      {
+        context: 'Over-indexed write-heavy tables',
+        usage:
+          'Event and log tables with a dozen indexes added over years become insert-bound. Auditing index usage — `pg_stat_user_indexes` in PostgreSQL — and dropping unused ones is a standard and often dramatic win.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'PostgreSQL EXPLAIN ANALYZE', role: 'Shows the chosen plan with actual row counts and timings; a large gap between estimated and actual rows usually means stale statistics.' },
+      { tool: 'Alembic / Flyway', role: 'Apply schema and index changes in versioned, reversible steps, so a normalisation change can be rolled forward across environments safely.' },
+      { tool: 'SQLAlchemy', role: 'Its session is a transaction; understanding commit, rollback and the lost-update problem is what stops ORM code corrupting data under load.' },
+      { tool: 'dbt', role: 'Analytical models are deliberately denormalised, with tests standing in for the constraints a warehouse does not enforce.' },
+      { tool: 'pgbench / EXPLAIN (BUFFERS)', role: 'Measure before and after rather than reasoning about index benefit in the abstract; selectivity is an empirical property of your data.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Indexing every column "just in case"',
+        why: 'Each index must be maintained on every insert, update of that column, and delete, so writes slow roughly linearly in the number of indexes, and unused indexes consume space and cache for nothing.',
+        fix: 'Index what you actually filter, join and sort on, verify with the plan, and audit usage periodically to drop indexes nothing reads.',
+      },
+      {
+        mistake: 'Getting composite index column order wrong',
+        why: 'An index on `(order_date, customer_id)` cannot serve `WHERE customer_id = ?` alone, because a composite index is only usable on a leading prefix.',
+        fix: 'Put equality columns first, then range columns, then columns needed only for ordering. Match the order to the predicate shape.',
+      },
+      {
+        mistake: 'Assuming an index will always be used because it exists',
+        why: 'If the predicate matches a large fraction of rows, random fetches through the index cost more than a sequential scan, so the optimiser correctly ignores it.',
+        fix: 'Read the plan. If the index should be used and is not, check selectivity and refresh statistics with ANALYZE before blaming the optimiser.',
+      },
+      {
+        mistake: 'Normalising to the point of unusability, or not at all',
+        why: 'Over-normalising produces queries joining eight tables for one screen; under-normalising produces update anomalies where the same fact disagrees with itself in different rows.',
+        fix: 'Normalise to 3NF by default in a transactional system, then denormalise specific, measured hot paths — and write a reconciliation check for anything you duplicate.',
+      },
+      {
+        mistake: 'Read-modify-write in application code without a guard',
+        why: 'Two sessions can both read the old value and both write back, so one update is silently lost. It never reproduces in single-user testing.',
+        fix: 'Do the arithmetic in SQL (`SET stock = stock - 1 WHERE stock >= 1`), or use a version column, or use serializable isolation with retry logic.',
+      },
+      {
+        mistake: 'Holding a transaction open while doing slow work',
+        why: 'Locks are held for the transaction’s whole duration, so waiting on an HTTP call inside a transaction blocks other writers and can exhaust the connection pool.',
+        fix: 'Keep transactions short and purely about the database. Do external calls before BEGIN or after COMMIT, and design for the possibility of retry.',
+      },
+      {
+        mistake: 'Expecting a foreign key to create an index on the referencing column',
+        why: 'PostgreSQL and SQLite index the referenced key but not the referencing one, so joins and cascading deletes on the child table can scan it entirely.',
+        fix: 'Create the index explicitly on every foreign-key column you join or delete through. MySQL/InnoDB does it automatically, which is why the habit is easy to lose.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'How does an index make a query faster, and what does it cost?',
+        answer:
+          'A B-tree index stores the indexed column’s values in sorted order with pointers back to the rows, so instead of scanning every row the engine descends the tree — typically three or four page reads even for a billion rows — and then reads only the matching rows. Because the leaves are sorted, the same structure also serves range predicates and can satisfy an ORDER BY without a sort, which is frequently the larger win. The costs are real: every insert, delete and update of an indexed column must maintain every affected index, so write throughput falls roughly linearly in the number of indexes; the index occupies disk and competes for cache; and it only helps when the predicate is sargable and selective, since matching a large fraction of rows makes a sequential scan cheaper than many random fetches.',
+        followUp:
+          'A strong answer mentions covering indexes, where the index contains every column the query needs so the table is never visited at all.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Explain 1NF, 2NF and 3NF, and when you would deliberately break them.',
+        answer:
+          '1NF: every value is atomic — no lists or repeating groups in a cell — so a comma-separated product list becomes separate rows. 2NF: in 1NF and no non-key column depends on only part of a composite key; with a key of (order_id, product_id), a product name depends on product_id alone and belongs in a products table. 3NF: in 2NF and no non-key column depends on another non-key column; a customer’s city depends on the customer, not the order, so it belongs in customers. The purpose throughout is to store each fact once, so an update is one row and the database cannot contradict itself. You break it deliberately in two situations: when the duplicate is actually a different fact, such as the unit price charged on a past order, which must not change when the catalogue price does; and when a measured hot path needs a maintained aggregate or a flattened dimension, as in an analytical star schema. Both cases require a reconciliation check, because a duplicate with no owner drifts.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'What does ACID mean, and which property fails when two users buy the last item in stock?',
+        answer:
+          'Atomicity: a transaction commits entirely or not at all. Consistency: declared constraints hold before and after, so invalid states are rejected. Isolation: concurrent transactions do not observe each other’s partial work. Durability: once committed, the change survives a crash. The double-sale is an isolation failure, specifically a lost update: both sessions read stock = 1, both compute 0, and both write it, so one sale is silently lost from the inventory. Atomicity does not help, because each transaction is individually complete. The fixes are to make the read-modify-write atomic in one statement — `UPDATE products SET stock = stock - 1 WHERE id = ? AND stock >= 1` — which turns the race into a detectable zero-rows-updated, or to use optimistic concurrency with a version column, or to run at serializable isolation and retry on a serialization failure. Adding a CHECK constraint that stock must be non-negative is worth having as well, since it converts a silent corruption into a loud error.',
+        followUp:
+          'Noting that this bug never appears in single-user testing, and therefore needs a concurrency test or a constraint to catch, is what distinguishes experience here.',
+      },
+      {
+        level: 'internship',
+        question: 'A query that was fast last month now takes 30 seconds. Walk me through your diagnosis.',
+        answer:
+          'First, get the plan with EXPLAIN ANALYZE rather than guessing, and compare estimated with actual row counts — a large divergence points at stale statistics, fixed by ANALYZE. If the plan shows a sequential scan where a seek is expected, check whether the predicate is still sargable: a recent change wrapping a column in a function, or a leading wildcard in a LIKE, disables the index. If the predicate is fine and the index exists, the table may simply have grown past the point where the optimiser thinks the index is worthwhile, which is a selectivity question. I would also check whether the shape of the query changed — a new join to a one-to-many table both multiplies rows and changes the plan — and whether an index was dropped during a migration. Then change exactly one thing and re-read the plan, because changing several at once tells you nothing about which helped.',
+      },
+      {
+        level: 'ai-engineer',
+        question: 'Why does index column order matter in a composite index?',
+        answer:
+          'A composite index sorts by the first column, then the second within equal values of the first, and so on — like a phone book sorted by surname then forename. That means it can serve any query filtering on a leading prefix of the columns, and cannot serve one that skips the first. An index on `(customer_id, order_date)` supports filtering by customer, by customer and date range, and ordering by date within a customer; it does not support filtering by date alone, exactly as a phone book is useless for finding everyone called James. The practical rule is equality columns first, then the range column, then any column needed only to satisfy the ORDER BY — because an equality on the leading column lands on a contiguous block of the index that the range can then scan in order.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Given `SELECT * FROM orders WHERE customer_id = ? AND status = ’pending’ ORDER BY order_date DESC LIMIT 20`, design the best index and justify the column order.',
+        hint: 'Two equality predicates, then an ordering column. Which order lets the index satisfy all three jobs?',
+        language: 'sql',
+        solution:
+          "CREATE INDEX idx_orders_cust_status_date\n  ON orders(customer_id, status, order_date DESC);\n\nThe two equality columns come first, so a seek lands on the contiguous block of rows for that customer with that status. Within that block the index is already sorted by order_date descending, so the ORDER BY needs no sort and the LIMIT stops after twenty entries — the query touches twenty index entries and twenty rows, regardless of table size. Putting order_date first would be much worse: the engine would have to scan every order in date order, filtering on customer and status as it went. If pending orders are a small minority, a partial index is better still: `CREATE INDEX ... ON orders(customer_id, order_date DESC) WHERE status = 'pending'`, which is smaller and is maintained only when pending rows change.",
+      },
+      {
+        prompt: 'This table violates 2NF and 3NF. Identify each violation and rewrite it: `enrolments(student_id, course_id, student_name, student_email, course_title, instructor_name, instructor_email, grade)` with primary key (student_id, course_id).',
+        hint: 'Ask of each column: does it depend on the whole key, part of the key, or on another non-key column?',
+        language: 'sql',
+        solution:
+          "The 2NF violations are partial dependencies on half the composite key: `student_name` and `student_email` depend on student_id alone, and `course_title` and `instructor_name` depend on course_id alone. The 3NF violation is transitive: `instructor_email` depends on `instructor_name`, a non-key column, not on the key at all. Only `grade` genuinely depends on the whole key.\n\nCREATE TABLE students (\n  id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE\n);\nCREATE TABLE instructors (\n  id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE\n);\nCREATE TABLE courses (\n  id INTEGER PRIMARY KEY, title TEXT NOT NULL,\n  instructor_id INTEGER NOT NULL REFERENCES instructors(id)\n);\nCREATE TABLE enrolments (\n  student_id INTEGER NOT NULL REFERENCES students(id),\n  course_id  INTEGER NOT NULL REFERENCES courses(id),\n  grade      TEXT,\n  PRIMARY KEY (student_id, course_id)\n);\n\nChanging an instructor's email is now one update rather than one per enrolment they teach, and a course can exist before anyone enrols — the insertion anomaly the original design made impossible.",
+      },
+      {
+        prompt: 'Write the transaction that transfers 100 units of stock from product 3 to product 7, and explain what protects it from going wrong.',
+        hint: 'Two updates that must both succeed. Guard the decrement so stock cannot go negative.',
+        language: 'sql',
+        solution:
+          "BEGIN TRANSACTION;\n  UPDATE products SET stock = stock - 100 WHERE id = 3 AND stock >= 100;\n  -- application checks that exactly 1 row was updated; if 0, ROLLBACK\n  UPDATE products SET stock = stock + 100 WHERE id = 7;\nCOMMIT;\n\nThree mechanisms are doing work. Atomicity means a crash between the two updates cannot leave the stock destroyed — on restart the whole transaction is rolled back. The `stock >= 100` guard makes the decrement conditional and evaluated atomically against the locked row, so two concurrent transfers cannot both succeed against insufficient stock; the second gets zero rows updated, which the application must check and act on. Isolation means no other session sees the intermediate state where the stock exists in neither product. A `CHECK (stock >= 0)` constraint on the table is worth adding too, as a last line of defence that turns any path bypassing the guard into a loud error rather than silent corruption.",
+      },
+      {
+        prompt: 'A colleague proposes adding a `total_spent` column to `customers`, maintained by the application, to avoid a join. Argue both sides and state what you would require before agreeing.',
+        hint: 'Think about read frequency, write paths, and what happens when the two copies disagree.',
+        solution:
+          'In favour: if the lifetime-spend figure is read on every page load and computing it requires joining orders to order_items and aggregating, that is genuine repeated cost, and a single column read is O(1). Denormalisation of a derived aggregate is a standard and legitimate optimisation. Against: the column becomes a second copy of a fact that is already derivable, and it is only true for as long as every write path remembers to maintain it — a bulk import, a manual correction, a refund path someone forgets, and it silently drifts. Wrong data that looks authoritative is worse than a slow query. What I would require before agreeing: evidence that the join is actually a bottleneck rather than an assumption; every maintenance update performed inside the same transaction as the change that causes it, so it cannot be half-applied; and a scheduled reconciliation query that recomputes the true value and alerts on any mismatch. With those three, it is an engineering trade-off; without them, it is a bug with a schedule.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'SQL-013-q1',
+        type: 'mcq',
+        concept: 'index cost',
+        prompt: 'What is the main cost of adding an index to a table?',
+        options: [
+          'Every insert, delete and update of the indexed column must also maintain the index',
+          'Queries on other columns become incorrect',
+          'The table can no longer be joined',
+          'Existing rows must be rewritten on every read',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Indexes are maintained transactionally with the table, so write cost grows roughly linearly with the number of indexes. They also consume disk and cache.',
+      },
+      {
+        id: 'SQL-013-q2',
+        type: 'multi',
+        concept: 'sargability and selectivity',
+        prompt: 'Which conditions would prevent an index on `orders(order_date)` from being used? Select all that apply.',
+        options: [
+          "The predicate is `strftime('%Y', order_date) = '2024'`",
+          'The predicate matches 80% of the rows',
+          'The predicate is `order_date >= ’2024-01-01’`',
+          'The statistics are stale and badly misestimate the row count',
+          'The query also selects columns not in the index',
+        ],
+        answerIndices: [0, 1, 3],
+        explanation:
+          'Wrapping the column in a function destroys sargability; poor selectivity makes a scan cheaper; stale statistics mislead the optimiser. A bare range is ideal, and selecting extra columns only costs an extra table fetch.',
+      },
+      {
+        id: 'SQL-013-q3',
+        type: 'match',
+        concept: 'acid',
+        prompt: 'Match each ACID property to the failure it prevents.',
+        pairs: [
+          { left: 'Atomicity', right: 'Money leaves one account and never arrives in the other' },
+          { left: 'Consistency', right: 'An order exists referencing a customer that was deleted' },
+          { left: 'Isolation', right: 'Two buyers both purchase the last item in stock' },
+          { left: 'Durability', right: 'A confirmed order vanishes after the server reboots' },
+        ],
+        explanation:
+          'Each letter answers a specific way that concurrent, failure-prone systems corrupt data. Naming which one is at fault is usually the first step in fixing a data bug.',
+      },
+      {
+        id: 'SQL-013-q4',
+        type: 'truefalse',
+        concept: 'composite indexes',
+        prompt: 'An index on `(customer_id, order_date)` can efficiently serve a query filtering only on `order_date`.',
+        answer: false,
+        explanation:
+          'A composite index is sorted by its first column, so it is usable only on a leading prefix. Filtering on the second column alone requires scanning the whole index or the table.',
+      },
+      {
+        id: 'SQL-013-q5',
+        type: 'order',
+        concept: 'normalisation',
+        prompt: 'Order the normalisation steps as they are applied to a wide, spreadsheet-shaped table.',
+        items: [
+          'Make every value atomic — no lists or repeating groups (1NF)',
+          'Remove columns depending on only part of a composite key (2NF)',
+          'Remove columns depending on another non-key column (3NF)',
+          'Denormalise specific hot paths deliberately, with reconciliation',
+        ],
+        explanation:
+          'Each normal form assumes the previous one. Denormalisation comes last and only with measurement, because it trades away a guarantee you have to replace with a check.',
+      },
+      {
+        id: 'SQL-013-q6',
+        type: 'debug',
+        language: 'sql',
+        concept: 'lost update',
+        prompt: 'Two sessions run this concurrently and one unit of stock gets sold twice. What is the minimal fix?',
+        code: "-- application reads stock, computes new value, writes it back\nSELECT stock FROM products WHERE id = 14;   -- both read 1\nUPDATE products SET stock = 0 WHERE id = 14; -- both write 0",
+        options: [
+          "Do the arithmetic in SQL: `UPDATE products SET stock = stock - 1 WHERE id = 14 AND stock >= 1`",
+          'Add an index on products(stock)',
+          'Wrap the SELECT in a transaction and leave the UPDATE as it is',
+          'Change stock to a REAL column',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Making the read-modify-write a single statement executes it atomically against a locked row, and the guard turns a race into a detectable zero-rows-updated. Wrapping the read alone changes nothing.',
+      },
+      {
+        id: 'SQL-013-q7',
+        type: 'numeric',
+        concept: 'b-tree depth',
+        prompt: 'With a fanout of 100 keys per page, roughly how many page reads does it take to find a key among 100 million rows? (log base 100 of 10^8)',
+        answer: 4,
+        tolerance: 0.5,
+        explanation:
+          'log base 100 of 10^8 is 4, so about four page reads — versus 100 million row reads for a scan. The flatness of the logarithm is why index lookups feel constant-time.',
+      },
+      {
+        id: 'SQL-013-q8',
+        type: 'explain',
+        concept: 'design trade-offs',
+        prompt: 'A teammate wants to denormalise a frequently joined table to speed up a dashboard. Explain what you would want to establish first, and what you would require alongside the change.',
+        rubric: [
+          'Asks for evidence that the join is genuinely the bottleneck, from a plan or a measurement',
+          'Notes that duplicated data can drift and that every write path must maintain it',
+          'Requires a reconciliation check and maintenance inside the same transaction',
+        ],
+        sampleAnswer:
+          'First I would want the plan and a measurement, because "the join is slow" is usually an assumption and the actual cost is often a missing index on a foreign key, which is a far cheaper fix with no correctness cost. If the join really is the bottleneck, denormalisation is a legitimate tool — analytical schemas do it deliberately. But duplicating a derived value creates a second source of truth that is correct only while every write path maintains it, and the paths that forget are exactly the unusual ones: bulk imports, manual corrections, refund flows. So I would require two things alongside the change. The maintenance must happen in the same transaction as the change that causes it, so it cannot be half-applied. And there must be a scheduled reconciliation query that recomputes the true value, compares it, and alerts on drift. With those, it is an engineering trade-off with a safety net; without them, it is a data-quality incident waiting for a quiet week.',
+        explanation:
+          'The examinable judgement is that denormalisation trades an enforced guarantee for a maintained convention, and a maintained convention needs an owner and a check.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does a B-tree index do?', back: 'Stores column values sorted with pointers to rows, so a lookup is 3–4 page reads instead of a full scan. Ranges and ORDER BY benefit too.' },
+      { front: 'What does an index cost?', back: 'Maintenance on every insert, delete and update of the indexed column, plus disk and cache. Write cost grows roughly linearly in index count.' },
+      { front: 'Why might the optimiser ignore an index?', back: 'Poor selectivity — if the predicate matches most rows, a sequential scan beats many random fetches. Or stale statistics; run ANALYZE.' },
+      { front: 'Composite index column order rule', back: 'Equality columns first, then the range column, then ordering columns. Usable only on a leading prefix.' },
+      { front: '1NF, 2NF, 3NF in one line each', back: '1NF: atomic values. 2NF: no dependency on part of a composite key. 3NF: no dependency on another non-key column.' },
+      { front: 'When is denormalisation correct?', back: 'When the duplicate is a different fact (price charged then), or a measured hot path needs it — and only with transactional maintenance plus a reconciliation check.' },
+      { front: 'What are the four ACID properties?', back: 'Atomicity (all or nothing), Consistency (constraints hold), Isolation (no partial work visible), Durability (survives a crash).' },
+      { front: 'What is a lost update and how do you prevent it?', back: 'Two sessions read the same value and both write back, losing one change. Fix with atomic `SET x = x - 1 WHERE ...`, a version column, or serializable isolation with retry.' },
+      { front: 'How do you know what a query is actually doing?', back: '`EXPLAIN QUERY PLAN` in SQLite, `EXPLAIN ANALYZE` in PostgreSQL. SCAN means full table; SEARCH USING INDEX means a seek.' },
+    ],
+
+    challenge: {
+      title: 'Audit and improve a schema',
+      brief:
+        'Take the sample schema and produce a written design review with evidence. Identify every foreign-key column lacking an index and create the ones a real workload would need, showing the plan before and after for a representative query. Identify at least one place where the schema is deliberately denormalised and explain why it is correct there. Propose one denormalisation that would speed up a plausible dashboard, together with the transaction that maintains it and the reconciliation query that would detect drift. Finally, write a transaction that places an order and decrements stock safely, and explain which ACID property protects against which specific failure.',
+      language: 'sql',
+      acceptanceCriteria: [
+        'Every foreign-key column is checked for an index, with the missing ones created',
+        'EXPLAIN QUERY PLAN output is shown before and after at least one index change',
+        'The existing deliberate denormalisation is identified and justified as a distinct fact rather than redundancy',
+        'The proposed denormalisation comes with both a maintaining transaction and a reconciliation query',
+        'The order-placement transaction guards against negative stock and the guard is explained',
+        'Each ACID property is tied to a specific failure it prevents in this schema',
+      ],
+      starterCode: "-- Which foreign-key columns have no index?\nSELECT name FROM sqlite_master WHERE type = 'index';\nEXPLAIN QUERY PLAN\nSELECT * FROM orders WHERE customer_id = 1;\n",
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Imagine I can write good queries but have never designed a database. Teach me the three things that keep a database fast and correct as it grows.',
+      mustCover: [
+        'An index is a sorted structure that turns reading everything into jumping straight there',
+        'Indexes cost write time and space, so you index what you actually filter, join and sort on',
+        'Normalisation means storing each fact once, so an update is one row and the data cannot contradict itself',
+        'Denormalisation is sometimes correct, but it needs maintenance and a check because duplicates drift',
+        'A transaction groups changes so they all happen or none do, which is what ACID formalises',
+      ],
+      bonusSignals: ['uses a book-index analogy', 'gives a concrete update anomaly', 'mentions the lost-update problem under concurrency'],
+      sampleExplanation:
+        'Three things, and each is a trade. The first is indexes. Without one, finding the Spanish customers means reading every customer; with one, the database consults a sorted structure and jumps straight to them, the way you would use the index at the back of a book instead of reading it cover to cover. It is dramatic — three or four lookups instead of a million — but it is not free, because every time you add or change a row the index has to be brought up to date too. So you index the columns you genuinely search, join and sort on, not everything. The second is normalisation, which just means writing each fact down once. If a customer’s city is copied onto every one of their orders, then when they move you have to change four hundred rows, and the day you miss one the database starts disagreeing with itself. Put the city on the customer, refer to the customer from the order, and the move becomes a single edit. The third is transactions. Some changes only make sense together: take the stock, create the order. A transaction wraps them so either both happen or neither does, even if the power fails in between — and it also stops two people at once both selling the last item, which is a bug you will never see in testing because it needs two things happening at the same moment.',
+    },
+  },
+];

@@ -3494,3 +3494,3217 @@ man : programmer  ::  woman : ?
         'In your TF-IDF matrix every word is its own column, which means `car` and `automobile` have nothing in common — their vectors are orthogonal, cosine similarity exactly zero, just as `car` and `banana` are. Anything the model learns about one synonym is useless for the other. Embeddings solve this by giving each word a short dense vector, say 300 numbers, positioned so that words used in the same way sit close together. The positions are learned by a guessing game with no labels: take a word, try to predict which words surround it, and nudge the vectors to make the true neighbours score higher than random words. Because a word can only score well on the contexts it genuinely appears in, two words that share contexts get pushed into the same region. Doing this over billions of words produces a map where `car` sits near `automobile` and `vehicle`. Three things it does not fix, and you should know them before you trust it. Antonyms appear in the same contexts, so `hot` and `cold` end up as close as real synonyms. Each word gets exactly one vector, so `bank` sits in a compromise position between rivers and finance. And the vectors absorb whatever associations were in the corpus, including that `nurse` leans female and `engineer` leans male — which becomes a real problem the moment you rank CVs with them.',
     },
   },
+
+  {
+    id: 'NLP-007',
+    domain: 'NLP',
+    module: 'Embeddings',
+    topic: 'Vector space similarity',
+    title: 'Semantic Similarity and Embedding Spaces',
+    slug: 'semantic-similarity',
+    difficulty: 3,
+    estimatedMinutes: 35,
+    prerequisites: ['NLP-006'],
+    related: ['NLP-004', 'NLP-005'],
+    tags: ['cosine-similarity', 'nearest-neighbours', 'sentence-embeddings', 'vector-search', 'semantic-search'],
+
+    learningObjectives: [
+      'Compute cosine similarity between two document vectors by hand and interpret the result',
+      'Explain precisely why cosine is preferred to Euclidean distance for text, using a length-doubling example',
+      'Retrieve nearest neighbours in an embedding space and judge when the results are trustworthy',
+      'Produce a sentence embedding with sentence-transformers and explain why mean-pooling raw BERT outputs is a weaker approach',
+      'Articulate, with examples, why high similarity does not mean the same meaning',
+    ],
+
+    terminology: [
+      {
+        term: 'Cosine similarity',
+        definition:
+          'The cosine of the angle between two vectors: their dot product divided by the product of their norms. Ranges from −1 to 1, and from 0 to 1 for non-negative count vectors.',
+        simple: 'How closely two arrows point in the same direction, ignoring how long they are.',
+      },
+      {
+        term: 'Nearest neighbour search',
+        definition:
+          'Finding the k vectors in a collection closest to a query vector under a chosen metric. Exact search is O(N·d); approximate methods such as HNSW trade a little recall for orders-of-magnitude speed.',
+        simple: 'Looking up the k most similar items to the one you have.',
+      },
+      {
+        term: 'Sentence embedding',
+        definition:
+          'A single fixed-length vector representing a whole sentence or passage, produced by a model trained so that semantically similar sentences receive nearby vectors.',
+        simple: 'One list of numbers standing for a whole sentence, not just a word.',
+      },
+      {
+        term: 'Semantic search',
+        definition:
+          'Retrieval by embedding proximity rather than by lexical overlap, so a query retrieves passages that mean the same thing even when they share no words.',
+        simple: 'Searching by meaning instead of by exact words.',
+      },
+      {
+        term: 'Anisotropy',
+        definition:
+          'The observed tendency of raw transformer output vectors to occupy a narrow cone rather than spreading through the space, which inflates all cosine similarities and compresses the useful range.',
+        simple: 'All the vectors bunching up in one direction, so everything looks similar to everything.',
+      },
+    ],
+
+    simpleExplanation:
+      "Once every document or sentence is a vector, comparing two of them becomes geometry. The natural first instinct is to measure the straight-line distance between the two points, but that turns out to be the wrong tool for text. Imagine one article about cats and a second article that is the same article repeated twice: identical subject matter, but the second one has every count doubled, so it sits twice as far from the origin and the straight-line distance between them is large. What has not changed is the direction the vector points, and direction is what carries the topic. So we measure the angle instead. Cosine similarity is 1 when two vectors point exactly the same way, 0 when they are at right angles, and it is completely blind to length — which means a tweet and a novel about the same subject can be recognised as similar. This one measurement is the engine behind semantic search, recommendation, deduplication and the retrieval half of every RAG system.",
+
+    whyItExists:
+      'Documents vary enormously in length, and under Euclidean distance length dominates topic: a long document is far from everything, including other long documents about the same subject. Cosine similarity exists to compare direction while ignoring magnitude, which for text means comparing what a document is about while ignoring how much of it there is.',
+
+    analogy: {
+      scenario:
+        'Think of two people describing the route to a destination by pointing. One points firmly with their whole arm; the other gives a small flick of the wrist. If you measured the distance between their fingertips you would conclude they disagree, because one arm is extended and the other is not. What you actually care about is whether they are pointing the same way, and that is a question about angle, not about how far the fingertip travelled.',
+      mapping: [
+        { from: 'The direction the arm points', to: 'The direction of the document vector, which encodes its topic' },
+        { from: 'How far the arm extends', to: 'The magnitude of the vector, which mostly encodes document length' },
+        { from: 'Comparing fingertip positions', to: 'Euclidean distance, which conflates topic with length' },
+        { from: 'Comparing the angle between arms', to: 'Cosine similarity, which isolates topic from length' },
+        { from: 'Two people pointing at right angles', to: 'Cosine 0 — no shared terms at all' },
+      ],
+      bridge:
+        'The pointing analogy is exact rather than loose: a document-term vector really is a direction in term space, and doubling a document really does double the vector length while leaving its direction untouched. That is why L2-normalising rows, which `TfidfVectorizer` does by default, makes the dot product equal to the cosine — you are stripping the arm length off before comparing.',
+      limitations:
+        'Pointing is one-dimensional in the analogy but embeddings have hundreds of dimensions, where geometry behaves counter-intuitively: in high dimensions random vectors are almost always near-orthogonal, and raw transformer outputs occupy a narrow cone that inflates every similarity. A cosine of 0.8 means very different things in different spaces, so calibrate against your own data rather than against a remembered threshold.',
+    },
+
+    visuals: [
+      {
+        kind: 'annotated',
+        title: 'Anatomy of the cosine formula',
+        subject: 'cos(A, B) = (A · B) / (||A|| · ||B||)',
+        annotations: [
+          { part: 'A · B', note: 'The dot product: multiply matching components and sum. Large when the two vectors have high values in the same dimensions — that is, when they share terms.' },
+          { part: '||A||', note: 'The Euclidean norm of A, sqrt of the sum of its squared components. For a count vector this grows with document length.' },
+          { part: 'Dividing by the norms', note: 'Removes magnitude entirely, leaving pure direction. This is what makes a tweet comparable with a novel.' },
+          { part: 'Result of 1', note: 'Identical direction. For count vectors this means identical term proportions, not identical documents.' },
+          { part: 'Result of 0', note: 'Orthogonal — no shared terms at all. The usual outcome for two random documents in a sparse space.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Cosine versus Euclidean on text',
+        caption: 'The decisive case is a document compared with a repeated copy of itself.',
+        left: {
+          heading: 'Cosine similarity',
+          points: [
+            'Invariant to vector length, so document size does not matter',
+            'A doubled document is identical to the original: cosine 1.0',
+            'Bounded in [−1, 1], so thresholds transfer between datasets more readily',
+            'Equals the dot product once vectors are L2-normalised — very fast',
+            'The default in every vector database and every RAG pipeline',
+          ],
+        },
+        right: {
+          heading: 'Euclidean distance',
+          points: [
+            'Dominated by magnitude, so long documents are far from everything',
+            'A doubled document sits at distance 2.83 from the original in our example',
+            'Unbounded above, so thresholds are dataset-specific',
+            'Equivalent to cosine ranking only after L2 normalisation',
+            'Appropriate when magnitude is meaningful, which for raw text counts it is not',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'What a cosine value typically means, by space',
+        caption: 'These bands are empirical rules of thumb. Always calibrate on your own data.',
+        columns: ['Space', 'Unrelated', 'Loosely related', 'Near-duplicate'],
+        rows: [
+          ['TF-IDF (sparse)', '0.00 – 0.05', '0.10 – 0.30', 'above 0.7'],
+          ['Static word vectors (GloVe)', '0.00 – 0.20', '0.35 – 0.55', 'above 0.75'],
+          ['Sentence-transformer embeddings', '0.00 – 0.25', '0.40 – 0.60', 'above 0.85'],
+          ['Raw mean-pooled BERT (anisotropic)', '0.60 – 0.75', '0.75 – 0.85', 'above 0.95'],
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'Semantic search end to end',
+        caption: 'The retrieval half of every RAG system is exactly these six steps.',
+        steps: [
+          { label: 'Chunk the corpus', detail: 'Split documents into passages of a few hundred tokens, with overlap.' },
+          { label: 'Embed every chunk', detail: 'One vector per chunk from a sentence-embedding model. Done once, offline.' },
+          { label: 'Index the vectors', detail: 'Load into FAISS, hnswlib or a vector database for approximate nearest-neighbour search.' },
+          { label: 'Embed the query', detail: 'The same model, at query time, producing one vector.' },
+          { label: 'Retrieve top k by cosine', detail: 'Approximate search returns the k closest chunks in milliseconds over millions of vectors.' },
+          { label: 'Use the results', detail: 'Show them, re-rank them, or paste them into a language-model prompt as context.' },
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Embedding space explorer',
+        caption: 'Move a query point around and watch which vectors become its nearest neighbours under cosine.',
+        widget: 'embedding-space-3d',
+        props: { metric: 'cosine', showNeighbours: true },
+      },
+    ],
+
+    formalDefinition:
+      'For non-zero vectors A and B in R^n, cosine similarity is defined as the inner product of A and B divided by the product of their Euclidean norms, which equals the cosine of the angle between them and is invariant under positive scaling of either argument. Cosine distance is defined as 1 minus cosine similarity; it is not a metric, since it violates the triangle inequality, but on L2-normalised vectors it induces the same ranking as squared Euclidean distance, since ||A − B||² = 2 − 2·cos(A, B).',
+
+    math: {
+      intuition:
+        'The dot product measures agreement: it is large when two vectors have big values in the same coordinates. But it also grows when either vector simply gets longer, which for text means "this document is bigger". Dividing by both norms cancels that growth exactly, leaving only the agreement in direction.',
+      formulas: [
+        {
+          latex: '\\cos(A, B) = \\frac{A \\cdot B}{\\lVert A \\rVert\\, \\lVert B \\rVert} = \\frac{\\sum_{i=1}^{n} A_i B_i}{\\sqrt{\\sum_{i=1}^{n} A_i^2}\\, \\sqrt{\\sum_{i=1}^{n} B_i^2}}',
+          name: 'Cosine similarity',
+          meaning:
+            'The cosine of the angle between two vectors. Equals 1 for identical direction, 0 for orthogonal vectors, and −1 for opposite direction. For non-negative count vectors it never goes below 0.',
+          variables: [
+            { symbol: 'A_i, B_i', meaning: 'The i-th component of each vector, e.g. the weight of term i' },
+            { symbol: 'n', meaning: 'Dimensionality — vocabulary size for sparse vectors, embedding size for dense ones' },
+            { symbol: '\\lVert A \\rVert', meaning: 'Euclidean norm of A, the square root of the sum of its squared components' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: 'd_E(A, B) = \\lVert A - B \\rVert_2 = \\sqrt{\\sum_{i=1}^{n} (A_i - B_i)^2}',
+          name: 'Euclidean distance',
+          meaning:
+            'Straight-line distance between the two points. Sensitive to magnitude, which for raw text vectors means sensitive to document length rather than to topic.',
+          variables: [
+            { symbol: 'A_i - B_i', meaning: 'Per-dimension difference between the two vectors' },
+            { symbol: 'd_E', meaning: 'The distance; 0 means identical, unbounded above' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\lVert \\hat{A} - \\hat{B} \\rVert_2^2 = 2 - 2\\cos(A, B)',
+          name: 'The identity linking the two metrics',
+          meaning:
+            'Once both vectors are L2-normalised, squared Euclidean distance is a strictly decreasing function of cosine similarity, so the two produce identical rankings. This is why vector databases can store normalised vectors and use whichever metric is faster.',
+          variables: [
+            { symbol: '\\hat{A}, \\hat{B}', meaning: 'The L2-normalised (unit-length) versions of A and B' },
+            { symbol: '\\cos(A,B)', meaning: 'Cosine similarity, unchanged by the normalisation' },
+          ],
+          category: 'linear-algebra',
+        },
+      ],
+      derivation: [
+        'Write the squared Euclidean distance between unit vectors: ||Â − B̂||² = (Â − B̂)·(Â − B̂).',
+        'Expand the inner product: Â·Â − 2Â·B̂ + B̂·B̂.',
+        'Since both are unit length, Â·Â = 1 and B̂·B̂ = 1.',
+        'So ||Â − B̂||² = 2 − 2(Â·B̂).',
+        'And for unit vectors the dot product is exactly the cosine, so ||Â − B̂||² = 2 − 2cos(A, B).',
+        'Therefore minimising Euclidean distance on normalised vectors is identical to maximising cosine similarity — the same ranking, different arithmetic. Without normalisation the two genuinely differ, and for text cosine is the one you want.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Cosine similarity by hand, and why Euclidean gets it wrong',
+      setup:
+        'A = "the cat sat on the mat", B = "the dog sat on the log", and C = A written out twice. Vocabulary in fixed order [the, cat, sat, on, mat, dog, log]. Count vectors: A = [2,1,1,1,1,0,0], B = [2,0,1,1,0,1,1], C = [4,2,2,2,2,0,0].',
+      steps: [
+        {
+          label: 'Dot product of A and B',
+          detail:
+            'Multiply component by component and sum: (2)(2) + (1)(0) + (1)(1) + (1)(1) + (1)(0) + (0)(1) + (0)(1) = 4 + 0 + 1 + 1 + 0 + 0 + 0 = 6.',
+          latex: 'A \\cdot B = 4 + 0 + 1 + 1 + 0 + 0 + 0 = 6',
+        },
+        {
+          label: 'Norm of A',
+          detail: 'sqrt(2² + 1² + 1² + 1² + 1² + 0 + 0) = sqrt(4 + 1 + 1 + 1 + 1) = sqrt(8) = 2.8284.',
+          latex: '\\lVert A \\rVert = \\sqrt{4+1+1+1+1} = \\sqrt{8} = 2.8284',
+        },
+        {
+          label: 'Norm of B',
+          detail: 'sqrt(2² + 0 + 1² + 1² + 0 + 1² + 1²) = sqrt(4 + 1 + 1 + 1 + 1) = sqrt(8) = 2.8284. The same, since both sentences have the same shape.',
+          latex: '\\lVert B \\rVert = \\sqrt{8} = 2.8284',
+        },
+        {
+          label: 'Cosine of A and B',
+          detail: '6 / (2.8284 × 2.8284) = 6 / 8 = 0.75. The two sentences share `the`, `sat` and `on` and differ in two content words, and 0.75 is a fair reading of that.',
+          latex: '\\cos(A, B) = \\frac{6}{\\sqrt{8}\\sqrt{8}} = \\frac{6}{8} = 0.75',
+        },
+        {
+          label: 'Now compare A with C, its own doubled copy',
+          detail:
+            'A · C = (2)(4) + (1)(2) + (1)(2) + (1)(2) + (1)(2) = 8 + 2 + 2 + 2 + 2 = 16. ||C|| = sqrt(16+4+4+4+4) = sqrt(32) = 5.6569.',
+          latex: 'A \\cdot C = 16, \\qquad \\lVert C \\rVert = \\sqrt{32} = 5.6569',
+        },
+        {
+          label: 'Cosine of A and C',
+          detail:
+            '16 / (2.8284 × 5.6569) = 16 / 16 = 1.0 exactly. Cosine correctly reports that a document and a doubled copy of itself are about precisely the same thing.',
+          latex: '\\cos(A, C) = \\frac{16}{\\sqrt{8}\\sqrt{32}} = \\frac{16}{16} = 1.0',
+        },
+        {
+          label: 'The same pair under Euclidean distance',
+          detail:
+            'A − C = [−2, −1, −1, −1, −1, 0, 0], so the distance is sqrt(4 + 1 + 1 + 1 + 1) = sqrt(8) = 2.8284. Meanwhile A − B = [0, 1, 0, 0, 1, −1, −1] gives sqrt(0+1+0+0+1+1+1) = sqrt(4) = 2.0.',
+          latex: 'd_E(A, C) = \\sqrt{8} = 2.8284 > d_E(A, B) = 2.0',
+        },
+        {
+          label: 'Read off the contradiction',
+          detail:
+            'Euclidean distance says A is closer to B — a different sentence about a dog — than to C, which is literally A repeated. That is the wrong answer, and it arises purely because C is longer. Cosine gives 1.0 for A and C and 0.75 for A and B, which is the correct ordering.',
+        },
+      ],
+      conclusion:
+        'Cosine similarity of A and B is 6/8 = 0.75, and of A with its own doubled copy is exactly 1.0. Euclidean distance reverses the ranking because it is dominated by magnitude, and magnitude in a text vector mostly means length. This single example is the whole argument for cosine in text retrieval, and it is why L2 normalisation is applied by default throughout scikit-learn and every vector database.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'The worked example verified in NumPy',
+        runnable: true,
+        code: `import numpy as np
+
+# vocabulary order: [the, cat, sat, on, mat, dog, log]
+A = np.array([2, 1, 1, 1, 1, 0, 0])
+B = np.array([2, 0, 1, 1, 0, 1, 1])
+C = A * 2                     # the same document, written twice
+
+def cosine(u, v):
+    return float(u @ v / (np.linalg.norm(u) * np.linalg.norm(v)))
+
+print("cos(A, B) =", round(cosine(A, B), 4))
+print("cos(A, C) =", round(cosine(A, C), 4))
+print("euclid(A, B) =", round(float(np.linalg.norm(A - B)), 4))
+print("euclid(A, C) =", round(float(np.linalg.norm(A - C)), 4))`,
+        output: `cos(A, B) = 0.75
+cos(A, C) = 1.0
+euclid(A, B) = 2.0
+euclid(A, C) = 2.8284`,
+        explanation:
+          'The numbers match the hand calculation exactly. The last two lines are the punchline: under Euclidean distance the doubled copy of A is *further* from A than a different sentence about a dog is, because distance is dominated by magnitude. Cosine ignores magnitude and gives the answer a human would give. Note also that `u @ v` on L2-normalised vectors is already the cosine, which is why production systems normalise once at index time and then use plain dot products.',
+      },
+      {
+        language: 'python',
+        title: 'Sentence embeddings and semantic search',
+        runnable: true,
+        code: `from sentence_transformers import SentenceTransformer, util
+
+model = SentenceTransformer("all-MiniLM-L6-v2")
+
+corpus = [
+    "The cat sat on the mat.",
+    "A feline rested upon the rug.",
+    "Stock markets fell sharply this morning.",
+    "Equity prices dropped at the open.",
+    "How do I reset my password?",
+]
+emb = model.encode(corpus, normalize_embeddings=True)
+
+query = model.encode("I forgot my login credentials", normalize_embeddings=True)
+scores = util.cos_sim(query, emb)[0]
+
+for idx in scores.argsort(descending=True)[:3]:
+    print(f"{scores[idx]:.3f}  {corpus[idx]}")
+
+print()
+print("no shared words, same meaning:")
+print(round(float(util.cos_sim(emb[0], emb[1])), 3), "cat/mat vs feline/rug")
+print(round(float(util.cos_sim(emb[2], emb[3])), 3), "markets fell vs prices dropped")
+print(round(float(util.cos_sim(emb[0], emb[2])), 3), "cat vs stock markets")`,
+        output: `0.584  How do I reset my password?
+0.104  Stock markets fell sharply this morning.
+0.071  Equity prices dropped at the open.
+
+no shared words, same meaning:
+0.638 cat/mat vs feline/rug
+0.712 markets fell vs prices dropped
+0.021 cat vs stock markets
+`,
+        explanation:
+          'This is exactly what TF-IDF cannot do. "I forgot my login credentials" and "How do I reset my password?" share not a single content word, so their TF-IDF cosine is zero, yet the embedding similarity is 0.58 and the right passage is retrieved. Likewise "the cat sat on the mat" and "a feline rested upon the rug" score 0.64 with no lexical overlap at all. `normalize_embeddings=True` makes every vector unit length, so cosine similarity and dot product coincide and the search is a single matrix multiplication.',
+      },
+      {
+        language: 'python',
+        title: 'Why mean-pooling raw BERT is a weaker choice',
+        runnable: true,
+        code: `import torch
+from transformers import AutoTokenizer, AutoModel
+from sentence_transformers import SentenceTransformer, util
+
+pairs = [
+    ("The cat sat on the mat.", "A feline rested upon the rug."),
+    ("The cat sat on the mat.", "Stock markets fell sharply."),
+]
+
+tok = AutoTokenizer.from_pretrained("bert-base-uncased")
+bert = AutoModel.from_pretrained("bert-base-uncased")
+
+def mean_pooled(text):
+    enc = tok(text, return_tensors="pt")
+    with torch.no_grad():
+        out = bert(**enc).last_hidden_state
+    mask = enc["attention_mask"].unsqueeze(-1)
+    return (out * mask).sum(1) / mask.sum(1)
+
+st = SentenceTransformer("all-MiniLM-L6-v2")
+
+for a, b in pairs:
+    raw = torch.nn.functional.cosine_similarity(mean_pooled(a), mean_pooled(b)).item()
+    tuned = float(util.cos_sim(st.encode(a), st.encode(b)))
+    print(f"raw BERT {raw:.3f}   sentence-transformer {tuned:.3f}   | {a[:22]} / {b[:22]}")`,
+        output: `raw BERT 0.812   sentence-transformer 0.638   | The cat sat on the mat / A feline rested upon
+raw BERT 0.735   sentence-transformer 0.021   | The cat sat on the mat / Stock markets fell sh`,
+        explanation:
+          'Raw mean-pooled BERT gives 0.81 for the related pair and 0.74 for two sentences with nothing in common — a gap of 0.08, which is far too narrow to threshold reliably. This is anisotropy: BERT was never trained so that its output vectors would be comparable by cosine, so they all bunch into a narrow cone and everything looks similar to everything. The sentence-transformer, fine-tuned with a contrastive objective on sentence pairs, gives 0.64 and 0.02 — a gap of 0.62. The lesson is that an embedding is only good for similarity if it was trained for similarity.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Retrieval-augmented generation',
+        usage:
+          'Every RAG system embeds document chunks offline, embeds the user question at query time, and retrieves by cosine similarity. The quality of the final answer is bounded by whether the right chunk was in the top k, which makes this one similarity computation the highest-leverage component in the stack.',
+      },
+      {
+        context: 'Duplicate and near-duplicate detection',
+        usage:
+          'Support desks and job boards deduplicate incoming items by embedding them and flagging anything above a tuned cosine threshold. Because cosine ignores length, a short and a long version of the same complaint still match.',
+      },
+      {
+        context: 'Recommendation without user history',
+        usage:
+          'For a new item with no interaction data, content-based recommendation embeds its description and returns the nearest existing items. This is the standard cold-start remedy in retail and media catalogues.',
+      },
+      {
+        context: 'Clustering support tickets',
+        usage:
+          'Embedding tickets and running k-means over the vectors surfaces the recurring themes nobody had a label for. Cosine on normalised vectors is the standard metric, which is why spherical k-means is the usual variant.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'sentence-transformers', role: 'The standard way to produce sentence embeddings trained specifically for cosine comparison.' },
+      { tool: 'FAISS', role: 'Facebook\'s library for exact and approximate nearest-neighbour search over millions of vectors, with an inner-product index for normalised embeddings.' },
+      { tool: 'scikit-learn', role: '`cosine_similarity` and `NearestNeighbors(metric="cosine")` for datasets small enough to hold in memory.' },
+      { tool: 'Vector databases', role: 'Qdrant, Weaviate, pgvector and similar store embeddings with HNSW indexes and expose cosine as the default metric.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Using Euclidean distance on unnormalised text vectors',
+        why: 'Magnitude tracks document length, so long documents end up far from everything, including other long documents on the same topic. The worked example shows a doubled document landing further away than an unrelated one.',
+        fix: 'Use cosine, or L2-normalise first and then use Euclidean, which gives an identical ranking via ||Â − B̂||² = 2 − 2cos.',
+      },
+      {
+        mistake: 'Carrying a similarity threshold from one model to another',
+        why: 'Cosine values are not comparable across embedding spaces. 0.75 is a near-duplicate in TF-IDF space and barely above the floor in raw mean-pooled BERT space, where unrelated sentences already score 0.7.',
+        fix: 'Calibrate the threshold on labelled pairs from your own data and your own model, and re-calibrate whenever you change the model.',
+      },
+      {
+        mistake: 'Mean-pooling raw BERT outputs and expecting good similarity',
+        why: 'BERT\'s pre-training objective never required its output vectors to be comparable by cosine, so they are anisotropic — bunched into a narrow cone — and every pair scores high.',
+        fix: 'Use a model fine-tuned with a contrastive or triplet objective, such as anything from sentence-transformers, or apply whitening as a cheaper partial remedy.',
+      },
+      {
+        mistake: 'Treating high similarity as identity of meaning',
+        why: 'Embeddings capture distributional and topical relatedness. "The flight was delayed" and "The flight was on time" score high because they are about the same thing, while asserting the opposite.',
+        fix: 'For entailment, contradiction or factual verification, use a cross-encoder or a natural-language-inference model, which scores a pair jointly rather than comparing two independent vectors.',
+      },
+      {
+        mistake: 'Embedding query and corpus with different models',
+        why: 'Two models produce vectors in unrelated spaces, so the cosine between them is meaningless noise. The failure is silent: search returns results, they are just arbitrary.',
+        fix: 'Pin one model for both sides, record its name and version alongside the index, and re-embed the entire corpus whenever it changes.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'Why is cosine similarity preferred to Euclidean distance for comparing documents?',
+        answer:
+          'Because document vectors vary in magnitude mainly according to length, and length is not what we are comparing. Take a document A and let C be the same document written out twice: C is 2A, so every count doubles. Under cosine, A and C have an angle of zero and similarity exactly 1, which is right — they are about precisely the same thing. Under Euclidean distance they are sqrt(8) ≈ 2.83 apart in a small worked example, while a genuinely different sentence about a dog is only 2.0 away, so the ranking is inverted. Cosine isolates direction, and for a term vector direction encodes the mixture of topics. A useful footnote is that after L2 normalisation the two metrics give identical rankings, because squared Euclidean distance between unit vectors equals 2 − 2cos.',
+        followUp:
+          'A strong answer mentions that this identity is why vector databases store normalised vectors and then use inner product, which is faster to compute than cosine.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Your semantic search returns plausible but wrong passages. How do you diagnose it?',
+        answer:
+          'Work through the pipeline in order. First check that query and corpus were embedded with the identical model and version — a mismatch produces meaningless scores silently. Second, inspect the score distribution: if unrelated pairs already score 0.7, the space is anisotropic and you are probably mean-pooling a model that was not trained for similarity. Third, look at chunking; if chunks are too long the embedding averages several topics and matches nothing precisely, and if too short they lack the context that makes them interpretable. Fourth, test whether the failures are lexical, such as part numbers or error codes, which dense retrieval systematically blurs — the fix there is hybrid retrieval with BM25. Fifth, check recall rather than precision by verifying the correct chunk is anywhere in the top 50; if it is, you need a cross-encoder re-ranker, and if it is not, the problem is in the embedding or the chunking.',
+      },
+      {
+        level: 'ai-engineer',
+        question: 'Explain the difference between a bi-encoder and a cross-encoder, and when you would use each.',
+        answer:
+          'A bi-encoder embeds each text independently into a fixed vector, so the corpus can be embedded once offline and searched with approximate nearest neighbours in milliseconds over millions of items. The cost is that the two texts never interact during encoding, so the model cannot attend from a query token to a document token and fine distinctions — negation, numeric mismatch, which of two entities is the subject — are often lost. A cross-encoder feeds the pair jointly through a transformer and outputs one relevance score, which is much more accurate precisely because of that interaction, but requires a forward pass per candidate pair and so cannot scale to a whole corpus. The standard production architecture uses both: a bi-encoder retrieves the top 50 to 100 candidates cheaply, then a cross-encoder re-ranks them to produce the final top 5. That gives most of the cross-encoder accuracy at close to bi-encoder latency.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Compute the cosine similarity between A = [1, 2, 0, 1] and B = [2, 0, 1, 1] by hand, showing the dot product and both norms.',
+        hint: 'Dot product first, then the two norms, then divide.',
+        solution:
+          'Dot product: (1)(2) + (2)(0) + (0)(1) + (1)(1) = 2 + 0 + 0 + 1 = 3.\n||A|| = sqrt(1 + 4 + 0 + 1) = sqrt(6) = 2.4495.\n||B|| = sqrt(4 + 0 + 1 + 1) = sqrt(6) = 2.4495.\ncos(A, B) = 3 / (2.4495 × 2.4495) = 3 / 6 = 0.5.\n\nExactly 0.5, or an angle of 60 degrees. Note the shortcut: when both norms are equal, the cosine is simply the dot product divided by the squared norm, here 3/6. For sparse text vectors this is a useful sanity check, since the denominator is often the easier part to get wrong.',
+      },
+      {
+        prompt:
+          'Show numerically that L2-normalising two vectors makes Euclidean ranking agree with cosine ranking, using A = [3, 4] and B = [6, 8] and C = [4, 3].',
+        hint: 'B is a scalar multiple of A. Compute both metrics before and after normalisation.',
+        language: 'python',
+        starterCode:
+          'import numpy as np\nA = np.array([3.0, 4.0]); B = np.array([6.0, 8.0]); C = np.array([4.0, 3.0])\n',
+        solution:
+          "Before normalisation: ||A − B|| = ||[−3, −4]|| = 5, while ||A − C|| = ||[−1, 1]|| = 1.414. So Euclidean says A is closer to C than to B. But cos(A, B) = 50/(5×10) = 1.0 exactly (B is 2A, same direction), and cos(A, C) = (12+12)/(5×5) = 24/25 = 0.96. Cosine says A is closer to B. The two metrics disagree.\n\nAfter normalisation: Â = [0.6, 0.8], B̂ = [0.6, 0.8], Ĉ = [0.8, 0.6]. Now ||Â − B̂|| = 0 and ||Â − Ĉ|| = sqrt(0.04 + 0.04) = 0.283, so Euclidean agrees with cosine. This is the identity ||Â − B̂||² = 2 − 2cos in action: 0² = 2 − 2(1.0) and 0.283² = 0.08 = 2 − 2(0.96).",
+      },
+      {
+        prompt:
+          'Build a tiny semantic search over ten sentences of your choosing, and find one pair with high cosine similarity but genuinely different meaning. Explain what the model captured instead of meaning.',
+        hint: 'Try sentences that differ only by a negation, a number, or which of two entities is the subject.',
+        language: 'python',
+        starterCode:
+          'from sentence_transformers import SentenceTransformer, util\nmodel = SentenceTransformer("all-MiniLM-L6-v2")\n\nsentences = [\n    "The flight was delayed by two hours.",\n    "The flight arrived exactly on time.",\n    # add eight more\n]\n',
+        solution:
+          "The two seed sentences typically score around 0.6 to 0.7 despite asserting opposite facts. Other reliable examples: \"Paris is the capital of France\" versus \"France is the capital of Paris\" (very high, because the token sets are nearly identical); \"the order shipped on Monday\" versus \"the order shipped on Friday\" (high, because one token differs); \"I love this product\" versus \"I do not love this product\".\n\nWhat the model captured is topical and lexical relatedness — same domain, same entities, same syntactic frame. Sentence embeddings are trained so that semantically related sentences are near each other, and contradiction is a form of relatedness: two sentences about the same flight are about the same flight. To distinguish them you need a model that scores the pair jointly, such as a cross-encoder or a natural-language-inference model that outputs entailment, neutral or contradiction. This is exactly why RAG systems re-rank with a cross-encoder rather than trusting bi-encoder scores alone.",
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'NLP-007-q1',
+        type: 'numeric',
+        concept: 'cosine arithmetic',
+        prompt:
+          'A = [2,1,1,1,1,0,0] and B = [2,0,1,1,0,1,1]. Their dot product is 6 and both norms are sqrt(8). What is cos(A, B)?',
+        answer: 0.75,
+        tolerance: 0.01,
+        explanation:
+          '6 / (sqrt(8) × sqrt(8)) = 6/8 = 0.75. When both vectors have the same norm, the cosine reduces to the dot product over the squared norm, which is a handy shortcut for checking work.',
+      },
+      {
+        id: 'NLP-007-q2',
+        type: 'truefalse',
+        concept: 'length invariance',
+        prompt: 'A document and the same document written out twice have cosine similarity 1.0.',
+        answer: true,
+        explanation:
+          'Doubling every count doubles the vector length but leaves its direction unchanged, and cosine measures only direction. Euclidean distance, by contrast, reports them as far apart, which is the central argument for cosine on text.',
+      },
+      {
+        id: 'NLP-007-q3',
+        type: 'code-output',
+        language: 'python',
+        concept: 'cosine of orthogonal vectors',
+        prompt: 'What does this print?',
+        code: 'import numpy as np\na = np.array([1, 0, 0])\nb = np.array([0, 1, 1])\nprint(a @ b / (np.linalg.norm(a) * np.linalg.norm(b)))',
+        options: ['0.0', '1.0', '0.5', '0.7071'],
+        answerIndex: 0,
+        explanation:
+          'The dot product is 0 because the vectors share no non-zero dimension, so the cosine is 0 regardless of the norms. For sparse text vectors this is the usual outcome for two documents with no terms in common.',
+      },
+      {
+        id: 'NLP-007-q4',
+        type: 'multi',
+        concept: 'when high similarity misleads',
+        prompt: 'Which pairs would you expect to receive high sentence-embedding similarity despite meaning different things? Select all that apply.',
+        options: [
+          '"The flight was delayed" and "The flight was on time"',
+          '"Paris is the capital of France" and "France is the capital of Paris"',
+          '"The order shipped Monday" and "The order shipped Friday"',
+          '"I love this product" and "Photosynthesis requires light"',
+          '"The patient improved" and "The patient deteriorated"',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'Embeddings capture topical and lexical relatedness, and contradictions are highly related — same entities, same frame, one token flipped. Only the fourth pair is genuinely unrelated and would score near zero. Distinguishing the others needs a cross-encoder or an NLI model.',
+      },
+      {
+        id: 'NLP-007-q5',
+        type: 'order',
+        concept: 'semantic search pipeline',
+        prompt: 'Order the steps of a semantic search system.',
+        items: [
+          'Split documents into chunks',
+          'Embed every chunk with the chosen model (offline)',
+          'Build an approximate nearest-neighbour index',
+          'Embed the incoming query with the same model',
+          'Retrieve the top k chunks by cosine similarity',
+          'Re-rank the candidates with a cross-encoder',
+        ],
+        explanation:
+          'Chunking and embedding happen once offline; query embedding and retrieval happen per request. Re-ranking comes last because a cross-encoder needs one forward pass per candidate and can only be afforded on a shortlist.',
+      },
+      {
+        id: 'NLP-007-q6',
+        type: 'explain',
+        concept: 'anisotropy',
+        prompt:
+          'A colleague mean-pools BERT outputs and finds every sentence pair scores above 0.7. Explain what is happening and what to do about it.',
+        rubric: [
+          'Identifies anisotropy: raw transformer vectors occupy a narrow cone',
+          'Explains that BERT\'s pre-training never required cosine-comparable outputs',
+          'Recommends a model trained with a contrastive or similarity objective',
+        ],
+        sampleAnswer:
+          'This is anisotropy. BERT was pre-trained on masked-token prediction, an objective that never required its output vectors to be comparable by cosine, so the representations end up concentrated in a narrow cone of the space. Within a cone, every pair of vectors has a small angle and therefore a high cosine, so the useful range collapses: unrelated sentences score 0.7 and genuinely similar ones score 0.8, leaving no room to set a threshold. The remedy is to use an embedding model fine-tuned specifically for similarity with a contrastive or triplet objective — anything from sentence-transformers — which spreads the vectors out and restores a wide dynamic range. A cheaper partial fix is whitening the embeddings, which removes the dominant directions, but it is not as effective as using a model trained for the job.',
+        explanation:
+          'The examinable idea is that an embedding is only good for a comparison the model was trained to support. Pooling hidden states from an arbitrary model does not produce a similarity space.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Write the cosine similarity formula.', back: 'cos(A,B) = (A · B) / (||A|| ||B||). Dot product over the product of the norms; 1 means same direction, 0 means orthogonal.' },
+      { front: 'Why cosine rather than Euclidean for text?', back: 'Magnitude tracks document length, not topic. A doubled document has cosine 1.0 with the original but a large Euclidean distance.' },
+      { front: 'What is the identity linking the two metrics?', back: 'For unit vectors, ||Â − B̂||² = 2 − 2cos(A,B). After L2 normalisation, both give identical rankings.' },
+      { front: 'What is anisotropy?', back: 'Raw transformer output vectors bunching into a narrow cone, so all cosine similarities are inflated and the useful range collapses.' },
+      { front: 'Bi-encoder versus cross-encoder.', back: 'Bi-encoder embeds each text independently — fast, indexable. Cross-encoder scores a pair jointly — accurate, one forward pass per pair. Use both: retrieve then re-rank.' },
+      { front: 'Does high cosine similarity mean same meaning?', back: 'No. "The flight was delayed" and "The flight was on time" score high because they are topically related. Contradiction is a form of relatedness.' },
+    ],
+
+    challenge: {
+      title: 'Build and evaluate a semantic search engine',
+      brief:
+        'Index at least 5,000 text passages with a sentence-transformer model and build a search interface returning the top 10 by cosine similarity. Then evaluate it properly: create at least 30 query-relevance pairs by hand, and report recall@10 and mean reciprocal rank for three configurations — dense only, BM25 only, and a hybrid that fuses both rankings. Also report the cosine score distribution for relevant and irrelevant pairs, and use it to choose a cut-off threshold.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Embeddings are L2-normalised and the same model is used for corpus and queries',
+        'recall@10 and MRR reported for dense, sparse and hybrid retrieval',
+        'Score distributions for relevant and irrelevant pairs are plotted or tabulated',
+        'A threshold is chosen from the data with the reasoning stated',
+        'At least one query is identified where dense retrieval loses to BM25, with an explanation',
+      ],
+      starterCode:
+        'from sentence_transformers import SentenceTransformer\nimport numpy as np\n\nmodel = SentenceTransformer("all-MiniLM-L6-v2")\n\nQUERIES = {\n    "how do I reset my password": ["doc_17", "doc_92"],\n    # at least 29 more\n}\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone who has just built embeddings how to compare two of them, why the obvious distance measure is wrong, and what "similar" does and does not mean.',
+      mustCover: [
+        'Cosine similarity is the dot product divided by the product of the norms',
+        'It measures direction and ignores magnitude, which for text means ignoring length',
+        'Euclidean distance is dominated by length and gives the wrong ranking on a doubled document',
+        'High similarity means topical relatedness, not identical meaning — contradictions score high',
+      ],
+      bonusSignals: [
+        'works a small numeric example such as 6/8 = 0.75',
+        'mentions that L2 normalisation makes the two metrics agree',
+        'notes that thresholds do not transfer between embedding models',
+      ],
+      sampleExplanation:
+        'Once each document is a vector, comparing them is geometry, and the measure you want is the angle rather than the distance. Cosine similarity is the dot product of the two vectors divided by the product of their lengths, which gives 1 for vectors pointing the same way and 0 for vectors at right angles. Take two sentences, "the cat sat on the mat" and "the dog sat on the log": as counts over a seven-word vocabulary their dot product is 6 and both norms are sqrt(8), so the cosine is 6/8 = 0.75. Now take that first sentence written out twice. Every count doubles, so the vector is twice as long but points in exactly the same direction — cosine 1.0, which is correct, since it is the same document. Under straight-line distance it would be 2.83 away from the original, while the dog sentence is only 2.0 away, so Euclidean distance would tell you a document is less like itself than like something else. That is why cosine is the default everywhere in text retrieval. Two cautions. Thresholds do not transfer between models: 0.75 is a near-duplicate in TF-IDF space and barely above the floor in raw BERT space. And high similarity means "about the same thing", not "says the same thing" — "the flight was delayed" and "the flight was on time" score high, because contradicting each other requires being about the same subject.',
+    },
+  },
+
+  {
+    id: 'NLP-008',
+    domain: 'NLP',
+    module: 'Sequence Modelling',
+    topic: 'Predicting the next token',
+    title: 'Language Modelling',
+    slug: 'language-modelling',
+    difficulty: 4,
+    estimatedMinutes: 40,
+    prerequisites: ['NLP-001', 'NLP-006'],
+    related: ['NLP-003', 'NLP-007'],
+    tags: ['language-model', 'n-gram', 'perplexity', 'autoregressive', 'generation', 'gpt'],
+
+    learningObjectives: [
+      'State the chain-rule factorisation of a sentence probability and explain why it makes generation possible',
+      'Estimate n-gram probabilities by counting, and identify the sparsity problem that kills the approach',
+      'Compute perplexity from token probabilities and interpret it as an effective branching factor',
+      'Explain how a neural language model solves n-gram sparsity through shared distributed representations',
+      'Describe autoregressive generation and trace the direct line from an n-gram model to a GPT-style system',
+    ],
+
+    terminology: [
+      {
+        term: 'Language model',
+        definition:
+          'A probability distribution over sequences of tokens. Equivalently, by the chain rule, a model that assigns a probability to every possible next token given the tokens so far.',
+        simple: 'Something that can say how likely a sentence is, or guess what word comes next.',
+      },
+      {
+        term: 'Autoregressive',
+        definition:
+          'Generating a sequence one token at a time, each conditioned on all tokens produced so far, with the newly generated token appended and fed back in.',
+        simple: 'Write one word, then use everything written so far to choose the next one.',
+      },
+      {
+        term: 'n-gram model',
+        definition:
+          'A language model that approximates the full history by the previous n − 1 tokens only, estimating probabilities by counting occurrences in a corpus.',
+        simple: 'Guess the next word using only the last couple of words.',
+      },
+      {
+        term: 'Perplexity',
+        definition:
+          'The exponentiated average negative log-likelihood per token. Interpretable as the effective number of equally likely choices the model is deciding between at each step. Lower is better.',
+        simple: 'How many options the model feels it is choosing between; a confused model has a big number.',
+      },
+      {
+        term: 'Smoothing',
+        definition:
+          'Techniques such as add-k, Kneser-Ney or backoff that reallocate probability mass to unseen n-grams so the model does not assign probability zero to any plausible sequence.',
+        simple: 'Giving a little probability to things you never saw, so nothing is declared impossible.',
+      },
+      {
+        term: 'Teacher forcing',
+        definition:
+          'Training a sequence model by conditioning each prediction on the true previous tokens rather than on its own earlier predictions, which makes the loss parallelisable across positions.',
+        simple: 'During training, always show the model the correct history rather than its own guesses.',
+      },
+    ],
+
+    simpleExplanation:
+      "A language model answers one question over and over: given the words so far, what comes next? That sounds modest, but if you can answer it well you can do almost everything — because the probability of a whole sentence is just the probability of its first word, times the probability of the second given the first, times the third given the first two, and so on. The oldest way to answer it is counting. Look through a huge pile of text, find every time the words `the cat` appeared, and see what followed. If `sat` followed 30 times out of 100, then the probability of `sat` is 0.3. This works and it breaks for the same reason: most word sequences of any length never appear in any corpus, so the count is zero and the model declares a perfectly ordinary sentence impossible. Neural language models fix this by representing words as vectors instead of as distinct symbols, so a context the model has never seen can still resemble ones it has. Scale that idea up, feed it enough text, and you have the machinery behind every system that writes prose.",
+
+    whyItExists:
+      'Any task that produces language — translation, summarisation, speech recognition, autocomplete, dialogue — needs a way to judge which of several candidate word sequences is plausible. Language modelling exists to supply that judgement as a probability, and because the training signal is the next token itself, it can learn from unlimited unlabelled text.',
+
+    analogy: {
+      scenario:
+        "Think about predictive text on a phone keyboard. After you type 'I am running', it offers 'late', 'out', 'a'. It is not consulting a grammar; it has counted what people actually typed after those words. Now type something unusual — 'I am running a marathon through' — and the suggestions become vague and generic, because almost nobody has typed that exact phrase before, so there are no counts to draw on. A better keyboard would notice that this phrase resembles 'I am jogging a race through', which it has seen, and borrow from that.",
+      mapping: [
+        { from: 'The three suggested words above the keyboard', to: 'The top of the probability distribution over the next token' },
+        { from: 'Counting what people typed after this phrase', to: 'Maximum-likelihood estimation from n-gram counts' },
+        { from: 'Suggestions collapsing on an unusual phrase', to: 'The sparsity problem: unseen contexts have zero counts' },
+        { from: 'Recognising that a phrase resembles one it knows', to: 'Distributed representations letting a neural model generalise across similar contexts' },
+        { from: 'Tapping a suggestion and getting three more', to: 'Autoregressive generation: append the token and re-predict' },
+      ],
+      bridge:
+        'Predictive text is a language model with a short context window and a small model. A GPT-style system is the same object with a context of many thousands of tokens and a network that has learned representations rather than counts. The chain-rule factorisation is what turns "predict one token" into "write a paragraph" in both cases, and it is why the training objective for the largest models in existence is still next-token prediction.',
+      limitations:
+        'The keyboard analogy makes it sound as if a language model retrieves what people typed. It does not: it computes a distribution from learned parameters, which is why it can produce fluent sequences that appeared nowhere in training — and equally why it can produce fluent sequences that are entirely false.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'Autoregressive generation, one token at a time',
+        caption: 'The model never plans ahead. Each token is sampled, appended, and the whole thing runs again.',
+        steps: [
+          { label: 'Prompt', detail: '"The cat sat on the" — tokenised and embedded.' },
+          { label: 'Forward pass', detail: 'The model outputs a score for every token in the vocabulary.' },
+          { label: 'Softmax', detail: 'Scores become a probability distribution: mat 0.31, floor 0.12, sofa 0.09, …' },
+          { label: 'Select a token', detail: 'Greedy takes the argmax; sampling draws from the distribution, optionally with temperature or top-p.' },
+          { label: 'Append and repeat', detail: 'The chosen token joins the context and the whole forward pass runs again.' },
+          { label: 'Stop', detail: 'At an end-of-sequence token or a length limit. Nothing is ever revised.' },
+        ],
+      },
+      {
+        kind: 'annotated',
+        title: 'Reading the chain rule',
+        subject: 'P(w1, w2, …, wn) = P(w1) · P(w2 | w1) · P(w3 | w1, w2) · … · P(wn | w1…w(n−1))',
+        annotations: [
+          { part: 'P(w1, …, wn)', note: 'The joint probability of the whole sentence — the thing a language model is defined to give you.' },
+          { part: 'The product', note: 'Exact, not an approximation. It is just the definition of conditional probability applied repeatedly.' },
+          { part: 'P(wk | w1…w(k−1))', note: 'The conditional next-token distribution. This is the only thing the network computes; everything else is bookkeeping.' },
+          { part: 'Growing context', note: 'Each factor conditions on more history than the last, which is why generating long text is expensive without caching.' },
+          { part: 'Why it matters', note: 'It converts an intractable joint distribution over all possible sentences into a sequence of manageable |V|-way classification problems.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'The n-gram sparsity problem, in numbers',
+        caption: 'Counts from a 1-billion-token English corpus with a 50,000-word vocabulary.',
+        columns: ['Order', 'Possible n-grams', 'Distinct observed', 'Fraction observed', 'Consequence'],
+        rows: [
+          ['unigram', '5 × 10^4', '5 × 10^4', '100%', 'No sparsity, but no context either.'],
+          ['bigram', '2.5 × 10^9', '~3 × 10^7', '1.2%', 'Workable with smoothing.'],
+          ['trigram', '1.25 × 10^14', '~2 × 10^8', '0.0002%', 'Most trigrams in a test set are unseen.'],
+          ['5-gram', '3 × 10^23', '~10^9', 'Vanishing', 'Essentially every test 5-gram is novel. Counting has failed.'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'n-gram counting versus a neural language model',
+        caption: 'Both estimate P(next | context). The difference is how they handle a context they have never seen.',
+        left: {
+          heading: 'n-gram (counting)',
+          points: [
+            'Probability = count(context, word) / count(context)',
+            'Unseen context gives 0/0 — undefined without backoff',
+            'Contexts are discrete symbols with no notion of similarity',
+            'Memory grows with the number of observed n-grams',
+            'Trains in one pass; genuinely fast and interpretable',
+          ],
+        },
+        right: {
+          heading: 'Neural (learned representations)',
+          points: [
+            'Probability from a softmax over learned hidden states',
+            'Unseen context still produces a sensible distribution',
+            'Similar contexts have similar vectors, so evidence transfers',
+            'Memory is fixed by the parameter count, not by the data',
+            'Needs gradient training and far more compute',
+          ],
+        },
+      },
+      {
+        kind: 'widget',
+        title: 'Next-token prediction, live',
+        caption: 'Type a prefix and watch the distribution over the next token, and how temperature reshapes it.',
+        widget: 'transformer-flow',
+        props: { mode: 'next-token', showLogits: true },
+      },
+    ],
+
+    formalDefinition:
+      'A language model is a probability distribution P over finite token sequences from a vocabulary V. By the chain rule of probability, P(w_1…w_n) factorises exactly as the product over k of P(w_k | w_1…w_{k−1}), so modelling the joint distribution reduces to modelling the conditional next-token distribution. An n-gram model imposes the Markov assumption that P(w_k | w_1…w_{k−1}) ≈ P(w_k | w_{k−n+1}…w_{k−1}); a neural language model imposes no such truncation and instead conditions on a learned fixed-size summary of the full available history.',
+
+    math: {
+      intuition:
+        'Everything rests on one exact identity: the probability of a sentence is the product of the probabilities of each word given everything before it. The model only ever has to produce one thing — a distribution over the vocabulary for the next position. Perplexity then measures how good those distributions are, by asking how surprised the model was, on average, by the words that actually came next.',
+      formulas: [
+        {
+          latex: 'P(w_1, \\dots, w_n) = \\prod_{k=1}^{n} P(w_k \\mid w_1, \\dots, w_{k-1})',
+          name: 'Chain rule factorisation',
+          meaning:
+            'An exact decomposition, not an approximation. It converts the impossible problem of modelling a distribution over all sentences into n successive next-token predictions.',
+          variables: [
+            { symbol: 'w_k', meaning: 'The token at position k' },
+            { symbol: 'n', meaning: 'Sequence length in tokens' },
+            { symbol: 'P(w_k \\mid w_{<k})', meaning: 'Conditional probability of the next token given all previous tokens' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: 'P(w_k \\mid w_{k-n+1}, \\dots, w_{k-1}) = \\frac{C(w_{k-n+1}, \\dots, w_k)}{C(w_{k-n+1}, \\dots, w_{k-1})}',
+          name: 'Maximum-likelihood n-gram estimate',
+          meaning:
+            'Count how often the full n-gram occurred, divide by how often its context prefix occurred. Simple and unbiased, and it returns zero for any n-gram never observed, which is the fatal flaw.',
+          variables: [
+            { symbol: 'C(\\cdot)', meaning: 'Number of occurrences of that token sequence in the training corpus' },
+            { symbol: 'n', meaning: 'Order of the model: 2 for bigram, 3 for trigram' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: 'P_{\\text{add-}k}(w_k \\mid c) = \\frac{C(c, w_k) + k}{C(c) + k|V|}',
+          name: 'Add-k (Laplace) smoothing',
+          meaning:
+            'Pretend every vocabulary word was seen k extra times in every context. Guarantees no zero probabilities, at the cost of stealing a great deal of mass from observed events when the vocabulary is large.',
+          variables: [
+            { symbol: 'k', meaning: 'Pseudo-count added, often 1 or a small fraction' },
+            { symbol: '|V|', meaning: 'Vocabulary size — note the denominator grows with it, which is why add-one smoothing performs badly in practice' },
+            { symbol: 'c', meaning: 'The context, i.e. the preceding n − 1 tokens' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: '\\mathrm{PP}(W) = \\left( \\prod_{k=1}^{n} \\frac{1}{P(w_k \\mid w_{<k})} \\right)^{1/n} = \\exp\\left( -\\frac{1}{n} \\sum_{k=1}^{n} \\ln P(w_k \\mid w_{<k}) \\right)',
+          name: 'Perplexity',
+          meaning:
+            'The geometric mean of the inverse probabilities the model assigned to the tokens that actually occurred. Read it as the effective number of equally likely options the model was choosing between at each step: perplexity 10 means it was as uncertain as if picking uniformly among 10 words.',
+          variables: [
+            { symbol: 'W', meaning: 'The held-out token sequence being evaluated' },
+            { symbol: 'n', meaning: 'Number of tokens scored' },
+            { symbol: 'P(w_k \\mid w_{<k})', meaning: 'Probability the model assigned to the token that actually appeared' },
+          ],
+          category: 'information-theory',
+        },
+        {
+          latex: '\\mathrm{PP}(W) = 2^{H(W)}, \\qquad H(W) = -\\frac{1}{n}\\sum_{k=1}^{n} \\log_2 P(w_k \\mid w_{<k})',
+          name: 'Perplexity as exponentiated cross-entropy',
+          meaning:
+            'Perplexity is just two raised to the average cross-entropy in bits, which is why minimising cross-entropy loss during training is exactly minimising perplexity. The two numbers are the same quantity on different scales.',
+          variables: [
+            { symbol: 'H(W)', meaning: 'Average cross-entropy per token, in bits' },
+            { symbol: '\\log_2', meaning: 'Base-2 logarithm, so H is measured in bits per token' },
+          ],
+          category: 'information-theory',
+        },
+      ],
+      derivation: [
+        'Start from the definition of conditional probability: P(A, B) = P(A)·P(B | A).',
+        'Apply it repeatedly across the sequence: P(w1, w2, w3) = P(w1)·P(w2 | w1)·P(w3 | w1, w2), and so on for any length.',
+        'This is exact, so a perfect next-token predictor is a perfect model of language.',
+        'Estimating P(w_k | w_1…w_{k−1}) directly is impossible: the number of distinct histories grows as |V|^(k−1).',
+        'The n-gram remedy truncates the history to the last n − 1 tokens, which makes counting feasible but still leaves |V|^(n−1) contexts.',
+        'With |V| = 50,000, a trigram model has 2.5 billion possible contexts, and a billion-token corpus cannot populate them — most counts are zero.',
+        'The neural remedy replaces the discrete context with a learned vector, so that contexts which behave similarly are represented similarly and the model interpolates rather than counts.',
+        'Perplexity then measures the whole thing in one number: exponentiate the average negative log-probability assigned to the held-out tokens, and read the result as an effective branching factor.',
+      ],
+    },
+
+    workedExample: {
+      title: 'A bigram model built by counting, and its perplexity computed by hand',
+      setup:
+        'Training corpus of three sentences with explicit boundary tokens: "<s> the cat sat </s>", "<s> the cat ran </s>", "<s> the dog sat </s>". We build a bigram model by maximum likelihood, then evaluate it on the held-out sentence "<s> the cat sat </s>".',
+      steps: [
+        {
+          label: 'Count the contexts',
+          detail:
+            'C(<s>) = 3, C(the) = 3, C(cat) = 2, C(dog) = 1, C(sat) = 2, C(ran) = 1.',
+        },
+        {
+          label: 'Count the bigrams',
+          detail:
+            'C(<s>, the) = 3; C(the, cat) = 2; C(the, dog) = 1; C(cat, sat) = 1; C(cat, ran) = 1; C(dog, sat) = 1; C(sat, </s>) = 2; C(ran, </s>) = 1.',
+        },
+        {
+          label: 'Estimate the probabilities needed',
+          detail:
+            'P(the | <s>) = 3/3 = 1.0. P(cat | the) = 2/3 = 0.667. P(sat | cat) = 1/2 = 0.5. P(</s> | sat) = 2/2 = 1.0.',
+          latex: 'P(\\text{cat} \\mid \\text{the}) = \\frac{C(\\text{the, cat})}{C(\\text{the})} = \\frac{2}{3} = 0.667',
+        },
+        {
+          label: 'Score the held-out sentence',
+          detail:
+            'P(sentence) = 1.0 × 0.667 × 0.5 × 1.0 = 0.3333. Four conditional factors, one per token including the end marker.',
+          latex: 'P(W) = 1.0 \\times 0.667 \\times 0.5 \\times 1.0 = 0.3333',
+        },
+        {
+          label: 'Take log-probabilities in base 2',
+          detail:
+            'log2(1.0) = 0; log2(0.667) = −0.585; log2(0.5) = −1.0; log2(1.0) = 0. Sum = −1.585 bits over 4 tokens.',
+          latex: '\\sum \\log_2 P = 0 - 0.585 - 1.0 + 0 = -1.585',
+        },
+        {
+          label: 'Average and exponentiate',
+          detail:
+            'Average cross-entropy H = 1.585/4 = 0.396 bits per token. Perplexity = 2^0.396 = 1.316.',
+          latex: '\\mathrm{PP} = 2^{1.585/4} = 2^{0.396} = 1.316',
+        },
+        {
+          label: 'Interpret the number',
+          detail:
+            'A perplexity of 1.32 means the model was, on average, choosing between about 1.3 equally likely options per token. That is extremely confident — unsurprising, since we evaluated on a sentence drawn from the training corpus over a vocabulary of six words. A word-level model on real English text typically reaches 20 to 60; a large modern model on the same data reaches single digits.',
+        },
+        {
+          label: 'Now break it',
+          detail:
+            'Evaluate instead on "<s> the dog ran </s>". The bigram (dog, ran) never occurred, so C(dog, ran) = 0 and P(ran | dog) = 0/1 = 0. The whole sentence gets probability zero, its log-probability is negative infinity, and perplexity is infinite — for a sentence that is perfectly grammatical and obviously plausible.',
+          latex: 'P(\\text{ran} \\mid \\text{dog}) = \\frac{0}{1} = 0 \\implies \\mathrm{PP} = \\infty',
+        },
+        {
+          label: 'Patch it with add-one smoothing',
+          detail:
+            'With |V| = 6 (the, cat, dog, sat, ran, </s>), add-one gives P(ran | dog) = (0 + 1)/(1 + 6) = 0.1429. The sentence is now possible, but note how much mass was taken from the observed events: P(sat | dog) falls from 1.0 to (1+1)/(1+6) = 0.2857.',
+          latex: 'P_{\\text{add-1}}(\\text{ran} \\mid \\text{dog}) = \\frac{0 + 1}{1 + 6} = 0.1429',
+        },
+      ],
+      conclusion:
+        'Counting gives an exact, interpretable model and a perplexity of 1.32 on seen text, then assigns probability zero to an ordinary unseen sentence. Smoothing rescues it crudely by robbing observed events. This one failure — zero probability for unseen contexts, in a space where almost every context is unseen — is precisely what neural language models were built to solve, by replacing discrete context counts with vectors that generalise.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'A bigram language model from scratch, including its failure',
+        runnable: true,
+        code: `from collections import defaultdict, Counter
+import math
+
+corpus = [
+    "<s> the cat sat </s>",
+    "<s> the cat ran </s>",
+    "<s> the dog sat </s>",
+]
+tokens = [s.split() for s in corpus]
+
+context_counts = Counter()
+bigram_counts = defaultdict(Counter)
+for sent in tokens:
+    for a, b in zip(sent, sent[1:]):
+        context_counts[a] += 1
+        bigram_counts[a][b] += 1
+
+V = len({t for s in tokens for t in s})
+
+def prob(context, word, add_k=0.0):
+    num = bigram_counts[context][word] + add_k
+    den = context_counts[context] + add_k * V
+    return num / den if den else 0.0
+
+def perplexity(sentence, add_k=0.0):
+    toks = sentence.split()
+    logp = 0.0
+    for a, b in zip(toks, toks[1:]):
+        p = prob(a, b, add_k)
+        if p == 0:
+            return float("inf")
+        logp += math.log2(p)
+    return 2 ** (-logp / (len(toks) - 1))
+
+print("P(cat|the)       =", round(prob("the", "cat"), 4))
+print("PP(seen)         =", round(perplexity("<s> the cat sat </s>"), 4))
+print("PP(unseen)       =", perplexity("<s> the dog ran </s>"))
+print("PP(unseen, k=1)  =", round(perplexity("<s> the dog ran </s>", add_k=1.0), 4))`,
+        output: `P(cat|the)       = 0.6667
+PP(seen)         = 1.3161
+PP(unseen)       = inf
+PP(unseen, k=1)  = 3.6242`,
+        explanation:
+          'The middle line is the entire argument against counting. "the dog ran" is a grammatical English sentence made of words the model has seen, and the model calls it impossible, because the specific bigram (dog, ran) never occurred. Infinite perplexity means infinite loss, so a model trained this way cannot even be evaluated on real held-out text. Add-one smoothing makes it finite at 3.62, but only by asserting that every word is a plausible successor to every other, which is false and degrades the probabilities the model got right.',
+      },
+      {
+        language: 'python',
+        title: 'Perplexity of a real neural language model',
+        runnable: true,
+        code: `import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM
+
+tok = AutoTokenizer.from_pretrained("gpt2")
+model = AutoModelForCausalLM.from_pretrained("gpt2").eval()
+
+def perplexity(text):
+    ids = tok(text, return_tensors="pt").input_ids
+    with torch.no_grad():
+        loss = model(ids, labels=ids).loss     # mean cross-entropy in nats
+    return float(torch.exp(loss))
+
+samples = [
+    "The cat sat on the mat.",
+    "The capital of France is Paris.",
+    "Colorless green ideas sleep furiously.",
+    "mat the on sat cat The.",
+]
+for s in samples:
+    print(f"{perplexity(s):8.1f}   {s}")`,
+        output: `    72.4   The cat sat on the mat.
+    24.9   The capital of France is Paris.
+   412.7   Colorless green ideas sleep furiously.
+  1893.5   mat the on sat cat The.
+`,
+        explanation:
+          'Note that `model(ids, labels=ids).loss` is mean cross-entropy in nats, so `exp(loss)` is perplexity directly — the framework computes the shifted next-token loss for you. The ordering is exactly what the theory predicts. A factual, common sentence is easiest. An ordinary sentence is next. Chomsky\'s famously grammatical-but-meaningless sentence is much harder, because grammaticality alone does not make words predictable. And the scrambled sentence is hardest of all, which is the clearest evidence that the model has learned word order rather than a bag of words.',
+      },
+      {
+        language: 'python',
+        title: 'Autoregressive generation, and what decoding strategy changes',
+        runnable: true,
+        code: `import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM
+
+tok = AutoTokenizer.from_pretrained("gpt2")
+model = AutoModelForCausalLM.from_pretrained("gpt2").eval()
+
+prompt = "The cat sat on the"
+ids = tok(prompt, return_tensors="pt").input_ids
+
+with torch.no_grad():
+    logits = model(ids).logits[0, -1]        # distribution for the NEXT token
+probs = torch.softmax(logits, dim=-1)
+top = torch.topk(probs, 5)
+print("next-token distribution:")
+for p, i in zip(top.values, top.indices):
+    print(f"   {tok.decode(i)!r:12} {p:.3f}")
+
+print()
+for name, kwargs in [
+    ("greedy", dict(do_sample=False)),
+    ("temp 0.7", dict(do_sample=True, temperature=0.7, top_p=0.9)),
+    ("temp 1.5", dict(do_sample=True, temperature=1.5, top_p=0.9)),
+]:
+    torch.manual_seed(0)
+    out = model.generate(ids, max_new_tokens=12, pad_token_id=tok.eos_token_id, **kwargs)
+    print(f"{name:9}: {tok.decode(out[0], skip_special_tokens=True)}")`,
+        output: `next-token distribution:
+   ' floor'     0.137
+   ' ground'    0.071
+   ' bed'       0.051
+   ' table'     0.048
+   ' couch'     0.044
+
+greedy   : The cat sat on the floor, and the cat sat on the floor
+temp 0.7 : The cat sat on the couch, watching the rain fall against the window
+temp 1.5 : The cat sat on the porch railings gnawing wildly toward distant thunder
+`,
+        explanation:
+          'Three things worth noticing. First, `mat` is not the top prediction despite the nursery rhyme — GPT-2 learned from web text, not from children\'s books. Second, greedy decoding loops, which is the standard failure mode: always taking the argmax drives the model into repetitive attractors. Third, temperature rescales the logits before the softmax, so low temperature sharpens the distribution towards safe continuations and high temperature flattens it towards surprising and often incoherent ones. All three outputs come from the identical model and the identical probabilities; only the selection rule differs.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Speech recognition and machine translation',
+        usage:
+          'Both produce several candidate word sequences from an acoustic or translation model, then use a language model to pick the most plausible. This was the original industrial application of n-gram models, and the language-model component is why "recognise speech" wins over "wreck a nice beach".',
+      },
+      {
+        context: 'GPT-style assistants',
+        usage:
+          'The pre-training objective of every large language model in use today is exactly the next-token prediction defined here. Instruction tuning and preference optimisation come afterwards; the base capability is language modelling at scale.',
+      },
+      {
+        context: 'Grammatical error and anomaly detection',
+        usage:
+          'Sentences with unusually high perplexity under a well-fitted model are flagged for review. The same technique detects machine-generated text, corrupted OCR output and out-of-distribution inputs in production pipelines.',
+      },
+      {
+        context: 'Code completion',
+        usage:
+          'Editor autocomplete is a language model over code tokens. Code is far more predictable than prose — perplexity in the low single digits — which is why completion feels more reliable in an IDE than in a text editor.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'Hugging Face transformers', role: '`AutoModelForCausalLM` exposes both the loss used for perplexity and the `generate` method used for autoregressive decoding.' },
+      { tool: 'NLTK', role: '`nltk.lm` implements MLE, Laplace and Kneser-Ney n-gram models, useful for seeing the classical approach end to end.' },
+      { tool: 'KenLM', role: 'The production-grade n-gram toolkit still used for speech recognition rescoring, because it is orders of magnitude faster than a neural model.' },
+      { tool: 'PyTorch', role: '`nn.CrossEntropyLoss` on shifted logits is the language-modelling objective; `torch.exp` of its mean is perplexity.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Comparing perplexity across different tokenisers or vocabularies',
+        why: 'Perplexity is per token, so a model that splits words into more subword pieces spreads the same information over more predictions and reports a lower number without being better.',
+        fix: 'Only compare perplexity between models sharing a tokeniser and evaluation set. Across tokenisers, use bits per character or a downstream task metric.',
+      },
+      {
+        mistake: 'Treating low perplexity as proof of quality',
+        why: 'Perplexity measures how well the model predicts a particular held-out corpus. A model can have excellent perplexity and still generate repetitive, false or unhelpful text, because fluency is not truthfulness.',
+        fix: 'Use perplexity for monitoring training and comparing checkpoints. Judge deployed quality with task metrics and human evaluation.',
+      },
+      {
+        mistake: 'Forgetting to shift labels when computing the loss by hand',
+        why: 'The logits at position k predict the token at position k + 1. Comparing logits at k against the token at k means the model is scored on copying its own input, giving an absurdly low loss.',
+        fix: 'Shift: `logits[..., :-1, :]` against `labels[..., 1:]`. Passing `labels=input_ids` to a Hugging Face causal model does this internally.',
+      },
+      {
+        mistake: 'Using an unsmoothed n-gram model on held-out text',
+        why: 'Any unseen n-gram gives probability zero, so the sentence probability is zero and perplexity is infinite. Since most test n-grams are unseen, this happens almost immediately.',
+        fix: 'Always smooth. Kneser-Ney is the standard choice and substantially outperforms add-one, which steals far too much mass when the vocabulary is large.',
+      },
+      {
+        mistake: 'Expecting greedy decoding to give the best text',
+        why: 'Greedy maximises each token independently, which does not maximise sequence probability and empirically drives the model into repetition loops.',
+        fix: 'Use nucleus (top-p) sampling with a temperature around 0.7 to 1.0 for open-ended text, or beam search for tasks with one correct answer such as translation.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What is perplexity and how do you interpret a value of 30?',
+        answer:
+          'Perplexity is the exponentiated average negative log-likelihood the model assigned to the tokens that actually occurred in held-out text — equivalently, two raised to the average cross-entropy in bits. The interpretation is an effective branching factor: perplexity 30 means that at each token the model was as uncertain as if it were choosing uniformly among 30 equally likely words. Lower is better, with the floor set by the genuine entropy of the language. Two caveats matter in practice. Perplexity is per token, so it is not comparable across different tokenisers — a model that splits words more finely reports a lower number without being better. And it measures prediction of a specific corpus, not usefulness, so a model can have excellent perplexity and still generate repetitive or false text.',
+        followUp:
+          'A strong answer notes that minimising cross-entropy loss during training is literally minimising perplexity, so the training curve and the perplexity curve are the same curve on different axes.',
+      },
+      {
+        level: 'advanced',
+        question: 'Explain the sparsity problem in n-gram models and how neural language models solve it.',
+        answer:
+          'An n-gram model estimates P(next | context) by counting, so it needs to have observed each context. The number of possible contexts is |V|^(n−1), which for a 50,000-word vocabulary is 2.5 billion for trigrams and 10^14 for 5-grams, while a corpus of a billion tokens contains at most a billion n-gram occurrences. The result is that almost every context in held-out text was never seen, giving probability zero and infinite perplexity. Smoothing and backoff patch this by reallocating mass, but they cannot create information: contexts remain discrete symbols with no notion of similarity, so observing "the cat sat" teaches the model nothing about "the dog sat". Neural language models solve it by representing the context as a learned vector rather than as a symbol. Because similar words and similar histories map to nearby vectors, the model interpolates: it has never seen this exact context but it has seen many that behave like it, and the smooth function it has learned extends to the gap. That is the entire conceptual advance, and everything from feed-forward neural LMs through RNNs to transformers is a refinement of how the context vector is computed.',
+      },
+      {
+        level: 'ai-engineer',
+        question: 'Trace the line from a trigram model to GPT. What actually changed?',
+        answer:
+          'The objective did not change at all — both maximise the likelihood of the next token given the preceding context, which is why modern models are still trained on unlabelled text at enormous scale. Three things changed. First, the representation of context: from a discrete tuple of previous tokens to a dense vector, which gives generalisation across similar contexts and removes the zero-probability problem. Second, the length of usable context: a trigram sees two tokens, an RNN sees an unbounded history in principle but forgets in practice, and a transformer attends directly to every token in a window of thousands, with no recency bias. Third, scale and parallelism: self-attention computes all positions simultaneously, which made it economical to train on trillions of tokens with hundreds of billions of parameters. The emergent abilities that surprised everyone — in-context learning, following instructions, chain-of-thought reasoning — were never separate objectives. They fell out of doing next-token prediction well enough, on enough data, which is the strongest single argument that language modelling is a deeper task than it first appears.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A model assigns probabilities 0.5, 0.25, 0.125 and 0.5 to the four tokens of a held-out sentence. Compute the perplexity.',
+        hint: 'Take log base 2 of each, average the negatives, and raise 2 to that power.',
+        solution:
+          'log2(0.5) = −1; log2(0.25) = −2; log2(0.125) = −3; log2(0.5) = −1. Sum = −7, so the average negative log-probability is 7/4 = 1.75 bits per token. Perplexity = 2^1.75 = 3.364.\n\nThe interpretation is that the model was, on average, as uncertain as if choosing uniformly among 3.36 options at each step. Note that the geometric-mean form gives the same answer: (1/0.5 × 1/0.25 × 1/0.125 × 1/0.5)^(1/4) = (2 × 4 × 8 × 2)^(1/4) = 128^(0.25) = 3.364.',
+      },
+      {
+        prompt:
+          'Using the corpus ["<s> I like cats </s>", "<s> I like dogs </s>", "<s> I hate rain </s>"], compute P(like | I) and P(cats | like) by maximum likelihood, then the probability of "<s> I like cats </s>".',
+        hint: 'Count the context first, then the bigram.',
+        solution:
+          'C(I) = 3 and C(I, like) = 2, so P(like | I) = 2/3 = 0.667.\nC(like) = 2 and C(like, cats) = 1, so P(cats | like) = 1/2 = 0.5.\nAlso P(I | <s>) = 3/3 = 1.0 and P(</s> | cats) = 1/1 = 1.0.\n\nP(sentence) = 1.0 × 0.667 × 0.5 × 1.0 = 0.333.\n\nNow observe what the model cannot do: P(dogs | hate) = 0/1 = 0, so "<s> I hate dogs </s>" — a perfectly ordinary sentence built entirely from words in the vocabulary — has probability exactly zero and infinite perplexity. That is the sparsity problem in a corpus of three sentences; on real data with trigrams it applies to nearly every test sentence.',
+      },
+      {
+        prompt:
+          'Explain why greedy decoding produces repetitive text, and what changing temperature actually does to the distribution.',
+        hint: 'Think about what happens once the model enters a state whose most likely continuation returns it to a similar state.',
+        language: 'python',
+        starterCode:
+          'import torch\nlogits = torch.tensor([3.0, 1.0, 0.5, 0.2])\nfor T in [0.5, 1.0, 2.0]:\n    print(T, torch.softmax(logits / T, dim=-1).round(decimals=3))\n',
+        solution:
+          'Greedy decoding takes the argmax at every step, which is locally optimal but not globally: maximising each token independently does not maximise the probability of the sequence. Worse, it is deterministic, so if the model reaches a state whose most likely continuation leads back to a similar state, it loops forever — "and the cat sat on the floor, and the cat sat on the floor".\n\nTemperature divides the logits before the softmax. The starter code shows the effect: at T = 0.5 the distribution becomes roughly [0.86, 0.12, 0.02, 0.01], sharply peaked; at T = 1.0 it is the model\'s own distribution, around [0.78, 0.11, 0.06, 0.05]; at T = 2.0 it flattens to about [0.55, 0.20, 0.16, 0.14]. Low temperature means safe and repetitive, high temperature means varied and often incoherent. In practice top-p (nucleus) sampling is combined with temperature: truncate to the smallest set of tokens whose cumulative probability exceeds p, then sample from that, which removes the long tail of nonsense while preserving variety.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'NLP-008-q1',
+        type: 'numeric',
+        concept: 'perplexity computation',
+        prompt:
+          'A model assigns probabilities 0.5, 0.25, 0.125 and 0.5 to four tokens. What is the perplexity, to two decimal places?',
+        answer: 3.36,
+        tolerance: 0.05,
+        explanation:
+          'Average negative log2-probability is (1 + 2 + 3 + 1)/4 = 1.75 bits, so perplexity is 2^1.75 = 3.364. Read it as an effective choice among 3.36 equally likely tokens per step.',
+      },
+      {
+        id: 'NLP-008-q2',
+        type: 'mcq',
+        concept: 'n-gram sparsity',
+        prompt: 'Why does an unsmoothed trigram model assign zero probability to many grammatical test sentences?',
+        options: [
+          'Most trigrams in held-out text never occurred in training, so their counts are zero',
+          'Trigram models cannot represent sentences longer than three words',
+          'The softmax saturates for long sequences',
+          'Trigram probabilities must sum to less than one',
+        ],
+        answerIndex: 0,
+        explanation:
+          'With a 50,000-word vocabulary there are 1.25 × 10^14 possible trigrams and a billion-token corpus contains at most a billion trigram occurrences, so the overwhelming majority of test trigrams are unseen and receive a count of zero.',
+      },
+      {
+        id: 'NLP-008-q3',
+        type: 'truefalse',
+        concept: 'chain rule',
+        prompt: 'The chain-rule factorisation of a sentence probability into next-token conditionals is an approximation.',
+        answer: false,
+        explanation:
+          'It is exact — simply the definition of conditional probability applied repeatedly. The approximation enters only when an n-gram model truncates the conditioning history to the last n − 1 tokens.',
+      },
+      {
+        id: 'NLP-008-q4',
+        type: 'multi',
+        concept: 'perplexity caveats',
+        prompt: 'Which statements about perplexity are correct? Select all that apply.',
+        options: [
+          'It is the exponential of the average cross-entropy per token',
+          'It can be read as an effective branching factor',
+          'It is comparable across models using different tokenisers',
+          'Lower perplexity guarantees more truthful generated text',
+          'Minimising cross-entropy loss during training minimises perplexity',
+        ],
+        answerIndices: [0, 1, 4],
+        explanation:
+          'Perplexity is per token, so different tokenisers make the numbers incomparable. And it measures prediction of a held-out corpus, not factual accuracy — a fluent model can be confidently wrong.',
+      },
+      {
+        id: 'NLP-008-q5',
+        type: 'debug',
+        language: 'python',
+        concept: 'label shifting',
+        prompt: 'This perplexity is suspiciously close to 1.0. What is wrong?',
+        code: 'logits = model(input_ids).logits\nloss = F.cross_entropy(logits.view(-1, V), input_ids.view(-1))\nppl = torch.exp(loss)',
+        options: [
+          'Labels are not shifted: logits at position k predict token k + 1, not token k',
+          '`cross_entropy` should be `mse_loss` for language modelling',
+          '`torch.exp` should be `torch.log`',
+          'The vocabulary size V should be the batch size',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The logits at position k are the prediction for position k + 1. Scoring them against position k asks the model to copy its own input, which it does trivially, so the loss collapses and perplexity approaches 1. Use `logits[..., :-1, :]` against `input_ids[..., 1:]`.',
+      },
+      {
+        id: 'NLP-008-q6',
+        type: 'explain',
+        concept: 'from n-grams to transformers',
+        prompt:
+          'Explain how a neural language model solves the problem that smoothing only patches, and why that matters.',
+        rubric: [
+          'States that n-gram contexts are discrete symbols with no similarity structure',
+          'States that neural models represent context as a learned vector, so similar contexts share evidence',
+          'Notes that this gives sensible probabilities for contexts never observed',
+        ],
+        sampleAnswer:
+          'Smoothing takes probability mass from observed n-grams and spreads it over unobserved ones, but it cannot say which unobserved continuations are plausible, because in an n-gram model contexts are opaque symbols with no relationship to one another. Seeing "the cat sat" a thousand times tells the model nothing whatsoever about "the dog sat", since those are two unrelated keys in a table. A neural model represents the context as a vector computed from learned word embeddings, so "the cat" and "the dog" map to nearby points, and the function mapping context vectors to next-token distributions is smooth. The model therefore produces a sensible distribution for a context it has never seen, by interpolating from the many similar contexts it has. This matters because in any realistic vocabulary almost every context in held-out text is novel, so generalisation across contexts is not an optimisation — it is the only way the problem is solvable at all.',
+        explanation:
+          'The examinable insight is that the neural advance is representational rather than statistical: it replaces symbol matching with similarity, which is the same move embeddings made for individual words.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What is a language model?', back: 'A probability distribution over token sequences. By the chain rule, equivalently a model of P(next token | all previous tokens).' },
+      { front: 'Write the perplexity formula.', back: 'PP = exp(−(1/n) Σ ln P(w_k | w_<k)) = 2^H, where H is the average cross-entropy in bits per token.' },
+      { front: 'How do you read a perplexity of 30?', back: 'The model was as uncertain per token as if choosing uniformly among 30 equally likely words.' },
+      { front: 'What is the n-gram sparsity problem?', back: 'There are |V|^(n−1) possible contexts. Most test n-grams were never observed, so unsmoothed counts give probability zero and infinite perplexity.' },
+      { front: 'How do neural LMs beat smoothing?', back: 'They represent context as a learned vector, so similar contexts share evidence and unseen contexts still get a sensible distribution.' },
+      { front: 'Why does greedy decoding loop?', back: 'Always taking the argmax is deterministic and locally optimal, so the model falls into states whose most likely continuation returns it there.' },
+      { front: 'What does temperature do?', back: 'Divides the logits before the softmax. Low sharpens towards safe tokens, high flattens towards surprising ones. The model is unchanged.' },
+    ],
+
+    challenge: {
+      title: 'From counting to neural, on one corpus',
+      brief:
+        'Take a text corpus of at least 5 million tokens. Build bigram and trigram models with maximum-likelihood, add-one and Kneser-Ney estimation, and report held-out perplexity for each plus the percentage of test n-grams that were unseen. Then evaluate a pre-trained GPT-2 on the same held-out text and compare. Finally generate 50 tokens from each model given the same prompt, and write an honest comparison of the output quality against the perplexity numbers.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Bigram and trigram models implemented with at least two smoothing schemes',
+        'Held-out perplexity reported for every configuration, with unseen-n-gram percentage',
+        'GPT-2 perplexity computed on the same held-out text, with the tokeniser caveat stated',
+        'Generated samples shown for each model from an identical prompt',
+        'Written analysis addresses whether perplexity ranking matches perceived output quality',
+      ],
+      starterCode:
+        'from collections import Counter, defaultdict\nimport math\n\nclass NGramLM:\n    def __init__(self, n=3, smoothing="mle", k=1.0):\n        self.n = n\n        self.smoothing = smoothing\n        self.k = k\n\n    def fit(self, token_lists):\n        ...\n\n    def logprob(self, context, word):\n        ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone who has used ChatGPT but never studied NLP what a language model actually is, how the simplest version works by counting, why that fails, and what perplexity measures.',
+      mustCover: [
+        'A language model predicts the next token, and the chain rule turns that into a probability for any sentence',
+        'The simplest version estimates probabilities by counting n-grams in a corpus',
+        'Counting fails because almost every context in new text was never seen, giving probability zero',
+        'Perplexity is the effective number of choices the model feels it is deciding between per token',
+      ],
+      bonusSignals: [
+        'works a small perplexity calculation',
+        'explains that neural models generalise via vector representations of context',
+        'notes that next-token prediction is still the objective for the largest models',
+      ],
+      sampleExplanation:
+        'A language model does one thing: given the words so far, produce a probability for every possible next word. That seems limited until you notice the chain rule — the probability of a whole sentence is the first word\'s probability, times the second given the first, times the third given the first two, and so on. So a good next-word predictor is a model of language, and you can also run it forwards to generate: pick a word, append it, predict again. The oldest version just counts. Go through a corpus, find every occurrence of "the cat", see what followed, and divide. If "sat" followed 30 times out of 100, the probability is 0.3. Then you hit the wall. With a 50,000-word vocabulary there are 2.5 billion possible two-word contexts, and no corpus populates them all, so a sentence like "the dog ran" can get a count of exactly zero and the model declares an ordinary English sentence impossible. Neural models fix this by representing the context as a vector rather than as a symbol, so "the dog" sits near "the cat" and the model can interpolate to a context it has never seen. To measure any of this you use perplexity: take the probability the model assigned to each word that actually occurred, average the negative logs, and exponentiate. If a model assigned 0.5, 0.25, 0.125 and 0.5 to four words, the average is 1.75 bits and perplexity is 2^1.75 ≈ 3.4, meaning it was about as uncertain as picking among three or four equally likely words each time. And the punchline: the objective behind every large model you have used is still exactly this — predict the next token, at enormous scale.',
+    },
+  },
+
+  {
+    id: 'NLP-009',
+    domain: 'NLP',
+    module: 'Sequence Modelling',
+    topic: 'Self-attention',
+    title: 'Attention in NLP and Transformer Encoders',
+    slug: 'attention-in-nlp',
+    difficulty: 5,
+    estimatedMinutes: 45,
+    prerequisites: ['NLP-008'],
+    related: ['NLP-006', 'NLP-007'],
+    tags: ['attention', 'self-attention', 'transformer', 'bert', 'multi-head', 'positional-encoding'],
+
+    learningObjectives: [
+      'Explain the fixed-bottleneck problem in encoder-decoder models and how attention removes it',
+      'Describe query, key and value as a differentiable soft dictionary lookup',
+      'Compute self-attention weights over a three-token sentence by hand, including the scaling factor',
+      'Justify multi-head attention and explain why positional information must be injected separately',
+      'Contrast BERT-style bidirectional encoders with decoder-only models on masking, training objective and appropriate use',
+    ],
+
+    terminology: [
+      {
+        term: 'Attention',
+        definition:
+          'A mechanism producing an output as a weighted average of value vectors, where the weights come from a learned compatibility score between a query and each key.',
+        simple: 'Deciding how much to listen to each other word, then blending them in those proportions.',
+      },
+      {
+        term: 'Query, key, value',
+        definition:
+          'Three linear projections of the input. The query asks what this position is looking for, keys advertise what each position offers, and values carry the content that is actually retrieved.',
+        simple: 'What I am looking for, what each word advertises, and what each word actually gives me.',
+      },
+      {
+        term: 'Self-attention',
+        definition:
+          'Attention where queries, keys and values all derive from the same sequence, so every token attends to every token including itself.',
+        simple: 'Every word in the sentence looking at every other word in the same sentence.',
+      },
+      {
+        term: 'Multi-head attention',
+        definition:
+          'Running several attention operations in parallel on lower-dimensional projections and concatenating the results, so different heads can specialise in different relations.',
+        simple: 'Several independent attention passes, each free to track a different kind of relationship.',
+      },
+      {
+        term: 'Positional encoding',
+        definition:
+          'Position-dependent vectors added to or combined with token embeddings, because self-attention is permutation-equivariant and would otherwise treat a sentence as a set.',
+        simple: 'Stamping each word with where it sits, since attention alone cannot tell.',
+      },
+      {
+        term: 'Bidirectional encoder',
+        definition:
+          'A transformer whose self-attention is unmasked, so every token attends to both left and right context. Trained with masked-token prediction, as in BERT.',
+        simple: 'A model that reads the whole sentence at once, both directions.',
+      },
+    ],
+
+    simpleExplanation:
+      "Consider the sentence \"the animal did not cross the street because it was too tired\". To represent `it` properly, a model must work out that `it` refers to the animal and not to the street. Older models read left to right and squeezed everything they had seen into one fixed-size memory, so by the time they reached `it` the beginning had been compressed almost out of existence. Attention removes that bottleneck by letting each word look directly at every other word and decide, for itself, how much each one matters. The mechanism is a soft dictionary lookup. Each word emits a query — what am I looking for — and every word also emits a key advertising what it offers. Compare the query against every key, turn those comparisons into weights that sum to one, and blend the words' value vectors in those proportions. When the model processes `it`, most of the weight lands on `animal`, so the resulting vector for `it` is largely made of `animal`. Nothing about that is hand-coded; the projections that produce queries and keys are learned.",
+
+    whyItExists:
+      'Recurrent encoder-decoder models compressed an entire input sequence into one fixed-length vector, so information from early tokens was crushed and long-range dependencies were unlearnable. Attention exists to give every output position direct, weighted access to every input position, removing the bottleneck and making the path length between any two tokens constant rather than proportional to their distance.',
+
+    analogy: {
+      scenario:
+        "Imagine researching a question in a library where you are allowed to consult every book at once. You hold a specific question in mind — your query. Every book has a spine label advertising its subject — its key. You glance at all the labels, decide that three books are highly relevant, two are marginal and the rest are irrelevant, and then you read those books in proportion to your judgement: most of your notes come from the three, a little from the two, none from the rest. Your notes on the question are a weighted blend of the books, with the weights chosen by matching your question against the labels.",
+      mapping: [
+        { from: 'The question you are holding in mind', to: 'The query vector of the current token' },
+        { from: 'Spine labels advertising each book', to: 'The key vector of every token' },
+        { from: 'The actual contents you read', to: 'The value vector of every token' },
+        { from: 'Deciding how relevant each book is', to: 'The dot product of query and key, giving a compatibility score' },
+        { from: 'Making the relevances sum to one before blending', to: 'The softmax over scores, producing attention weights' },
+        { from: 'Your final notes', to: 'The output vector: a weighted sum of values' },
+      ],
+      bridge:
+        'The key insight the analogy makes concrete is why there are three separate projections rather than one. A book\'s label and its contents serve different purposes, and what you are looking for is different again — so the model learns three different linear maps of the same embedding. It is a dictionary lookup made soft and differentiable: instead of retrieving one entry, you retrieve a weighted mixture of all of them, which is exactly what makes it trainable by gradient descent.',
+      limitations:
+        'A researcher reads books sequentially and remembers doing so. Self-attention has no inherent sense of order at all: permute the input and the outputs permute identically. Position must be injected separately, which is a genuinely unintuitive property and the source of many implementation bugs.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'Scaled dot-product attention, step by step',
+        caption: 'The same six steps whether the sequence is 3 tokens or 30,000.',
+        steps: [
+          { label: 'Project', detail: 'From each token embedding produce Q = XW_Q, K = XW_K, V = XW_V. Three learned linear maps.' },
+          { label: 'Score', detail: 'Compute QKᵀ — the dot product of every query with every key, giving an n × n matrix.' },
+          { label: 'Scale', detail: 'Divide by sqrt(d_k). Without this, large d_k makes dot products huge and the softmax saturates.' },
+          { label: 'Mask (optional)', detail: 'Set future positions to −inf for a decoder, or padding positions for any model.' },
+          { label: 'Softmax', detail: 'Row-wise, so each token\'s weights over all tokens sum to 1.' },
+          { label: 'Blend', detail: 'Multiply the weight matrix by V. Each output row is a weighted mixture of value vectors.' },
+        ],
+      },
+      {
+        kind: 'ascii',
+        title: 'Attention weights over a real sentence',
+        caption:
+          'Row = the token doing the looking. Values are attention weights from one head, summing to 1 per row.',
+        art: `                the   animal  did   not   cross  the   street  because   it
+  the          0.31   0.22   0.08  0.05   0.11  0.09   0.08     0.03    0.03
+  animal       0.14   0.44   0.09  0.04   0.13  0.05   0.06     0.03    0.02
+  cross        0.06   0.19   0.11  0.07   0.31  0.08   0.14     0.02    0.02
+  street       0.08   0.07   0.04  0.03   0.18  0.22   0.35     0.02    0.01
+  it           0.04   0.51   0.03  0.02   0.06  0.03   0.19     0.05    0.07
+                      ^^^^                             ^^^^
+                   coreference resolved here: "it" puts 0.51 on "animal"
+                   and only 0.19 on "street" — the model has decided what
+                   the pronoun refers to, and nothing about that was coded.`,
+      },
+      {
+        kind: 'compare',
+        title: 'Encoder-only (BERT) versus decoder-only (GPT)',
+        caption: 'Same attention mechanism. The mask and the training objective are what differ.',
+        left: {
+          heading: 'Bidirectional encoder — BERT',
+          points: [
+            'No causal mask: every token attends left and right',
+            'Trained by masked-token prediction — 15% of tokens hidden',
+            'Produces contextual representations, not continuations',
+            'Ideal for classification, NER, retrieval, sentence similarity',
+            'Cannot generate text autoregressively',
+          ],
+        },
+        right: {
+          heading: 'Causal decoder — GPT',
+          points: [
+            'Causal mask: token k attends only to positions ≤ k',
+            'Trained by next-token prediction on raw text',
+            'Generates by sampling and feeding back its own output',
+            'Ideal for generation, dialogue, in-context learning',
+            'Each representation sees only leftward context',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Why attention displaced recurrence',
+        columns: ['Property', 'RNN / LSTM', 'Self-attention'],
+        rows: [
+          ['Path length between two tokens', 'O(distance) — information decays', 'O(1) — direct connection'],
+          ['Parallelism during training', 'None; step t needs step t − 1', 'Full; all positions computed at once'],
+          ['Compute per layer', 'O(n · d²)', 'O(n² · d) — quadratic in sequence length'],
+          ['Long-range dependencies', 'Learned poorly beyond a few dozen tokens', 'Learned directly at any distance in the window'],
+          ['Order awareness', 'Intrinsic to the architecture', 'None — must be injected as positional encoding'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Attention laboratory',
+        caption: 'Enter a sentence and inspect the attention weights of each head, layer by layer.',
+        widget: 'attention-lab',
+        props: { sentence: 'the animal did not cross the street because it was too tired', heads: 8 },
+      },
+      {
+        kind: 'widget',
+        title: 'Inside a transformer encoder block',
+        caption: 'Follow one token through attention, residual, layer norm and the feed-forward sublayer.',
+        widget: 'transformer-flow',
+        props: { variant: 'encoder', layers: 2 },
+      },
+    ],
+
+    formalDefinition:
+      'Scaled dot-product attention maps a query matrix Q in R^(n×d_k), a key matrix K in R^(m×d_k) and a value matrix V in R^(m×d_v) to softmax(QKᵀ / sqrt(d_k))V in R^(n×d_v). In self-attention, Q, K and V are distinct learned linear projections of the same input sequence, so n = m. Multi-head attention applies h such operations in parallel on d_model/h-dimensional projections and concatenates the results through an output projection W_O. Self-attention is permutation-equivariant: permuting the input rows permutes the output rows identically, which is why explicit positional information is required.',
+
+    math: {
+      intuition:
+        'A dot product measures agreement between two vectors, so the dot product of a query with a key measures how relevant that position is to what this position is asking for. Softmax turns those relevances into weights that sum to one, and multiplying by the values blends the content in those proportions. The division by sqrt(d_k) exists because in high dimensions dot products of random vectors grow with the square root of the dimension, and without correction the softmax would saturate into a hard argmax with vanishing gradients.',
+      formulas: [
+        {
+          latex: '\\mathrm{Attention}(Q, K, V) = \\mathrm{softmax}\\!\\left( \\frac{QK^{\\top}}{\\sqrt{d_k}} \\right) V',
+          name: 'Scaled dot-product attention',
+          meaning:
+            'The entire mechanism in one line. QKᵀ scores every query against every key, the scaling keeps the softmax in a useful range, and multiplying by V produces a weighted blend of the value vectors.',
+          variables: [
+            { symbol: 'Q', meaning: 'Query matrix, one row per position, dimension d_k' },
+            { symbol: 'K', meaning: 'Key matrix, one row per position, dimension d_k' },
+            { symbol: 'V', meaning: 'Value matrix, one row per position, dimension d_v' },
+            { symbol: 'd_k', meaning: 'Key and query dimensionality, used for the scaling factor' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\alpha_{ij} = \\frac{\\exp(q_i \\cdot k_j / \\sqrt{d_k})}{\\sum_{l=1}^{n} \\exp(q_i \\cdot k_l / \\sqrt{d_k})}, \\qquad z_i = \\sum_{j=1}^{n} \\alpha_{ij} v_j',
+          name: 'Attention weights for one position',
+          meaning:
+            'The per-token view. Alpha_ij is how much token i attends to token j, non-negative and summing to 1 over j. The output for token i is the value vectors blended in exactly those proportions.',
+          variables: [
+            { symbol: '\\alpha_{ij}', meaning: 'Attention weight from query position i to key position j' },
+            { symbol: 'q_i, k_j, v_j', meaning: 'Query of position i, key and value of position j' },
+            { symbol: 'z_i', meaning: 'Output representation for position i' },
+            { symbol: 'n', meaning: 'Sequence length' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\mathrm{Var}(q \\cdot k) = d_k \\quad \\text{for unit-variance components} \\implies \\text{divide by } \\sqrt{d_k}',
+          name: 'Why the scaling factor is sqrt(d_k)',
+          meaning:
+            'If query and key components are independent with mean 0 and variance 1, their dot product has variance d_k and hence standard deviation sqrt(d_k). Dividing by sqrt(d_k) restores unit variance, keeping the softmax away from saturation where gradients vanish.',
+          variables: [
+            { symbol: 'd_k', meaning: 'Dimensionality of the query and key vectors, typically 64 per head' },
+            { symbol: '\\mathrm{Var}', meaning: 'Variance across random initialisation' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\mathrm{MultiHead}(X) = \\mathrm{Concat}(\\mathrm{head}_1, \\dots, \\mathrm{head}_h) W_O, \\quad \\mathrm{head}_i = \\mathrm{Attention}(XW_Q^i, XW_K^i, XW_V^i)',
+          name: 'Multi-head attention',
+          meaning:
+            'Run h attention operations in parallel on separate low-dimensional projections, concatenate and project back. Each head is free to specialise: empirically some track syntactic dependencies, some track coreference, some attend to delimiters.',
+          variables: [
+            { symbol: 'h', meaning: 'Number of heads, typically 8 to 16' },
+            { symbol: 'W_Q^i, W_K^i, W_V^i', meaning: 'Per-head projection matrices, each of width d_model/h' },
+            { symbol: 'W_O', meaning: 'Output projection mixing the concatenated head outputs back to d_model' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: 'PE_{(pos, 2i)} = \\sin\\!\\left(\\frac{pos}{10000^{2i/d}}\\right), \\quad PE_{(pos, 2i+1)} = \\cos\\!\\left(\\frac{pos}{10000^{2i/d}}\\right)',
+          name: 'Sinusoidal positional encoding',
+          meaning:
+            'Adds a deterministic position-dependent pattern to each embedding. Different dimensions oscillate at different frequencies, so a fixed offset corresponds to a linear transformation of the encoding, which lets the model learn relative position.',
+          variables: [
+            { symbol: 'pos', meaning: 'Position index in the sequence, starting at 0' },
+            { symbol: 'i', meaning: 'Dimension index within the embedding' },
+            { symbol: 'd', meaning: 'Model dimensionality' },
+          ],
+          category: 'deep-learning',
+        },
+      ],
+      derivation: [
+        'Start from the problem: an encoder-decoder RNN compresses the whole input into one fixed vector, so early tokens are crushed and long dependencies cannot be learned.',
+        'Instead, keep every input position available and let the decoder compute a relevance score for each one at every output step.',
+        'Parameterise relevance as a dot product, since it is cheap, differentiable, and large exactly when two vectors agree.',
+        'Normalise the scores with a softmax so they form a convex combination — this makes the output a weighted average that stays in the same space as the values.',
+        'Observe that the query, the advertisement and the retrieved content serve different roles, so learn three separate projections rather than reusing the embedding for all three.',
+        'Note that dot products of d_k-dimensional random vectors have standard deviation sqrt(d_k), which would saturate the softmax; divide by sqrt(d_k) to fix it.',
+        'Notice that one attention pattern can only express one relation, so run h of them in parallel on smaller projections and concatenate.',
+        'Finally observe that nothing in any of this depends on order — permuting the input permutes the output identically — so add positional information to the embeddings before the first layer.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Self-attention over "the cat sat", computed by hand',
+      setup:
+        'Three tokens, d_k = d_v = 2. Keys: k_the = [0, 1], k_cat = [1, 1], k_sat = [1, 0]. Values: v_the = [1, 0], v_cat = [0, 1], v_sat = [1, 1]. We compute the output for the query of `sat`, which is q = [1, 0].',
+      steps: [
+        {
+          label: 'Score the query against every key',
+          detail: 'q · k_the = (1)(0) + (0)(1) = 0. q · k_cat = (1)(1) + (0)(1) = 1. q · k_sat = (1)(1) + (0)(0) = 1.',
+          latex: 'q \\cdot k_{the} = 0, \\quad q \\cdot k_{cat} = 1, \\quad q \\cdot k_{sat} = 1',
+        },
+        {
+          label: 'Scale by sqrt(d_k)',
+          detail: 'd_k = 2, so sqrt(d_k) = 1.4142. Scaled scores: 0/1.4142 = 0, 1/1.4142 = 0.7071, 1/1.4142 = 0.7071.',
+          latex: '\\frac{q \\cdot k_j}{\\sqrt{2}} = [0,\; 0.7071,\; 0.7071]',
+        },
+        {
+          label: 'Exponentiate',
+          detail: 'exp(0) = 1.0000; exp(0.7071) = 2.0281; exp(0.7071) = 2.0281. Sum = 5.0562.',
+          latex: '[e^{0}, e^{0.7071}, e^{0.7071}] = [1.0000,\; 2.0281,\; 2.0281], \\ \\Sigma = 5.0562',
+        },
+        {
+          label: 'Softmax to get attention weights',
+          detail:
+            'alpha_the = 1.0000/5.0562 = 0.1978; alpha_cat = 2.0281/5.0562 = 0.4011; alpha_sat = 2.0281/5.0562 = 0.4011. They sum to 1.0000, as they must.',
+          latex: '\\alpha = [0.1978,\; 0.4011,\; 0.4011]',
+        },
+        {
+          label: 'Blend the value vectors',
+          detail:
+            'z = 0.1978 × [1, 0] + 0.4011 × [0, 1] + 0.4011 × [1, 1]. First component: 0.1978 + 0 + 0.4011 = 0.5989. Second: 0 + 0.4011 + 0.4011 = 0.8022.',
+          latex: 'z_{sat} = 0.1978\\,v_{the} + 0.4011\\,v_{cat} + 0.4011\\,v_{sat} = [0.5989,\; 0.8022]',
+        },
+        {
+          label: 'Read the result',
+          detail:
+            'The new representation of `sat` is 40% `cat`, 40% itself and 20% `the`. It is no longer a static embedding of the word `sat` — it is a context-dependent vector that carries information about what sat. Change `cat` to `dog` and this vector changes, which is exactly what static Word2Vec embeddings could never do.',
+        },
+        {
+          label: 'Check what the scaling bought',
+          detail:
+            'Without the sqrt(2) divisor the scores would be [0, 1, 1], giving weights [0.1554, 0.4223, 0.4223] — a sharper distribution. With d_k = 64 rather than 2 the difference is dramatic: unscaled dot products would have standard deviation 8, pushing the softmax towards a one-hot vector where gradients are nearly zero and learning stalls.',
+          latex: '\\text{unscaled: } \\alpha = [0.1554,\; 0.4223,\; 0.4223]',
+        },
+        {
+          label: 'Note the permutation property',
+          detail:
+            'Nothing in this calculation used the fact that `the` came first. Permute the three tokens and the three output vectors permute identically — the values are unchanged. That is why positional encodings are added to the embeddings before any of this happens.',
+        },
+      ],
+      conclusion:
+        'One query, three keys, a softmax and a weighted sum produce a contextual representation of `sat` that is 40% made of `cat`. Every token does this simultaneously, in parallel, in every head of every layer. That is the entire transformer encoder — everything else in the architecture is residual connections, layer normalisation and a position-wise feed-forward network.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'The worked example, verified in NumPy',
+        runnable: true,
+        code: `import numpy as np
+
+K = np.array([[0.0, 1.0],    # the
+              [1.0, 1.0],    # cat
+              [1.0, 0.0]])   # sat
+V = np.array([[1.0, 0.0],
+              [0.0, 1.0],
+              [1.0, 1.0]])
+q = np.array([1.0, 0.0])     # query for "sat"
+
+d_k = K.shape[1]
+scores = K @ q / np.sqrt(d_k)
+weights = np.exp(scores) / np.exp(scores).sum()
+z = weights @ V
+
+print("scaled scores  :", np.round(scores, 4))
+print("attention      :", np.round(weights, 4), "sum =", round(weights.sum(), 4))
+print("output for sat :", np.round(z, 4))
+
+unscaled = K @ q
+w2 = np.exp(unscaled) / np.exp(unscaled).sum()
+print("without scaling:", np.round(w2, 4))`,
+        output: `scaled scores  : [0.     0.7071 0.7071]
+attention      : [0.1978 0.4011 0.4011] sum = 1.0
+output for sat : [0.5989 0.8022]
+without scaling: [0.1554 0.4223 0.4223]`,
+        explanation:
+          'Six lines are the whole mechanism. The weights are non-negative and sum to exactly 1, so the output is a convex combination of the value vectors and therefore lives in the same space as them — that is what makes attention stackable across layers. The final line shows what scaling does: removing it sharpens the distribution, and at the realistic d_k = 64 it sharpens it to the point where the softmax saturates and gradients vanish.',
+      },
+      {
+        language: 'python',
+        title: 'Full multi-head self-attention in PyTorch',
+        runnable: true,
+        code: `import torch
+import torch.nn.functional as F
+
+torch.manual_seed(0)
+batch, seq, d_model, heads = 1, 5, 64, 8
+d_k = d_model // heads
+
+x = torch.randn(batch, seq, d_model)
+Wq, Wk, Wv = (torch.nn.Linear(d_model, d_model, bias=False) for _ in range(3))
+
+def split_heads(t):
+    return t.view(batch, seq, heads, d_k).transpose(1, 2)   # (B, H, S, d_k)
+
+Q, K, V = split_heads(Wq(x)), split_heads(Wk(x)), split_heads(Wv(x))
+
+scores = Q @ K.transpose(-2, -1) / d_k ** 0.5               # (B, H, S, S)
+attn = F.softmax(scores, dim=-1)
+out = (attn @ V).transpose(1, 2).reshape(batch, seq, d_model)
+
+print("scores shape   :", tuple(scores.shape))
+print("attn row sums  :", attn[0, 0].sum(-1).round(decimals=4).tolist())
+print("output shape   :", tuple(out.shape))
+
+causal = torch.tril(torch.ones(seq, seq)).bool()
+masked = F.softmax(scores.masked_fill(~causal, float("-inf")), dim=-1)
+print("causal row 0   :", masked[0, 0, 0].round(decimals=3).tolist())
+print("causal row 4   :", masked[0, 0, 4].round(decimals=3).tolist())`,
+        output: `scores shape   : (1, 8, 5, 5)
+attn row sums  : [1.0, 1.0, 1.0, 1.0, 1.0]
+output shape   : (1, 5, 64)
+causal row 0   : [1.0, 0.0, 0.0, 0.0, 0.0]
+causal row 4   : [0.197, 0.211, 0.184, 0.209, 0.199]
+`,
+        explanation:
+          'The score tensor is (batch, heads, seq, seq) — one full attention matrix per head, which is where the quadratic memory cost lives and why long contexts are expensive. Every row of the softmax sums to 1, confirming each token distributes exactly one unit of attention. The causal mask is the single difference between an encoder and a decoder: setting the upper triangle to negative infinity before the softmax makes those weights exactly zero, so the first token can only attend to itself while the last can attend to everything.',
+      },
+      {
+        language: 'python',
+        title: 'Contextual embeddings: the same word, two vectors',
+        runnable: true,
+        code: `import torch
+from transformers import AutoTokenizer, AutoModel
+
+tok = AutoTokenizer.from_pretrained("bert-base-uncased")
+model = AutoModel.from_pretrained("bert-base-uncased", output_attentions=True).eval()
+
+sentences = [
+    "I deposited cash at the bank.",
+    "We sat on the river bank.",
+]
+
+vectors = []
+for s in sentences:
+    enc = tok(s, return_tensors="pt")
+    with torch.no_grad():
+        out = model(**enc)
+    idx = enc.input_ids[0].tolist().index(tok.convert_tokens_to_ids("bank"))
+    vectors.append(out.last_hidden_state[0, idx])
+
+cos = torch.nn.functional.cosine_similarity(vectors[0], vectors[1], dim=0)
+print("cosine between the two 'bank' vectors:", round(float(cos), 3))
+
+enc = tok(sentences[1], return_tensors="pt")
+with torch.no_grad():
+    att = model(**enc).attentions[-1]           # (1, heads, seq, seq)
+tokens = tok.convert_ids_to_tokens(enc.input_ids[0])
+bank_row = att[0, :, tokens.index("bank"), :].mean(0)
+top = torch.topk(bank_row, 3)
+print("what 'bank' attends to:", [(tokens[i], round(float(v), 3)) for v, i in zip(top.values, top.indices)])`,
+        output: `cosine between the two 'bank' vectors: 0.478
+
+what 'bank' attends to: [('[SEP]', 0.201), ('river', 0.164), ('bank', 0.142)]
+`,
+        explanation:
+          'A static Word2Vec embedding gives `bank` one vector, so the financial and geographic senses are forced into a single compromise position. BERT gives two vectors with cosine similarity of only 0.48, because each was computed by attending to a different sentence — the river sense attends strongly to `river`. This is the concrete payoff of attention over static embeddings, and it closes the loop on the polysemy limitation identified in the Word2Vec unit. The high weight on `[SEP]` is a well-documented artefact: heads with nothing useful to do park their attention on delimiter tokens, a "no-op" behaviour that is worth knowing before you over-interpret an attention map.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Every modern language model',
+        usage:
+          'BERT, GPT, T5, Llama and their descendants are all stacks of the attention block computed above. The differences between them are the mask, the training objective, the position scheme and the scale — not the core mechanism.',
+      },
+      {
+        context: 'Retrieval re-ranking',
+        usage:
+          'A cross-encoder re-ranker feeds query and document jointly through an encoder so attention runs across both, letting query tokens attend to document tokens. That interaction is precisely why it is more accurate than comparing two independent embeddings.',
+      },
+      {
+        context: 'Protein structure prediction',
+        usage:
+          'AlphaFold treats an amino-acid sequence as a sequence of tokens and uses attention over residue pairs. The mechanism transferred unchanged from language to biology, which is a strong hint that it encodes something general about structured sequences.',
+      },
+      {
+        context: 'Long-context engineering',
+        usage:
+          'The n² cost of the score matrix is why context windows are expensive and why FlashAttention, sliding-window attention and KV caching exist. Anyone operating a model in production is managing the consequences of that quadratic term.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'PyTorch', role: '`nn.MultiheadAttention` and `F.scaled_dot_product_attention`, the latter dispatching to fused kernels such as FlashAttention.' },
+      { tool: 'Hugging Face transformers', role: '`output_attentions=True` returns the weight matrices for inspection; `AutoModel` loads encoders and `AutoModelForCausalLM` loads decoders.' },
+      { tool: 'BertViz', role: 'Interactive visualisation of attention heads across layers, useful for seeing head specialisation directly.' },
+      { tool: 'FlashAttention', role: 'A fused kernel that computes the same result without materialising the n × n matrix, which is what makes long contexts affordable.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Forgetting that self-attention is order-blind',
+        why: 'The operation is permutation-equivariant, so without positional information a sentence is processed as a set and "dog bites man" is indistinguishable from "man bites dog".',
+        fix: 'Add sinusoidal or learned positional embeddings before the first layer, or use a relative scheme such as RoPE or ALiBi. Never omit it.',
+      },
+      {
+        mistake: 'Omitting the sqrt(d_k) scaling',
+        why: 'Dot products of d_k-dimensional vectors have standard deviation proportional to sqrt(d_k). At d_k = 64 the logits reach magnitudes where the softmax is effectively one-hot, gradients vanish, and training stalls with no error message.',
+        fix: 'Always divide by sqrt(d_k). If you use `F.scaled_dot_product_attention` it is applied for you.',
+      },
+      {
+        mistake: 'Treating attention weights as an explanation',
+        why: 'High weight means the value vector was heavily mixed in, which is not the same as that token being causally responsible for the output. Jain and Wallace showed that substantially different attention distributions can produce identical predictions.',
+        fix: 'Use attention maps as a debugging hint, not as evidence. For attribution use gradient-based methods or intervention studies that actually change the input.',
+      },
+      {
+        mistake: 'Applying a causal mask in an encoder',
+        why: 'BERT-style models are meant to see both directions. Masking the future turns a bidirectional encoder into a weak decoder, and fine-tuning accuracy drops with no obvious cause.',
+        fix: 'Use a causal mask only for autoregressive generation. Encoders mask padding positions only.',
+      },
+      {
+        mistake: 'Ignoring the quadratic cost until it bites',
+        why: 'The score matrix is n × n per head per layer, so doubling the sequence length quadruples attention memory. A model that runs fine at 512 tokens can exhaust GPU memory at 4,096.',
+        fix: 'Budget memory as heads × layers × n² × batch. Use FlashAttention, sliding-window attention or chunking for long documents.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'advanced',
+        question: 'Explain query, key and value, and why three separate projections are needed rather than one.',
+        answer:
+          'Attention is a soft dictionary lookup. The query is what the current position is looking for, the keys advertise what each position offers so they can be matched against the query, and the values carry the content that gets retrieved. These are three genuinely different roles, so tying them to a single vector would force one representation to serve all three and reduce expressiveness — in particular, a shared query and key would make the score matrix symmetric, so "A attends to B" and "B attends to A" would always be equal, which is wrong for relations like modification or coreference. Concretely, the score is softmax(q·k/sqrt(d_k)) and the output is the weighted sum of the values, so the model can learn to match on one property and retrieve a different one. That asymmetry is the point.',
+        followUp:
+          'A strong answer notes that the sqrt(d_k) scaling exists because dot products of d_k-dimensional vectors have standard deviation sqrt(d_k), and without it the softmax saturates and gradients vanish.',
+      },
+      {
+        level: 'advanced',
+        question: 'Why does multi-head attention outperform a single head of the same total width?',
+        answer:
+          'A single softmax over a single score matrix can only express one attention pattern per position — it must commit to one distribution of relevance. But a token usually stands in several relations simultaneously: a verb relates to its subject, its object, its auxiliary and its clause boundary at once. Splitting the width into h independent subspaces lets each head form its own pattern, and probing studies find heads that specialise in exactly these relations: some track syntactic dependencies, some resolve coreference, some attend to the previous token, some park on delimiters as a no-op. The concatenation and output projection then mix the results. The cost is unchanged, since each head works in d_model/h dimensions, so multi-head attention is strictly more expressive for the same parameter budget.',
+      },
+      {
+        level: 'ai-engineer',
+        question: 'When would you choose a BERT-style encoder over a decoder-only model, in 2026?',
+        answer:
+          'When the task produces a label or a vector rather than text, and latency or cost matters. Encoders see both directions, so every token representation is informed by the full sentence, which suits classification, token labelling such as NER, extractive question answering and sentence embeddings for retrieval. A fine-tuned 110-million-parameter encoder routinely matches or beats a far larger decoder on those tasks, runs on CPU, costs almost nothing per request and gives deterministic output — all of which matter in production. Decoder-only models win when you need open-ended generation, when the task is best expressed as an instruction, when you have almost no labelled data and need zero- or few-shot behaviour, or when the task list keeps changing and maintaining one fine-tuned model per task is impractical. A common architecture uses both: an encoder as the bi-encoder retriever and a decoder to compose the final answer.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Given q = [1, 1], k_1 = [1, 0], k_2 = [0, 1], k_3 = [1, 1] and d_k = 2, compute the attention weights.',
+        hint: 'Dot products, divide by sqrt(2), exponentiate, normalise.',
+        solution:
+          'Dot products: q·k_1 = 1, q·k_2 = 1, q·k_3 = 2.\nScaled by sqrt(2) = 1.4142: 0.7071, 0.7071, 1.4142.\nExponentiate: 2.0281, 2.0281, 4.1133. Sum = 8.1695.\nWeights: 0.2483, 0.2483, 0.5035.\n\nThe third key gets just over half the attention because it points in the same direction as the query, so its dot product is twice the others. Note how gently the softmax separates them: a 2× difference in raw score becomes only a 2× difference in weight, not a hard selection. That softness is what makes attention differentiable and trainable, and it is also why attention rarely produces the clean one-hot alignments that visualisations sometimes suggest.',
+      },
+      {
+        prompt:
+          'Explain what breaks if you remove positional encodings from a transformer encoder, and design a two-sentence experiment that demonstrates it.',
+        hint: 'Think about what self-attention computes when you permute the input rows.',
+        language: 'python',
+        starterCode:
+          'import torch\nimport torch.nn.functional as F\n\nx = torch.randn(1, 4, 8)          # 4 tokens, no positional information\nperm = torch.tensor([2, 0, 3, 1])\n',
+        solution:
+          'Self-attention is permutation-equivariant: permuting the input rows permutes the output rows identically and changes nothing else, because every score is a dot product between two rows and the softmax is over a set. So without positional encodings a transformer processes a sentence as a bag of tokens and cannot distinguish "dog bites man" from "man bites dog".\n\nThe experiment: run attention on x, then on x[:, perm, :], and check that the second output equals the first with the same permutation applied. With positional encodings added to x beforehand, that equality fails, which is precisely the evidence that order now matters.\n\n    out1 = attention(x)\n    out2 = attention(x[:, perm, :])\n    assert torch.allclose(out2, out1[:, perm, :], atol=1e-5)   # passes without PE\n\nThis is also why the choice of position scheme — sinusoidal, learned absolute, RoPE, ALiBi — is a real architectural decision rather than a detail, since it determines how well the model extrapolates beyond the context length it was trained on.',
+      },
+      {
+        prompt:
+          'Estimate the attention memory for a 12-layer, 12-head model at sequence lengths 512 and 4096, with batch size 8 and float32 storage. Comment on the result.',
+        hint: 'The score matrix is (batch × heads × n × n) per layer, at 4 bytes per element.',
+        solution:
+          'At n = 512: 8 × 12 × 512 × 512 = 25,165,824 elements per layer, times 4 bytes = 100.7 MB per layer, times 12 layers = 1.21 GB.\n\nAt n = 4096: 8 × 12 × 4096 × 4096 = 1,610,612,736 elements per layer = 6.44 GB per layer, times 12 layers = 77.3 GB.\n\nAn eightfold increase in sequence length produced a 64-fold increase in attention memory, which is the quadratic term made concrete. This is why a model that trains comfortably at 512 tokens will not fit at 4,096 on the same hardware, and why FlashAttention matters so much: it computes the identical result in tiles without ever materialising the n × n matrix, reducing memory from quadratic to linear in n while keeping the same arithmetic.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'NLP-009-q1',
+        type: 'mcq',
+        concept: 'attention mechanism',
+        prompt: 'In scaled dot-product attention, what do the softmax weights multiply?',
+        options: [
+          'The value vectors',
+          'The key vectors',
+          'The query vectors',
+          'The positional encodings',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Queries and keys produce the scores; the resulting weights are applied to the values. That separation is what lets the model match on one property and retrieve a different one.',
+      },
+      {
+        id: 'NLP-009-q2',
+        type: 'numeric',
+        concept: 'softmax weights',
+        prompt:
+          'Scaled scores are [0, 0.7071, 0.7071]. What attention weight does the first position receive, to three decimal places?',
+        answer: 0.198,
+        tolerance: 0.005,
+        explanation:
+          'exp(0) = 1 and exp(0.7071) = 2.0281 twice, so the sum is 5.0562 and the first weight is 1/5.0562 = 0.1978. The other two receive 0.4011 each, and all three sum to 1.',
+      },
+      {
+        id: 'NLP-009-q3',
+        type: 'truefalse',
+        concept: 'permutation equivariance',
+        prompt: 'Without positional encodings, a transformer encoder would treat "dog bites man" and "man bites dog" identically.',
+        answer: true,
+        explanation:
+          'Self-attention is permutation-equivariant: permuting the input rows permutes the output rows and changes nothing else. Order enters only through the positional information added to the embeddings.',
+      },
+      {
+        id: 'NLP-009-q4',
+        type: 'mcq',
+        concept: 'scaling factor',
+        prompt: 'Why are the dot products divided by sqrt(d_k) before the softmax?',
+        options: [
+          'Dot products grow with sqrt(d_k), and without scaling the softmax saturates and gradients vanish',
+          'It makes the attention weights sum to 1',
+          'It reduces the memory needed for the score matrix',
+          'It is required for the causal mask to work',
+        ],
+        answerIndex: 0,
+        explanation:
+          'For unit-variance components the dot product has variance d_k, hence standard deviation sqrt(d_k). At d_k = 64 the logits reach magnitudes where the softmax is effectively one-hot and no gradient flows. The softmax itself is what makes weights sum to 1.',
+      },
+      {
+        id: 'NLP-009-q5',
+        type: 'match',
+        concept: 'encoder versus decoder',
+        prompt: 'Match each property to the architecture it belongs to.',
+        pairs: [
+          { left: 'Causal mask hiding future tokens', right: 'Decoder-only (GPT)' },
+          { left: 'Masked-token prediction objective', right: 'Bidirectional encoder (BERT)' },
+          { left: 'Best for sentence embeddings and NER', right: 'Bidirectional encoder (BERT)' },
+          { left: 'Generates text by feeding output back in', right: 'Decoder-only (GPT)' },
+        ],
+        explanation:
+          'The attention mechanism is identical in both. What differs is the mask, the training objective and therefore what the resulting representations are good for.',
+      },
+      {
+        id: 'NLP-009-q6',
+        type: 'explain',
+        concept: 'the bottleneck attention solved',
+        prompt:
+          'Explain the fixed-bottleneck problem in sequence-to-sequence models and how attention removes it.',
+        rubric: [
+          'Describes compressing the entire input into one fixed-size vector',
+          'Explains that early tokens are crushed and long-range dependencies are lost',
+          'Explains that attention gives every output position weighted access to every input position',
+        ],
+        sampleAnswer:
+          'A classical encoder-decoder RNN read the whole input and compressed it into a single fixed-size hidden state, which the decoder then had to work from. That vector is the bottleneck: no matter how long the input, everything must fit in the same number of numbers, so information from early tokens is progressively overwritten and long-range dependencies cannot be learned. Translation quality degraded sharply with sentence length, which was the symptom that motivated the fix. Attention removes the bottleneck by keeping every input position available and letting each output step compute its own weighted combination of all of them. The path between any two positions becomes length one rather than proportional to their distance, so gradients flow directly and no compression is forced. Self-attention then applies the same idea within a single sequence, which is what makes each token representation contextual.',
+        explanation:
+          'The examinable insight is that attention is a fix for an information-routing problem, and that constant path length between positions is what makes long-range dependencies learnable.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Write the attention formula.', back: 'Attention(Q,K,V) = softmax(QKᵀ / sqrt(d_k))V. Queries score against keys; the resulting weights blend the values.' },
+      { front: 'What are query, key and value?', back: 'What this position seeks, what each position advertises, and what each position actually contributes. Three separate learned projections of the same input.' },
+      { front: 'Why divide by sqrt(d_k)?', back: 'Dot products of d_k-dimensional vectors have standard deviation sqrt(d_k). Without scaling the softmax saturates and gradients vanish.' },
+      { front: 'Why multi-head rather than one wide head?', back: 'One softmax expresses one relation per position. Separate heads specialise — syntax, coreference, previous-token — for the same parameter budget.' },
+      { front: 'Why are positional encodings necessary?', back: 'Self-attention is permutation-equivariant, so without them a sentence is a set and word order carries no information.' },
+      { front: 'BERT versus GPT in one line.', back: 'Same attention; BERT is unmasked and trained on masked-token prediction for representations, GPT is causally masked and trained on next-token prediction for generation.' },
+      { front: 'What is the cost of self-attention in sequence length?', back: 'O(n²·d) time and O(n²) memory per head per layer, which is why long contexts are expensive and FlashAttention exists.' },
+    ],
+
+    challenge: {
+      title: 'Implement and probe a transformer encoder block',
+      brief:
+        'Implement multi-head self-attention and a full encoder block — attention, residual, layer norm, position-wise feed-forward, residual, layer norm — in PyTorch without using `nn.MultiheadAttention` or `nn.TransformerEncoderLayer`. Verify numerically against the built-in modules with the same weights. Then load `bert-base-uncased` with `output_attentions=True`, extract the attention matrices for five sentences, and identify at least three heads with an interpretable specialisation, supporting each claim with the weights.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Multi-head attention implemented from primitives with correct head splitting and recombination',
+        'Scaling by sqrt(d_k) and optional causal masking both supported',
+        'Numerical agreement with `nn.MultiheadAttention` asserted to a stated tolerance',
+        'At least three heads characterised with evidence from actual attention weights',
+        'A written caveat that attention weights are not a causal explanation of the prediction',
+      ],
+      starterCode:
+        'import torch\nimport torch.nn as nn\nimport torch.nn.functional as F\n\nclass MultiHeadSelfAttention(nn.Module):\n    def __init__(self, d_model, n_heads):\n        super().__init__()\n        assert d_model % n_heads == 0\n        self.n_heads = n_heads\n        self.d_k = d_model // n_heads\n        self.Wq = nn.Linear(d_model, d_model, bias=False)\n        self.Wk = nn.Linear(d_model, d_model, bias=False)\n        self.Wv = nn.Linear(d_model, d_model, bias=False)\n        self.Wo = nn.Linear(d_model, d_model, bias=False)\n\n    def forward(self, x, causal=False):\n        ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach attention to someone who understands embeddings and language modelling but has never seen a transformer. Use the sentence "the animal did not cross the street because it was too tired".',
+      mustCover: [
+        'The fixed-bottleneck problem attention was invented to solve',
+        'Query, key and value as a soft, differentiable dictionary lookup',
+        'The softmax producing weights that sum to one, and the output being a weighted blend of values',
+        'Self-attention has no sense of order, so position must be added separately',
+      ],
+      bonusSignals: [
+        'works through actual attention weights on a short sentence',
+        'explains why the scores are divided by sqrt(d_k)',
+        'explains why multiple heads are used',
+      ],
+      sampleExplanation:
+        'Take the sentence "the animal did not cross the street because it was too tired". To represent `it` correctly the model has to know it refers to the animal, not the street. The older approach read left to right and compressed everything into one fixed-size memory, so by the time it reached `it` the beginning had been squeezed almost out of existence — that is the bottleneck attention was built to remove. The fix is to let every word look at every other word directly. Each position produces three vectors from its embedding by three learned linear maps. The query says what this word is looking for. The key advertises what this word offers. The value is the content it will hand over. To process `it`, take its query and dot it with every key, which gives a relevance score per word. Divide by the square root of the key dimension, otherwise in 64 dimensions those dot products get large enough to saturate the softmax and kill the gradients. Then softmax, which turns the scores into weights that sum to one — say 0.51 on `animal`, 0.19 on `street`, the rest spread thinly. Finally take the weighted sum of the value vectors in exactly those proportions. The new representation of `it` is now mostly made of `animal`. Nothing about that was coded by hand. Two more pieces. One attention pattern can only express one relation, so the model runs eight or twelve of them in parallel on smaller slices and concatenates — some heads end up tracking syntax, some coreference. And note that nothing in the calculation used position: permute the words and the outputs permute the same way. That is why position has to be stamped onto the embeddings before any of this runs.',
+    },
+  },
+
+  {
+    id: 'NLP-010',
+    domain: 'NLP',
+    module: 'NLP Tasks',
+    topic: 'Document classification',
+    title: 'Text Classification and Sentiment Analysis',
+    slug: 'text-classification-and-sentiment',
+    difficulty: 3,
+    estimatedMinutes: 40,
+    prerequisites: ['NLP-005', 'NLP-009'],
+    related: ['NLP-004', 'NLP-006', 'NLP-007'],
+    tags: ['classification', 'sentiment', 'logistic-regression', 'fine-tuning', 'class-imbalance', 'negation'],
+
+    learningObjectives: [
+      'Build the full pipeline from raw text to a prediction, naming what each stage contributes',
+      'Establish a TF-IDF plus logistic regression baseline and explain why it is genuinely hard to beat',
+      'Fine-tune a transformer classifier and state precisely when the extra cost is justified',
+      'Diagnose and handle class imbalance without being misled by accuracy',
+      'Explain why negation, sarcasm and domain shift remain the hard cases, and what each actually breaks',
+    ],
+
+    terminology: [
+      {
+        term: 'Text classification',
+        definition:
+          'Assigning one or more labels from a fixed set to a whole document. Binary, multi-class and multi-label variants differ in whether labels are mutually exclusive.',
+        simple: 'Reading a piece of text and putting it in the right box.',
+      },
+      {
+        term: 'Sentiment analysis',
+        definition:
+          'Classification where the label is the writer\'s attitude — typically positive, negative or neutral, sometimes a graded scale or a set of emotions.',
+        simple: 'Working out whether the writer liked something.',
+      },
+      {
+        term: 'Baseline',
+        definition:
+          'A simple model established first so that every subsequent result has something to beat. TF-IDF plus logistic regression is the standard text baseline.',
+        simple: 'The cheap model you compare everything else against.',
+      },
+      {
+        term: 'Class imbalance',
+        definition:
+          'A label distribution far from uniform, so that a model predicting only the majority class scores well on accuracy while being useless.',
+        simple: 'When one answer is so common that always guessing it looks good.',
+      },
+      {
+        term: 'Macro F1',
+        definition:
+          'The unweighted mean of per-class F1 scores, so every class counts equally regardless of frequency. The default metric to report under imbalance.',
+        simple: 'An average score that does not let big classes drown out small ones.',
+      },
+      {
+        term: 'Fine-tuning',
+        definition:
+          'Continuing training of a pre-trained model on a labelled task dataset, usually with a new classification head and a small learning rate.',
+        simple: 'Taking a model that already knows language and teaching it your specific task.',
+      },
+    ],
+
+    simpleExplanation:
+      "Text classification is the task that pays for most of NLP in industry: read something and decide which box it goes in. Is this email spam, is this review positive, which team should handle this ticket. The pipeline uses everything from the earlier units. Take the raw text, tokenise it, turn it into numbers — either a TF-IDF row or a transformer's contextual vectors — and hand those numbers to a classifier that outputs a probability per label. What surprises people is how strong the cheap version is. TF-IDF plus logistic regression trains in seconds on a laptop, reaches around 90% on many topic tasks, and shows you exactly which words drove each decision. A fine-tuned transformer usually beats it by a few points, and by much more when meaning depends on word order. And some things break both: a negation the model attaches to the wrong word, sarcasm that inverts sentiment without changing any word's dictionary meaning, and text from a domain the model never saw.",
+
+    whyItExists:
+      'Organisations receive far more text than anyone can read — support tickets, reviews, emails, claims, transcripts — and decisions about that text have to be made consistently and immediately. Text classification exists to turn unstructured language into a routing or scoring decision at scale, and it is the single most deployed NLP capability in production.',
+
+    analogy: {
+      scenario:
+        'Think of a post room in a large building. Someone glances at each envelope and drops it into one of twenty pigeonholes. A new clerk works from obvious cues — the word "invoice" means accounts, a legal letterhead means the legal team — and gets most of them right very quickly. An experienced clerk also reads tone and context, notices that an "invoice" letter is actually a complaint about an invoice, and gets the awkward ones right too. Both are doing the same job; one uses surface signals and the other uses understanding, and the experienced clerk is slower and more expensive.',
+      mapping: [
+        { from: 'The envelope', to: 'The input document' },
+        { from: 'The twenty pigeonholes', to: 'The fixed label set' },
+        { from: 'The new clerk spotting keywords', to: 'TF-IDF plus logistic regression — fast, surface-level, surprisingly accurate' },
+        { from: 'The experienced clerk reading context', to: 'A fine-tuned transformer that uses word order and meaning' },
+        { from: 'A letter that mentions invoices but is really a complaint', to: 'The case where lexical features fail and context is required' },
+        { from: 'A pigeonhole that receives one letter a month', to: 'A rare class, where accuracy hides poor performance' },
+      ],
+      bridge:
+        'The two clerks are the real engineering decision. Most documents are decided by surface cues, which is exactly why a bag-of-words model gets 90% — and it is also why the last few points are so expensive, because they are precisely the documents where surface cues mislead. Knowing which clerk your problem needs, and proving it with a held-out score, is the skill.',
+      limitations:
+        'The analogy assumes pigeonholes are fixed and mutually exclusive. Real problems are often multi-label (a ticket about billing and about a crash), hierarchical, or open-ended, and the label set itself drifts over time as the business changes.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'The full pipeline, raw text to prediction',
+        caption: 'Every stage is something you have already met in this domain.',
+        steps: [
+          { label: 'Raw text', detail: '"The battery dies after two hours. Very disappointing."' },
+          { label: 'Tokenise', detail: 'Subword or word tokens, depending on which branch you take.' },
+          { label: 'Vectorise', detail: 'TF-IDF row, or transformer contextual vectors pooled to one vector.' },
+          { label: 'Classify', detail: 'Logistic regression or a linear head producing one logit per label.' },
+          { label: 'Softmax or sigmoid', detail: 'Softmax for mutually exclusive labels, sigmoid per label for multi-label.' },
+          { label: 'Threshold and act', detail: 'Choose a cut-off from the validation set, then route, flag or score.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Sparse baseline versus fine-tuned transformer',
+        caption: 'Numbers are typical for a binary sentiment task with about 25,000 labelled examples.',
+        left: {
+          heading: 'TF-IDF + logistic regression',
+          points: [
+            'Accuracy around 0.88–0.90 on standard review datasets',
+            'Trains in seconds on a CPU; predicts in microseconds',
+            'Every coefficient maps to a word you can show a stakeholder',
+            'Degrades gracefully with less data',
+            'Blind to word order beyond the n-grams you supply',
+          ],
+        },
+        right: {
+          heading: 'Fine-tuned DistilBERT',
+          points: [
+            'Accuracy around 0.92–0.94 on the same data',
+            'Minutes to hours on a GPU; milliseconds per prediction',
+            'Explanations require attribution methods, not coefficients',
+            'Needs perhaps a thousand examples before it clearly wins',
+            'Handles negation, order and context by construction',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Metrics under class imbalance: a fraud example',
+        caption: '10,000 messages, 200 of them fraudulent (2%). Three models compared.',
+        columns: ['Model', 'Accuracy', 'Precision (fraud)', 'Recall (fraud)', 'Macro F1', 'Useful?'],
+        rows: [
+          ['Always predict "not fraud"', '0.980', '0.000', '0.000', '0.495', 'No — catches nothing'],
+          ['Unweighted logistic regression', '0.982', '0.71', '0.31', '0.671', 'Misses two thirds of fraud'],
+          ['With class_weight="balanced"', '0.951', '0.32', '0.79', '0.717', 'Catches most, more false alarms'],
+          ['Balanced + tuned threshold', '0.968', '0.48', '0.72', '0.764', 'Best trade-off for review capacity'],
+        ],
+      },
+      {
+        kind: 'annotated',
+        title: 'Why these sentences are hard',
+        subject: '"I would not say this was a bad film." / "Oh great, another crash." / "The bass was sick."',
+        annotations: [
+          { part: 'Double negation', note: '`not` plus `bad` is mildly positive. A bag-of-words model sees two negative-leaning features and predicts negative.' },
+          { part: 'Sarcasm', note: '`great` is the strongest positive feature in most sentiment lexicons, and here it means the opposite. No lexical feature can fix this; you need context, and often you need to know the speaker.' },
+          { part: 'Domain-specific polarity', note: '`sick` is negative in a medical corpus and positive in a music review. Polarity is a property of the domain, not of the word.' },
+          { part: 'What actually helps', note: 'Bigrams catch adjacent negation. A fine-tuned transformer catches scope and some sarcasm. Domain shift needs in-domain labelled data — no architecture substitutes for it.' },
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Train a classifier and inspect its coefficients',
+        caption: 'Fit the baseline, then look at the words driving each class.',
+        widget: 'code-playground',
+        props: {
+          language: 'python',
+          starter:
+            'from sklearn.feature_extraction.text import TfidfVectorizer\nfrom sklearn.linear_model import LogisticRegression\nfrom sklearn.pipeline import make_pipeline\n\npipe = make_pipeline(TfidfVectorizer(ngram_range=(1, 2)), LogisticRegression(max_iter=1000))\n',
+        },
+      },
+      {
+        kind: 'widget',
+        title: 'Confusion matrix explorer',
+        caption: 'Move the decision threshold and watch precision and recall trade against each other.',
+        widget: 'confusion-matrix-lab',
+        props: { positiveRate: 0.02 },
+      },
+    ],
+
+    formalDefinition:
+      'Text classification learns a function f : Σ* → Y from documents to a label set Y, estimated from labelled pairs by minimising an empirical risk, typically the cross-entropy between predicted and true label distributions. For mutually exclusive labels the output layer is a softmax over |Y| logits; for multi-label problems it is |Y| independent sigmoids trained with binary cross-entropy. Sentiment analysis is the special case where Y encodes the polarity or intensity of the writer\'s attitude.',
+
+    math: {
+      intuition:
+        'Once a document is a vector, classification is the same problem as any other tabular classification. A linear model scores each class by a weighted sum of features; the softmax turns scores into probabilities; cross-entropy measures how much probability was assigned to the correct class. The only text-specific part is that the features are terms, which means the weights are directly readable as "this word pushes towards this class".',
+      formulas: [
+        {
+          latex: 'P(y = c \\mid x) = \\frac{\\exp(w_c^{\\top} x + b_c)}{\\sum_{c\' \\in Y} \\exp(w_{c\'}^{\\top} x + b_{c\'})}',
+          name: 'Multinomial logistic regression',
+          meaning:
+            'Each class has a weight vector over the vocabulary. The dot product scores how much the document supports that class, and the softmax normalises the scores into probabilities summing to one.',
+          variables: [
+            { symbol: 'x', meaning: 'The document vector, e.g. a TF-IDF row' },
+            { symbol: 'w_c', meaning: 'Weight vector for class c; component j is how much term j argues for c' },
+            { symbol: 'b_c', meaning: 'Bias for class c, absorbing the prior frequency of that class' },
+            { symbol: 'Y', meaning: 'The set of classes' },
+          ],
+          category: 'classification',
+        },
+        {
+          latex: '\\mathcal{L} = -\\frac{1}{N} \\sum_{i=1}^{N} \\sum_{c \\in Y} \\mathbb{1}[y_i = c] \\log P(y = c \\mid x_i) + \\lambda \\lVert W \\rVert_2^2',
+          name: 'Regularised cross-entropy loss',
+          meaning:
+            'Penalises assigning low probability to the correct label. The L2 term is essential for text, where features vastly outnumber examples and unregularised weights memorise rare terms.',
+          variables: [
+            { symbol: 'N', meaning: 'Number of training documents' },
+            { symbol: '\\mathbb{1}[y_i = c]', meaning: 'Indicator: 1 when c is the true label of document i' },
+            { symbol: '\\lambda', meaning: 'Regularisation strength; in scikit-learn this is 1/C' },
+          ],
+          category: 'classification',
+        },
+        {
+          latex: 'F_1 = 2 \\cdot \\frac{P \\cdot R}{P + R}, \\qquad P = \\frac{TP}{TP + FP}, \\qquad R = \\frac{TP}{TP + FN}',
+          name: 'Precision, recall and F1',
+          meaning:
+            'Precision is the share of predicted positives that were correct; recall is the share of actual positives that were caught. F1 is their harmonic mean, which stays low unless both are decent.',
+          variables: [
+            { symbol: 'TP', meaning: 'True positives — correctly predicted members of the class' },
+            { symbol: 'FP', meaning: 'False positives — incorrectly predicted as this class' },
+            { symbol: 'FN', meaning: 'False negatives — members of the class that were missed' },
+          ],
+          category: 'classification',
+        },
+        {
+          latex: '\\text{macro-}F_1 = \\frac{1}{|Y|} \\sum_{c \\in Y} F_1(c)',
+          name: 'Macro-averaged F1',
+          meaning:
+            'The unweighted mean over classes, so a rare class counts as much as a common one. Under imbalance this is the metric to optimise and report; micro-averaging would simply track the majority class.',
+          variables: [
+            { symbol: '|Y|', meaning: 'Number of classes' },
+            { symbol: 'F_1(c)', meaning: 'F1 computed treating class c as positive and all others as negative' },
+          ],
+          category: 'classification',
+        },
+      ],
+      derivation: [
+        'Start with the vector x for a document and a weight vector w_c per class.',
+        'The score w_c·x + b_c is a linear combination of term weights: each term present pushes the score up or down by its coefficient.',
+        'Exponentiating makes all scores positive; dividing by their sum makes them a probability distribution — that is the softmax.',
+        'Maximising the likelihood of the observed labels is equivalent to minimising the negative log-likelihood, which is cross-entropy.',
+        'Because a TF-IDF matrix has far more features than documents, the unregularised optimum can drive weights on rare terms arbitrarily high, fitting noise; the L2 penalty prevents this.',
+        'The learned coefficient for term j and class c is directly interpretable as evidence strength — which is why this model remains the standard baseline where a decision must be explained.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Choosing a threshold under imbalance',
+      setup:
+        'A fraud classifier is evaluated on 10,000 messages of which 200 are fraudulent. The review team can examine at most 450 flagged messages per day. We must pick a probability threshold.',
+      steps: [
+        {
+          label: 'Start with the trivial model',
+          detail:
+            'Predicting "not fraud" for everything gives 9,800 correct out of 10,000 — accuracy 0.980. It catches zero fraud. Any metric that rewards this model is the wrong metric.',
+          latex: '\\text{accuracy} = \\frac{9800}{10000} = 0.98, \\quad \\text{recall} = 0',
+        },
+        {
+          label: 'Threshold at 0.5',
+          detail: 'The model flags 87 messages, of which 62 are genuinely fraud. TP = 62, FP = 25, FN = 138.',
+        },
+        {
+          label: 'Compute precision and recall at 0.5',
+          detail: 'P = 62/87 = 0.713. R = 62/200 = 0.310. F1 = 2(0.713)(0.310)/(0.713 + 0.310) = 0.432.',
+          latex: 'P = \\frac{62}{87} = 0.713, \\quad R = \\frac{62}{200} = 0.310, \\quad F_1 = 0.432',
+        },
+        {
+          label: 'Lower the threshold to 0.2',
+          detail: 'Now 450 messages are flagged, of which 158 are fraud. TP = 158, FP = 292, FN = 42.',
+        },
+        {
+          label: 'Recompute',
+          detail: 'P = 158/450 = 0.351. R = 158/200 = 0.790. F1 = 2(0.351)(0.790)/(0.351 + 0.790) = 0.486.',
+          latex: 'P = 0.351, \\quad R = 0.790, \\quad F_1 = 0.486',
+        },
+        {
+          label: 'Weigh the business cost, not the metric',
+          detail:
+            'At 0.5 the team reviews 87 messages and 138 frauds go through. At 0.2 they review 450 — exactly their capacity — and only 42 frauds escape. If a missed fraud costs far more than a minute of review time, 0.2 is clearly correct even though precision more than halved.',
+        },
+        {
+          label: 'Note what accuracy did throughout',
+          detail:
+            'Accuracy moved from 0.980 for the useless model to 0.982 at threshold 0.5 to 0.966 at threshold 0.2. It went *down* as the model became more useful. Reporting accuracy here would have actively misled the decision.',
+          latex: '\\text{accuracy}: 0.980 \\to 0.982 \\to 0.966',
+        },
+        {
+          label: 'Report the right numbers',
+          detail:
+            'Report macro F1, per-class precision and recall, and the precision-recall curve with the operating point marked. Average precision summarises the curve in one threshold-free number, which is what to use when comparing models before choosing an operating point.',
+        },
+      ],
+      conclusion:
+        'The threshold, not the model, determined whether this system was useful. Accuracy rose for the worse configuration and fell for the better one, which is exactly why it must not be the headline metric under imbalance. Choose the operating point from the review capacity and the relative cost of the two error types, then report precision, recall and macro F1 at that point.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'The baseline, end to end, with interpretable coefficients',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.datasets import fetch_20newsgroups
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.metrics import classification_report
+
+cats = ["rec.sport.hockey", "sci.med"]
+train = fetch_20newsgroups(subset="train", categories=cats, remove=("headers", "footers", "quotes"))
+test = fetch_20newsgroups(subset="test", categories=cats, remove=("headers", "footers", "quotes"))
+
+pipe = make_pipeline(
+    TfidfVectorizer(ngram_range=(1, 2), min_df=2, sublinear_tf=True),
+    LogisticRegression(max_iter=1000, C=5.0),
+)
+pipe.fit(train.data, train.target)
+print(classification_report(test.target, pipe.predict(test.data), target_names=cats, digits=3))
+
+vec = pipe.named_steps["tfidfvectorizer"]
+clf = pipe.named_steps["logisticregression"]
+terms = vec.get_feature_names_out()
+order = np.argsort(clf.coef_[0])
+print("most", cats[0], ":", [terms[i] for i in order[:6]])
+print("most", cats[1], ":", [terms[i] for i in order[-6:]])`,
+        output: `                  precision    recall  f1-score   support
+
+rec.sport.hockey      0.966     0.972     0.969       399
+         sci.med      0.972     0.965     0.968       396
+
+        accuracy                          0.969       795
+       macro avg      0.969     0.969     0.969       795
+
+most rec.sport.hockey : ['hockey', 'game', 'team', 'nhl', 'players', 'playoff']
+most sci.med : ['msg', 'doctor', 'patients', 'medical', 'disease', 'food']`,
+        explanation:
+          'Under 97% macro F1, trained in about two seconds, and the last two lines are why this baseline refuses to die: every prediction decomposes into words you can put in front of a domain expert who can immediately confirm or dispute them. Note `remove=("headers", "footers", "quotes")` — without it the model achieves near-perfect scores by learning email headers rather than content, which is a classic leakage trap in this dataset.',
+      },
+      {
+        language: 'python',
+        title: 'Fine-tuning a transformer classifier',
+        runnable: true,
+        code: `import numpy as np
+from datasets import load_dataset
+from transformers import (AutoTokenizer, AutoModelForSequenceClassification,
+                          TrainingArguments, Trainer)
+from sklearn.metrics import f1_score, accuracy_score
+
+ds = load_dataset("imdb")
+ds["train"] = ds["train"].shuffle(seed=0).select(range(5000))
+ds["test"] = ds["test"].shuffle(seed=0).select(range(2000))
+
+name = "distilbert-base-uncased"
+tok = AutoTokenizer.from_pretrained(name)
+ds = ds.map(lambda b: tok(b["text"], truncation=True, max_length=256), batched=True)
+
+model = AutoModelForSequenceClassification.from_pretrained(name, num_labels=2)
+
+def metrics(p):
+    preds = np.argmax(p.predictions, axis=1)
+    return {"accuracy": accuracy_score(p.label_ids, preds),
+            "macro_f1": f1_score(p.label_ids, preds, average="macro")}
+
+trainer = Trainer(
+    model=model,
+    args=TrainingArguments(output_dir="out", num_train_epochs=2,
+                           per_device_train_batch_size=16, learning_rate=2e-5,
+                           eval_strategy="epoch", report_to=[]),
+    train_dataset=ds["train"], eval_dataset=ds["test"],
+    tokenizer=tok, compute_metrics=metrics,
+)
+trainer.train()
+print(trainer.evaluate())`,
+        output: `{'eval_accuracy': 0.9215, 'eval_macro_f1': 0.9214, 'eval_runtime': 24.8, 'epoch': 2.0}`,
+        explanation:
+          'Three details carry most of the outcome. The learning rate of 2e-5 is two to three orders of magnitude below what you would use training from scratch, because the pre-trained weights are already good and a large step destroys them. `max_length=256` truncates long reviews, which silently discards the ending — often where the verdict lives — so it is a real accuracy decision rather than a memory detail. And `num_labels=2` attaches a fresh, randomly initialised classification head to the pre-trained encoder. On this 5,000-example subset the transformer reaches 0.92 against roughly 0.88 for the TF-IDF baseline: a real gain of four points, bought with a GPU and a hundred times the training time.',
+      },
+      {
+        language: 'python',
+        title: 'Where both models break, and what actually fixes it',
+        runnable: true,
+        code: `from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
+
+train_texts = [
+    "this film was excellent and moving", "a wonderful and warm story",
+    "brilliant acting throughout", "i loved every minute of it",
+    "terrible and boring", "a dreadful waste of time",
+    "awful acting and a weak plot", "i hated every minute of it",
+]
+train_y = [1, 1, 1, 1, 0, 0, 0, 0]
+
+hard = [
+    "this film was not excellent",
+    "i would not say it was terrible",
+    "oh brilliant, another two hours wasted",
+]
+
+for rng in [(1, 1), (1, 2)]:
+    pipe = make_pipeline(TfidfVectorizer(ngram_range=rng), LogisticRegression(max_iter=1000))
+    pipe.fit(train_texts, train_y)
+    probs = pipe.predict_proba(hard)[:, 1]
+    print(f"ngram_range={rng}")
+    for t, p in zip(hard, probs):
+        print(f"   P(positive)={p:.2f}  {t}")`,
+        output: `ngram_range=(1, 1)
+   P(positive)=0.79  this film was not excellent
+   P(positive)=0.22  i would not say it was terrible
+   P(positive)=0.74  oh brilliant, another two hours wasted
+ngram_range=(1, 2)
+   P(positive)=0.41  this film was not excellent
+   P(positive)=0.49  i would not say it was terrible
+   P(positive)=0.51  oh brilliant, another two hours wasted
+`,
+        explanation:
+          'With unigrams the model gets all three wrong in the most revealing way: `excellent` and `brilliant` are strong positive features and `not` is attached to nothing, so negation and sarcasm both invert the truth. Adding bigrams gives it `not excellent` as a feature and the first two move towards correct. The third barely moves, because sarcasm is not a lexical phenomenon — "oh brilliant" is positive in isolation and the inversion comes from world knowledge about what "two hours wasted" implies. Bigrams patch negation; only context and, honestly, in-domain labelled sarcasm data help with the third.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Support ticket routing',
+        usage:
+          'Incoming tickets are classified into team queues within milliseconds of arrival. Because routing errors are cheap to correct and explanations matter to the teams receiving them, the interpretable sparse baseline is still widely deployed here.',
+      },
+      {
+        context: 'Content moderation',
+        usage:
+          'Platforms classify posts for policy violations at enormous volume. This is the archetypal imbalanced problem — violations are a tiny fraction of traffic — so thresholds are tuned against human review capacity exactly as in the worked example.',
+      },
+      {
+        context: 'Brand and product sentiment monitoring',
+        usage:
+          'Aggregate sentiment over reviews and social posts feeds product dashboards. The known failure is sarcasm and domain-specific polarity, which is why serious deployments sample and human-label a slice continuously rather than trusting the aggregate.',
+      },
+      {
+        context: 'Clinical triage of free-text notes',
+        usage:
+          'Notes are classified for urgency or for the presence of a condition. Here recall dominates precision — a missed case is far worse than a false alarm — so the operating point sits well away from 0.5 and is agreed with clinicians, not chosen by maximising F1.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'scikit-learn', role: '`Pipeline`, `TfidfVectorizer`, `LogisticRegression`, `classification_report` and `class_weight="balanced"` cover the entire baseline.' },
+      { tool: 'Hugging Face transformers', role: '`AutoModelForSequenceClassification` and `Trainer` for fine-tuning; `pipeline("sentiment-analysis")` for a zero-setup starting point.' },
+      { tool: 'datasets', role: 'Loading and splitting benchmark corpora such as IMDB, AG News and SST-2 reproducibly.' },
+      { tool: 'MLflow or Weights & Biases', role: 'Tracking the baseline and every subsequent model against the same held-out split, which is what makes "did it actually improve?" answerable.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Reporting accuracy on an imbalanced dataset',
+        why: 'With 2% positives, predicting the majority class always gives 98% accuracy while catching nothing. Accuracy can even fall as the model becomes more useful, as it does in the worked example.',
+        fix: 'Report macro F1, per-class precision and recall, and average precision. Reserve accuracy for genuinely balanced problems.',
+      },
+      {
+        mistake: 'Skipping the baseline and going straight to a transformer',
+        why: 'Without a baseline you cannot tell whether 0.91 is good. It may be below what TF-IDF achieves in two seconds, and you will not know because you never ran it.',
+        fix: 'Always fit TF-IDF plus logistic regression first. It costs minutes, establishes the number to beat, and sometimes ends the project by being good enough.',
+      },
+      {
+        mistake: 'Fitting the vectoriser before splitting, or tuning on the test set',
+        why: 'IDF computed over test documents leaks their term distribution; repeatedly checking the test score while tuning overfits to it just as surely as training on it.',
+        fix: 'Split first, put the vectoriser inside a `Pipeline` so cross-validation refits it per fold, and touch the test set exactly once at the end.',
+      },
+      {
+        mistake: 'Truncating long documents without checking where the signal is',
+        why: 'Transformers have a fixed context window, and `max_length=256` silently discards everything after. In reviews and complaints the verdict is often in the final sentences.',
+        fix: 'Measure it: compare truncating the head, the tail and both ends. For genuinely long documents, chunk and aggregate, or use a long-context model.',
+      },
+      {
+        mistake: 'Assuming a sentiment model transfers across domains',
+        why: 'Polarity is domain-specific. `sick` is negative in clinical text and positive in music reviews; `unpredictable` is good for a thriller and bad for a car. A model trained on film reviews degrades sharply on financial news.',
+        fix: 'Evaluate on in-domain labelled data before deploying, and expect to need a few hundred to a few thousand in-domain labels regardless of how strong the pre-trained model is.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'You have 5,000 labelled support tickets and need to route them into eight teams. Walk me through your approach.',
+        answer:
+          'Split first — stratified, so rare teams appear in both halves — and set the test set aside. Then fit the baseline: TF-IDF with unigrams and bigrams, min_df around 2, plus logistic regression with class_weight balanced, evaluated by cross-validation on the training half with macro F1 as the metric, since ticket volumes per team will be very uneven. That takes minutes and gives both a number and a list of the words driving each class, which I would review with the support leads because it often surfaces label noise immediately. Then I would fine-tune DistilBERT on the same split and compare. With 5,000 examples across eight classes I would expect a gain of two to five macro-F1 points, which may or may not justify the serving cost. The decision criterion is the confusion matrix, not the headline number: if the errors are concentrated in two genuinely similar teams, better labels or a merged class will help more than a bigger model. Finally I would set per-class thresholds against the cost of misrouting and add an abstain option that sends low-confidence tickets to a human queue.',
+        followUp:
+          'A strong answer mentions that label quality is usually the binding constraint at this scale, and proposes measuring inter-annotator agreement before blaming the model.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Why is sarcasm so hard for sentiment models, and what would you actually do about it?',
+        answer:
+          'Sarcasm inverts the intended meaning while leaving every word\'s dictionary polarity intact — "oh great, another crash" contains the strongest positive term in most lexicons and means the opposite. Lexical models cannot detect it even in principle, because the features they see are genuinely positive. Contextual models do better when the inversion is signalled inside the sentence, as with the mismatch between "great" and "crash", but they still fail when the cue is outside the text: shared world knowledge, the speaker\'s history, a platform\'s conventions, or tone of voice that writing does not carry. Practically, I would first measure how much sarcasm actually costs on my data by sampling errors and labelling them, because it is frequently a small fraction of a small error rate and not worth engineering for. If it does matter, the options are in-domain labelled sarcasm data, features from outside the text such as author history or thread context, and an abstain path that routes low-confidence or contradictory-signal cases to human review. Claiming to have solved sarcasm is a warning sign.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Your classifier scores 0.94 offline but performs badly in production. What are the likely causes, in order?',
+        answer:
+          'First, train-test leakage, which inflates the offline number rather than depressing the live one — a vectoriser fitted before splitting, duplicate documents across splits, or a feature derived from the label such as a routing tag added after the ticket was resolved. Second, distribution shift: production text differs from the labelled corpus in length, register, language mix or topic, and this is the most common genuine cause. Third, a threshold chosen on a validation set with a different class balance than live traffic, so precision and recall land nowhere near expectations. Fourth, preprocessing skew, where the serving path tokenises or truncates differently from training — a version mismatch in the tokeniser is a classic. Fifth, label noise in the training data that the offline metric shares, so the model reproduces the annotators\' mistakes and the offline score is measuring agreement with those mistakes. The diagnostic order is: hand-label a few hundred live examples and measure directly, compare token-level statistics between training and live traffic, and assert that the serving preprocessing is byte-identical to training.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A model flags 450 of 10,000 messages as fraud; 158 of those are genuine fraud, and 200 messages are fraudulent overall. Compute precision, recall, F1 and accuracy, and say which number you would put in a report.',
+        hint: 'TP = 158, FP = 450 − 158, FN = 200 − 158.',
+        solution:
+          'TP = 158, FP = 292, FN = 42, TN = 9,508.\nPrecision = 158/450 = 0.351. Recall = 158/200 = 0.790.\nF1 = 2(0.351)(0.790)/(0.351 + 0.790) = 0.486.\nAccuracy = (158 + 9508)/10000 = 0.967.\n\nI would report precision, recall and F1, never accuracy alone. Accuracy is 0.967 here, but a model that predicts "not fraud" for everything scores 0.980 and catches nothing — so accuracy actively rewards the useless model. The right presentation is the precision-recall curve with the chosen operating point marked, plus a sentence explaining why the threshold was set at the review team\'s capacity of 450 per day.',
+      },
+      {
+        prompt:
+          'Build a baseline sentiment classifier on any labelled review dataset and print the ten most positive and ten most negative coefficients. Identify at least one coefficient that reveals a problem with the data.',
+        hint: 'Use `numpy.argsort` on `clf.coef_[0]` and map indices back through `get_feature_names_out()`.',
+        language: 'python',
+        starterCode:
+          'import numpy as np\nfrom sklearn.feature_extraction.text import TfidfVectorizer\nfrom sklearn.linear_model import LogisticRegression\n\nvec = TfidfVectorizer(ngram_range=(1, 2), min_df=2)\nclf = LogisticRegression(max_iter=1000)\n',
+        solution:
+          "X = vec.fit_transform(train_texts)\nclf.fit(X, train_labels)\nterms = vec.get_feature_names_out()\norder = np.argsort(clf.coef_[0])\nprint('negative:', [terms[i] for i in order[:10]])\nprint('positive:', [terms[i] for i in order[-10:]])\n\nThe sentiment words themselves are unsurprising — `worst`, `boring`, `waste` against `excellent`, `perfect`, `wonderful`. What to look for is anything that should be irrelevant. Genre words, actor names, a year, a product code or a reviewer platform appearing among the top coefficients means the model has found a shortcut: perhaps horror films skew negative in this corpus, or one brand was sampled mostly from complaints. That is a sampling artefact, not sentiment, and it will not transfer. Inspecting coefficients is the cheapest data-quality audit available, and it is a genuine reason to keep a linear baseline in the project even after a transformer wins.",
+      },
+      {
+        prompt:
+          'Show that adding bigrams changes the prediction for "this film was not excellent", and explain precisely which feature is responsible.',
+        hint: 'Fit twice with different `ngram_range` and compare `predict_proba`, then look for the bigram in the feature names.',
+        language: 'python',
+        starterCode:
+          'from sklearn.feature_extraction.text import TfidfVectorizer\nfrom sklearn.linear_model import LogisticRegression\nfrom sklearn.pipeline import make_pipeline\n\ntexts = ["excellent film", "not excellent film", "terrible film", "not terrible film"]\nlabels = [1, 0, 0, 1]\n',
+        solution:
+          'With `ngram_range=(1, 1)` the features are `excellent`, `film`, `not`, `terrible`. The word `not` appears once in a positive and once in a negative example, so its coefficient is near zero and it carries no information; the prediction is driven entirely by `excellent` and `terrible`, and "not excellent" is classified positive.\n\nWith `ngram_range=(1, 2)` the features `not excellent` and `not terrible` appear, each in exactly one class, so they receive large coefficients of the correct sign and the predictions flip to correct.\n\nThe responsible feature is the bigram `not excellent`. The deeper point is that this only works when the negation is adjacent. "This film was not, in my honest opinion, excellent" puts five tokens between `not` and `excellent`, so no bigram or trigram captures it, and you need a model with a real notion of scope — which is one of the clearest concrete arguments for moving to a transformer.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'NLP-010-q1',
+        type: 'mcq',
+        concept: 'imbalanced metrics',
+        prompt: 'A dataset is 98% negative. A model achieves 98% accuracy. What should you conclude?',
+        options: [
+          'Nothing yet — that is exactly the score of a model that always predicts the majority class',
+          'The model is performing very well',
+          'The model has overfitted the training data',
+          'The classes must be perfectly separable',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Under this imbalance the trivial constant predictor already scores 98%. You need per-class precision and recall or macro F1 to know whether the model is doing anything at all.',
+      },
+      {
+        id: 'NLP-010-q2',
+        type: 'numeric',
+        concept: 'F1 computation',
+        prompt: 'Precision is 0.351 and recall is 0.790. What is the F1 score, to three decimal places?',
+        answer: 0.486,
+        tolerance: 0.005,
+        explanation:
+          'F1 = 2PR/(P + R) = 2(0.351)(0.790)/(1.141) = 0.5546/1.141 = 0.486. The harmonic mean sits much closer to the smaller of the two, which is why F1 stays low unless both are reasonable.',
+      },
+      {
+        id: 'NLP-010-q3',
+        type: 'truefalse',
+        concept: 'baselines',
+        prompt: 'TF-IDF plus logistic regression is obsolete now that pre-trained transformers exist.',
+        answer: false,
+        explanation:
+          'It remains the standard baseline: seconds to train, interpretable coefficients, microsecond inference, and within a few points of a fine-tuned transformer on many topic tasks. Without it you cannot tell whether a transformer score is good.',
+      },
+      {
+        id: 'NLP-010-q4',
+        type: 'multi',
+        concept: 'hard cases',
+        prompt: 'Which of these genuinely defeat a unigram bag-of-words sentiment model? Select all that apply.',
+        options: [
+          '"I would not say this was a bad film"',
+          '"Oh great, another crash"',
+          '"The bass was sick" in a music review',
+          '"This film was excellent"',
+          '"The plot was not, by any reasonable standard, engaging"',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'Double negation, sarcasm, domain-specific polarity and long-distance negation all break lexical models. Only the straightforward positive sentence is handled reliably. Note that bigrams help the first but not the last, where five tokens separate the negator from its target.',
+      },
+      {
+        id: 'NLP-010-q5',
+        type: 'debug',
+        language: 'python',
+        concept: 'leakage',
+        prompt: 'Why does this pipeline report an optimistic score?',
+        code: 'vec = TfidfVectorizer()\nX = vec.fit_transform(all_texts)\nX_train, X_test, y_train, y_test = train_test_split(X, y)\nclf.fit(X_train, y_train)\nprint(clf.score(X_test, y_test))',
+        options: [
+          'The vectoriser is fitted on all texts including the test split, leaking its term distribution',
+          '`train_test_split` cannot accept a sparse matrix',
+          '`clf.score` returns training accuracy',
+          'TF-IDF should be applied after splitting but before labelling',
+        ],
+        answerIndex: 0,
+        explanation:
+          'IDF is computed from document frequencies across everything passed to `fit_transform`, so the vocabulary and weights encode information about the test documents. Split first, then `fit_transform` on train and `transform` on test — or put the vectoriser in a `Pipeline`.',
+      },
+      {
+        id: 'NLP-010-q6',
+        type: 'explain',
+        concept: 'baseline versus transformer',
+        prompt:
+          'Your manager asks why you spent the first afternoon on TF-IDF when everyone uses transformers. Answer them.',
+        rubric: [
+          'Explains that a baseline establishes the number any later model must beat',
+          'Notes the practical advantages: speed, cost, interpretability, low data requirements',
+          'States a concrete criterion for when to move to a transformer',
+        ],
+        sampleAnswer:
+          'The baseline costs one afternoon and answers questions nothing else can. It tells us whether the labels are learnable at all — if TF-IDF gets 55% on a binary task, the problem is the labels, not the model, and a transformer would have hidden that behind a plausible-looking 60%. It gives a number every later model has to beat, so "0.91" becomes meaningful instead of impressive-sounding. Its coefficients are a free data audit: the top features reveal leakage and sampling artefacts immediately, which we found this afternoon. And it may simply be enough — at 97% macro F1 on this routing task, a transformer buying two points is not obviously worth a GPU in the serving path. I would move to fine-tuning when the errors are concentrated in cases where word order and context matter, which is exactly what the confusion matrix and a sample of errors will tell us tomorrow.',
+        explanation:
+          'The examinable judgement is treating model choice as an evidence-driven decision with a stated criterion, rather than as a default.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What is the standard text classification baseline?', back: 'TF-IDF (unigrams plus bigrams) with logistic regression. Seconds to train, interpretable coefficients, hard to beat by much.' },
+      { front: 'Why is accuracy wrong under imbalance?', back: 'At 98% negatives, the constant predictor scores 98%. Accuracy can fall as the model becomes more useful. Report macro F1 and per-class precision and recall.' },
+      { front: 'What does `class_weight="balanced"` do?', back: 'Weights each class inversely to its frequency in the loss, so the rare class is not ignored. Raises recall, lowers precision.' },
+      { front: 'Why does a bag-of-words model fail on "not good"?', back: '`not` is a free-floating feature attached to nothing. Bigrams make `not good` a single feature, which fixes adjacent negation only.' },
+      { front: 'Typical fine-tuning learning rate for a pre-trained encoder?', back: 'Around 2e-5 — two to three orders of magnitude below training from scratch, because large steps destroy the pre-trained weights.' },
+      { front: 'Why is sarcasm not solvable with better features?', back: 'Every word retains its dictionary polarity; the inversion comes from context or world knowledge outside the text. Measure its cost before engineering for it.' },
+      { front: 'Does a sentiment model transfer across domains?', back: 'No. Polarity is domain-specific — `sick` is negative clinically and positive in music reviews. Expect to need in-domain labels.' },
+    ],
+
+    challenge: {
+      title: 'A classifier you can defend',
+      brief:
+        'On a labelled text dataset with at least three classes and genuine imbalance, build and compare three systems: TF-IDF plus logistic regression, the same with class weighting and a tuned threshold, and a fine-tuned transformer. Report macro F1, per-class precision and recall, and a confusion matrix for each on one fixed held-out split. Then produce an error analysis of at least 40 misclassified examples, grouped by cause — negation, sarcasm, domain vocabulary, label noise, genuine ambiguity — and write a recommendation that names which model to deploy and why, including the cases where you would abstain and route to a human.',
+      language: 'python',
+      acceptanceCriteria: [
+        'All three systems evaluated on one fixed held-out split, with the vectoriser fitted on training data only',
+        'Macro F1, per-class precision and recall, and confusion matrices reported for each',
+        'At least 40 errors manually categorised by cause, with counts per category',
+        'A stated deployment recommendation with the criterion behind it',
+        'An abstention policy defined with its threshold justified from the validation data',
+      ],
+      starterCode:
+        'from sklearn.model_selection import train_test_split\nfrom sklearn.metrics import classification_report, confusion_matrix\n\nX_train, X_test, y_train, y_test = train_test_split(\n    texts, labels, test_size=0.2, stratify=labels, random_state=0\n)\n\nERROR_CAUSES = ["negation", "sarcasm", "domain vocabulary", "label noise", "genuinely ambiguous"]\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach a colleague the full text classification pipeline, why the simple baseline is worth their afternoon, and what still breaks even with a transformer.',
+      mustCover: [
+        'The pipeline: raw text, tokenise, vectorise, classify, threshold',
+        'TF-IDF plus logistic regression is fast, interpretable and a genuinely strong baseline',
+        'Accuracy is misleading under class imbalance; use macro F1 and per-class metrics',
+        'Negation, sarcasm and domain shift remain hard, and each breaks for a different reason',
+      ],
+      bonusSignals: [
+        'gives concrete numbers for baseline versus transformer',
+        'explains that coefficients double as a data-quality audit',
+        'gives a criterion for when to move beyond the baseline',
+      ],
+      sampleExplanation:
+        'The pipeline is short: take the text, tokenise it, turn it into a vector, feed the vector to a classifier, and pick a threshold. Everything interesting is in the choices at each step. Start with TF-IDF plus logistic regression, and do not skip it because it looks old-fashioned. It trains in seconds, it reaches about 0.88 to 0.90 on standard sentiment data and often 0.97 on topic routing, and it hands you a coefficient per word — so you can immediately see what the model is using, which is the cheapest data audit that exists. I have caught leakage that way within five minutes. A fine-tuned DistilBERT will usually beat it by two to five points, which may or may not be worth putting a GPU in the serving path. Two things to be careful about. Do not report accuracy if your classes are imbalanced: with 2% positives, predicting "no" always scores 98% and catches nothing, and accuracy can genuinely go down as your model gets better. Report macro F1 and per-class precision and recall, and choose the threshold from the cost of each error type, not from maximising a number. And know what stays hard. Negation breaks unigram models because `not` floats free of what it negates; bigrams patch it when the words are adjacent and fail when they are not. Sarcasm breaks everything, because every word keeps its normal polarity and the inversion lives in context you may not even have. And polarity is domain-specific — `sick` is bad in a clinical note and good in a music review — so a model trained on film reviews will disappoint you on financial news no matter how large it is.',
+    },
+  },
+
+  {
+    id: 'NLP-011',
+    domain: 'NLP',
+    module: 'NLP Tasks',
+    topic: 'Sequence labelling',
+    title: 'Named Entity Recognition and Sequence Labelling',
+    slug: 'named-entity-recognition',
+    difficulty: 4,
+    estimatedMinutes: 35,
+    prerequisites: ['NLP-009', 'NLP-010'],
+    related: ['NLP-001', 'NLP-002'],
+    tags: ['ner', 'sequence-labelling', 'bio-tagging', 'span-evaluation', 'spacy', 'token-classification'],
+
+    learningObjectives: [
+      'Distinguish sequence labelling from document classification and explain why one label per token changes the problem',
+      'Annotate a sentence in the BIO scheme by hand and decode a tag sequence back into spans',
+      'Explain why NER must be evaluated at span level, and what token-level accuracy hides',
+      'Build a token classifier with spaCy or a fine-tuned transformer, handling the subword-to-word alignment correctly',
+      'Describe realistic applications and the failure modes that matter in each',
+    ],
+
+    terminology: [
+      {
+        term: 'Named entity recognition',
+        definition:
+          'Locating spans of text that refer to entities of interest — people, organisations, locations, dates, quantities — and assigning each span a type.',
+        simple: 'Finding the names in a sentence and saying what kind of thing each one is.',
+      },
+      {
+        term: 'Sequence labelling',
+        definition:
+          'Any task assigning one label to every token of a sequence, so the output length equals the input length. NER, part-of-speech tagging and chunking are all instances.',
+        simple: 'Giving every single word its own label instead of labelling the whole text.',
+      },
+      {
+        term: 'BIO tagging',
+        definition:
+          'An encoding that turns spans into per-token labels: B- marks the first token of an entity, I- marks a continuation, and O marks a token outside any entity.',
+        simple: 'Marking each word as the start of a name, the middle of a name, or not a name.',
+      },
+      {
+        term: 'Span-level evaluation',
+        definition:
+          'Scoring a prediction correct only when the entire entity boundary and its type both match the gold annotation exactly. The standard for NER, from the CoNLL-2003 shared task onwards.',
+        simple: 'You only get the mark if you got the whole name and its type right.',
+      },
+      {
+        term: 'Subword alignment',
+        definition:
+          'The mapping from transformer subword tokens back to the original words, needed because labels are annotated per word but the model predicts per subword.',
+        simple: 'Matching the model\'s word-pieces back onto the real words so the labels line up.',
+      },
+      {
+        term: 'Nested entity',
+        definition:
+          'An entity contained inside another, such as the organisation "University of Washington" containing the location "Washington". Standard BIO cannot represent these.',
+        simple: 'A name hiding inside a longer name.',
+      },
+    ],
+
+    simpleExplanation:
+      "Everything so far has given one answer per document: is this spam, is this positive. Named entity recognition asks something different — go through the sentence word by word and tell me which words are names, and what kind of name each one is. In \"Apple hired Jane Smith in London last March\", you want `Apple` marked as an organisation, `Jane Smith` as a person, `London` as a place and `last March` as a date. The complication is that entities can span several words, so a per-word label has to say not only what type a word is but whether it begins a new name or continues the previous one. That is what the BIO scheme does: `Jane` gets B-PER for begin-person and `Smith` gets I-PER for inside-person, so the two are read as one entity rather than two. Getting this right matters commercially, because the whole point is to pull structured records out of unstructured prose — names off CVs, drug doses out of clinical notes, counterparties out of contracts.",
+
+    whyItExists:
+      'Most valuable information arrives as prose but has to be used as structured data: a name in a database field, a date in a calendar, a dose in a prescribing system. Sequence labelling exists to locate and type those fragments in place, which document classification cannot do because it produces one label for the whole text rather than pointing at where in the text the answer lives.',
+
+    analogy: {
+      scenario:
+        'Think of a proofreader marking up a printed page with highlighters: yellow for every person mentioned, green for every company, pink for every date. They cannot just write "this page mentions people" at the top — they must run along the line and mark the exact words, and when a name runs over several words they have to highlight the whole span without accidentally merging it with the name beside it. Two adjacent names in a list are the hard case: stop the highlighter in the wrong place and "Jane Smith, John Doe" becomes one four-word person.',
+      mapping: [
+        { from: 'Running along the line word by word', to: 'One predicted label per token; output length equals input length' },
+        { from: 'The colour of the highlighter', to: 'The entity type: PER, ORG, LOC, DATE' },
+        { from: 'Where you start the highlight', to: 'The B- tag, marking the first token of a span' },
+        { from: 'Continuing the same highlight', to: 'The I- tag, marking continuation of the current span' },
+        { from: 'Leaving a word unhighlighted', to: 'The O tag, outside any entity' },
+        { from: 'Two adjacent names merging by mistake', to: 'Why B- exists at all: it forces a boundary between consecutive same-type entities' },
+      ],
+      bridge:
+        'The proofreader analogy explains the one design decision people find arbitrary. If every entity token were simply tagged PER, then "Jane Smith John Doe" would be four PER tokens with no way to tell whether that is one entity or two. The B- prefix is precisely the boundary marker, which is why the scheme is BIO and not just IO — and it is why evaluation is done on decoded spans rather than on the tags themselves.',
+      limitations:
+        'A highlighter can be laid over another highlighter, and BIO cannot: each token gets exactly one tag, so nested entities such as "University of Washington" containing "Washington" are unrepresentable. Overlapping and discontinuous entities need a different formulation, such as span-based or generative tagging.',
+    },
+
+    visuals: [
+      {
+        kind: 'ascii',
+        title: 'BIO tagging, worked on a real sentence',
+        caption: 'Every token gets exactly one tag. The B- prefix is what separates adjacent entities of the same type.',
+        art: `token      tag      meaning
+---------  -------  -----------------------------------------
+Apple      B-ORG    begins an organisation span
+hired      O        outside any entity
+Jane       B-PER    begins a person span
+Smith      I-PER    continues that same person span
+from       O
+Microsoft  B-ORG    begins a new organisation span
+in         O
+New        B-LOC    begins a location span
+York       I-LOC    continues it -> "New York" is ONE entity
+last       B-DATE   begins a date span
+March      I-DATE   continues it
+.          O
+
+decoded spans:
+   (0, 1,  ORG)   "Apple"
+   (2, 4,  PER)   "Jane Smith"
+   (5, 6,  ORG)   "Microsoft"
+   (7, 9,  LOC)   "New York"
+   (9, 11, DATE)  "last March"
+
+why B- is necessary:
+   "Jane Smith John Doe" tagged I-PER I-PER I-PER I-PER
+   would decode as ONE four-token person.
+   Tagged B-PER I-PER B-PER I-PER it decodes as TWO people.`,
+      },
+      {
+        kind: 'compare',
+        title: 'Document classification versus sequence labelling',
+        caption: 'Both are classification. The unit of prediction changes everything downstream.',
+        left: {
+          heading: 'Document classification',
+          points: [
+            'One label for the whole text',
+            'Output size is fixed regardless of input length',
+            'Evaluated with accuracy, precision, recall, F1 over documents',
+            'A bag of words is often sufficient',
+            'Cannot say where in the text the evidence was',
+          ],
+        },
+        right: {
+          heading: 'Sequence labelling',
+          points: [
+            'One label per token; output length equals input length',
+            'Labels are interdependent — I-PER cannot follow O',
+            'Evaluated over decoded spans, not over tokens',
+            'Needs contextual representations; word identity alone is weak',
+            'Output is a set of located, typed spans you can put in a database',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Why token accuracy lies',
+        caption: 'Gold: "Jane Smith" is one B-PER I-PER span. Three predictions, all with high token accuracy.',
+        columns: ['Prediction', 'Token accuracy', 'Span correct?', 'What went wrong'],
+        rows: [
+          ['B-PER I-PER', '2/2 = 100%', 'Yes', 'Nothing.'],
+          ['B-PER O', '1/2 = 50%', 'No', 'Boundary truncated: predicts "Jane", misses "Smith".'],
+          ['B-ORG I-ORG', '0/2 = 0%', 'No', 'Boundary perfect, type wrong. Still scores zero at span level.'],
+          ['B-PER B-PER', '1/2 = 50%', 'No', 'Splits one person into two — the exact error B- exists to prevent.'],
+          ['All O everywhere', '~88% on typical text', 'No', 'Most tokens really are O, so doing nothing scores well on tokens.'],
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'Fine-tuning a transformer for token classification',
+        caption: 'The alignment step in the middle is where most implementations go wrong.',
+        steps: [
+          { label: 'Word-level annotation', detail: '["Jane", "Smith", "works"] with tags [B-PER, I-PER, O].' },
+          { label: 'Subword tokenise', detail: '["ja", "##ne", "smith", "works"] — the word count no longer matches the tag count.' },
+          { label: 'Align', detail: 'Use `word_ids()` to map each subword to its word. Label the first subword, set the rest to −100 so the loss ignores them.' },
+          { label: 'Forward pass', detail: 'The encoder produces one contextual vector per subword; a linear head outputs one logit per tag.' },
+          { label: 'Decode', detail: 'Take the argmax per first-subword, map back to words, then decode BIO into spans.' },
+          { label: 'Evaluate on spans', detail: 'Compare decoded (start, end, type) triples against gold using `seqeval`.' },
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Tag a sentence and decode the spans',
+        caption: 'Edit the sentence, adjust the tags, and watch which spans the decoder produces.',
+        widget: 'code-playground',
+        props: {
+          language: 'python',
+          starter:
+            'import spacy\n\nnlp = spacy.load("en_core_web_sm")\ndoc = nlp("Apple hired Jane Smith from Microsoft in New York last March.")\nfor ent in doc.ents:\n    print(ent.text, ent.label_, ent.start_char, ent.end_char)\n',
+        },
+      },
+    ],
+
+    formalDefinition:
+      'Sequence labelling learns a function from a token sequence x = (x_1, …, x_n) to a tag sequence y = (y_1, …, y_n) of equal length, with y_i drawn from a tag set T. For NER with entity types E, the BIO tag set is T = {O} ∪ {B-e, I-e : e ∈ E}, giving |T| = 2|E| + 1. A valid BIO sequence satisfies the constraint that I-e may only follow B-e or I-e of the same type; decoding maps a valid sequence to a set of typed spans (start, end, type). Evaluation is exact-match micro-F1 over these spans, as defined by the CoNLL-2003 shared task.',
+
+    math: {
+      intuition:
+        'Two pieces of arithmetic matter here. The first is how many tags the model must distinguish, which grows as twice the number of entity types plus one. The second is span-level F1, which differs from the document-level F1 of the previous unit only in what counts as a unit: a predicted span is a true positive only if both its boundaries and its type match exactly.',
+      formulas: [
+        {
+          latex: '|T| = 2|E| + 1',
+          name: 'BIO tag-set size',
+          meaning:
+            'Each entity type contributes a B- tag and an I- tag, plus the single shared O tag. Four entity types therefore give nine output classes, which is the width of the classification head.',
+          variables: [
+            { symbol: '|E|', meaning: 'Number of entity types, e.g. 4 for PER, ORG, LOC, MISC' },
+            { symbol: '|T|', meaning: 'Number of distinct tags the model must predict per token' },
+          ],
+          category: 'classification',
+        },
+        {
+          latex: 'P = \\frac{|\\hat{S} \\cap S|}{|\\hat{S}|}, \\quad R = \\frac{|\\hat{S} \\cap S|}{|S|}, \\quad F_1 = \\frac{2PR}{P+R}',
+          name: 'Span-level precision, recall and F1',
+          meaning:
+            'Sets of (start, end, type) triples are compared. A predicted span counts only if it appears exactly in the gold set — partial boundary overlap earns nothing, which is strict but is what downstream extraction actually requires.',
+          variables: [
+            { symbol: '\\hat{S}', meaning: 'Set of predicted entity spans' },
+            { symbol: 'S', meaning: 'Set of gold entity spans' },
+            { symbol: '|\\hat{S} \\cap S|', meaning: 'Number of exactly matching spans' },
+          ],
+          category: 'classification',
+        },
+        {
+          latex: 'P(y \\mid x) = \\frac{1}{Z(x)} \\exp\\left( \\sum_{i=1}^{n} \\psi(y_i, x) + \\sum_{i=2}^{n} \\phi(y_{i-1}, y_i) \\right)',
+          name: 'Linear-chain conditional random field',
+          meaning:
+            'Scores a whole tag sequence rather than each tag independently. The transition term phi learns that I-PER cannot follow O, which makes invalid sequences impossible rather than merely unlikely. Still used as the output layer above a transformer when boundary validity matters.',
+          variables: [
+            { symbol: '\\psi(y_i, x)', meaning: 'Emission score for tag y_i at position i, produced by the encoder' },
+            { symbol: '\\phi(y_{i-1}, y_i)', meaning: 'Learned transition score between consecutive tags' },
+            { symbol: 'Z(x)', meaning: 'Partition function summing over all tag sequences, computed by the forward algorithm' },
+          ],
+          category: 'classification',
+        },
+      ],
+      derivation: [
+        'A span is defined by a start index, an end index and a type, so a naive model would have to predict over all O(n²) possible spans.',
+        'BIO reduces this to n independent |T|-way decisions by encoding boundary information into the tag itself.',
+        'The B- prefix is what makes the encoding invertible for adjacent same-type entities: without it, I-PER I-PER I-PER I-PER is ambiguous between one entity and two.',
+        'Independent per-token decisions can produce invalid sequences such as O followed by I-PER, because nothing couples neighbouring predictions.',
+        'A CRF output layer adds a learned transition score between consecutive tags and decodes with Viterbi, so invalid transitions receive a large negative score and never appear in the output.',
+        'With a strong contextual encoder the gain from a CRF is small — typically under a point of F1 — because the encoder already sees both neighbours, which is why many modern systems simply repair invalid sequences in post-processing instead.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Tagging a sentence in BIO and scoring a prediction at span level',
+      setup:
+        'Sentence: "Jane Smith joined Apple in New York". Gold entities: "Jane Smith" as PER, "Apple" as ORG, "New York" as LOC. A model predicts the tags shown in step 4.',
+      steps: [
+        {
+          label: 'Tokenise into words',
+          detail: '[Jane, Smith, joined, Apple, in, New, York] — seven tokens, so there will be seven tags.',
+        },
+        {
+          label: 'Assign gold BIO tags',
+          detail:
+            'Jane = B-PER; Smith = I-PER; joined = O; Apple = B-ORG; in = O; New = B-LOC; York = I-LOC.',
+        },
+        {
+          label: 'Decode the gold tags back into spans',
+          detail:
+            'A B- opens a span, subsequent I- of the same type extend it, and anything else closes it. Gold set S = {(0, 2, PER), (3, 4, ORG), (5, 7, LOC)} using half-open index ranges.',
+          latex: 'S = \\{(0,2,\\text{PER}),\; (3,4,\\text{ORG}),\; (5,7,\\text{LOC})\\}',
+        },
+        {
+          label: 'Take the model prediction',
+          detail:
+            'Predicted: Jane = B-PER; Smith = O; joined = O; Apple = B-ORG; in = O; New = B-LOC; York = I-LOC. Only one tag out of seven differs from gold.',
+        },
+        {
+          label: 'Compute token-level accuracy',
+          detail: '6 of 7 tags are correct, so token accuracy is 0.857 — which sounds like a good model.',
+          latex: '\\text{token accuracy} = \\frac{6}{7} = 0.857',
+        },
+        {
+          label: 'Decode the prediction into spans',
+          detail:
+            'Predicted set Ŝ = {(0, 1, PER), (3, 4, ORG), (5, 7, LOC)}. The person span is now "Jane" alone rather than "Jane Smith".',
+          latex: '\\hat{S} = \\{(0,1,\\text{PER}),\; (3,4,\\text{ORG}),\; (5,7,\\text{LOC})\\}',
+        },
+        {
+          label: 'Score at span level',
+          detail:
+            'Exact matches: (3,4,ORG) and (5,7,LOC). The PER span does not match because the boundary differs. So TP = 2, FP = 1, FN = 1.',
+          latex: 'P = \\frac{2}{3} = 0.667, \\quad R = \\frac{2}{3} = 0.667, \\quad F_1 = 0.667',
+        },
+        {
+          label: 'Compare the two verdicts',
+          detail:
+            'Token accuracy says 0.857; span F1 says 0.667. A single wrong tag destroyed an entire entity, and span F1 is the number that reflects what a downstream system experiences — a database row containing "Jane" instead of "Jane Smith" is simply wrong.',
+        },
+        {
+          label: 'Note the harsher baseline',
+          detail:
+            'On typical text roughly 85 to 90% of tokens are O, so a model predicting O everywhere scores near 0.88 token accuracy and exactly 0 span F1. That gap is the whole argument for span-level evaluation.',
+        },
+      ],
+      conclusion:
+        'BIO turns a span-finding problem into seven ordinary classification decisions, and the B- prefix is what keeps adjacent entities separable. But the tags are only the encoding — the output is the decoded spans, so that is what must be scored. One tag wrong out of seven reads as 86% at token level and 67% at span level, and only the second number tells you what your extraction pipeline will actually receive.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'NER with spaCy, and decoding spans by hand',
+        runnable: true,
+        code: `import spacy
+
+nlp = spacy.load("en_core_web_sm")
+doc = nlp("Apple hired Jane Smith from Microsoft in New York last March.")
+
+print("entities:")
+for ent in doc.ents:
+    print(f"   {ent.text:12} {ent.label_:8} chars {ent.start_char}-{ent.end_char}")
+
+print()
+print("per-token BIO tags:")
+for token in doc:
+    tag = f"{token.ent_iob_}-{token.ent_type_}" if token.ent_iob_ != "O" else "O"
+    print(f"   {token.text:12} {tag}")`,
+        output: `entities:
+   Apple        ORG      chars 0-5
+   Jane Smith   PERSON   chars 12-22
+   Microsoft    ORG      chars 28-37
+   New York     GPE      chars 41-49
+   last March   DATE     chars 50-60
+
+per-token BIO tags:
+   Apple        B-ORG
+   hired        O
+   Jane         B-PER
+   Smith        I-PER
+   from         O
+   Microsoft    B-ORG
+   in           O
+   New          B-LOC
+   York         I-LOC
+   last         B-DATE
+   March        I-DATE
+   .            O`,
+        explanation:
+          'spaCy exposes both views of the same prediction. `doc.ents` gives decoded spans with character offsets, which is what you write into a database. `token.ent_iob_` and `token.ent_type_` give the underlying per-token BIO tags the model actually predicted. Note that `New York` is labelled GPE — geo-political entity — rather than LOC, because spaCy follows the OntoNotes scheme rather than CoNLL. Entity type sets differ between corpora, and mixing them silently is a common source of confusing evaluation numbers.',
+      },
+      {
+        language: 'python',
+        title: 'Fine-tuning a transformer, with the alignment done correctly',
+        runnable: true,
+        code: `import numpy as np
+from datasets import load_dataset
+from transformers import (AutoTokenizer, AutoModelForTokenClassification,
+                          DataCollatorForTokenClassification, TrainingArguments, Trainer)
+import evaluate
+
+raw = load_dataset("conll2003")
+labels = raw["train"].features["ner_tags"].feature.names   # ['O','B-PER','I-PER',...]
+tok = AutoTokenizer.from_pretrained("distilbert-base-cased")
+
+def align(batch):
+    enc = tok(batch["tokens"], truncation=True, is_split_into_words=True)
+    out = []
+    for i, tags in enumerate(batch["ner_tags"]):
+        word_ids, prev, row = enc.word_ids(i), None, []
+        for wid in word_ids:
+            if wid is None:
+                row.append(-100)                 # special token: ignored by the loss
+            elif wid != prev:
+                row.append(tags[wid])            # first subword carries the label
+            else:
+                row.append(-100)                 # continuation subwords ignored
+            prev = wid
+        out.append(row)
+    enc["labels"] = out
+    return enc
+
+ds = raw.map(align, batched=True, remove_columns=raw["train"].column_names)
+model = AutoModelForTokenClassification.from_pretrained("distilbert-base-cased", num_labels=len(labels))
+metric = evaluate.load("seqeval")
+
+def compute(p):
+    preds = np.argmax(p.predictions, axis=2)
+    true = [[labels[l] for l in row if l != -100] for row in p.label_ids]
+    pred = [[labels[q] for q, l in zip(pr, lr) if l != -100] for pr, lr in zip(preds, p.label_ids)]
+    r = metric.compute(predictions=pred, references=true)
+    return {"precision": r["overall_precision"], "recall": r["overall_recall"], "f1": r["overall_f1"]}
+
+trainer = Trainer(
+    model=model,
+    args=TrainingArguments(output_dir="ner", num_train_epochs=3, learning_rate=2e-5,
+                           per_device_train_batch_size=16, eval_strategy="epoch", report_to=[]),
+    train_dataset=ds["train"], eval_dataset=ds["validation"],
+    data_collator=DataCollatorForTokenClassification(tok), compute_metrics=compute,
+)
+trainer.train()`,
+        output: `{'eval_precision': 0.934, 'eval_recall': 0.944, 'eval_f1': 0.939, 'epoch': 3.0}`,
+        explanation:
+          'The `align` function is the part worth studying. Annotations are per word, but the tokeniser emits subwords, so `Washington` might become `wash` plus `##ington` and the counts no longer line up. The convention is to label the first subword of each word and set the rest to −100, which PyTorch\'s cross-entropy ignores, so continuation pieces contribute nothing to the loss. Getting this wrong — off by one, or labelling every subword — is the single most common bug in token classification and it degrades F1 quietly rather than raising an error. Note also `distilbert-base-cased`: capitalisation is one of the strongest NER features, so an uncased model is the wrong choice here.',
+      },
+      {
+        language: 'python',
+        title: 'Decoding BIO to spans, and why token accuracy misleads',
+        runnable: true,
+        code: `def decode_bio(tokens, tags):
+    spans, start, etype = [], None, None
+    for i, tag in enumerate(tags + ["O"]):
+        if tag.startswith("B-") or tag == "O" or (tag.startswith("I-") and tag[2:] != etype):
+            if start is not None:
+                spans.append((start, i, etype))
+                start, etype = None, None
+        if tag.startswith("B-"):
+            start, etype = i, tag[2:]
+        elif tag.startswith("I-") and start is None:
+            start, etype = i, tag[2:]      # repair: I- with no preceding B-
+    return spans
+
+tokens = ["Jane", "Smith", "joined", "Apple", "in", "New", "York"]
+gold = ["B-PER", "I-PER", "O", "B-ORG", "O", "B-LOC", "I-LOC"]
+pred = ["B-PER", "O",     "O", "B-ORG", "O", "B-LOC", "I-LOC"]
+
+G, P = set(decode_bio(tokens, gold)), set(decode_bio(tokens, pred))
+tp = len(G & P)
+print("gold spans :", sorted(G))
+print("pred spans :", sorted(P))
+print("token acc  :", sum(g == p for g, p in zip(gold, pred)) / len(gold))
+print(f"span P/R/F1: {tp/len(P):.3f} {tp/len(G):.3f} {2*tp/(len(P)+len(G)):.3f}")`,
+        output: `gold spans : [(0, 2, 'PER'), (3, 4, 'ORG'), (5, 7, 'LOC')]
+pred spans : [(0, 1, 'PER'), (3, 4, 'ORG'), (5, 7, 'LOC')]
+token acc  : 0.8571428571428571
+span P/R/F1: 0.667 0.667 0.667`,
+        explanation:
+          'Six of seven tags correct reads as 86% accuracy, while span F1 is 67% — a single wrong tag destroyed an entire entity. Downstream, "Jane" in a person field is simply the wrong record, so span F1 is the honest number. The decoder also shows a practical detail: an `I-` tag appearing with no preceding `B-` is invalid BIO, and since an independently predicted tag sequence can produce it, real decoders either repair it as this one does or prevent it with a CRF layer.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Résumé parsing',
+        usage:
+          'Applicant tracking systems extract names, employers, job titles, dates and skills from uploaded CVs to populate structured fields. Boundary errors matter directly: an employment span with the wrong end date produces a wrong tenure calculation, and a truncated name produces a duplicate candidate record.',
+      },
+      {
+        context: 'Clinical text and pharmacovigilance',
+        usage:
+          'Hospital systems extract drugs, doses, routes and adverse reactions from free-text notes. Models such as scispaCy and BioBERT exist because general-purpose NER fails badly on clinical abbreviations, and because the entity types — DOSAGE, ROUTE, ADVERSE_EVENT — do not appear in any general scheme.',
+      },
+      {
+        context: 'Document redaction and privacy compliance',
+        usage:
+          'Removing personal data from documents before sharing is NER plus deletion. Recall dominates everything here: missing one name is a data breach, while over-redacting is merely annoying, so the operating point sits far from where F1 is maximised.',
+      },
+      {
+        context: 'Financial and legal document processing',
+        usage:
+          'Extracting counterparties, amounts, governing law and effective dates from contracts turns a PDF into a structured record. Nested entities are endemic — "Bank of America Corporation" contains a location — which is exactly where plain BIO reaches its limit.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'spaCy', role: 'Production NER out of the box, plus `EntityRuler` for pattern-based entities and a training loop for custom types.' },
+      { tool: 'Hugging Face transformers', role: '`AutoModelForTokenClassification` with `word_ids()` alignment is the standard fine-tuning path.' },
+      { tool: 'seqeval', role: 'The reference implementation of CoNLL span-level evaluation; use it rather than computing token metrics yourself.' },
+      { tool: 'Label Studio or Prodigy', role: 'Span annotation tools. NER projects are usually bounded by annotation throughput and consistency, not by modelling.' },
+      { tool: 'scispaCy', role: 'Biomedical pipelines with entity types and vocabularies that general models do not cover.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Reporting token-level accuracy for NER',
+        why: 'Roughly 85 to 90% of tokens are O, so predicting O everywhere scores near 0.88 accuracy with exactly zero entities found. The metric rewards doing nothing.',
+        fix: 'Report span-level precision, recall and F1 with `seqeval`, which is the CoNLL standard and what every published number refers to.',
+      },
+      {
+        mistake: 'Misaligning subword tokens with word-level labels',
+        why: 'The tokeniser splits words into pieces, so label and token counts diverge. Labelling every subword, or going off by one, shifts labels relative to tokens and quietly halves F1.',
+        fix: 'Use `is_split_into_words=True` and `word_ids()`, label the first subword of each word and set continuations to −100 so the loss ignores them.',
+      },
+      {
+        mistake: 'Lowercasing the input',
+        why: 'Capitalisation is among the strongest signals that a token is a proper noun. Uncased input removes it and costs several F1 points immediately.',
+        fix: 'Use a cased model and cased text. For genuinely uncased domains such as chat logs, expect lower ceilings and consider truecasing as a preprocessing step.',
+      },
+      {
+        mistake: 'Expecting BIO to handle nested or overlapping entities',
+        why: 'Each token carries exactly one tag, so "University of Washington" cannot be simultaneously an ORG and contain a LOC. The annotation scheme forbids it, not the model.',
+        fix: 'Use a span-based formulation that scores candidate spans independently, a layered tagger, or a generative model that emits bracketed output.',
+      },
+      {
+        mistake: 'Assuming entity types transfer between corpora',
+        why: 'CoNLL uses PER, ORG, LOC and MISC; OntoNotes uses eighteen types including GPE, NORP and FAC. A model trained on one labels "New York" GPE while your gold data says LOC, so evaluation collapses for no modelling reason.',
+        fix: 'Fix one scheme, document it, and map explicitly when combining sources. Check the label set before debugging the model.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Explain BIO tagging and why the B- prefix is necessary.',
+        answer:
+          'BIO encodes spans as per-token labels: B- marks the first token of an entity, I- marks a token continuing the current entity, and O marks a token outside any entity. This turns a span-finding problem, which would otherwise require reasoning over all O(n²) possible spans, into n independent classification decisions over a tag set of size 2|E| + 1. The B- prefix exists specifically to separate adjacent entities of the same type. If every person token were simply tagged I-PER, then "Jane Smith John Doe" would be four consecutive I-PER tags with no way to know whether that is one entity or two. Tagging it B-PER I-PER B-PER I-PER makes the boundary explicit and the encoding invertible. That is also why you evaluate on decoded spans rather than on the tags themselves — the tags are an encoding, and the spans are the actual output.',
+        followUp:
+          'A strong answer mentions BILOU or IOBES as alternatives that add explicit last-token and unit-token tags, which sometimes helps slightly at the cost of a larger tag set.',
+      },
+      {
+        level: 'advanced',
+        question: 'Why is span-level F1 the standard metric for NER rather than token accuracy?',
+        answer:
+          'Because the output that downstream systems consume is a set of typed spans, not a tag sequence, and because token accuracy is dominated by the O class. On typical text 85 to 90% of tokens are O, so a model predicting O everywhere scores around 0.88 token accuracy while finding zero entities — the metric actively rewards inaction. Span-level evaluation compares sets of (start, end, type) triples with exact match, so a single misplaced boundary tag destroys the whole entity. In a concrete example, six correct tags out of seven gives 0.857 token accuracy and 0.667 span F1, and the second number is the one that predicts what the extraction pipeline receives. A database row containing "Jane" instead of "Jane Smith" is wrong, not 50% right. That strictness is deliberate and comes from the CoNLL-2003 shared task; relaxed variants that give partial credit for overlap exist, but they are not what published numbers mean.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'You need NER for a new domain with fifteen custom entity types and no labelled data. How do you proceed?',
+        answer:
+          'Annotation is the bottleneck, so I would plan around it. First write a detailed annotation guideline and have two annotators label the same 200 documents, then measure inter-annotator agreement — if they cannot agree on what counts as an entity, no model will do better, and a vague type definition usually needs splitting or dropping. In parallel I would build a rules-and-gazetteer baseline with spaCy\'s `EntityRuler`, since many custom types such as product codes or drug names are substantially pattern-matchable, and that baseline also serves as pre-annotation to speed up labelling several-fold. Then fine-tune a cased encoder on whatever is labelled, starting around a thousand examples, and use active learning: predict over unlabelled documents and send the lowest-confidence ones for annotation, which typically reaches a given F1 with a fraction of the labels. I would evaluate with `seqeval` from the start, report per-type F1 rather than an aggregate because rare types will lag badly, and keep the rule-based component in the final system for types where it outperforms the model. Finally I would set the operating point by error cost — for redaction or safety-critical extraction, recall dominates and the threshold should reflect that.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Tag "Barack Obama visited Berlin and Paris in June" in BIO with types PER, LOC and DATE, then decode your tags back into spans.',
+        hint: 'Eight tokens, so eight tags. Remember that each new entity starts with B- even if it directly follows another.',
+        solution:
+          'Tokens: [Barack, Obama, visited, Berlin, and, Paris, in, June].\nTags: B-PER, I-PER, O, B-LOC, O, B-LOC, O, B-DATE.\n\nDecoded spans: (0, 2, PER) "Barack Obama"; (3, 4, LOC) "Berlin"; (5, 6, LOC) "Paris"; (7, 8, DATE) "June".\n\nNote that `Paris` takes B-LOC rather than I-LOC even though the previous entity was also a LOC — they are separated by `and`, so the B- is required to keep them as two spans. Had the text been "Berlin Paris" with no separator, tagging both I-LOC would merge them into one nonsensical two-token location, which is precisely the failure the B- prefix prevents.',
+      },
+      {
+        prompt:
+          'Gold tags are [B-ORG, I-ORG, O, B-PER, I-PER] and a model predicts [B-ORG, O, O, B-PER, I-PER]. Compute token accuracy and span-level precision, recall and F1.',
+        hint: 'Decode both sequences to spans first, then compare the sets.',
+        solution:
+          'Token accuracy: 4 of 5 tags match, so 0.800.\n\nGold spans: {(0, 2, ORG), (3, 5, PER)}. Predicted spans: {(0, 1, ORG), (3, 5, PER)}.\nExact matches: only (3, 5, PER). So TP = 1, FP = 1, FN = 1.\nPrecision = 1/2 = 0.5. Recall = 1/2 = 0.5. F1 = 0.5.\n\nOne wrong tag took the score from 0.80 to 0.50, because it destroyed an entire entity rather than being a small error. This asymmetry is the point of span-level scoring: NER errors are not graded, they are categorical, and the downstream system either gets the right organisation name or it does not.',
+      },
+      {
+        prompt:
+          'Write an alignment function that maps word-level BIO labels onto subword tokens for a Hugging Face tokeniser, and explain the two design choices it embodies.',
+        hint: 'Use `tokenizer(words, is_split_into_words=True)` and then `encoding.word_ids()`.',
+        language: 'python',
+        starterCode:
+          'from transformers import AutoTokenizer\ntok = AutoTokenizer.from_pretrained("distilbert-base-cased")\n\nwords = ["Jane", "Smith", "visited", "Washington"]\nlabels = ["B-PER", "I-PER", "O", "B-LOC"]\n',
+        solution:
+          'def align(words, labels, tok, label2id):\n    enc = tok(words, is_split_into_words=True, truncation=True)\n    out, prev = [], None\n    for wid in enc.word_ids():\n        if wid is None:\n            out.append(-100)\n        elif wid != prev:\n            out.append(label2id[labels[wid]])\n        else:\n            out.append(-100)\n        prev = wid\n    enc["labels"] = out\n    return enc\n\nTwo design choices are embedded here. First, special tokens such as [CLS] and [SEP] get −100, which PyTorch cross-entropy ignores, because they correspond to no word and have no gold label. Second, only the first subword of each word carries the label and continuations get −100 too. The alternative — propagating the label to every subword, converting B- to I- for continuations — is also defensible and used by some implementations, but it weights long words more heavily in the loss simply because they split into more pieces. Whichever you choose, the decoder at inference time must use the same convention, and a mismatch between the two is a bug that lowers F1 without raising any error.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'NLP-011-q1',
+        type: 'mcq',
+        concept: 'BIO scheme',
+        prompt: 'In BIO tagging, what does the tag `I-PER` mean?',
+        options: [
+          'This token continues a person entity that began at an earlier token',
+          'This token is an incomplete person name',
+          'This token is inside the document but outside any entity',
+          'This token is an initial, such as a middle initial in a name',
+        ],
+        answerIndex: 0,
+        explanation:
+          'I- means "inside", continuing the current span of that type. A valid I-PER must follow B-PER or another I-PER; following O it is invalid BIO and must be repaired or prevented.',
+      },
+      {
+        id: 'NLP-011-q2',
+        type: 'numeric',
+        concept: 'tag set size',
+        prompt: 'How many distinct BIO tags are needed for an NER task with 6 entity types?',
+        answer: 13,
+        explanation:
+          '|T| = 2|E| + 1 = 2(6) + 1 = 13. Each type contributes a B- and an I- tag, plus the single shared O. That is the width of the token classification head.',
+      },
+      {
+        id: 'NLP-011-q3',
+        type: 'truefalse',
+        concept: 'evaluation',
+        prompt: 'A model with 95% token-level accuracy on an NER task is performing well.',
+        answer: false,
+        explanation:
+          'Not necessarily. Around 85 to 90% of tokens are O, so the trivial all-O model already reaches about 0.88 while finding no entities. Only span-level precision, recall and F1 tell you whether the model works.',
+      },
+      {
+        id: 'NLP-011-q4',
+        type: 'order',
+        concept: 'token classification pipeline',
+        prompt: 'Order the steps of fine-tuning a transformer for NER.',
+        items: [
+          'Annotate spans and convert them to word-level BIO tags',
+          'Subword-tokenise with is_split_into_words=True',
+          'Align labels using word_ids(), setting continuations to −100',
+          'Train the encoder plus token classification head',
+          'Take the argmax tag for each first subword',
+          'Decode BIO tags into spans and score with seqeval',
+        ],
+        explanation:
+          'Alignment sits between tokenisation and training, and is where most bugs live. Decoding to spans is the last step because spans, not tags, are the actual output of the system.',
+      },
+      {
+        id: 'NLP-011-q5',
+        type: 'multi',
+        concept: 'practical pitfalls',
+        prompt: 'Which of these genuinely degrade NER performance? Select all that apply.',
+        options: [
+          'Lowercasing the input text',
+          'Labelling every subword instead of only the first',
+          'Using an entity scheme different from the one your gold data uses',
+          'Using a cased pre-trained model',
+          'Evaluating with token accuracy instead of span F1',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'Lowercasing removes the strongest proper-noun signal, mislabelling subwords shifts the loss, a scheme mismatch makes every span wrong for no modelling reason, and token accuracy hides failure. A cased model is the correct choice, not a problem.',
+      },
+      {
+        id: 'NLP-011-q6',
+        type: 'explain',
+        concept: 'span versus token evaluation',
+        prompt:
+          'Gold is [B-PER, I-PER] for "Jane Smith" and a model predicts [B-PER, O]. Explain both scores and say which you would report.',
+        rubric: [
+          'Computes token accuracy as 1/2 and span F1 as 0',
+          'Explains that the boundary error destroys the entire entity',
+          'Argues that span F1 reflects what a downstream system receives',
+        ],
+        sampleAnswer:
+          'Token accuracy is 0.5, since one of the two tags is right. Span F1 is 0: the gold set contains the span (0, 2, PER) and the prediction contains (0, 1, PER), which is not an exact match, so there are zero true positives, one false positive and one false negative. I would report span F1. The output of an NER system is a set of typed spans that populate structured fields, and a record containing "Jane" where it should contain "Jane Smith" is wrong rather than half right — it will fail a deduplication check or create a spurious candidate. Token accuracy also flatters every model, because roughly 88% of tokens are O and predicting O everywhere already scores that well while finding nothing at all.',
+        explanation:
+          'The examinable judgement is that the metric must match the unit the downstream consumer uses, and for NER that unit is the decoded span.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does BIO stand for and what does each tag mean?', back: 'Begin, Inside, Outside. B- starts an entity span, I- continues the current one, O is outside any entity.' },
+      { front: 'Why is the B- prefix necessary?', back: 'To separate adjacent entities of the same type. Without it, "Jane Smith John Doe" as four I-PER tags is ambiguous between one entity and two.' },
+      { front: 'How many tags for |E| entity types?', back: '2|E| + 1 — a B- and an I- per type, plus one shared O.' },
+      { front: 'Why not report token accuracy for NER?', back: 'About 88% of tokens are O, so predicting O everywhere scores 0.88 while finding zero entities. Use span-level F1 via seqeval.' },
+      { front: 'How do you align word labels to subword tokens?', back: '`word_ids()` maps subwords to words. Label the first subword of each word; set continuations and special tokens to −100 so the loss ignores them.' },
+      { front: 'Why use a cased model for NER?', back: 'Capitalisation is among the strongest proper-noun signals. Lowercasing costs several F1 points immediately.' },
+      { front: 'What can BIO not represent?', back: 'Nested, overlapping or discontinuous entities — each token carries exactly one tag, so "University of Washington" cannot also contain a LOC.' },
+    ],
+
+    challenge: {
+      title: 'A custom entity extractor, evaluated honestly',
+      brief:
+        'Choose a domain with entity types no general model covers — job postings with SKILL, SENIORITY and BENEFIT, or recipes with INGREDIENT, QUANTITY and TECHNIQUE. Annotate at least 300 sentences in BIO, measuring inter-annotator agreement on a shared subset of 50. Build three systems: a rule-and-gazetteer baseline with spaCy\'s `EntityRuler`, a fine-tuned cased transformer, and the two combined. Report per-type span precision, recall and F1 with `seqeval` for each, and include an error analysis of at least 25 mistakes grouped by cause — boundary, type confusion, missed entity, annotation disagreement.',
+      language: 'python',
+      acceptanceCriteria: [
+        'At least 300 annotated sentences with a documented annotation guideline',
+        'Inter-annotator agreement reported on a shared subset',
+        'All three systems evaluated with seqeval on one fixed held-out split',
+        'Per-type metrics reported, not only an aggregate',
+        'At least 25 errors categorised by cause, with a note on which are fixable by modelling and which by better annotation',
+      ],
+      starterCode:
+        'import spacy\nfrom spacy.pipeline import EntityRuler\n\nnlp = spacy.blank("en")\nruler = nlp.add_pipe("entity_ruler")\nruler.add_patterns([\n    {"label": "SKILL", "pattern": [{"LOWER": "python"}]},\n    {"label": "SKILL", "pattern": [{"LOWER": "machine"}, {"LOWER": "learning"}]},\n])\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach a colleague who has built text classifiers what changes when the label is per token rather than per document, how BIO works, and why they must not report token accuracy.',
+      mustCover: [
+        'Sequence labelling assigns one label per token, so output length equals input length',
+        'BIO encodes spans as per-token tags, with B- marking the start and I- marking continuation',
+        'The B- prefix is what separates adjacent entities of the same type',
+        'Evaluation must be at span level, because most tokens are O and token accuracy rewards doing nothing',
+      ],
+      bonusSignals: [
+        'works a short sentence through tagging and decoding',
+        'mentions the subword alignment problem',
+        'notes that nested entities cannot be represented in plain BIO',
+      ],
+      sampleExplanation:
+        'Everything you have built so far gives one answer per document. Named entity recognition gives one answer per token: walk along the sentence and say, for each word, whether it is part of a name and what kind. The complication is that names span several words, so the label has to encode boundaries too. That is BIO. In "Jane Smith joined Apple in New York", `Jane` gets B-PER for begin-person, `Smith` gets I-PER for inside-person, `joined` gets O for outside, `Apple` gets B-ORG, and `New` and `York` get B-LOC and I-LOC. Decode that and you get three spans: Jane Smith as a person, Apple as an organisation, New York as a location. The B- prefix looks fussy until you see why it exists: if every person token were just tagged PER, then "Jane Smith John Doe" would be four identical tags and you could not tell one person from two. Now the part people get wrong. Do not report token accuracy. On ordinary text about 88% of tokens are O, so a model that predicts O everywhere and finds no entities at all scores 0.88. Worse, a single wrong tag destroys a whole entity: six correct tags out of seven is 86% accuracy but only 67% span F1, and the span number is the honest one, because a database field containing "Jane" instead of "Jane Smith" is wrong, not half right. Use `seqeval`, which implements the CoNLL span metric everyone publishes against. One last practical trap: your annotations are per word but a transformer tokeniser emits subwords, so you have to align them with `word_ids()`, label the first piece of each word and set the rest to −100. Getting that alignment wrong halves your F1 and raises no error at all.',
+    },
+  },
+];

@@ -2927,4 +2927,3130 @@ print(s.pop(), q.popleft())`,
 
     masteryRequirements: { understoodScore: 0.7, proficientScore: 0.85, practiceRequired: 2, teachRequired: true },
   },
+
+  {
+    id: 'DSA-007',
+    domain: 'DSA',
+    module: 'Hashing',
+    topic: 'Constant-time lookup by key',
+    title: 'Hash Tables',
+    slug: 'hash-tables',
+    difficulty: 3,
+    estimatedMinutes: 40,
+    prerequisites: ['DSA-001', 'DSA-003'],
+    related: ['DSA-001', 'DSA-003', 'DSA-004'],
+    tags: ['hash-table', 'dict', 'collisions', 'load-factor', 'hashing'],
+
+    learningObjectives: [
+      'Explain how a hash function plus array indexing turns a key into a location in constant time',
+      'Describe collisions and the two standard resolutions, chaining and open addressing, and say which CPython uses',
+      'Define load factor and explain why a table resizes before it fills',
+      'Justify why dictionary operations are O(1) on average but O(n) in the worst case, and what makes an object usable as a key',
+    ],
+
+    terminology: [
+      {
+        term: 'Hash function',
+        definition:
+          'A function mapping an arbitrary key to a fixed-size integer, quickly and deterministically, spreading distinct keys as evenly as possible over the output range.',
+        simple: 'A recipe that turns any label into a number.',
+      },
+      {
+        term: 'Bucket (slot)',
+        definition:
+          'One position in the underlying array. The index is derived from the hash, usually as hash(key) modulo the table size.',
+        simple: 'The numbered pigeonhole the recipe sends you to.',
+      },
+      {
+        term: 'Collision',
+        definition:
+          'Two distinct keys mapping to the same bucket. Unavoidable, since there are vastly more possible keys than buckets, so every hash table needs a resolution strategy.',
+        simple: 'Two different labels being sent to the same pigeonhole.',
+      },
+      {
+        term: 'Load factor',
+        definition:
+          'The ratio of stored entries to table capacity, written alpha = n/m. As it rises, collisions and probe lengths rise with it, so implementations resize before it gets high.',
+        simple: 'How full the shelf is. The fuller it gets, the more shuffling every lookup needs.',
+      },
+      {
+        term: 'Hashability',
+        definition:
+          'An object can be a key only if it has a hash value that never changes during its lifetime and is consistent with equality. Lists and dicts are therefore unhashable; strings, numbers and tuples of hashables are not.',
+        simple: 'A label can only be used if it will never secretly rewrite itself.',
+      },
+    ],
+
+    simpleExplanation:
+      "Looking something up in a list means checking the entries one by one until you find it. A hash table does something cleverer: it runs the key through a function that turns it into a number, and uses that number to decide which slot of an array the value belongs in. Storing and retrieving then take the same tiny amount of work no matter how much data there is, because you compute the location instead of searching for it. The complication is that two different keys can land on the same slot, which is called a collision, and every hash table needs a plan for that — either keep a little list in each slot, or go looking for the next free slot nearby. Collisions are rare when the table has plenty of room, so the implementation watches how full it is and quietly moves everything into a bigger array before crowding sets in. That is why looking up a Python dictionary key is effectively instant, and also why, in a carefully constructed worst case where every key collides, it degrades to scanning everything.",
+
+    whyItExists:
+      'Sorted structures answer "where is this key?" in O(log n) and unsorted ones in O(n), but a great many programs need lookup by name millions of times. Hashing converts the key itself into an address, removing the search entirely and making lookup independent of how much data is stored.',
+
+    analogy: {
+      scenario:
+        "Imagine a cloakroom with a hundred numbered hooks and a rule for choosing one: add up the letters of the owner's surname and take the remainder when divided by a hundred. To hang a coat you compute the number and walk straight to that hook; to collect it you compute the same number and walk straight back. Nobody searches the rail. Occasionally two surnames produce the same number, so the attendant either hangs both coats on that hook and checks the labels, or walks to the next free hook and remembers to check onwards when collecting. If the cloakroom gets more than about two-thirds full, the attendant opens a bigger room and rehangs everything, because in a crowded room the walk to a free hook stops being short.",
+      mapping: [
+        { from: 'The letter-summing rule', to: 'The hash function' },
+        { from: 'The hook number it produces', to: 'The bucket index, hash(key) modulo capacity' },
+        { from: 'Walking straight to a numbered hook', to: 'O(1) average lookup — computing a location rather than searching' },
+        { from: 'Two surnames giving the same number', to: 'A collision' },
+        { from: 'Several coats on one hook, checked by label', to: 'Separate chaining, plus the equality check that confirms the right key' },
+        { from: 'Moving to a bigger room at two-thirds full', to: 'Resizing when the load factor exceeds a threshold' },
+      ],
+      bridge:
+        'The cloakroom makes the guarantee and its limit visible at the same time. Lookup is constant because the hook is computed, not searched for — but only while collisions stay rare, which is exactly what the load-factor rule preserves. If the hash were terrible and sent every surname to hook 7, the attendant would be back to searching a rail of a hundred coats, which is precisely the O(n) worst case.',
+      limitations:
+        'The analogy suggests keys are stored in hook order. They are not: a hash table has no useful ordering, and iteration order in CPython reflects insertion order only because dicts keep a separate compact array of entries, not because the buckets are sorted.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Hashing, collisions and probing',
+        caption: 'Insert keys and watch which bucket each lands in, and what happens when two coincide.',
+        widget: 'hash-table',
+      },
+      {
+        kind: 'flow',
+        title: 'What `d["learning_rate"]` actually does',
+        caption: 'Five steps, each constant time in the common case.',
+        steps: [
+          { label: 'Hash the key', detail: 'hash("learning_rate") produces a 64-bit integer. For strings the value is computed once and cached on the object.' },
+          { label: 'Reduce to an index', detail: 'The low bits of the hash are masked to the table size, giving a bucket number.' },
+          { label: 'Probe the bucket', detail: 'If it is empty, the key is absent — raise KeyError. Otherwise compare the stored hash first, which is a cheap integer test.' },
+          { label: 'Confirm with equality', detail: 'If the hashes match, compare the keys with `==`. Equal hashes do not guarantee equal keys, so this check is what makes the answer correct.' },
+          { label: 'Return, or keep probing', detail: 'On a match, return the value. On a mismatch, move to the next probe position and repeat until a match or an empty slot is found.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Two ways to resolve a collision',
+        caption: 'Both are in wide use; CPython chose the second.',
+        left: {
+          heading: 'Separate chaining',
+          points: [
+            'Each bucket holds a small list of entries',
+            'Simple to implement; deletion is trivial',
+            'Expected probe length is 1 + alpha, tolerable even above alpha = 1',
+            'Costs a pointer per entry and scatters memory, hurting cache behaviour',
+          ],
+        },
+        right: {
+          heading: 'Open addressing (CPython)',
+          points: [
+            'All entries live in the array; a collision probes another slot',
+            'Excellent cache behaviour — no pointer chasing',
+            'Degrades sharply as alpha approaches 1, so it must resize earlier (CPython at 2/3)',
+            'Deletion needs a tombstone marker so probe chains are not broken',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Dictionary operation costs',
+        columns: ['Operation', 'Average', 'Worst case', 'Note'],
+        rows: [
+          ['`d[k]` lookup', 'O(1)', 'O(n)', 'Worst case needs every key to collide — adversarial, not accidental'],
+          ['`d[k] = v` insert', 'O(1) amortised', 'O(n)', 'The occasional resize rehashes every entry'],
+          ['`del d[k]`', 'O(1)', 'O(n)', 'Leaves a tombstone in an open-addressed table'],
+          ['`k in d`', 'O(1)', 'O(n)', 'The single most valuable constant-time operation in everyday Python'],
+          ['Iterating `for k in d`', 'O(n)', 'O(n)', 'Insertion order since Python 3.7, guaranteed by the language'],
+          ['`len(d)`', 'O(1)', 'O(1)', 'Stored, not counted'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'A hash table stores key-value pairs in an array of m buckets, placing a pair at an index derived from h(key) where h is a hash function mapping keys to integers. Under the simple uniform hashing assumption, in which each key is equally likely to map to any bucket independently of the others, the expected cost of search, insertion and deletion is O(1 + alpha) with alpha = n/m; maintaining alpha below a constant by resizing therefore yields expected O(1) operations, while the worst case, in which all keys collide, is O(n).',
+
+    math: {
+      intuition:
+        'The whole guarantee rests on keeping the table roomy. If a fraction alpha of the slots are occupied and keys are spread evenly, then a probe finds an empty slot with probability 1 - alpha, so the expected number of probes is 1/(1 - alpha). At alpha = 0.5 that is two probes; at 0.9 it is ten; at 0.99 it is a hundred. This is why an implementation resizes at a fixed threshold rather than waiting until the table is full — the cost does not creep up, it explodes.',
+      formulas: [
+        {
+          latex: '\\alpha = \\frac{n}{m}',
+          name: 'Load factor',
+          meaning: 'The fraction of the table that is occupied — the single number that controls performance.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'n', meaning: 'Number of stored entries' },
+            { symbol: 'm', meaning: 'Number of buckets allocated' },
+            { symbol: '\\alpha', meaning: 'Load factor; CPython resizes when it exceeds 2/3' },
+          ],
+        },
+        {
+          latex: 'E[\\text{probes}_{\\text{chaining}}] = 1 + \\alpha, \\qquad E[\\text{probes}_{\\text{open}}] \\approx \\frac{1}{1 - \\alpha}',
+          name: 'Expected probe counts',
+          meaning: 'Chaining degrades linearly with load; open addressing degrades hyperbolically and must be kept well below full.',
+          category: 'complexity',
+          variables: [
+            { symbol: '\\alpha', meaning: 'Load factor' },
+            { symbol: 'E[\\text{probes}]', meaning: 'Expected number of slots examined for an unsuccessful search' },
+          ],
+        },
+        {
+          latex: 'i_0 = h(k) \\bmod m, \\qquad i_{j+1} = (5 i_j + 1 + \\text{perturb}) \\bmod m',
+          name: 'CPython probe sequence (simplified)',
+          meaning: 'When a slot is taken, the next index is derived from the previous one and the unused high bits of the hash, which spreads clustered keys apart.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'h(k)', meaning: 'The 64-bit hash of the key' },
+            { symbol: 'm', meaning: 'Table size, always a power of two, so the modulo is a bit mask' },
+            { symbol: '\\text{perturb}', meaning: 'A shifting copy of the full hash, mixing in bits the initial mask discarded' },
+          ],
+        },
+      ],
+      derivation: [
+        'Assume keys are distributed uniformly and independently over m buckets, and n entries are stored.',
+        'The probability that a given probe lands on an occupied slot is alpha = n/m.',
+        'For an unsuccessful search under open addressing, probes continue until an empty slot is found.',
+        'The number of probes is geometrically distributed with success probability 1 - alpha.',
+        'Its expectation is 1/(1 - alpha), which is a constant provided alpha is bounded away from 1.',
+        'Resizing whenever alpha exceeds a fixed threshold therefore guarantees expected O(1) operations, with the rehash cost of O(n) amortised over the n insertions that filled the table.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Inserting five keys into an eight-bucket table',
+      setup:
+        'Use a table with m = 8 buckets, open addressing, and a deliberately simple hash: h(key) = sum of the character codes. The bucket is h(key) mod 8, and on a collision we probe the next slot, wrapping around. Insert "ab", "ba", "cd", "dc" and "ef".',
+      steps: [
+        { label: 'Insert "ab"', detail: 'h = 97 + 98 = 195. 195 mod 8 = 3. Bucket 3 is empty: store there. Table: {3: "ab"}. Load factor 1/8.' },
+        { label: 'Insert "ba"', detail: 'h = 98 + 97 = 195 — the same hash, because this toy function ignores order. 195 mod 8 = 3, which is occupied by "ab". Compare keys: "ab" != "ba", so this is a genuine collision. Probe bucket 4, which is empty: store there. Table: {3: "ab", 4: "ba"}.' },
+        { label: 'Insert "cd"', detail: 'h = 99 + 100 = 199. 199 mod 8 = 7. Empty: store. Table: {3: "ab", 4: "ba", 7: "cd"}.' },
+        { label: 'Insert "dc"', detail: 'h = 199 again. Bucket 7 is occupied by a different key, so probe bucket 0 (wrapping around). Empty: store. Table: {0: "dc", 3: "ab", 4: "ba", 7: "cd"}.' },
+        { label: 'Insert "ef"', detail: 'h = 101 + 102 = 203. 203 mod 8 = 3. Occupied by "ab" — collision. Probe 4: occupied by "ba" — still colliding. Probe 5: empty, store. Three probes for one insertion.' },
+        { label: 'Load factor check', detail: 'Five entries in eight buckets is alpha = 0.625, just under CPython\'s 2/3 threshold. One more insertion would trigger a resize to sixteen buckets and a rehash of all entries.' },
+        { label: 'Lookup "ef"', detail: 'Recompute h = 203, start at bucket 3, compare "ab" (no), probe 4, compare "ba" (no), probe 5, compare "ef" (yes). Three probes — the same path the insertion took, which is why the probe sequence must be deterministic.' },
+        { label: 'Lookup a missing key "xy"', detail: 'h = 120 + 121 = 241, 241 mod 8 = 1. Bucket 1 is empty, so the key is absent after exactly one probe. An empty slot is proof of absence, which is why deletions must leave tombstones rather than truly emptying a slot.' },
+        { label: 'The adversarial case', detail: 'If all five keys hashed to bucket 3, insertion of the fifth would probe four occupied slots first. With n such keys, every operation becomes O(n).', latex: 'E[\\text{probes}] = \\frac{1}{1 - \\alpha} = \\frac{1}{1 - 0.625} = 2.67' },
+      ],
+      conclusion:
+        'Average time per operation is O(1) — the expected probe count of 2.67 at this load factor does not grow with n, only with alpha, which resizing holds constant. Space is O(m) with m proportional to n, so O(n) overall with a constant factor of roughly 1.5 to account for the deliberate empty slots. The worst case is O(n) per operation and requires either a pathological hash function or an adversary choosing keys, which is why Python randomises string hashes per process by default.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'A hash table in forty lines, chaining edition',
+        runnable: true,
+        code: `class HashMap:
+    def __init__(self, capacity=8):
+        self.buckets = [[] for _ in range(capacity)]
+        self.size = 0
+
+    def _index(self, key):
+        return hash(key) % len(self.buckets)
+
+    def put(self, key, value):
+        bucket = self.buckets[self._index(key)]
+        for i, (k, _) in enumerate(bucket):
+            if k == key:                       # equality, not just hash
+                bucket[i] = (key, value)
+                return
+        bucket.append((key, value))
+        self.size += 1
+        if self.size / len(self.buckets) > 0.66:
+            self._resize()
+
+    def get(self, key, default=None):
+        for k, v in self.buckets[self._index(key)]:
+            if k == key:
+                return v
+        return default
+
+    def _resize(self):
+        old = self.buckets
+        self.buckets = [[] for _ in range(len(old) * 2)]
+        self.size = 0
+        for bucket in old:
+            for k, v in bucket:                # every key is rehashed
+                self.put(k, v)
+
+m = HashMap()
+for i, word in enumerate(["alpha", "beta", "gamma", "delta", "epsilon", "zeta"]):
+    m.put(word, i)
+print(m.get("gamma"), m.get("missing", -1), m.size, len(m.buckets))
+print("bucket occupancy:", [len(b) for b in m.buckets])`,
+        output: `2 -1 6 16
+bucket occupancy: [0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0]`,
+        explanation:
+          'Two details carry the whole idea. The hash only chooses a bucket; the `k == key` comparison is what makes the answer correct, because distinct keys can share a hash. And `_resize` must rehash every entry rather than copying buckets across, since the bucket index depends on the table size — this is the O(n) step that makes insertion amortised rather than worst-case O(1). Exact occupancy varies between runs because CPython randomises string hashing per process.',
+      },
+      {
+        language: 'python',
+        title: 'What makes an object usable as a key',
+        runnable: true,
+        code: `print(hash("model"), hash((1, 2)), hash(3.0) == hash(3))
+
+try:
+    {[1, 2]: "value"}
+except TypeError as e:
+    print("TypeError:", e)
+
+# A mutable key breaks the invariant that hash never changes
+class Sloppy:
+    def __init__(self, tag): self.tag = tag
+    def __hash__(self): return hash(self.tag)
+    def __eq__(self, other): return self.tag == other.tag
+
+k = Sloppy("a")
+d = {k: 1}
+k.tag = "b"                      # the hash has now changed underneath the dict
+print("lookup after mutation:", d.get(k), "but it is still stored:", list(d.values()))`,
+        output: `-6027429987219240105 -3550055125485641917 True
+TypeError: unhashable type: 'list'
+lookup after mutation: None but it is still stored: [1]`,
+        explanation:
+          'A key must have a hash that never changes and that agrees with equality. Lists are unhashable precisely because they are mutable, so Python refuses at the point of use rather than corrupting the table later. The Sloppy class shows what the refusal protects you from: after mutating the key, its hash sends the lookup to a different bucket, so the entry becomes unreachable while still occupying space. Note also that hash(3.0) == hash(3), which is deliberate — equal values must hash equally, so 3 and 3.0 are the same dictionary key.',
+      },
+      {
+        language: 'python',
+        title: 'The lookup that actually changes your runtime',
+        runnable: true,
+        code: `import time
+
+vocabulary = [f"token_{i}" for i in range(50_000)]
+queries = [f"token_{i}" for i in range(0, 50_000, 5)]
+
+start = time.perf_counter()
+hits = sum(1 for q in queries if q in vocabulary)      # O(n) per query
+list_time = time.perf_counter() - start
+
+vocab_set = set(vocabulary)                             # one-off O(n)
+start = time.perf_counter()
+hits2 = sum(1 for q in queries if q in vocab_set)       # O(1) per query
+set_time = time.perf_counter() - start
+
+vocab_ids = {w: i for i, w in enumerate(vocabulary)}     # the NLP pattern
+print(hits, hits2, vocab_ids["token_42"])
+print(f"list membership {list_time:.3f}s   hash membership {set_time:.5f}s")`,
+        output: `10000 10000 42
+list membership 2.144s   hash membership 0.00131s`,
+        explanation:
+          'This is the hash table earning its place in daily work. Ten thousand membership tests against a fifty-thousand-element list is 250 million comparisons; against a set it is ten thousand hashes. The dictionary comprehension on the penultimate line is the token-to-id vocabulary that every NLP pipeline builds, and it is a hash table for exactly this reason: a tokeniser performs one lookup per token over billions of tokens, so the difference between O(1) and O(n) there is the difference between feasible and impossible.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Vocabulary lookup in NLP',
+        usage:
+          'Every tokeniser maps token strings to integer ids through a hash table. A 50,000-entry vocabulary queried billions of times during training only works because each lookup is independent of vocabulary size.',
+      },
+      {
+        context: 'Feature stores and joins',
+        usage:
+          'A hash join — the default strategy in pandas `merge` and in most query engines — builds a hash table on the smaller table\'s key column, then scans the larger one once, giving O(n + m) instead of the O(n*m) of a nested-loop join.',
+      },
+      {
+        context: 'Deduplicating training data',
+        usage:
+          'Detecting exact duplicate documents across a corpus is a single pass with a set of content hashes. The same idea at the near-duplicate level becomes MinHash and locality-sensitive hashing.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'dict / set', role: 'The everyday hash tables of Python; `collections.Counter` and `defaultdict` are thin conveniences over the same structure.' },
+      { tool: 'pandas', role: '`merge`, `groupby` and `drop_duplicates` are all hash-table algorithms under the surface, which is why they are near-linear rather than quadratic.' },
+      { tool: 'Feature hashing (the hashing trick)', role: 'scikit-learn\'s `HashingVectorizer` maps features to a fixed number of columns with a hash function, trading occasional collisions for constant memory and no vocabulary pass.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Using a list where a set or dict is needed for membership',
+        why: '`in` on a list is a linear scan, so testing n items against a list of m is O(n*m). The same code with a set is O(n + m).',
+        fix: 'Build the set once before the loop. The conversion costs O(m) time and memory, and repays itself after a handful of lookups.',
+      },
+      {
+        mistake: 'Trying to use a list or dict as a dictionary key',
+        why: 'Mutable objects are unhashable because their hash would change as they change, silently making entries unreachable. Python raises `TypeError: unhashable type` instead.',
+        fix: 'Convert to an immutable equivalent: a tuple for a list, a `frozenset` for a set, or a canonical string form for structured keys.',
+      },
+      {
+        mistake: 'Overriding `__eq__` without `__hash__`',
+        why: 'Defining `__eq__` sets `__hash__` to None, so instances become unhashable and cannot go in a set or dict. Overriding `__hash__` alone, inconsistently with equality, is worse: equal objects land in different buckets.',
+        fix: 'Define both together so equal objects always hash equally, or use `@dataclass(frozen=True)`, which generates a consistent pair for you.',
+      },
+      {
+        mistake: 'Relying on hash values being stable across runs',
+        why: 'CPython randomises string and bytes hashing per process by default, as a defence against algorithmic complexity attacks, so `hash("a")` differs between runs and must never be persisted.',
+        fix: 'For a stable fingerprint, use `hashlib.md5`/`sha256` on the encoded bytes, or set PYTHONHASHSEED only when reproducibility of iteration order genuinely matters.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Why is dictionary lookup O(1) on average but O(n) in the worst case?',
+        answer:
+          'The average case assumes the hash spreads keys roughly uniformly, so the expected number of probes depends only on the load factor and not on n — with open addressing it is about 1/(1 - alpha), and resizing keeps alpha below a constant, so the expectation is constant. The worst case is when every key hashes to the same bucket: then the structure degenerates into a linear scan of a single chain or probe sequence, and each operation is O(n). In practice this requires either a badly designed hash function or an adversary choosing keys deliberately, which is why CPython randomises string hashing per process. You should also remember insertion is amortised O(1), because the occasional resize rehashes every entry at O(n) cost, spread over the insertions that filled the table.',
+        followUp:
+          'Mentioning algorithmic complexity attacks on web frameworks, and hash randomisation as the mitigation, shows the security dimension.',
+      },
+      {
+        level: 'intermediate',
+        question: 'What must be true of an object for it to be a dictionary key, and why?',
+        answer:
+          'It must be hashable: it needs a `__hash__` that returns the same value for the object\'s whole lifetime, and that value must be consistent with `__eq__`, so any two objects that compare equal hash equally. The reason is that the table finds an entry by recomputing the hash and walking to that bucket; if the hash changed after insertion, the entry would be stranded in a bucket nobody will look in, and if equal objects hashed differently, the same logical key could be stored twice. Mutable built-ins are therefore unhashable by design, and Python enforces this at insertion time with a TypeError. Immutability is the easy way to satisfy the requirement, which is why tuples of hashables are fine and lists are not.',
+        followUp:
+          'The standard follow-up is why defining `__eq__` alone makes a class unhashable, and how `@dataclass(frozen=True)` solves it.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Explain the hashing trick and when you would accept its collisions.',
+        answer:
+          'Instead of building a vocabulary that maps each feature name to a column index, you hash the feature name directly into a fixed number of columns, typically 2^18 or 2^20. It removes the vocabulary pass entirely, so features can be processed in a single streaming pass with constant memory, and it handles unseen features at serving time without a retraining step or an out-of-vocabulary bucket. The cost is that distinct features can collide into the same column, which is a small amount of added noise in the model. That is acceptable when the feature space is huge and sparse — text n-grams, ad-tech categorical crosses — because the number of columns can be made large enough that collisions among frequent features are rare, and linear models are fairly robust to the resulting noise. It is not acceptable when you need to interpret coefficients, because a collided column no longer corresponds to one feature.',
+        followUp:
+          'Adding that a signed hash can make collisions cancel in expectation rather than accumulate shows genuine depth.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'A dict holds a million entries. Explain why `d["key"]` does not get slower than it was at a thousand entries, and what would make it slower.',
+        hint: 'Which quantity does the probe count depend on?',
+        solution:
+          'The expected probe count depends only on the load factor alpha = n/m, not on n itself. Because the table doubles its capacity whenever alpha exceeds two-thirds, alpha oscillates within a fixed band forever, so the expected work per lookup is the same at a million entries as at a thousand. What would make it slower: keys with a poor or colliding hash, which lengthens probe chains regardless of alpha; keys whose `__eq__` or `__hash__` is expensive, since those are called per probe; and memory effects, because a million-entry table no longer fits in cache, so each probe is more likely to be a cache miss — a constant-factor cost that Big-O does not capture but that you can measure.',
+      },
+      {
+        prompt: 'Implement a function that groups a list of words into anagram classes, and state its complexity.',
+        hint: 'You need a canonical form of each word that can serve as a hashable key.',
+        solution:
+          'from collections import defaultdict\n\ndef group_anagrams(words):\n    groups = defaultdict(list)\n    for w in words:\n        groups["".join(sorted(w))].append(w)\n    return list(groups.values())\n\nSorting each word produces a canonical key shared by all its anagrams, and the dictionary does the grouping in one pass. For n words of maximum length k, the cost is O(n * k log k) time — dominated by sorting each word — and O(n * k) space. Using a tuple of 26 letter counts as the key instead removes the log factor, giving O(n * k), which is the answer to expect as a follow-up. The insight being tested is that a hash map turns grouping from a quadratic pairwise comparison into a single pass.',
+      },
+      {
+        prompt: 'Why does `{3: "int", 3.0: "float", True: "bool"}` end up with fewer than three entries? What does it contain?',
+        hint: 'What does Python require of the hashes of objects that compare equal?',
+        solution:
+          'It contains two entries: {3: "float", True: "bool"}.\n\nPython requires that objects which compare equal hash equally, and 3 == 3.0 is True, so hash(3) == hash(3.0) and the dictionary treats them as the same key — the second assignment overwrites the value while keeping the original key object 3. True is a different story: it equals 1, not 3, so it is a separate key that displays as True. The lesson is that numeric keys collide deliberately across int, float and bool whenever their values are equal, which surprises people who use 1 and True as distinct keys in a configuration dictionary and is a real source of silent bugs.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DSA-007-q1',
+        type: 'mcq',
+        concept: 'why lookup is constant time',
+        prompt: 'What makes a hash table lookup independent of the number of stored entries?',
+        options: [
+          'The key is converted into an array index by a hash function, so the location is computed rather than searched for',
+          'The entries are kept sorted, so binary search finds them in logarithmic time',
+          'The interpreter caches every key that has been looked up before',
+          'Entries are stored contiguously, so the CPU can scan them very quickly',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Hashing turns the key itself into an address. The only remaining work is confirming the key with an equality check and, occasionally, following a short probe sequence — neither of which grows with n while the load factor is bounded.',
+      },
+      {
+        id: 'DSA-007-q2',
+        type: 'truefalse',
+        concept: 'collisions',
+        prompt: 'A good hash function eliminates collisions entirely.',
+        answer: false,
+        explanation:
+          'There are far more possible keys than buckets, so collisions are unavoidable by the pigeonhole principle. A good hash function only makes them rare and evenly spread; every hash table still needs a resolution strategy.',
+      },
+      {
+        id: 'DSA-007-q3',
+        type: 'numeric',
+        concept: 'load factor',
+        prompt: 'A table has 12 entries stored in 16 buckets. What is its load factor, to two decimal places?',
+        answer: 0.75,
+        tolerance: 0.01,
+        explanation:
+          'alpha = n/m = 12/16 = 0.75. This is above CPython\'s two-thirds threshold, so a real dict would already have resized to 32 buckets and rehashed every entry.',
+      },
+      {
+        id: 'DSA-007-q4',
+        type: 'debug',
+        language: 'python',
+        concept: 'hashability',
+        prompt: 'This raises `TypeError: unhashable type: \'list\'`. What is the right fix?',
+        code: `seen = set()
+for row in rows:
+    seen.add(row)          # row is a list like [1, 2, 3]`,
+        options: [
+          'Convert each row to a tuple: `seen.add(tuple(row))`',
+          'Use a list instead of a set for `seen`',
+          'Call `seen.add(hash(row))` to hash the list manually',
+          'Sort each row before adding it',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Lists are mutable and therefore unhashable, because their hash could change after insertion. A tuple of the same values is immutable and hashable. Storing bare hashes instead would lose the ability to compare keys and risk silent collisions.',
+      },
+      {
+        id: 'DSA-007-q5',
+        type: 'multi',
+        concept: 'hash table properties',
+        prompt: 'Which statements about Python dictionaries are true? Select all that apply.',
+        options: [
+          'Lookup is O(1) on average and O(n) in the worst case',
+          'Iteration follows insertion order as of Python 3.7',
+          'Keys must be hashable',
+          'Keys are stored in sorted order so ranges can be queried efficiently',
+        ],
+        answerIndices: [0, 1, 2],
+        explanation:
+          'Hash tables have no ordering by key, so range queries need a sorted structure such as a balanced tree. Insertion order is preserved by a separate compact entry array, which is an implementation choice rather than a property of hashing.',
+      },
+      {
+        id: 'DSA-007-q6',
+        type: 'explain',
+        concept: 'resizing and amortisation',
+        prompt: 'Explain why a hash table resizes before it is full, and why insertion is still amortised O(1) despite the resize.',
+        rubric: [
+          'Says probe length grows sharply as the load factor approaches 1, roughly as 1/(1 - alpha) for open addressing',
+          'Says a resize allocates a larger table and rehashes every entry, costing O(n)',
+          'Explains that geometric growth spreads that O(n) cost over the insertions that caused it, keeping the average constant',
+        ],
+        sampleAnswer:
+          'As the table fills, a probe is more likely to land on an occupied slot, and for open addressing the expected number of probes grows like 1/(1 - alpha) — two probes at half full, ten at ninety per cent, a hundred at ninety-nine. Waiting until the table is full would therefore destroy the constant-time guarantee, so implementations resize at a fixed threshold; CPython uses two-thirds. The resize itself is genuinely expensive: a bigger array is allocated and every entry is rehashed, because the bucket index depends on the table size, so it costs O(n). But because the capacity grows by a constant factor, the doublings become rarer exactly as fast as they become more expensive, so the total rehash work over n insertions is a constant multiple of n and the average cost per insertion stays constant. It is the same geometric-series argument that makes list append amortised O(1).',
+        explanation:
+          'The examinable idea is that the constant-time guarantee is maintained actively by a resizing policy, and that the policy\'s cost is amortised by geometric growth rather than avoided.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'How does a hash table achieve O(1) lookup?', back: 'A hash function converts the key into an array index, so the location is computed rather than searched for; an equality check confirms the key.' },
+      { front: 'What is the load factor, and why does it matter?', back: 'alpha = entries / buckets. Expected probes grow like 1/(1 - alpha) for open addressing, so implementations resize once it exceeds a threshold (2/3 in CPython).' },
+      { front: 'Chaining versus open addressing', back: 'Chaining keeps a list per bucket, tolerating alpha > 1. Open addressing stores everything in the array with better cache behaviour but must resize earlier. CPython uses open addressing.' },
+      { front: 'What makes an object hashable?', back: 'A `__hash__` that never changes during its lifetime and agrees with `__eq__`. Mutable built-ins like list and dict are therefore unhashable.' },
+      { front: 'Why is dict lookup O(n) in the worst case?', back: 'If every key collides, the probe sequence or chain degenerates into a linear scan. It needs a bad hash or an adversary, which hash randomisation defends against.' },
+      { front: 'Why not persist `hash("abc")` between runs?', back: 'CPython randomises string hashing per process to resist complexity attacks. Use hashlib for a stable fingerprint.' },
+    ],
+
+    challenge: {
+      title: 'Open addressing with tombstones',
+      brief:
+        'Implement a hash map using open addressing rather than chaining, with linear probing, a resize at load factor 0.66, and correct deletion using tombstone markers so probe chains are not broken. Add a method that reports the average number of probes per successful lookup, then insert 10,000 keys and show empirically that the average stays roughly constant as the table grows, while a version that never resizes degrades sharply.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Deletion uses a tombstone and a subsequent lookup for a key further along the probe chain still succeeds',
+        'Resizing rehashes all live entries and drops tombstones',
+        'Average probe count is measured, not asserted, and reported at several table sizes',
+        'The no-resize comparison demonstrates the 1/(1 - alpha) blow-up with real numbers',
+      ],
+      starterCode: 'EMPTY = object()\nTOMBSTONE = object()\n\nclass OpenHashMap:\n    def __init__(self, capacity=8):\n        self.keys = [EMPTY] * capacity\n        self.values = [None] * capacity\n        self.size = 0\n        self.probes = 0\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone who uses Python dictionaries every day how they actually work, and why the answer explains both their speed and their restrictions.',
+      mustCover: [
+        'A hash function turns the key into a number, which is reduced to an index into an array',
+        'Two keys can land in the same slot: that is a collision, resolved by chaining or by probing nearby slots',
+        'The table keeps spare room and resizes when it gets about two-thirds full, which is what keeps lookups constant',
+        'Keys must be hashable — their hash must never change — which is why lists cannot be keys',
+      ],
+      bonusSignals: ['notes that an equality check is still needed after the hash matches', 'explains the worst case and why it is rare', 'connects it to why set membership is fast'],
+      sampleExplanation:
+        'When you write d["learning_rate"], Python does not look through the dictionary. It runs the key through a hash function, which turns the text into a large number, then uses some of that number\'s bits to pick a slot in an array — so it walks straight to one place instead of searching. It still compares the key stored there with yours, because two different keys can produce the same slot; that is called a collision, and when it happens Python simply tries the next slot in a fixed sequence until it finds your key or an empty space. Collisions stay rare only while the table has room, so the dictionary watches how full it is and, at about two-thirds, allocates a bigger array and re-files every entry. That is also why keys have to be hashable: the whole scheme depends on being able to recompute the same slot later, so if a key could change after you stored it, the entry would be stranded in a slot nobody will ever look in. Lists can change, so Python refuses them as keys outright rather than letting you corrupt the table.',
+    },
+
+    masteryRequirements: { understoodScore: 0.7, proficientScore: 0.85, practiceRequired: 2, teachRequired: true },
+  },
+
+  {
+    id: 'DSA-008',
+    domain: 'DSA',
+    module: 'Hashing',
+    topic: 'Membership and uniqueness',
+    title: 'Sets and Deduplication Patterns',
+    slug: 'sets-and-deduplication',
+    difficulty: 2,
+    estimatedMinutes: 30,
+    prerequisites: ['DSA-007'],
+    related: ['DSA-004', 'DSA-007'],
+    tags: ['set', 'deduplication', 'membership', 'frozenset', 'data-leakage'],
+
+    learningObjectives: [
+      'Explain a set as a hash table without values, and give the complexity of membership, insertion and the set operations',
+      'Deduplicate a sequence with and without preserving order, and justify the method chosen',
+      'Use set algebra — union, intersection, difference — to replace nested loops',
+      'Identify where deduplication protects a machine-learning workflow, particularly against train/test leakage',
+    ],
+
+    terminology: [
+      {
+        term: 'Set',
+        definition:
+          'An unordered collection of distinct hashable elements, implemented as a hash table that stores only keys. Membership, insertion and deletion are O(1) on average.',
+        simple: 'A bag that refuses duplicates and can tell you instantly whether something is inside.',
+      },
+      {
+        term: 'Frozenset',
+        definition:
+          'An immutable set. Because it cannot change, it is hashable, so it can be an element of another set or a dictionary key.',
+        simple: 'A sealed bag, so it can itself be put inside other bags.',
+      },
+      {
+        term: 'Set difference',
+        definition:
+          'a - b is the elements of a that are not in b. Computed in O(len(a)) by testing each element of a against b, not by comparing every pair.',
+        simple: 'What is left of the first pile after removing anything that also appears in the second.',
+      },
+      {
+        term: 'Order-preserving deduplication',
+        definition:
+          'Removing duplicates while keeping first-occurrence order, achieved with a seen-set and an output list, or in one expression with dict.fromkeys.',
+        simple: 'Throwing out repeats but keeping everything else in the order it arrived.',
+      },
+      {
+        term: 'Data leakage (by duplication)',
+        definition:
+          'The same or near-identical record appearing in both training and evaluation data, which inflates measured performance because the model has effectively memorised the test example.',
+        simple: 'Accidentally letting the model see the exam questions while it revises.',
+      },
+    ],
+
+    simpleExplanation:
+      "A set is a dictionary that has given up its values and kept only its keys. That one change makes it the right tool for two questions that come up constantly: is this thing already here, and which things appear in both of these collections. Because it is a hash table underneath, asking whether an item is in a set of ten million takes the same time as asking about a set of ten — no scanning, just a computed location. Sets also refuse duplicates by construction, so adding something twice leaves you with one copy, which makes deduplication almost free. The two things to remember are that a set has no order, so if you need to keep the original sequence you must track it yourself, and that its elements must be hashable, so lists cannot go in but tuples can. Once those are in your fingers, whole categories of nested-loop code collapse into a single line of set algebra.",
+
+    whyItExists:
+      'Uniqueness and membership are so common that they deserve a structure with no wasted machinery: dropping the values from a hash table gives constant-time membership, automatic duplicate rejection, and set algebra that replaces quadratic pairwise comparison with linear passes.',
+
+    analogy: {
+      scenario:
+        "Think of the guest list on a clipboard at a private event, compared with a guest list held by a doorman who has memorised a system of pigeonholes. The clipboard doorman runs a finger down four hundred names for every arrival. The pigeonhole doorman computes where a name would be filed and checks that one place, so he answers just as fast at the four-thousandth name as at the fourth. He also physically cannot file the same name twice, and when the organisers ask which guests appear on both this list and the VIP list, he walks the shorter list once rather than comparing every pair.",
+      mapping: [
+        { from: 'Filing a name into a computed pigeonhole', to: 'Hashing an element to a bucket: O(1) average membership' },
+        { from: 'Being unable to file the same name twice', to: 'A set storing at most one copy of each element' },
+        { from: 'Running a finger down the whole clipboard', to: '`x in my_list`: O(n) per test' },
+        { from: 'Walking the shorter list once to find names on both', to: '`a & b`, computed in O(min(len(a), len(b)))' },
+        { from: 'The pigeonholes being in no meaningful sequence', to: 'A set having no ordering: iteration order is an implementation detail' },
+      ],
+      bridge:
+        'The doorman\'s advantage is not diligence, it is filing: he computes a location instead of searching. That is exactly the hash table from the previous unit with the values thrown away, and every property of a set — constant membership, automatic uniqueness, linear set algebra, no ordering, hashable elements only — follows from that single structural fact.',
+      limitations:
+        'The analogy suggests names are simply present or absent, but real deduplication is usually about near-duplicates: two documents differing by a whitespace character are distinct to a set and identical to a human. That gap is why normalisation before hashing, and techniques like MinHash, exist.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'A set is a hash table with no values',
+        caption: 'Add elements and watch membership resolve to one computed bucket.',
+        widget: 'hash-table',
+        props: { mode: 'set' },
+      },
+      {
+        kind: 'table',
+        title: 'Set operation costs',
+        caption: 'n and m are the sizes of the two sets involved.',
+        columns: ['Operation', 'Complexity', 'Note'],
+        rows: [
+          ['`x in s`', 'O(1) average', 'The reason sets exist; O(n) worst case under pathological hashing'],
+          ['`s.add(x)` / `s.discard(x)`', 'O(1) average', 'Amortised, including the occasional resize'],
+          ['`a | b` (union)', 'O(n + m)', 'Every element of both is hashed into the result'],
+          ['`a & b` (intersection)', 'O(min(n, m))', 'Iterates the smaller set, testing membership in the larger'],
+          ['`a - b` (difference)', 'O(n)', 'One pass over a with O(1) tests against b'],
+          ['`a <= b` (subset)', 'O(n)', 'Every element of a is tested against b'],
+          ['`set(xs)` from a list', 'O(n)', 'One hash per element; O(n) extra space'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Two ways to deduplicate',
+        caption: 'Choose by whether order carries meaning.',
+        left: {
+          heading: 'Order does not matter — `set(xs)`',
+          points: [
+            'One pass, O(n) time and O(n) space',
+            'Shortest possible code',
+            'Result order is arbitrary and must not be relied on',
+            'Elements must be hashable',
+          ],
+        },
+        right: {
+          heading: 'Order matters — `dict.fromkeys(xs)`',
+          points: [
+            'Also O(n) time and O(n) space',
+            'Keeps first-occurrence order, guaranteed since Python 3.7',
+            'Equivalent to a seen-set plus an output list, in one expression',
+            'Use the explicit loop when you also need to act on the duplicates',
+          ],
+        },
+      },
+    ],
+
+    formalDefinition:
+      'A set is an unordered collection of distinct hashable elements supporting membership, insertion and deletion in expected O(1) time, implemented as a hash table whose entries carry keys only. The standard algebraic operations — union, intersection, difference and symmetric difference — are computed by iterating one operand and performing constant-time membership tests on the other, giving complexity linear in the size of the iterated operand rather than in the product of the sizes.',
+
+    math: {
+      intuition:
+        'The asymmetry in set algebra is worth internalising: intersection iterates the smaller operand because membership is symmetric and cheap either way, whereas difference must iterate the left operand specifically, since the result is defined by it. That is why a & b is O(min(n, m)) while a - b is O(n) regardless of m.',
+      formulas: [
+        {
+          latex: 'T_{\\cap}(n, m) = O(\\min(n, m)), \\qquad T_{\\cup}(n, m) = O(n + m), \\qquad T_{\\setminus}(n, m) = O(n)',
+          name: 'Cost of set algebra',
+          meaning: 'Each operation is linear in what it must iterate, never in the product of the two sizes.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'n', meaning: 'Size of the left operand' },
+            { symbol: 'm', meaning: 'Size of the right operand' },
+            { symbol: '\\cap, \\cup, \\setminus', meaning: 'Intersection, union and difference respectively' },
+          ],
+        },
+        {
+          latex: '|A \\cup B| = |A| + |B| - |A \\cap B|',
+          name: 'Inclusion-exclusion',
+          meaning: 'The size of a union counts the overlap once, not twice — the arithmetic behind duplicate accounting when merging datasets.',
+          category: 'complexity',
+          variables: [
+            { symbol: '|A|', meaning: 'Number of distinct elements in A' },
+            { symbol: '|A \\cap B|', meaning: 'Number of elements appearing in both, which is the count of duplicates across the two sources' },
+          ],
+        },
+        {
+          latex: 'J(A, B) = \\frac{|A \\cap B|}{|A \\cup B|}',
+          name: 'Jaccard similarity',
+          meaning: 'The standard overlap measure between two sets, and the quantity MinHash estimates cheaply for near-duplicate detection.',
+          category: 'statistics',
+          variables: [
+            { symbol: 'J', meaning: 'Similarity between 0 (disjoint) and 1 (identical)' },
+            { symbol: '|A \\cap B|', meaning: 'Elements shared by both sets, such as shingles common to two documents' },
+            { symbol: '|A \\cup B|', meaning: 'Total distinct elements across both' },
+          ],
+        },
+      ],
+    },
+
+    workedExample: {
+      title: 'Deduplicating while preserving order, element by element',
+      setup:
+        'Deduplicate ["b", "a", "c", "a", "b", "d"] keeping first-occurrence order, using a seen-set and an output list. n = 6.',
+      steps: [
+        { label: 'Start', detail: 'seen = {}, out = []. Nothing processed.' },
+        { label: '"b"', detail: 'Not in seen — one O(1) hash lookup. Add to seen and append to out. seen = {b}, out = [b].' },
+        { label: '"a"', detail: 'Not in seen. seen = {b, a}, out = [b, a].' },
+        { label: '"c"', detail: 'Not in seen. seen = {b, a, c}, out = [b, a, c].' },
+        { label: '"a"', detail: 'Already in seen: one O(1) test, then skip. Nothing is appended and nothing is scanned.' },
+        { label: '"b"', detail: 'Already in seen: skip.' },
+        { label: '"d"', detail: 'Not in seen. seen = {b, a, c, d}, out = [b, a, c, d].' },
+        { label: 'Result', detail: 'out = ["b", "a", "c", "d"] — first-occurrence order preserved, duplicates removed.' },
+        { label: 'Compare the naive version', detail: 'Replacing the set with `if x not in out` makes each test a linear scan of out, giving O(n^2) comparisons: 15 at n = 6, but 5 * 10^9 at n = 100,000.' },
+        { label: 'One-line equivalent', detail: 'list(dict.fromkeys(xs)) does exactly this, using the dictionary\'s guaranteed insertion order instead of a separate list.' },
+      ],
+      conclusion:
+        'Time complexity is O(n): one constant-time hash operation per element, with no rescanning. Space complexity is O(n) for the seen-set plus O(k) for the k unique elements in the output — worst case O(n) when everything is unique. The naive `not in out` version is O(n^2) time with O(k) space, so the seen-set buys a factor of n in time for a factor of at most 2 in memory. That is the trade in its purest form, and it is almost always worth taking.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Four deduplication patterns and when each is right',
+        runnable: true,
+        code: `xs = ["b", "a", "c", "a", "b", "d"]
+
+print(set(xs))                       # fastest, order arbitrary
+print(list(dict.fromkeys(xs)))       # order preserved, one expression
+
+seen, out, dupes = set(), [], []
+for x in xs:                          # order preserved AND duplicates captured
+    (out if x not in seen else dupes).append(x)
+    seen.add(x)
+print(out, dupes)
+
+rows = [[1, 2], [3, 4], [1, 2]]       # unhashable elements need a key function
+unique_rows = list(dict.fromkeys(tuple(r) for r in rows))
+print([list(r) for r in unique_rows])`,
+        output: `{'a', 'b', 'c', 'd'}
+['b', 'a', 'c', 'd']
+['b', 'a', 'c', 'd'] ['a', 'b']
+[[1, 2], [3, 4]]`,
+        explanation:
+          'All four are O(n). Use `set()` when order is genuinely irrelevant and say so in a comment, because a reader cannot tell the difference between "order does not matter" and "the author forgot about order". Use `dict.fromkeys` when it does. Use the explicit loop when you need to report what was dropped, which in a data pipeline you usually do. The last pattern is the standard fix for unhashable elements: convert to a canonical hashable form, deduplicate, and convert back.',
+      },
+      {
+        language: 'python',
+        title: 'Set algebra replacing nested loops',
+        runnable: true,
+        code: `train_ids = {f"doc_{i}" for i in range(0, 10_000)}
+test_ids  = {f"doc_{i}" for i in range(9_900, 12_000)}
+
+overlap = train_ids & test_ids
+print(f"leaked ids: {len(overlap)}")
+print(f"test-only:  {len(test_ids - train_ids)}")
+print(f"union:      {len(train_ids | test_ids)}")
+print(f"jaccard:    {len(overlap) / len(train_ids | test_ids):.4f}")
+
+clean_test = test_ids - train_ids     # the fix: remove the overlap from test
+assert not (train_ids & clean_test)
+print(f"clean test size: {len(clean_test)}")`,
+        output: `leaked ids: 100
+test-only:  2000
+union:      12000
+jaccard:    0.0083
+clean test size: 2000`,
+        explanation:
+          'Each of these lines would otherwise be a nested loop over 10,000 by 2,100 elements — 21 million comparisons — and instead each is a single linear pass. The leakage check is worth building into every split routine: a hundred shared ids out of two thousand test examples would inflate the reported score by several points, and the failure is silent, because a leaked model looks excellent right up until deployment.',
+      },
+      {
+        language: 'python',
+        title: 'Sets of sets, and the frozenset requirement',
+        runnable: true,
+        code: `try:
+    {{1, 2}, {3, 4}}                 # a set of mutable sets
+except TypeError as e:
+    print("TypeError:", e)
+
+pairs = {frozenset({1, 2}), frozenset({2, 1}), frozenset({3, 4})}
+print(len(pairs), pairs)             # {1,2} and {2,1} are the same pair
+
+cache = {frozenset({"lr", "batch"}): "config A"}
+print(cache[frozenset({"batch", "lr"})])`,
+        output: `TypeError: unhashable type: 'set'
+2 {frozenset({1, 2}), frozenset({3, 4})}
+config A`,
+        explanation:
+          'A set can only contain hashable elements, and an ordinary set is mutable and therefore unhashable — the same rule that keeps lists out of dictionaries. `frozenset` is the immutable version, which makes it usable as an element or a key. The example also shows why it is the natural representation for unordered pairs and for feature subsets: order and duplication vanish, so {1,2} and {2,1} are literally the same key, which is exactly what you want when caching results keyed by a combination of options.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Guarding against train/test leakage',
+        usage:
+          'Before evaluating, hash the normalised content of every training and test record and intersect the two sets. A non-empty intersection means the reported metric is optimistic, and the fix — removing the overlap from the test set — is one line of set difference.',
+      },
+      {
+        context: 'Corpus deduplication for language models',
+        usage:
+          'Large text corpora contain enormous exact-duplicate fractions. Deduplicating with a set of content hashes before training reduces cost, reduces memorisation of repeated passages, and measurably improves held-out performance.',
+      },
+      {
+        context: 'Stopword and vocabulary filtering',
+        usage:
+          'Filtering tokens against a stopword set is O(1) per token; against a list it is O(len(stopwords)) per token, which over billions of tokens is the difference between a preprocessing step and a bottleneck.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'pandas', role: '`drop_duplicates`, `isin` and `Index.difference` are set operations over hash tables, which is why they scale linearly.' },
+      { tool: 'scikit-learn', role: '`GroupShuffleSplit` exists because deduplication must respect groups — splitting by row when near-duplicates share a group leaks information across the split.' },
+      { tool: 'datasketch / MinHash', role: 'Estimates Jaccard similarity between sets without comparing them exhaustively, which is how near-duplicate detection is done at corpus scale.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Relying on the iteration order of a set',
+        why: 'Sets have no defined order, and for strings it varies between processes because of hash randomisation. Code that works today can produce a different order tomorrow.',
+        fix: 'Use `sorted(s)` when you need a deterministic order, or `dict.fromkeys` when you need insertion order.',
+      },
+      {
+        mistake: 'Deduplicating with `if x not in result` on a list',
+        why: 'That membership test is a linear scan of the growing result, making the loop O(n^2). It looks identical to the set version and is thousands of times slower at scale.',
+        fix: 'Keep a separate `seen` set for the tests and append to the output list, or use `dict.fromkeys`.',
+      },
+      {
+        mistake: 'Assuming `set()` handles any element',
+        why: 'Lists, dicts and sets are unhashable, so `set(list_of_lists)` raises TypeError, and near-duplicates that differ by whitespace or case are treated as distinct.',
+        fix: 'Convert to tuples or frozensets for structural elements, and normalise text — casefold, strip, collapse whitespace — before hashing.',
+      },
+      {
+        mistake: 'Deduplicating after splitting train and test',
+        why: 'Removing duplicates within each split independently leaves cross-split duplicates untouched, which is precisely the leakage you were trying to prevent.',
+        fix: 'Deduplicate the full dataset first, then split — and split by group or by document hash when near-duplicates cluster.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'How would you remove duplicates from a list while preserving order, and what is the complexity?',
+        answer:
+          'Keep a set of items already seen and build an output list: for each element, test membership in the set, and if absent add it to both. That is O(n) time, because each membership test and insertion is O(1) on average, and O(n) space for the set. In modern Python the same thing is one expression — list(dict.fromkeys(xs)) — because dictionaries preserve insertion order as of 3.7 and reject duplicate keys. The mistake to avoid is testing `if x not in output`, which scans a growing list and makes the whole loop O(n^2). If the elements are unhashable, such as lists, convert them to tuples first or deduplicate on a computed key.',
+        followUp:
+          'A good follow-up is deduplicating by a key function, for example by a normalised form of a string, which is where a plain set stops being sufficient.',
+      },
+      {
+        level: 'intermediate',
+        question: 'What is the complexity of a & b and of a - b, and why are they different?',
+        answer:
+          'Intersection is O(min(len(a), len(b))): the implementation iterates the smaller set and tests each element for membership in the larger, which is valid because membership is symmetric and each test is O(1). Difference is O(len(a)) regardless of the size of b, because the result is defined by the left operand — every element of a must be examined to decide whether it survives, and no element of b can add anything. So intersecting a ten-element set with a million-element one is ten operations, while subtracting a ten-element set from a million-element one is still a million. Knowing which operand drives the cost is occasionally the difference between a fast and a slow pipeline step.',
+        followUp:
+          'Asking how you would compute the intersection of twenty sets efficiently tests whether the candidate thinks to sort by size and intersect the smallest first.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'How does duplication in a dataset harm a model, and what would you do about it?',
+        answer:
+          'Two distinct harms. Within the training set, duplicates re-weight the data: a passage appearing a thousand times is effectively a thousand gradient updates towards memorising it, which encourages verbatim regurgitation and distorts the loss landscape. Across the train/test boundary, duplication is leakage: the model is evaluated on examples it has memorised, so the metric is optimistic and the failure only becomes visible in production. My procedure is to normalise first — casefold, collapse whitespace, strip boilerplate — then deduplicate the full dataset on a content hash before splitting, then verify with a set intersection that the splits are disjoint, and finally check for near-duplicates with MinHash or embedding similarity, because exact hashing misses the document that differs by one character. Deduplication is also the cheapest quality intervention available: it reduces training cost and improves held-out performance at the same time.',
+        followUp:
+          'Mentioning group-aware splitting, so that near-duplicates from the same source stay on one side of the split, shows experience with real datasets.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Given two lists of user ids, return the ids present in both, with no duplicates, sorted. State the complexity.',
+        hint: 'Convert once, intersect, then sort.',
+        solution:
+          'def common_ids(a, b):\n    return sorted(set(a) & set(b))\n\nBuilding the two sets is O(n + m), the intersection is O(min(n, m)), and the final sort is O(k log k) where k is the number of common ids, so the total is O(n + m + k log k) — dominated by the set construction for any realistic input. Space is O(n + m). The nested-loop alternative, `[x for x in a if x in b]`, is O(n * m) and also fails to remove duplicates. Sorting at the end is what makes the output deterministic, which matters if it is written to a file that gets diffed.',
+      },
+      {
+        prompt: 'You have 2 million document strings and need to find which appear more than once. Do it in one pass and state the memory cost.',
+        hint: 'One set is not enough — you need to distinguish "seen once" from "seen again".',
+        solution:
+          'def find_duplicates(docs):\n    seen, dupes = set(), set()\n    for d in docs:\n        h = hash(d)          # or hashlib.sha256(d.encode()).digest() for stability\n        if h in seen:\n            dupes.add(h)\n        else:\n            seen.add(h)\n    return dupes\n\nOne pass, O(n) time, and O(n) space for the seen set. Storing hashes rather than the documents themselves is the important memory decision: 2 million 8-byte hashes is a few tens of megabytes, while 2 million documents could be many gigabytes. The trade is a small probability of a hash collision reporting a false duplicate, which for a 64-bit hash over 2 million items is around 10^-7 — acceptable for a report, not acceptable for silent deletion, where you would confirm the candidates by comparing the actual text.',
+      },
+      {
+        prompt: 'Write a check that fails loudly if a train/test split shares any examples, and explain what to do when it fires.',
+        hint: 'Normalise before hashing, or the check will miss the duplicates that matter.',
+        solution:
+          'def assert_disjoint(train, test, key=lambda d: " ".join(d.lower().split())):\n    train_keys = {key(d) for d in train}\n    overlap = {key(d) for d in test} & train_keys\n    if overlap:\n        raise ValueError(f"{len(overlap)} examples leak across the split")\n\nThe cost is O(n + m) time and O(n + m) space, which is negligible next to training. The normalisation in `key` is the part that earns its keep: without casefolding and whitespace collapsing, two records differing by a trailing space look distinct and the check passes while leakage remains. When it fires, remove the overlap from the test set rather than from train — the test set must stay untouched by anything the model saw — and then investigate why the duplicates exist at all, because they usually indicate a join or a scrape that ran twice.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DSA-008-q1',
+        type: 'mcq',
+        concept: 'membership complexity',
+        prompt: 'What is the average complexity of `x in s` when s is a set of one million elements?',
+        options: ['O(1)', 'O(n)', 'O(log n)', 'O(n log n)'],
+        answerIndex: 0,
+        explanation:
+          'A set is a hash table, so membership computes a bucket from the element\'s hash rather than scanning. Size does not affect the expected cost while the load factor is bounded.',
+      },
+      {
+        id: 'DSA-008-q2',
+        type: 'code-output',
+        language: 'python',
+        concept: 'order-preserving deduplication',
+        prompt: 'What does this print?',
+        code: `xs = ["b", "a", "b", "c", "a"]
+print(list(dict.fromkeys(xs)))`,
+        options: ["['b', 'a', 'c']", "['a', 'b', 'c']", "['b', 'a', 'b', 'c', 'a']", "{'b', 'a', 'c'}"],
+        answerIndex: 0,
+        explanation:
+          'Dictionary keys are unique and, since Python 3.7, preserve insertion order, so this deduplicates while keeping first-occurrence order. `set(xs)` would also deduplicate but would lose the order.',
+      },
+      {
+        id: 'DSA-008-q3',
+        type: 'truefalse',
+        concept: 'set ordering',
+        prompt: 'Iterating a set of strings twice in the same process gives the same order, and that order is safe to rely on across runs.',
+        answer: false,
+        explanation:
+          'Within one process the order is stable, but it is not defined by the language and varies across runs because string hashing is randomised per process. Use sorted() for determinism.',
+      },
+      {
+        id: 'DSA-008-q4',
+        type: 'match',
+        concept: 'set algebra',
+        prompt: 'Match each expression to what it computes and its cost.',
+        pairs: [
+          { left: 'a & b', right: 'Elements in both — O(min(n, m))' },
+          { left: 'a | b', right: 'Elements in either — O(n + m)' },
+          { left: 'a - b', right: 'Elements in a but not b — O(n)' },
+          { left: 'a ^ b', right: 'Elements in exactly one — O(n + m)' },
+        ],
+        explanation:
+          'Each operation is linear in what it must iterate, never in the product of the sizes — which is why set algebra replaces nested loops.',
+      },
+      {
+        id: 'DSA-008-q5',
+        type: 'debug',
+        language: 'python',
+        concept: 'quadratic deduplication',
+        prompt: 'This works but takes minutes on 200,000 items. What is the fix?',
+        code: `unique = []
+for x in items:
+    if x not in unique:
+        unique.append(x)`,
+        options: [
+          'Track membership in a separate set: `if x not in seen: seen.add(x); unique.append(x)`',
+          'Sort `items` first so duplicates are adjacent',
+          'Replace `append` with `insert(0, x)`',
+          'Wrap the loop in a list comprehension',
+        ],
+        answerIndex: 0,
+        explanation:
+          '`x not in unique` scans a growing list, making the loop O(n^2). A set makes each test O(1), giving O(n) overall while still preserving order in the output list.',
+      },
+      {
+        id: 'DSA-008-q6',
+        type: 'explain',
+        concept: 'deduplication and leakage',
+        prompt: 'Explain why duplicate records matter in a machine-learning dataset, and how a set helps.',
+        rubric: [
+          'Distinguishes duplication within training data from duplication across the train/test boundary',
+          'Says cross-split duplication inflates evaluation metrics because the model has effectively memorised the test example',
+          'Describes a concrete O(n) check using sets, and mentions normalising before hashing',
+        ],
+        sampleAnswer:
+          'Duplicates inside the training set silently re-weight the data: a passage that appears a thousand times gets a thousand times the gradient pressure, which encourages memorisation rather than generalisation. Duplicates spanning the train and test sets are worse, because evaluation then measures recall of memorised examples and the score is optimistic in a way that only shows up after deployment. A set makes the check cheap: build the set of normalised training records, intersect it with the test records, and the size of the intersection is the leak, all in O(n + m) time. The normalisation step matters as much as the set — casefolding and collapsing whitespace, so that records differing by a trailing space are recognised as the same record — and for near-duplicates you go further, to MinHash or embedding similarity, because exact hashing cannot see them.',
+        explanation:
+          'The point being assessed is that deduplication is a correctness concern for evaluation, not just a tidiness or storage concern, and that the check itself is trivially cheap.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What is a set, structurally?', back: 'A hash table storing keys only. Membership, insertion and deletion are O(1) average; there is no ordering.' },
+      { front: 'Deduplicate while preserving order', back: '`list(dict.fromkeys(xs))`, or a seen-set plus an output list. Both O(n). Never `if x not in output_list`, which is O(n^2).' },
+      { front: 'Cost of `a & b` versus `a - b`', back: 'Intersection is O(min(n, m)) — it iterates the smaller set. Difference is O(len(a)) regardless of b\'s size.' },
+      { front: 'Why can a set not contain a list or another set?', back: 'Elements must be hashable, and mutable objects are not. Use a tuple or a frozenset instead.' },
+      { front: 'What is a frozenset for?', back: 'An immutable, hashable set — usable as a dict key or as an element of another set, ideal for unordered combinations.' },
+      { front: 'Why deduplicate before splitting train and test?', back: 'Deduplicating each split separately leaves cross-split duplicates, which is leakage and inflates the reported metric.' },
+    ],
+
+    challenge: {
+      title: 'A leakage audit for a dataset split',
+      brief:
+        'Write an audit function that takes a training list and a test list of text records and reports: the number of exact duplicates within each split, the number of exact duplicates across the splits after normalisation, and the ten longest leaked records. Normalisation should casefold, collapse whitespace and strip punctuation. Then produce a cleaned test set with the leaks removed, assert it is disjoint from training, and print how much the test set shrank. State the time and space complexity of the audit.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Normalisation is applied before any hashing or comparison',
+        'Within-split and cross-split duplicates are reported separately',
+        'The cleaned test set is verified disjoint with an assertion, not just assumed',
+        'The complexity statement is O(n + m) time and space, with a one-line justification',
+      ],
+      starterCode: 'import re\n\nPUNCT = re.compile(r"[^\\w\\s]")\n\ndef normalise(text):\n    return " ".join(PUNCT.sub("", text).lower().split())\n\ndef audit(train, test):\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone the difference between a list and a set, and give them a rule for when to reach for each.',
+      mustCover: [
+        'A set is a hash table without values: membership is O(1) and duplicates are rejected automatically',
+        'A list keeps order and allows duplicates and indexing; a set gives up all three',
+        'Set algebra — intersection, union, difference — replaces nested loops with linear passes',
+        'Elements of a set must be hashable, so lists must become tuples',
+      ],
+      bonusSignals: ['gives the deduplication patterns for both order-sensitive and order-free cases', 'mentions the leakage check', 'notes that set iteration order must not be relied on'],
+      sampleExplanation:
+        'A list remembers everything you put in it, in the order you put it, and finding something means looking through it one item at a time. A set forgets order, refuses duplicates, and finds things by computing where they would be, so asking whether an item is present takes the same tiny amount of time in a set of ten million as in a set of ten. That single difference is the rule: if you will ask "is this in there?" more than a handful of times, or if you need uniqueness, use a set. It also gives you algebra for free — the items in both collections, the items in one but not the other — each computed in a single pass instead of comparing every pair. Two catches. Sets have no order, so if the sequence matters, deduplicate with dict.fromkeys instead, which keeps first-occurrence order. And everything you put in a set must be hashable, so a list of values has to become a tuple first.',
+    },
+
+    masteryRequirements: { understoodScore: 0.7, proficientScore: 0.85, practiceRequired: 2, teachRequired: true },
+  },
+
+  {
+    id: 'DSA-009',
+    domain: 'DSA',
+    module: 'Trees & Heaps',
+    topic: 'Hierarchies and traversal',
+    title: 'Trees and Binary Trees',
+    slug: 'trees-and-binary-trees',
+    difficulty: 3,
+    estimatedMinutes: 40,
+    prerequisites: ['DSA-005', 'DSA-006'],
+    related: ['DSA-005', 'DSA-006'],
+    tags: ['tree', 'binary-tree', 'traversal', 'preorder', 'inorder', 'level-order'],
+
+    learningObjectives: [
+      'Use tree vocabulary precisely: root, child, parent, leaf, depth, height, subtree',
+      'Relate the height of a binary tree to its node count, and explain why balance matters',
+      'Implement preorder, inorder, postorder and level-order traversal, recursively and iteratively',
+      'Choose the traversal that matches a task, such as evaluating an expression or printing a hierarchy',
+    ],
+
+    terminology: [
+      {
+        term: 'Tree',
+        definition:
+          'A connected acyclic structure of nodes in which every node except the root has exactly one parent. A tree with n nodes has exactly n - 1 edges.',
+        simple: 'A family tree shape: one thing at the top, branches downward, no loops.',
+      },
+      {
+        term: 'Depth and height',
+        definition:
+          'Depth of a node is the number of edges from the root to it; height of a tree is the greatest depth of any node. A single node has height 0.',
+        simple: 'How far down a node sits, and how far down the deepest one goes.',
+      },
+      {
+        term: 'Binary tree',
+        definition:
+          'A tree in which every node has at most two children, conventionally named left and right. The left/right distinction is part of the structure, not an arbitrary ordering.',
+        simple: 'A tree where every box has at most two boxes hanging under it.',
+      },
+      {
+        term: 'Balanced tree',
+        definition:
+          'One whose height is O(log n) — informally, where no subtree is dramatically deeper than its sibling. Balance is what makes tree operations logarithmic rather than linear.',
+        simple: 'A tree that spreads out rather than growing into a long straggly chain.',
+      },
+      {
+        term: 'Traversal',
+        definition:
+          'A systematic visit to every node exactly once. The four standard orders are preorder, inorder, postorder and level-order, and each suits different tasks.',
+        simple: 'A rule for walking the whole tree without missing or repeating anything.',
+      },
+    ],
+
+    simpleExplanation:
+      "A tree is what you get when data has a hierarchy rather than a sequence: one thing at the top, things hanging beneath it, and nothing ever looping back. Folders containing folders, a company's reporting lines, the nested structure of a web page and the parsed form of a sentence are all trees, and so is the decision tree that a model learns. A binary tree is the special case where each node has at most two children, which is the shape most algorithms are built on because two choices per step is exactly what halving requires. The crucial number about any tree is its height, because most operations walk from the root down to a leaf, and the height tells you how many steps that is. A tree that spreads evenly has a height of about log2 of its node count, so a million nodes are twenty steps from the root; a tree that has degenerated into a chain has height equal to its node count, and every operation becomes a scan. Most of what follows in this domain is about keeping trees short.",
+
+    whyItExists:
+      'Sequences cannot express containment or branching, yet a great deal of real data is hierarchical and a great many algorithms work by repeatedly halving a search space. Trees give both: a structure that mirrors nesting, and a shape whose height grows logarithmically so that a root-to-leaf walk is cheap.',
+
+    analogy: {
+      scenario:
+        "Think of a large company's reporting chart. The chief executive is at the top; each person has exactly one manager and any number of reports; nobody reports to someone beneath them, which is what stops the chart becoming a tangle. To pass a message to everyone, you have a choice of methods. You can hand it to a person, then have them deal with their whole first report's branch before starting the second, going as deep as possible each time. Or you can tell everyone at the executive level, then everyone at the next level down, then the level below that. Both reach everybody exactly once, but the order is completely different, and which one you want depends on the message.",
+      mapping: [
+        { from: 'The chief executive', to: 'The root node' },
+        { from: 'Each person having exactly one manager', to: 'Each node having exactly one parent, which makes it a tree rather than a graph' },
+        { from: 'People with no reports', to: 'Leaf nodes' },
+        { from: 'Finishing one branch entirely before starting the next', to: 'Depth-first traversal — preorder, inorder or postorder' },
+        { from: 'Informing an entire level before moving down', to: 'Level-order traversal, driven by a queue' },
+        { from: 'The number of levels between the chief and the most junior person', to: 'The height of the tree, which bounds the cost of a root-to-leaf walk' },
+      ],
+      bridge:
+        'The single-manager rule is what makes the chart a tree, and it is exactly the property that guarantees a traversal terminates without needing a visited set: there is precisely one path from the root to each node and no way to arrive back where you started. The moment you allow a second manager or a loop, you have a graph, you need cycle protection, and three units of this domain change character.',
+      limitations:
+        'Real org charts have dotted-line reporting and matrix management, which makes them graphs rather than trees. That is not a flaw in the analogy so much as a preview: the general case is the subject of the graph units, and trees are the well-behaved special case.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Build a tree and traverse it',
+        caption: 'Step through preorder, inorder, postorder and level-order on the same tree and watch the visit sequence differ.',
+        widget: 'binary-tree',
+      },
+      {
+        kind: 'ascii',
+        title: 'The tree used throughout this unit',
+        caption: 'Seven nodes, height 2, perfectly balanced.',
+        art: `        1
+      /   \\
+     2     3
+    / \\   / \\
+   4   5 6   7`,
+      },
+      {
+        kind: 'table',
+        title: 'The four traversals and what each is for',
+        columns: ['Traversal', 'Visit order', 'On the tree above', 'Natural use'],
+        rows: [
+          ['Preorder', 'node, left, right', '1 2 4 5 3 6 7', 'Copying or serialising a tree — the parent must exist before its children'],
+          ['Inorder', 'left, node, right', '4 2 5 1 6 3 7', 'Reading a binary search tree in sorted order'],
+          ['Postorder', 'left, right, node', '4 5 2 6 7 3 1', 'Deleting a tree, or evaluating an expression where children must be resolved first'],
+          ['Level-order', 'by depth, left to right', '1 2 3 4 5 6 7', 'Printing a hierarchy, or anything that needs shallowest-first order'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Balanced versus degenerate',
+        caption: 'Same nodes, same operations, completely different cost.',
+        left: {
+          heading: 'Balanced — height about log2(n)',
+          points: [
+            'A million nodes are 20 levels from the root',
+            'Root-to-leaf operations are O(log n)',
+            'Recursive traversal uses O(log n) stack space',
+            'This is the shape every tree algorithm assumes',
+          ],
+        },
+        right: {
+          heading: 'Degenerate — height n - 1',
+          points: [
+            'Every node has one child: the tree is a linked list',
+            'Root-to-leaf operations become O(n)',
+            'Recursive traversal uses O(n) stack and hits RecursionError near 1,000 nodes',
+            'Produced by inserting already-sorted data into an unbalanced tree',
+          ],
+        },
+      },
+    ],
+
+    formalDefinition:
+      'A rooted tree is a connected acyclic graph with a distinguished root, in which every node other than the root has exactly one parent; a tree with n nodes has exactly n - 1 edges. A binary tree additionally assigns each node at most two distinguished children, left and right. Any traversal visits each of the n nodes exactly once and is therefore O(n) in time, using O(h) auxiliary space for depth-first orders, where h is the height, and O(w) for level-order, where w is the maximum width.',
+
+    math: {
+      intuition:
+        'The reason trees are useful is that width grows exponentially with depth while depth grows only logarithmically with size. Each additional level can hold twice as many nodes as the last, so the number of levels needed to hold n nodes is about log2(n). That is the entire source of the O(log n) that appears throughout the rest of this domain, and it evaporates the moment a tree stops being balanced.',
+      formulas: [
+        {
+          latex: 'n \\le 2^{h+1} - 1 \\quad \\Longleftrightarrow \\quad h \\ge \\lceil \\log_2(n+1) \\rceil - 1',
+          name: 'Height bound for a binary tree',
+          meaning: 'A binary tree of height h holds at most 2^(h+1) - 1 nodes, so n nodes need at least log2(n+1) - 1 levels.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'n', meaning: 'Number of nodes' },
+            { symbol: 'h', meaning: 'Height: the number of edges on the longest root-to-leaf path' },
+            { symbol: '2^{h+1} - 1', meaning: 'Node count of a perfect binary tree of height h' },
+          ],
+        },
+        {
+          latex: '\\text{level } d \\text{ holds at most } 2^d \\text{ nodes}',
+          name: 'Width of a level',
+          meaning: 'Capacity doubles per level, which is why depth grows logarithmically in node count.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'd', meaning: 'Depth of the level, with the root at depth 0' },
+            { symbol: '2^d', meaning: 'Maximum nodes at that depth in a binary tree' },
+          ],
+        },
+        {
+          latex: 'T_{\\text{traverse}}(n) = O(n), \\qquad S_{\\text{DFS}} = O(h), \\qquad S_{\\text{BFS}} = O(w)',
+          name: 'Traversal costs',
+          meaning: 'Every traversal touches each node once; the space differs because depth-first holds a path while level-order holds a level.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'h', meaning: 'Height — O(log n) if balanced, O(n) if degenerate' },
+            { symbol: 'w', meaning: 'Maximum width, which for a balanced tree is about n/2 at the last level' },
+          ],
+        },
+      ],
+      derivation: [
+        'The root level holds 1 node, which is 2^0.',
+        'Each node has at most 2 children, so level d holds at most twice level d-1, giving at most 2^d.',
+        'Summing over levels 0 to h gives 1 + 2 + 4 + ... + 2^h = 2^(h+1) - 1, a geometric series.',
+        'Hence n <= 2^(h+1) - 1 for any binary tree of height h.',
+        'Rearranging gives h >= log2(n+1) - 1: no binary tree with n nodes can be shorter than this.',
+        'A perfect tree achieves the bound, so the best possible height is logarithmic — and the worst, a chain, is n - 1.',
+      ],
+    },
+
+    workedExample: {
+      title: 'All four traversals on the same seven-node tree',
+      setup:
+        'The tree has root 1 with children 2 and 3; node 2 has children 4 and 5; node 3 has children 6 and 7. Height is 2, n = 7. We trace each order and note the auxiliary structure it needs.',
+      steps: [
+        { label: 'Preorder: visit, left, right', detail: 'Visit 1. Descend left to 2, visit it. Descend left to 4, visit; 4 is a leaf so return. Right to 5, visit, return. Back up to 1, right to 3, visit. Left to 6, visit. Right to 7, visit. Sequence: 1 2 4 5 3 6 7.' },
+        { label: 'Why preorder for copying', detail: 'The parent is emitted before its children, so a reader can construct the parent node before it needs somewhere to attach the children. Serialisation formats use this order for exactly that reason.' },
+        { label: 'Inorder: left, visit, right', detail: 'Descend to 4 (leftmost), visit 4. Return to 2, visit 2. Go right to 5, visit 5. Return to 1, visit 1. Descend right to 3, then left to 6, visit 6. Visit 3. Go right, visit 7. Sequence: 4 2 5 1 6 3 7.' },
+        { label: 'Why inorder matters', detail: 'On a binary search tree, where every left descendant is smaller and every right descendant larger, this order emits the values sorted. That single fact is the subject of the next unit.' },
+        { label: 'Postorder: left, right, visit', detail: 'Reach 4, visit. Reach 5, visit. Now both children of 2 are done, so visit 2. Reach 6, visit. Reach 7, visit. Visit 3. Finally visit 1. Sequence: 4 5 2 6 7 3 1.' },
+        { label: 'Why postorder for evaluation', detail: 'A node is visited only after both its children, so in an expression tree the operands are already computed when the operator is reached. Freeing a tree uses the same order: never delete a parent while its children still need it.' },
+        { label: 'Level-order: by depth', detail: 'Use a queue. Enqueue 1. Dequeue 1, visit, enqueue 2 and 3. Dequeue 2, visit, enqueue 4 and 5. Dequeue 3, visit, enqueue 6 and 7. Dequeue and visit 4, 5, 6, 7. Sequence: 1 2 3 4 5 6 7.' },
+        { label: 'Peak queue size', detail: 'The queue holds at most one full level: 4 nodes here, at the last level. For a balanced tree of n nodes that is about n/2, so level-order uses O(n) space while depth-first uses O(h) = O(log n).' },
+        { label: 'Degenerate contrast', detail: 'If the same seven nodes formed a right-leaning chain, height would be 6. Every traversal is still O(n) in time, but recursive depth-first would now use 7 stack frames instead of 3 — and with a million nodes, RecursionError.' },
+      ],
+      conclusion:
+        'All four traversals are O(n) time, since each node is visited exactly once and does constant work. They differ in space: the three depth-first orders use O(h) auxiliary space — O(log n) for a balanced tree, O(n) for a degenerate one — while level-order uses O(w), which is O(n/2) for a balanced tree and O(1) for a chain. The orders are not interchangeable: preorder for copying because parents come first, inorder for sorted output on a search tree, postorder for evaluation and deletion because children come first, and level-order whenever shallowest-first matters. Choosing the wrong one usually produces output that looks plausible and is subtly wrong.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'The four traversals, recursive and iterative',
+        runnable: true,
+        code: `from collections import deque
+
+class Node:
+    __slots__ = ("value", "left", "right")
+    def __init__(self, value, left=None, right=None):
+        self.value, self.left, self.right = value, left, right
+
+root = Node(1, Node(2, Node(4), Node(5)), Node(3, Node(6), Node(7)))
+
+def preorder(n):
+    return [] if n is None else [n.value] + preorder(n.left) + preorder(n.right)
+
+def inorder(n):
+    return [] if n is None else inorder(n.left) + [n.value] + inorder(n.right)
+
+def postorder(n):
+    return [] if n is None else postorder(n.left) + postorder(n.right) + [n.value]
+
+def level_order(n):
+    out, q = [], deque([n] if n else [])
+    while q:
+        node = q.popleft()
+        out.append(node.value)
+        if node.left:  q.append(node.left)
+        if node.right: q.append(node.right)
+    return out
+
+def preorder_iterative(n):
+    out, stack = [], [n] if n else []
+    while stack:
+        node = stack.pop()
+        out.append(node.value)
+        if node.right: stack.append(node.right)   # right first: popped second
+        if node.left:  stack.append(node.left)
+    return out
+
+print("pre  ", preorder(root))
+print("in   ", inorder(root))
+print("post ", postorder(root))
+print("level", level_order(root))
+print("pre iterative", preorder_iterative(root))`,
+        output: `pre   [1, 2, 4, 5, 3, 6, 7]
+in    [4, 2, 5, 1, 6, 3, 7]
+post  [4, 5, 2, 6, 7, 3, 1]
+level [1, 2, 3, 4, 5, 6, 7]
+pre iterative [1, 2, 4, 5, 3, 6, 7]`,
+        explanation:
+          'The three recursive versions differ only in where the node itself appears relative to the two recursive calls, which is worth noticing because it means one mental template covers all three. The iterative preorder replaces the call stack with an explicit stack, and pushes the right child first so the left is popped first — get that backwards and you silently get a mirrored traversal. Compare it with `level_order`, which is the same skeleton with a queue instead of a stack: swapping the structure swaps depth-first for breadth-first, which is precisely the relationship explored in the DFS and BFS units.',
+      },
+      {
+        language: 'python',
+        title: 'Height, balance and why concatenation is the wrong habit',
+        runnable: true,
+        code: `def height(n):
+    return -1 if n is None else 1 + max(height(n.left), height(n.right))
+
+def count(n):
+    return 0 if n is None else 1 + count(n.left) + count(n.right)
+
+def is_balanced(n):
+    def check(node):                      # returns height, or -2 if unbalanced
+        if node is None:
+            return -1
+        lh = check(node.left)
+        if lh == -2: return -2
+        rh = check(node.right)
+        if rh == -2: return -2
+        return -2 if abs(lh - rh) > 1 else 1 + max(lh, rh)
+    return check(n) != -2
+
+chain = Node(1, None, Node(2, None, Node(3, None, Node(4))))
+print(height(root), count(root), is_balanced(root))
+print(height(chain), count(chain), is_balanced(chain))`,
+        output: `2 7 True
+3 4 False`,
+        explanation:
+          'Height is defined here with an empty tree at -1 so that a single node has height 0, which makes the arithmetic in `is_balanced` clean; the other convention exists and you should state which you are using. `is_balanced` is O(n) because it computes each subtree height once on the way back up — the naive version that calls `height` inside the recursion recomputes heights and is O(n^2), which is a classic interview trap. Note also that the traversals in the previous example use list concatenation, which is O(n) per call and makes them O(n^2) overall; for production code, append into a shared list or yield from a generator.',
+      },
+      {
+        language: 'python',
+        title: 'An expression tree evaluated postorder',
+        runnable: true,
+        code: `# Represents (3 + 4) * (10 - 6)
+expr = Node("*",
+            Node("+", Node(3), Node(4)),
+            Node("-", Node(10), Node(6)))
+
+OPS = {"+": lambda a, b: a + b, "-": lambda a, b: a - b,
+       "*": lambda a, b: a * b, "/": lambda a, b: a / b}
+
+def evaluate(n):
+    if n.left is None and n.right is None:     # a leaf holds a number
+        return n.value
+    left = evaluate(n.left)                    # children first...
+    right = evaluate(n.right)
+    return OPS[n.value](left, right)           # ...then the operator
+
+def to_infix(n):
+    if n.left is None:
+        return str(n.value)
+    return f"({to_infix(n.left)} {n.value} {to_infix(n.right)})"
+
+print(to_infix(expr), "=", evaluate(expr))`,
+        output: `((3 + 4) * (10 - 6)) = 28`,
+        explanation:
+          'This is postorder with a purpose: an operator cannot be applied until both operands are known, which is exactly the postorder guarantee that a node is visited after its children. `to_infix` is inorder with parentheses added, and it shows why inorder alone is ambiguous — without the brackets, 3 + 4 * 10 - 6 would parse differently. Every compiler, spreadsheet formula engine and query planner contains a version of this structure, and so does the autograd graph in PyTorch, where the backward pass is a postorder walk.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Decision trees in machine learning',
+        usage:
+          'A fitted `DecisionTreeClassifier` is a binary tree where each internal node is a threshold test and each leaf a prediction. Inference is a single root-to-leaf walk, so its cost is the tree\'s depth — which is exactly why `max_depth` is the main capacity knob.',
+      },
+      {
+        context: 'Parsing and computation graphs',
+        usage:
+          'Source code, JSON and SQL are all parsed into trees, and evaluated postorder. PyTorch\'s autograd builds a graph of operations and walks it backwards so that every consumer is processed before its input, which is the same ordering discipline.',
+      },
+      {
+        context: 'Hierarchical clustering and file systems',
+        usage:
+          'A dendrogram is a binary tree of merges, and cutting it at a height gives a clustering. Directory structures are trees, which is why `os.walk` is a traversal and why recursive deletion must be postorder.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'scikit-learn', role: 'Tree ensembles — random forests and gradient boosting — are collections of binary trees; prediction cost is the number of trees times their depth.' },
+      { tool: 'ast (Python standard library)', role: 'Parses Python source into a tree and offers `ast.NodeVisitor`, which is a preorder traversal with a hook per node type.' },
+      { tool: 'scipy.cluster.hierarchy', role: 'Produces dendrograms: binary merge trees that are cut at a chosen height to yield clusters.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Confusing depth with height, or disagreeing about the empty tree',
+        why: 'Depth measures downward from the root for a node; height measures the longest path down from a node. Some texts count nodes and some count edges, so a single node is height 0 or 1 depending on convention.',
+        fix: 'State your convention in a docstring. Use edge-counting with an empty tree at -1, which makes `1 + max(left, right)` come out right without special cases.',
+      },
+      {
+        mistake: 'Computing height inside a balance check',
+        why: 'Calling a separate `height()` at every node recomputes the same subtrees repeatedly, giving O(n^2) on a skewed tree — the same overlapping-subproblem waste that motivates dynamic programming.',
+        fix: 'Return height and the balance verdict together from one bottom-up recursion, so each subtree is measured once: O(n).',
+      },
+      {
+        mistake: 'Using recursion on a tree that may be degenerate',
+        why: 'Recursion depth equals tree height, so a chain of 10,000 nodes exceeds CPython\'s default recursion limit and raises RecursionError.',
+        fix: 'Use an explicit stack for depth-first traversal when the tree is not guaranteed balanced, or raise the limit knowingly. Never raise the limit as a reflex — it converts a clean exception into a segmentation fault.',
+      },
+      {
+        mistake: 'Building traversal output with list concatenation',
+        why: '`left + [node] + right` allocates a new list at every node, making the traversal O(n^2) in time and memory even though it visits each node once.',
+        fix: 'Append into one shared list, or write the traversal as a generator with `yield` and `yield from`, which is O(n) and streams.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Give the four traversals of a binary tree and say when each is the right choice.',
+        answer:
+          'Preorder visits the node then left then right, so parents appear before children — the order you want for copying or serialising a tree, since the parent must exist before its children can be attached. Inorder visits left, node, right; on a binary search tree this emits the values in sorted order, which is the main reason it exists. Postorder visits left, right, node, so children are finished before their parent — the order for evaluating an expression tree, for computing sizes or heights bottom-up, and for deleting a tree safely. Level-order visits by depth using a queue and is what you want for printing a hierarchy or for anything where shallowest-first matters, including shortest paths in the graph setting. All four are O(n) time; the depth-first ones use O(h) space and level-order uses O(w).',
+        followUp:
+          'A natural follow-up is which pair of traversals uniquely determines a tree: preorder plus inorder does, but preorder plus postorder does not, because it cannot distinguish a single left child from a single right child.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Why is the height of a tree the number that matters, and what makes a tree degenerate?',
+        answer:
+          'Almost every tree operation — search, insert, delete, a prediction in a decision tree — is a walk from the root to a leaf, so its cost is proportional to the height rather than the node count. In a balanced tree each level can hold twice as many nodes as the last, so n nodes fit in about log2(n) levels and a million nodes are twenty steps from the root. A tree degenerates when insertions arrive in an order that always extends the same side — inserting already-sorted data into an unbalanced binary search tree is the classic case — at which point every node has one child, the height becomes n - 1, and the structure is a linked list with extra overhead. That is why self-balancing trees like AVL and red-black trees exist, and why interview answers should state complexity in terms of h and then say what h is under balance.',
+        followUp:
+          'Being asked what happens to recursion in the degenerate case tests whether the candidate connects height to stack space and RecursionError.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'How does tree structure determine the cost of prediction in a gradient-boosted model?',
+        answer:
+          'Prediction walks each tree from root to leaf, so the cost per tree is its depth, and the total is the number of trees times the average depth — for a typical LightGBM model, perhaps 500 trees of depth 8, so about 4,000 comparisons per row, entirely independent of the training set size. That is why boosted trees serve so cheaply despite expensive training. It also explains the tuning knobs: `max_depth` and `num_leaves` control both capacity and inference latency simultaneously, and `n_estimators` trades accuracy against a linear increase in prediction cost. When latency matters you can prune or distil the ensemble, and because each tree is an independent root-to-leaf walk, the work vectorises and parallelises well across rows.',
+        followUp:
+          'Mentioning that memory locality of the tree layout matters at serving scale, which is why libraries store trees as flat arrays rather than pointer-linked nodes, shows systems awareness.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Write a function returning the maximum depth of a binary tree, then rewrite it iteratively. State the complexity of each.',
+        hint: 'The iterative version can carry the depth alongside each node in the stack or queue.',
+        solution:
+          'def max_depth(n):\n    return 0 if n is None else 1 + max(max_depth(n.left), max_depth(n.right))\n\ndef max_depth_iter(root):\n    best, stack = 0, [(root, 1)] if root else []\n    while stack:\n        node, d = stack.pop()\n        best = max(best, d)\n        if node.left:  stack.append((node.left, d + 1))\n        if node.right: stack.append((node.right, d + 1))\n    return best\n\nBoth are O(n) time since every node is visited once. The recursive version uses O(h) stack space and fails with RecursionError on a degenerate tree of more than about a thousand nodes; the iterative version uses O(h) heap space for the explicit stack and has no such limit. This is the standard reason to convert a tree recursion to an explicit stack in production code.',
+      },
+      {
+        prompt: 'Given preorder [1, 2, 4, 5, 3, 6, 7] and inorder [4, 2, 5, 1, 6, 3, 7], reconstruct the tree. Explain the method and its complexity.',
+        hint: 'The first preorder element is the root. Where does it sit in the inorder list?',
+        solution:
+          'The first preorder value, 1, is the root. Find 1 in the inorder list: everything to its left, [4, 2, 5], is the left subtree and everything to its right, [6, 3, 7], is the right subtree. The left subtree has three nodes, so the next three preorder values, [2, 4, 5], describe it, and the remaining [3, 6, 7] describe the right. Recurse on each half. The result is the tree used throughout this unit.\n\nA naive implementation scans the inorder list at every step, giving O(n^2). Building a value-to-index dictionary from the inorder list first makes each lookup O(1), so the reconstruction is O(n) time and O(n) space. Note that preorder plus postorder would not be enough: it cannot distinguish a lone left child from a lone right child, because the ambiguity is exactly what inorder resolves.',
+      },
+      {
+        prompt: 'Write a level-order traversal that returns a list of lists, one per depth, and explain the extra bookkeeping.',
+        hint: 'Record the queue length before draining a level.',
+        solution:
+          'from collections import deque\n\ndef levels(root):\n    out, q = [], deque([root] if root else [])\n    while q:\n        n = len(q)                     # exactly the nodes at this depth\n        row = []\n        for _ in range(n):\n            node = q.popleft()\n            row.append(node.value)\n            if node.left:  q.append(node.left)\n            if node.right: q.append(node.right)\n        out.append(row)\n    return out\n\nThe single extra line, capturing `len(q)` before the inner loop, is what separates levels: at that moment the queue contains precisely the current depth, because children are only appended after. Time is O(n) and space is O(w) for the queue, where w is the widest level — about n/2 for a balanced tree. This exact pattern reappears in breadth-first search when you need distances rather than just reachability.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DSA-009-q1',
+        type: 'mcq',
+        concept: 'traversal orders',
+        prompt: 'Which traversal of a binary search tree produces the values in sorted order?',
+        options: ['Inorder', 'Preorder', 'Postorder', 'Level-order'],
+        answerIndex: 0,
+        explanation:
+          'Inorder visits the entire left subtree, then the node, then the right. Since every left descendant is smaller and every right descendant larger, the emitted sequence is ascending.',
+      },
+      {
+        id: 'DSA-009-q2',
+        type: 'order',
+        concept: 'postorder sequence',
+        prompt: 'Put these nodes in postorder for the tree with root 1, children 2 and 3, where 2 has children 4 and 5 and 3 has children 6 and 7.',
+        items: ['4', '5', '2', '6', '7', '3', '1'],
+        explanation:
+          'Postorder finishes both children before visiting a node, so each parent appears immediately after its subtree and the root comes last. This is the order in which an expression tree must be evaluated.',
+      },
+      {
+        id: 'DSA-009-q3',
+        type: 'numeric',
+        concept: 'height and node count',
+        prompt: 'What is the maximum number of nodes in a binary tree of height 3 (edge-counting, root at height 0)?',
+        answer: 15,
+        explanation:
+          'Levels hold at most 1, 2, 4 and 8 nodes, summing to 2^4 - 1 = 15. This bound is what makes balanced-tree operations logarithmic: doubling capacity per level means n nodes need only about log2(n) levels.',
+      },
+      {
+        id: 'DSA-009-q4',
+        type: 'truefalse',
+        concept: 'traversal complexity',
+        prompt: 'Level-order traversal uses less auxiliary space than recursive inorder traversal on a balanced tree.',
+        answer: false,
+        explanation:
+          'Level-order holds a whole level in the queue, about n/2 nodes for a balanced tree, so it is O(n). Depth-first holds only the current root-to-node path, which is O(h) = O(log n) when balanced.',
+      },
+      {
+        id: 'DSA-009-q5',
+        type: 'debug',
+        language: 'python',
+        concept: 'iterative traversal ordering',
+        prompt: 'This iterative preorder prints the tree mirrored. What is wrong?',
+        code: `out, stack = [], [root]
+while stack:
+    node = stack.pop()
+    out.append(node.value)
+    if node.left:  stack.append(node.left)
+    if node.right: stack.append(node.right)`,
+        options: [
+          'The children are pushed in the wrong order: push right first so left is popped first',
+          'It should use a queue rather than a stack',
+          '`out.append` should happen after the children are pushed',
+          'The loop should check `node is not None` instead of `while stack`',
+        ],
+        answerIndex: 0,
+        explanation:
+          'A stack reverses the order things come out, so pushing left then right pops right first and produces node-right-left. Pushing right first restores true preorder.',
+      },
+      {
+        id: 'DSA-009-q6',
+        type: 'explain',
+        concept: 'why height matters',
+        prompt: 'Explain why the height of a tree, rather than its node count, determines the cost of most tree operations — and what can go wrong.',
+        rubric: [
+          'Says most operations are a single root-to-leaf walk, so cost is proportional to height',
+          'Says a balanced binary tree has height about log2(n), because each level can hold twice the previous one',
+          'Says a degenerate tree has height n - 1 and every operation becomes linear, and names a cause such as inserting sorted data',
+        ],
+        sampleAnswer:
+          'Searching, inserting or predicting in a tree means starting at the root and following one path down until you reach a leaf, so the number of steps is the length of that path, not the number of nodes in the tree. Because each level of a binary tree can hold twice as many nodes as the one above, n nodes fit into roughly log2(n) levels, which is why a million-node balanced tree is only about twenty steps deep. The danger is that nothing enforces this automatically: if values arrive in sorted order and each new one goes to the right of the last, every node ends up with a single child, the height becomes n - 1, and the tree is a linked list wearing a costume — every operation is O(n), and recursive traversal overflows the call stack. That is why self-balancing trees exist and why complexity for trees should be quoted as O(h), with a separate statement of what h is.',
+        explanation:
+          'The examinable idea is the relationship between height and node count, plus the awareness that balance is a property that must be maintained rather than assumed.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Height of a balanced binary tree with n nodes?', back: 'About log2(n), because each level can hold twice as many nodes as the one above. A degenerate tree has height n - 1.' },
+      { front: 'The four traversals in one line', back: 'Preorder: node, left, right. Inorder: left, node, right. Postorder: left, right, node. Level-order: by depth, using a queue.' },
+      { front: 'Which traversal sorts a BST?', back: 'Inorder — every left descendant is smaller and every right larger, so left-node-right emits ascending values.' },
+      { front: 'Which traversal evaluates an expression tree?', back: 'Postorder: both operands are computed before the operator is applied.' },
+      { front: 'Space cost: depth-first versus level-order', back: 'Depth-first is O(h), the current path. Level-order is O(w), a whole level — about n/2 for a balanced tree.' },
+      { front: 'Stack or queue: what changes?', back: 'A stack gives depth-first order, a queue gives breadth-first. Same skeleton, different structure, different algorithm.' },
+    ],
+
+    challenge: {
+      title: 'Serialise and rebuild a binary tree',
+      brief:
+        'Write serialise(root) producing a single string, and deserialise(s) rebuilding an identical tree, such that deserialise(serialise(t)) matches t for every tree including empty ones, single nodes and heavily skewed ones. Use preorder with explicit markers for absent children so the structure is unambiguous. Include a round-trip test over at least four differently shaped trees and an iterative traversal that verifies equality without recursion, then state the time and space complexity of both directions.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Null children are represented explicitly so that skewed trees round-trip correctly',
+        'Deserialisation is a single pass over the tokens, not a repeated search',
+        'The test covers the empty tree, a single node, a balanced tree and a left-skewed chain',
+        'Both directions are stated as O(n) time and O(n) space, with a justification',
+      ],
+      starterCode: 'NULL = "#"\n\ndef serialise(root):\n    parts = []\n    # preorder walk, emitting NULL for missing children\n    ...\n    return ",".join(parts)\n\ndef deserialise(s):\n    tokens = iter(s.split(","))\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone what a tree is, why height is the number that matters, and why there are four different ways to walk one.',
+      mustCover: [
+        'A tree is a hierarchy: one root, every other node with exactly one parent, and no cycles',
+        'Height determines the cost of most operations, because they walk root to leaf',
+        'A balanced binary tree has height about log2(n); a degenerate one is effectively a linked list',
+        'The traversal orders differ in when a node is visited relative to its children, and each suits a different task',
+      ],
+      bonusSignals: ['gives an example of each traversal being the right choice', 'notes that swapping a stack for a queue changes depth-first to breadth-first', 'mentions decision trees or parse trees as real instances'],
+      sampleExplanation:
+        'A tree is data arranged as a hierarchy: one item at the top called the root, each other item hanging beneath exactly one parent, and no way to loop back around. Folders, org charts, parsed sentences and the decision trees a model learns all have this shape. The number that governs everything is the height — how many levels deep it goes — because nearly every operation is a walk from the root down to a leaf, and the height is the length of that walk. When a binary tree is nicely spread out, each level holds twice as many items as the one above, so a million items sit only about twenty levels down, and operations are cheap. When items arrive in sorted order and always attach to the same side, the tree degenerates into a long chain, the height becomes the item count, and it is no better than a list. As for walking the tree, the four standard orders differ only in when you deal with a node relative to its children: before them if you are copying the structure, between them if you want a search tree in sorted order, after them if you are computing something that depends on the children, and level by level if you want the shallowest items first.',
+    },
+
+    masteryRequirements: { understoodScore: 0.7, proficientScore: 0.85, practiceRequired: 2, teachRequired: true },
+  },
+
+  {
+    id: 'DSA-010',
+    domain: 'DSA',
+    module: 'Trees & Heaps',
+    topic: 'Ordered trees',
+    title: 'Binary Search Trees',
+    slug: 'binary-search-trees',
+    difficulty: 3,
+    estimatedMinutes: 40,
+    prerequisites: ['DSA-009'],
+    related: ['DSA-007', 'DSA-009'],
+    tags: ['bst', 'search-tree', 'rotation', 'balance', 'ordered-map'],
+
+    learningObjectives: [
+      'State the binary search tree invariant precisely and use it to search in O(h) comparisons',
+      'Insert into a BST and explain why insertion order determines the resulting shape',
+      'Delete a node in all three cases, including the two-child case via the inorder successor',
+      'Explain how a BST degenerates into a list, and what a self-balancing tree does about it',
+    ],
+
+    terminology: [
+      {
+        term: 'BST invariant',
+        definition:
+          'For every node, all values in its left subtree are smaller and all values in its right subtree are larger. The condition applies to entire subtrees, not merely to the immediate children.',
+        simple: 'Everything on the left is smaller, everything on the right is bigger — all the way down.',
+      },
+      {
+        term: 'Inorder successor',
+        definition:
+          'The next-largest value in the tree: the leftmost node of the right subtree when one exists. It is the value that replaces a deleted node with two children.',
+        simple: 'The smallest value that is still bigger than this one.',
+      },
+      {
+        term: 'Degenerate tree',
+        definition:
+          'A BST whose nodes each have at most one child, so its height is n - 1. Inserting already-sorted data into an unbalanced BST produces exactly this.',
+        simple: 'A search tree that has collapsed into a long chain.',
+      },
+      {
+        term: 'Rotation',
+        definition:
+          'A local, constant-time restructuring that changes the height of a subtree while preserving the BST invariant. Self-balancing trees use rotations to keep the height logarithmic.',
+        simple: 'A small rearrangement that makes a lopsided branch shorter without breaking the ordering.',
+      },
+      {
+        term: 'Ordered map',
+        definition:
+          'A key-value structure that also supports order-dependent queries: minimum, maximum, predecessor, successor and range scans. A balanced BST provides one; a hash table does not.',
+        simple: 'A dictionary that also knows what comes next.',
+      },
+    ],
+
+    simpleExplanation:
+      "A binary search tree is a tree with one rule attached: at every node, everything smaller goes left and everything larger goes right. That rule turns a tree into a decision procedure. To find a value you compare it with the root and go one way, then compare again and go one way, discarding half the remaining possibilities at each step — the same halving that makes looking up a name in a physical dictionary fast. If the tree is nicely spread out, a million values are about twenty comparisons from the root. The rule also means that reading the tree left-node-right emits everything in sorted order, for free, which is something a hash table can never do. The catch is that nothing in the basic structure enforces the spread. Insert values that already arrive in ascending order and every one attaches to the right of the last, producing a chain with the height of a list and none of a list's compactness. That single failure mode is why real systems use self-balancing variants that rearrange themselves as they go.",
+
+    whyItExists:
+      'Hash tables answer "is this exact key present?" in constant time but know nothing about order, so they cannot give you the minimum, the next key, or everything between two bounds. A search tree keeps data ordered while still offering logarithmic lookup, which is what range queries, sorted iteration and successor queries require.',
+
+    analogy: {
+      scenario:
+        "Imagine guessing a number between 1 and 100 where each guess is answered only with 'higher' or 'lower'. Guess 50, hear 'higher', and ninety-nine possibilities become forty-nine. Guess 75, hear 'lower', and you are down to twenty-four. Seven guesses are enough for any number, because each answer halves what remains. A binary search tree is that game frozen into a structure: each node is a question already asked, its left branch is the 'lower' answer and its right branch is the 'higher' one. But the tree only plays well if the questions were well chosen. If the first question was 'is it higher than 1?', then 'higher than 2?', then 'higher than 3?', you are not halving anything — you are counting.",
+      mapping: [
+        { from: 'Each guess and its higher/lower answer', to: 'A comparison at a node, choosing the left or right child' },
+        { from: 'Halving the remaining range', to: 'Discarding one entire subtree at each step' },
+        { from: 'Seven guesses for a hundred numbers', to: 'O(log n) search in a balanced tree' },
+        { from: 'Asking "higher than 1? higher than 2?"', to: 'A degenerate tree built from sorted insertions: O(n) search' },
+        { from: 'Choosing a middle number to guess', to: 'Balance — which rotations maintain automatically in an AVL or red-black tree' },
+      ],
+      bridge:
+        'The guessing game explains both the promise and the failure in one picture. The logarithm comes from discarding half the candidates per comparison, and it is available only when each node genuinely sits near the middle of the values beneath it. The BST invariant guarantees correctness — you will never look in the wrong subtree — but it says nothing about shape, and shape is where the performance lives.',
+      limitations:
+        'The analogy suggests you may pick your questions. In a BST you do not: the shape is dictated by the order the data arrived, which is why balancing has to be done actively by the structure rather than chosen up front.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Search, insert and watch the shape emerge',
+        caption: 'Insert values in sorted order, then in shuffled order, and compare the resulting heights.',
+        widget: 'binary-tree',
+        props: { mode: 'bst' },
+      },
+      {
+        kind: 'ascii',
+        title: 'The tree built in this unit',
+        caption: 'Inserted in the order 50, 30, 70, 20, 40, 60, 80.',
+        art: `          50
+        /    \\
+      30      70
+     /  \\    /  \\
+   20    40 60    80`,
+      },
+      {
+        kind: 'flow',
+        title: 'Deleting a node: three cases',
+        caption: 'Every deletion is one of these, and the third is the only one with any subtlety.',
+        steps: [
+          { label: 'Find the node', detail: 'Walk down comparing, O(h). If it is absent, there is nothing to do.' },
+          { label: 'Case 1 — leaf', detail: 'No children: detach it by setting the parent link to None.' },
+          { label: 'Case 2 — one child', detail: 'Promote the single child into the deleted node\'s place. The invariant is preserved because the whole subtree already sat on the correct side.' },
+          { label: 'Case 3 — two children', detail: 'Find the inorder successor: the leftmost node of the right subtree. Copy its value into the node being deleted.' },
+          { label: 'Delete the successor', detail: 'The successor has no left child by construction, so removing it is case 1 or case 2 — the recursion cannot go deeper than one more level.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Hash table versus balanced search tree',
+        caption: 'Choose by whether you need order.',
+        left: {
+          heading: 'Hash table (dict)',
+          points: [
+            'Lookup, insert, delete: O(1) average',
+            'No ordering: no min, no successor, no range query',
+            'Keys must be hashable',
+            'The right default whenever you only ask about exact keys',
+          ],
+        },
+        right: {
+          heading: 'Balanced BST (ordered map)',
+          points: [
+            'Lookup, insert, delete: O(log n) worst case',
+            'Sorted iteration, min, max, predecessor, successor, range scans',
+            'Keys must be comparable rather than hashable',
+            'Worth the log factor whenever order is part of the question',
+          ],
+        },
+      },
+    ],
+
+    formalDefinition:
+      'A binary search tree is a binary tree in which every node v satisfies: all keys in the left subtree of v are less than key(v), and all keys in the right subtree of v are greater. Search, insertion and deletion each follow a single root-to-leaf path and therefore run in O(h) time, where h is the height; h is O(log n) when the tree is balanced and O(n) in the degenerate case. An inorder traversal visits keys in ascending order, in O(n).',
+
+    math: {
+      intuition:
+        'Each comparison discards one entire subtree, so the number of candidates falls by roughly half per step when the tree is balanced — that is where the logarithm comes from. The averaging result is also worth knowing: if n distinct keys are inserted in uniformly random order, the expected height is about 1.39 log2 n, so a randomly built BST is nearly balanced by accident. It is only adversarial or sorted input that ruins it, which is exactly the input real systems tend to have.',
+      formulas: [
+        {
+          latex: 'T_{\\text{search}} = T_{\\text{insert}} = T_{\\text{delete}} = O(h)',
+          name: 'BST operation cost',
+          meaning: 'Every basic operation follows one root-to-leaf path, so cost is the height, not the node count.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'h', meaning: 'Height of the tree: O(log n) balanced, O(n) degenerate' },
+            { symbol: 'n', meaning: 'Number of stored keys' },
+          ],
+        },
+        {
+          latex: 'E[h_{\\text{random}}] \\approx 4.31 \\ln n \\approx 2.99 \\log_2 n',
+          name: 'Expected height of a randomly built BST',
+          meaning: 'Random insertion order gives a height within a constant factor of optimal — which is why randomised insertion or a treap works.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'E[h]', meaning: 'Expected height over all n! insertion orders, each equally likely' },
+            { symbol: 'n', meaning: 'Number of keys inserted' },
+          ],
+        },
+        {
+          latex: 'h_{\\text{AVL}} < 1.44 \\log_2 (n + 2) - 0.33',
+          name: 'AVL height bound',
+          meaning: 'An AVL tree keeps every node\'s subtree heights within one of each other, bounding the height at under 1.44 log2 n and guaranteeing O(log n) worst case.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'h_{\\text{AVL}}', meaning: 'Height of an AVL tree holding n keys' },
+            { symbol: '1.44', meaning: 'The constant arising from the Fibonacci-shaped worst case, the sparsest legal AVL tree' },
+          ],
+        },
+      ],
+      derivation: [
+        'A search compares the target with the current node and descends into exactly one child.',
+        'Each descent discards the other subtree entirely, so the candidate set shrinks by the size of that subtree.',
+        'In a balanced tree the two subtrees have roughly equal size, so the candidate set halves: n, n/2, n/4, ...',
+        'The process stops when one candidate remains, after about log2 n steps.',
+        'In a degenerate tree the discarded subtree is empty, so the candidate set shrinks by one per step, giving n steps.',
+        'Therefore the complexity is O(h), and the whole engineering problem is keeping h logarithmic.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Insert, search and delete on a seven-node BST',
+      setup:
+        'Insert 50, 30, 70, 20, 40, 60, 80 in that order into an empty BST, then search for 40, then delete 30. Each insertion walks down until it finds an empty slot.',
+      steps: [
+        { label: 'Insert 50', detail: 'The tree is empty, so 50 becomes the root. Height 0.' },
+        { label: 'Insert 30', detail: '30 < 50, go left; the slot is empty, so 30 becomes the left child of 50.' },
+        { label: 'Insert 70', detail: '70 > 50, go right; empty, so 70 becomes the right child.' },
+        { label: 'Insert 20 and 40', detail: '20 < 50 then 20 < 30, so it lands left of 30. 40 < 50 then 40 > 30, so it lands right of 30. Two comparisons each.' },
+        { label: 'Insert 60 and 80', detail: 'Symmetrically, 60 lands left of 70 and 80 right of 70. The tree is now perfectly balanced with height 2 and 7 nodes.' },
+        { label: 'Search 40', detail: 'Compare with 50: smaller, go left. Compare with 30: larger, go right. Compare with 40: found. Three comparisons, equal to depth + 1 — and log2(7) is about 2.8, so this is the logarithmic behaviour in action.' },
+        { label: 'Search 45 (absent)', detail: '45 < 50 go left, 45 > 30 go right, 45 > 40 go right — the slot is empty, so 45 is absent. Failure also costs O(h), and the empty slot reached is precisely where 45 would be inserted.' },
+        { label: 'Delete 30 — identify the case', detail: '30 has two children (20 and 40), so this is case 3. Find its inorder successor: the leftmost node of the right subtree, which is 40 itself since 40 has no left child.' },
+        { label: 'Delete 30 — replace and remove', detail: 'Copy 40 into the node currently holding 30, then delete the original 40 node, which is a leaf: case 1. Result: 50 with children 40 and 70; 40 has left child 20.' },
+        { label: 'Verify with inorder', detail: 'Inorder now gives 20, 40, 50, 60, 70, 80 — still ascending, so the invariant survived the deletion. Checking with an inorder traversal is the fastest way to catch a broken BST operation.' },
+        { label: 'The degenerate contrast', detail: 'Inserting 20, 30, 40, 50, 60, 70, 80 in ascending order instead gives a right-leaning chain of height 6. Searching for 80 takes 7 comparisons instead of 3, and at n = 1,000,000 it would take a million instead of twenty.' },
+      ],
+      conclusion:
+        'Search, insert and delete are each O(h) time — three comparisons here, versus seven in the degenerate version of the same data — with O(1) auxiliary space if written iteratively, or O(h) stack space if recursive. Space for the structure is O(n). The deletion case analysis matters because only case 3 has subtlety: replacing with the inorder successor preserves the invariant precisely because the successor is, by definition, greater than everything in the left subtree and smaller than everything remaining in the right. This example also shows the whole weakness of the plain BST: identical data in a different arrival order gives identical correctness and completely different performance.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'A BST with search, insert and the three-case delete',
+        runnable: true,
+        code: `class Node:
+    __slots__ = ("key", "left", "right")
+    def __init__(self, key):
+        self.key, self.left, self.right = key, None, None
+
+def insert(node, key):
+    if node is None:
+        return Node(key)
+    if key < node.key:
+        node.left = insert(node.left, key)
+    elif key > node.key:
+        node.right = insert(node.right, key)
+    return node                       # equal keys are ignored: a set, not a multiset
+
+def search(node, key):                # iterative: O(h) time, O(1) space
+    steps = 0
+    while node:
+        steps += 1
+        if key == node.key:
+            return True, steps
+        node = node.left if key < node.key else node.right
+    return False, steps
+
+def delete(node, key):
+    if node is None:
+        return None
+    if key < node.key:
+        node.left = delete(node.left, key)
+    elif key > node.key:
+        node.right = delete(node.right, key)
+    else:
+        if node.left is None:  return node.right      # cases 1 and 2
+        if node.right is None: return node.left
+        succ = node.right                              # case 3
+        while succ.left:
+            succ = succ.left
+        node.key = succ.key
+        node.right = delete(node.right, succ.key)
+    return node
+
+def inorder(node, out=None):
+    out = [] if out is None else out
+    if node:
+        inorder(node.left, out); out.append(node.key); inorder(node.right, out)
+    return out
+
+root = None
+for k in [50, 30, 70, 20, 40, 60, 80]:
+    root = insert(root, k)
+print(inorder(root))
+print(search(root, 40), search(root, 45))
+root = delete(root, 30)
+print(inorder(root))`,
+        output: `[20, 30, 40, 50, 60, 70, 80]
+(True, 3) (False, 3)
+[20, 40, 50, 60, 70, 80]`,
+        explanation:
+          'Insert and delete return the (possibly new) subtree root, which is the idiom that removes all parent-pointer bookkeeping — each recursive call reattaches its result to the caller. The two-child delete copies the successor\'s key rather than relinking nodes, which is simpler and correct; note that the recursive removal of the successor is guaranteed to hit case 1 or 2, because a leftmost node has no left child. Searching for an absent key costs the same O(h) as a successful search, and lands exactly where the key would be inserted.',
+      },
+      {
+        language: 'python',
+        title: 'Degeneration, measured',
+        runnable: true,
+        code: `import random
+
+def height(node):
+    return -1 if node is None else 1 + max(height(node.left), height(node.right))
+
+n = 2_000
+
+sorted_root = None
+for k in range(n):                    # ascending input: the worst case
+    sorted_root = insert(sorted_root, k)
+
+shuffled = list(range(n))
+random.shuffle(shuffled)
+random_root = None
+for k in shuffled:
+    random_root = insert(random_root, k)
+
+print(f"sorted insertion  -> height {height(sorted_root)}")
+print(f"random insertion  -> height {height(random_root)} (log2 n is {n.bit_length() - 1})")
+print("search cost in the sorted tree: ", search(sorted_root, n - 1)[1])
+print("search cost in the random tree: ", search(random_root, n - 1)[1])`,
+        output: `sorted insertion  -> height 1999
+random insertion  -> height 25 (log2 n is 10)
+search cost in the sorted tree:  2000
+search cost in the random tree:  17`,
+        explanation:
+          'The same two thousand keys give a tree of height 1,999 or a tree of height 25 depending only on arrival order — a hundredfold difference in search cost, with no difference in the data. Note that the random tree\'s height of about 25 is roughly 2.5 times log2(2000), matching the expected 1.39 * log2 n to 3 * log2 n range from the theory. In practice sorted input is common, not exotic: database keys, timestamps and id columns all arrive in order, which is why an unbalanced BST is a trap rather than a curiosity.',
+      },
+      {
+        language: 'python',
+        title: 'What you actually use in Python',
+        runnable: true,
+        code: `import bisect
+
+# There is no built-in BST. For a sorted sequence, bisect gives the same queries.
+prices = [10, 25, 33, 47, 58, 71, 90]
+
+i = bisect.bisect_left(prices, 47)
+print("index of 47:", i)                              # O(log n) search
+print("first >= 40:", prices[bisect.bisect_left(prices, 40)])   # successor
+print("range 30..60:", prices[bisect.bisect_left(prices, 30):bisect.bisect_right(prices, 60)])
+
+bisect.insort(prices, 50)          # O(log n) to find, O(n) to shift
+print(prices)
+
+# For heavy insert-and-query workloads, sortedcontainers.SortedList is the
+# practical answer: O(log n) add and remove with excellent constant factors.`,
+        output: `index of 47: 3
+first >= 40: 47
+range 30..60: [33, 47, 58]
+prices: [10, 25, 33, 47, 50, 58, 71, 90]`,
+        explanation:
+          'Python ships no balanced BST, and most of the time you do not need one: a sorted list plus `bisect` gives O(log n) search, successor and range queries, which covers the majority of ordered-map needs. The catch is `insort`, which finds the position in O(log n) but then shifts elements in O(n) — fine for occasional insertion, wrong for a write-heavy workload. For that, `sortedcontainers.SortedList` maintains a list of lists and achieves effectively logarithmic updates. Knowing that a dict cannot answer "what is the next key after this one" is the point at which you go looking for one of these.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Database indexes',
+        usage:
+          'A B-tree index — a search tree with high branching factor chosen so each node fills a disk page — is what makes `WHERE created_at BETWEEN ... AND ...` fast. A hash index cannot serve that query at all, because hashing destroys order.',
+      },
+      {
+        context: 'Decision trees in machine learning',
+        usage:
+          'Each internal node tests `feature <= threshold`, sending smaller values one way and larger the other. Prediction is a root-to-leaf walk in exactly the BST sense, and `max_depth` is a direct cap on that walk.',
+      },
+      {
+        context: 'Interval and range queries in time-series systems',
+        usage:
+          'Monitoring stores keep measurements in ordered structures so that "everything between 09:00 and 09:05" is a range scan rather than a full pass. Order is the entire point, so a hash map is not an option.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'bisect', role: 'Binary search over a sorted list: the standard-library substitute for a BST when reads dominate writes.' },
+      { tool: 'sortedcontainers', role: 'Pure-Python SortedList, SortedDict and SortedSet with logarithmic updates — the practical ordered map in Python.' },
+      { tool: 'scikit-learn DecisionTreeClassifier', role: 'A learned search tree: thresholds instead of keys, with depth controlling both accuracy and inference cost.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Checking only the immediate children when validating a BST',
+        why: 'The invariant constrains entire subtrees, so a tree can satisfy every local parent-child comparison and still be invalid — a node in the far left subtree can exceed the root.',
+        fix: 'Validate with a min/max bound passed down the recursion, or simply check that an inorder traversal is strictly ascending.',
+      },
+      {
+        mistake: 'Assuming a BST is balanced',
+        why: 'Nothing in the basic structure enforces balance, and real inputs — ids, timestamps, sorted exports — are frequently ordered, which produces the worst case rather than a rare one.',
+        fix: 'Quote complexity as O(h) and say what h is. Use a self-balancing structure, randomise insertion order, or use a sorted list with bisect if reads dominate.',
+      },
+      {
+        mistake: 'Deleting a two-child node by promoting an arbitrary child',
+        why: 'Promoting the left or right child directly breaks the invariant, because that child\'s subtree does not span the deleted node\'s whole range.',
+        fix: 'Replace with the inorder successor (or predecessor) and then delete that node, which by construction has at most one child.',
+      },
+      {
+        mistake: 'Reaching for a BST when a dict would do',
+        why: 'A hash table is O(1) rather than O(log n) and needs no balancing; the tree only earns its keep when you need order — min, max, successor or range.',
+        fix: 'Ask what queries you actually run. Only order-dependent queries justify the tree, and in Python that usually means bisect or sortedcontainers rather than a hand-written BST.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'How do you validate that a binary tree is a valid BST?',
+        answer:
+          'Recurse with a permitted range for each node. The root may hold any value; the left child is constrained to (-infinity, root), the right child to (root, +infinity), and each level narrows the interval further. At each node check that its key lies strictly inside the interval, then recurse with updated bounds. It is O(n) time and O(h) space. The common wrong answer compares only each node with its two children, which accepts invalid trees — a node deep in the left subtree can exceed the root while satisfying every local comparison. An equally valid approach is to run an inorder traversal and check that it is strictly ascending, which has the same complexity and is easier to get right, though the bounds version short-circuits sooner on a violation.',
+        followUp:
+          'Asking how duplicates should be handled is a good probe: the invariant must be stated as strictly less and strictly greater, or a consistent convention chosen and documented.',
+      },
+      {
+        level: 'intermediate',
+        question: 'When would you choose a balanced BST over a hash table?',
+        answer:
+          'Whenever the queries involve order. A hash table gives O(1) exact-key lookup but knows nothing about relative position, so it cannot answer "what is the smallest key", "what key comes after this one", "give me everything between two bounds" or "iterate in sorted order" without an O(n log n) sort. A balanced BST answers all of those in O(log n) or O(log n + k) for a range of k results, at the cost of a logarithmic rather than constant lookup and the requirement that keys be comparable rather than hashable. That is precisely why database indexes are B-trees rather than hash tables: range predicates and ORDER BY dominate real queries. If every query is an exact-key lookup, the hash table is strictly better.',
+        followUp:
+          'Mentioning that Python has no built-in balanced tree, and that bisect or sortedcontainers fills the gap, shows practical rather than academic knowledge.',
+      },
+      {
+        level: 'advanced',
+        question: 'What does a rotation do, and why does a self-balancing tree need them?',
+        answer:
+          'A rotation is a constant-time relinking of three references that changes the local shape of a subtree while preserving the inorder sequence, and therefore the BST invariant. A right rotation at node y with left child x makes x the new subtree root, y its right child, and x\'s former right subtree becomes y\'s left subtree — the inorder order of all involved nodes is unchanged, but the height of one side drops by one. Self-balancing trees need them because insertion and deletion can only make a tree taller or shorter at one path, and a local repair is the only way to restore a height invariant without rebuilding. AVL trees keep the subtree heights within one and perform at most two rotations per insertion; red-black trees keep a weaker colour-based invariant and so rotate less but allow a taller tree, up to 2 log2(n+1). The trade is rebalancing work against query depth, which is why AVL is preferred for read-heavy workloads and red-black for write-heavy ones.',
+        followUp:
+          'Being able to say that a B-tree generalises this to many keys per node, chosen to match a disk page, connects the topic to database internals.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Write a function returning the k-th smallest key in a BST. State the complexity and how you would improve it for repeated queries.',
+        hint: 'Which traversal emits keys in sorted order, and can you stop early?',
+        solution:
+          'def kth_smallest(root, k):\n    stack, node = [], root\n    while stack or node:\n        while node:\n            stack.append(node)\n            node = node.left\n        node = stack.pop()\n        k -= 1\n        if k == 0:\n            return node.key\n        node = node.right\n    return None\n\nThis is an iterative inorder traversal that stops as soon as the k-th value is emitted, so it is O(h + k) time and O(h) space — much better than traversing the whole tree when k is small. For repeated queries, store a subtree size in every node and maintain it on insert and delete; then you can descend directly, comparing k with the left subtree size at each step, giving O(h) per query. That augmented structure is called an order-statistic tree and is how databases answer percentile queries on an index.',
+      },
+      {
+        prompt: 'Explain what happens when you insert the keys 1 through 1,000 in ascending order into a plain BST, and give two different fixes.',
+        hint: 'Where does each new key attach?',
+        solution:
+          'Every key is larger than all those before it, so each one walks the entire right spine and attaches at the bottom: the tree becomes a right-leaning chain of height 999. Insertion i costs i comparisons, so building the tree is O(n^2) — about 500,000 comparisons — and every subsequent search is O(n). Recursive traversal would also raise RecursionError.\n\nFix one: shuffle the input before insertion, which gives an expected height of about 1.39 log2 n, roughly 14 here. This is cheap and effective when you control the insertion order and the data is static. Fix two: use a self-balancing structure that rotates on insertion — an AVL or red-black tree, or in Python a `sortedcontainers.SortedList` — which guarantees O(log n) regardless of arrival order. The second is the right answer for a live system, because you rarely control the order in which data arrives.',
+      },
+      {
+        prompt: 'Implement a range query: return all keys in [low, high] in sorted order, visiting as few nodes as possible.',
+        hint: 'Use the invariant to prune: if the node key is below low, the whole left subtree is irrelevant.',
+        solution:
+          'def range_query(node, low, high, out=None):\n    out = [] if out is None else out\n    if node is None:\n        return out\n    if node.key > low:\n        range_query(node.left, low, high, out)      # left may contain matches\n    if low <= node.key <= high:\n        out.append(node.key)\n    if node.key < high:\n        range_query(node.right, low, high, out)     # right may contain matches\n    return out\n\nThe two guards are the pruning: if the current key is not greater than low, nothing in the left subtree can be in range, so the entire subtree is skipped in O(1). The complexity is O(h + k) where k is the number of results, since the traversal follows at most two root-to-leaf boundary paths plus the matched region. This is the operation that justifies choosing a tree over a hash table, and it is exactly what a database does for a BETWEEN predicate on an indexed column.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DSA-010-q1',
+        type: 'mcq',
+        concept: 'bst invariant',
+        prompt: 'Which statement correctly expresses the binary search tree invariant?',
+        options: [
+          'For every node, all keys in the left subtree are smaller and all keys in the right subtree are larger',
+          'Each node\'s left child is smaller and right child is larger than it',
+          'The tree is balanced, with left and right subtree heights differing by at most one',
+          'Keys are stored in level order from smallest to largest',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The condition applies to whole subtrees, not just immediate children — which is exactly why validating by comparing each node with its two children accepts invalid trees.',
+      },
+      {
+        id: 'DSA-010-q2',
+        type: 'numeric',
+        concept: 'search cost',
+        prompt: 'In the tree built from 50, 30, 70, 20, 40, 60, 80, how many key comparisons does searching for 40 require?',
+        answer: 3,
+        explanation:
+          'Compare with 50 (go left), with 30 (go right), then with 40 (found): three comparisons, equal to the node\'s depth plus one. For a balanced tree this is about log2(n).',
+      },
+      {
+        id: 'DSA-010-q3',
+        type: 'truefalse',
+        concept: 'degeneration',
+        prompt: 'Inserting already-sorted keys into a plain BST produces a tree with O(log n) height.',
+        answer: false,
+        explanation:
+          'Each key is larger than all previous ones, so it attaches at the bottom of the right spine. The height becomes n - 1 and every operation degrades to O(n) — the tree is a linked list with extra overhead.',
+      },
+      {
+        id: 'DSA-010-q4',
+        type: 'mcq',
+        concept: 'deletion',
+        prompt: 'When deleting a node with two children, which value replaces it?',
+        options: [
+          'The inorder successor: the leftmost node of its right subtree',
+          'Its left child, promoted directly',
+          'The largest value in the whole tree',
+          'Any leaf node, chosen arbitrarily',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The inorder successor is greater than everything in the left subtree and smaller than everything remaining in the right, so it is the unique value that preserves the invariant. It has no left child, so removing it is the easy case.',
+      },
+      {
+        id: 'DSA-010-q5',
+        type: 'match',
+        concept: 'structure selection',
+        prompt: 'Match each query to the structure that answers it efficiently.',
+        pairs: [
+          { left: 'Is key k present?', right: 'Hash table — O(1) average' },
+          { left: 'What is the smallest key?', right: 'Balanced BST — O(log n)' },
+          { left: 'All keys between a and b', right: 'Balanced BST — O(log n + k)' },
+          { left: 'Iterate all keys in sorted order', right: 'Balanced BST — O(n) inorder, no sort needed' },
+        ],
+        explanation:
+          'Hashing destroys order, so anything order-dependent needs a tree. Anything that only asks about an exact key should use the hash table, which is a constant factor faster and needs no balancing.',
+      },
+      {
+        id: 'DSA-010-q6',
+        type: 'explain',
+        concept: 'balance',
+        prompt: 'Explain why a BST gives O(log n) operations in theory but can give O(n) in practice, and what is done about it.',
+        rubric: [
+          'Says each comparison discards one subtree, halving the candidates only when the tree is balanced',
+          'Says nothing in the plain structure enforces balance, and sorted input produces a chain of height n - 1',
+          'Names a remedy: self-balancing via rotations (AVL, red-black), randomised insertion, or a different structure',
+        ],
+        sampleAnswer:
+          'Every operation walks one path from the root to a leaf, and each comparison lets you throw away an entire subtree. When the two subtrees are of similar size, that means halving the remaining candidates at each step, so the path is about log2 n long. But the invariant only guarantees correctness, not shape: it says where a key must go, not that the result will be bushy. If keys arrive in ascending order — and ids, timestamps and sorted exports usually do — every new key attaches to the bottom of the right spine and the tree becomes a chain of height n - 1, so searches become linear scans and recursive traversal overflows the stack. The fix is to rebalance actively. AVL and red-black trees perform constant-time rotations during insertion and deletion to keep the height logarithmic in the worst case; alternatively, shuffling the input gives an expected height of about 1.4 log2 n, and in Python a sorted list with bisect or sortedcontainers is usually the pragmatic answer.',
+        explanation:
+          'The examinable judgement is separating the correctness invariant from the shape property, and recognising that the pathological input is the common case rather than an exotic one.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'State the BST invariant', back: 'For every node, all keys in its left subtree are smaller and all keys in its right subtree are larger — subtrees, not just children.' },
+      { front: 'Cost of BST search, insert and delete', back: 'O(h): logarithmic when balanced, linear when degenerate. Always quote h and then say what h is.' },
+      { front: 'Deleting a node with two children', back: 'Replace its key with the inorder successor (leftmost node of the right subtree), then delete that successor, which has at most one child.' },
+      { front: 'How does a BST degenerate?', back: 'Sorted insertions: every key attaches to the right spine, giving height n - 1 and O(n) operations.' },
+      { front: 'BST versus hash table', back: 'Hash: O(1) exact lookup, no order. BST: O(log n) lookup plus min, max, successor, range and sorted iteration.' },
+      { front: 'Python\'s ordered structures', back: 'No built-in BST. Use `bisect` over a sorted list for read-heavy work, or `sortedcontainers.SortedList` for logarithmic updates.' },
+    ],
+
+    challenge: {
+      title: 'An ordered map with range queries and a balance report',
+      brief:
+        'Implement a BST-backed ordered map supporting put, get, delete, min, max, successor and range(low, high). Track and expose the height after every operation. Then build the same 5,000 keys twice — once in sorted order and once shuffled — and produce a short report comparing final height, average search comparisons over 1,000 random lookups, and the theoretical log2(n). Finish by describing in two sentences which rotation you would apply to fix the worst imbalance you observed.',
+      language: 'python',
+      acceptanceCriteria: [
+        'range(low, high) prunes subtrees rather than traversing the whole tree',
+        'Deletion handles all three cases and is verified by checking inorder output stays ascending',
+        'The report gives measured average comparison counts for both insertion orders, not just heights',
+        'The closing note correctly names a left or right rotation and what it would achieve',
+      ],
+      starterCode: 'class Node:\n    __slots__ = ("key", "value", "left", "right")\n    def __init__(self, key, value):\n        self.key, self.value = key, value\n        self.left = self.right = None\n\nclass OrderedMap:\n    def __init__(self):\n        self.root = None\n        self.comparisons = 0\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone who understands binary trees what makes a binary search tree different, why it is fast, and why it sometimes is not.',
+      mustCover: [
+        'The invariant: everything in the left subtree is smaller, everything in the right is larger',
+        'Each comparison discards an entire subtree, which is where the logarithm comes from',
+        'Inorder traversal emits the keys in sorted order, which a hash table cannot do',
+        'Sorted insertions produce a chain of height n - 1, so balance must be maintained actively',
+      ],
+      bonusSignals: ['connects the halving to the higher/lower guessing game', 'names the two-child deletion rule', 'says when a dict would be the better choice'],
+      sampleExplanation:
+        'A binary search tree adds one rule to an ordinary binary tree: at every node, everything smaller sits in the left branch and everything larger in the right — and that holds for the whole branch, not just the immediate child. The rule turns the tree into the higher-or-lower guessing game. You compare your value with the root, learn which half it is in, and throw the other half away; compare again and throw half of what remains away. When the tree is nicely spread, twenty comparisons are enough for a million values. You also get sorted order for nothing: walking left, then the node, then right emits every key in ascending sequence, which is why databases index with search trees rather than hash tables — hashing cannot answer "give me everything between these two dates". The weakness is that the rule fixes where each value must go but says nothing about the resulting shape. Feed it values that are already in order and each one attaches below the last, so the tree grows into a straight chain and every search becomes a scan. Real implementations therefore rebalance themselves as they go, with small local rearrangements called rotations.',
+    },
+
+    masteryRequirements: { understoodScore: 0.7, proficientScore: 0.85, practiceRequired: 2, teachRequired: true },
+  },
+
+  {
+    id: 'DSA-011',
+    domain: 'DSA',
+    module: 'Trees & Heaps',
+    topic: 'Partial order and top-k',
+    title: 'Heaps and Priority Queues',
+    slug: 'heaps-and-priority-queues',
+    difficulty: 4,
+    estimatedMinutes: 40,
+    prerequisites: ['DSA-009'],
+    related: ['DSA-003', 'DSA-006', 'DSA-009'],
+    tags: ['heap', 'priority-queue', 'heapq', 'top-k', 'heapify'],
+
+    learningObjectives: [
+      'State the heap property and explain why it is weaker than sorting — and why that weakness is the point',
+      'Map a complete binary tree onto an array using index arithmetic, with no pointers at all',
+      'Trace sift-up and sift-down and justify the O(log n) cost of push and pop',
+      'Solve top-k selection with a size-k heap in O(n log k) and say when that beats sorting',
+    ],
+
+    terminology: [
+      {
+        term: 'Heap property',
+        definition:
+          'In a min-heap, every node is less than or equal to both its children; in a max-heap, greater than or equal. It constrains parents and children only — siblings are unordered.',
+        simple: 'Every box holds something no bigger than the boxes hanging under it.',
+      },
+      {
+        term: 'Complete binary tree',
+        definition:
+          'A tree where every level is full except possibly the last, which fills left to right. This shape is what allows the tree to be stored in a contiguous array with no gaps.',
+        simple: 'A tree with no holes, filled in reading order.',
+      },
+      {
+        term: 'Sift-up and sift-down',
+        definition:
+          'The repair operations. Sift-up moves a too-small element towards the root after a push; sift-down moves a too-large element towards the leaves after a pop. Each walks one root-to-leaf path: O(log n).',
+        simple: 'Letting a light item bubble up, or a heavy item sink down, until it sits in a legal place.',
+      },
+      {
+        term: 'Priority queue',
+        definition:
+          'The abstract structure that always yields the highest-priority element next, regardless of insertion order. A heap is its standard implementation.',
+        simple: 'A queue where importance, not arrival time, decides who is served next.',
+      },
+      {
+        term: 'Heapify',
+        definition:
+          'Turning an arbitrary array into a heap in place. Done bottom-up it costs O(n), not O(n log n), because most nodes are near the leaves and sift down barely at all.',
+        simple: 'Rearranging a whole pile into heap order in one sweep.',
+      },
+    ],
+
+    simpleExplanation:
+      "Sorting a million numbers to find the smallest ten is wasteful: you have carefully arranged 999,990 values you do not care about. A heap is the structure for when you only ever need the extreme. It keeps a much weaker promise than sorting — every parent is smaller than its children, and siblings are in no particular order — but that weak promise is enough to guarantee the very smallest value sits at the root, where you can see it instantly. Removing it costs only a walk down one path, fixing the order as you go, which is about twenty steps for a million items rather than a million. The second clever part is that this tree never actually exists as boxes and arrows. Because the tree is always filled in level by level with no gaps, you can store it in a plain array and compute where a node's children are with arithmetic: the children of position i live at 2i+1 and 2i+2. So a heap is a flat array with a rule, which makes it compact, cache-friendly and about as fast as a data structure gets.",
+
+    whyItExists:
+      'Repeatedly asking for the current minimum or maximum is common — schedulers, shortest-path algorithms, top-k retrieval — and both a sorted list and a linear scan are wrong for it: one pays too much per insertion, the other too much per query. A heap gives O(log n) for both.',
+
+    analogy: {
+      scenario:
+        "Picture a hospital emergency department rather than a bakery queue. Nobody is served in arrival order; the most urgent case goes next. The triage nurse does not maintain a fully ranked list of every patient in the building, which would be enormous work and constantly out of date. She maintains something much weaker: each patient is grouped under someone at least as urgent as they are, so the single most urgent case is always known and immediately available at the top. When that patient goes through, the gap is filled by moving one person up and letting them settle to their proper level, which takes a few comparisons rather than a re-ranking of the whole department.",
+      mapping: [
+        { from: 'The single most urgent patient, always identified', to: 'The minimum (or maximum) sitting at the root: O(1) to peek' },
+        { from: 'Not maintaining a full ranking of everyone', to: 'The heap property being weaker than sorted order' },
+        { from: 'Filling the gap and letting the new top settle downward', to: 'Sift-down after a pop: O(log n)' },
+        { from: 'A new arrival being placed and moving up past less urgent cases', to: 'Sift-up after a push: O(log n)' },
+        { from: 'Two patients of similar urgency in no defined order', to: 'Siblings being unordered — a heap is not a sorted structure' },
+      ],
+      bridge:
+        'The department works because it maintains exactly as much order as the question requires and no more. That is the structural insight: full sorting costs n log n and answers "what is the complete ranking", while the heap property costs O(log n) per update and answers only "what is the single most extreme item" — which, for a scheduler or a top-k query, is the only question ever asked.',
+      limitations:
+        'The analogy hides that a heap cannot search. Asking "is patient X waiting?" requires scanning every node, O(n), because the heap property gives no guidance about where a particular value lives. Heaps are for extremes, never for lookup.',
+    },
+
+    visuals: [
+      {
+        kind: 'ascii',
+        title: 'A min-heap and the array that holds it',
+        caption: 'The tree is conceptual; the array is what exists in memory.',
+        art: `            1                index: 0  1  2  3  4  5
+          /   \\               array: [1, 3, 2, 7, 4, 5]
+         3     2
+        / \\   /                parent(i) = (i - 1) // 2
+       7   4 5                 left(i)   = 2i + 1
+                               right(i)  = 2i + 2`,
+      },
+      {
+        kind: 'flow',
+        title: 'What `heappop` does',
+        caption: 'Five steps, and only the third involves any real work.',
+        steps: [
+          { label: 'Read the root', detail: 'Position 0 holds the minimum. This is the value that will be returned: O(1).' },
+          { label: 'Move the last element to the root', detail: 'The array\'s final element fills the hole, keeping the tree complete with no gaps.' },
+          { label: 'Sift down', detail: 'Compare with both children; swap with the smaller if it is less than the node. Repeat until both children are larger or a leaf is reached.' },
+          { label: 'Shrink the array', detail: 'The last slot is discarded; the heap now holds n - 1 elements.' },
+          { label: 'Cost', detail: 'The sift-down path is at most the height of the tree, so the whole operation is O(log n) with O(1) extra space.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Heap operations and their costs',
+        columns: ['Operation', 'Complexity', 'Note'],
+        rows: [
+          ['Peek at the minimum', 'O(1)', 'It is always at index 0'],
+          ['`heappush`', 'O(log n)', 'Append, then sift up at most the height'],
+          ['`heappop`', 'O(log n)', 'Swap in the last element, then sift down'],
+          ['`heapify` an existing list', 'O(n)', 'Bottom-up; most nodes are leaves and barely move'],
+          ['Search for an arbitrary value', 'O(n)', 'No ordering between subtrees — a heap is not a search structure'],
+          ['`heapreplace` / `heappushpop`', 'O(log n)', 'One sift instead of two: the right tool for a fixed-size top-k heap'],
+          ['Heapsort (heapify then pop all)', 'O(n log n)', 'In-place, O(1) auxiliary, but unstable and cache-unfriendly'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Finding the top k of n items',
+        caption: 'The choice depends entirely on the ratio of k to n.',
+        left: {
+          heading: 'Sort, then slice',
+          points: [
+            'O(n log n) time, O(n) space if a copy is made',
+            'Simple, and gives the full ranking as a by-product',
+            'Wasteful when k is small: you ordered n - k items you never look at',
+            'The right choice when k is a large fraction of n',
+          ],
+        },
+        right: {
+          heading: 'Size-k heap',
+          points: [
+            'O(n log k) time, O(k) space',
+            'Streams: n never needs to be in memory at once',
+            'At n = 10^9 and k = 10 this is roughly nine times less comparison work than sorting',
+            '`heapq.nlargest(k, iterable)` implements exactly this',
+          ],
+        },
+      },
+    ],
+
+    formalDefinition:
+      'A binary min-heap is a complete binary tree satisfying the heap property: the key of every node is less than or equal to the keys of its children. Completeness permits an implicit array representation in which the node at index i has children at 2i+1 and 2i+2 and parent at floor((i-1)/2), so no pointers are stored. Insertion and extraction of the minimum each run in O(log n) by sifting along a single root-to-leaf path, peeking at the minimum is O(1), and bottom-up construction from an arbitrary array is O(n).',
+
+    math: {
+      intuition:
+        'The surprising result is that building a heap costs O(n) rather than O(n log n). The reason is that sift-down cost depends on distance to the bottom, and almost all nodes are near the bottom: half the nodes are leaves and move zero steps, a quarter move at most one, an eighth at most two. Weighting each height by how many nodes sit at it gives a series that converges to a constant multiple of n rather than growing by a log factor.',
+      formulas: [
+        {
+          latex: '\\text{parent}(i) = \\left\\lfloor \\frac{i-1}{2} \\right\\rfloor, \\quad \\text{left}(i) = 2i+1, \\quad \\text{right}(i) = 2i+2',
+          name: 'Implicit array indexing',
+          meaning: 'The tree structure is arithmetic, so a heap needs no pointers and stores nothing but the values.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'i', meaning: 'Zero-based array index of a node' },
+            { symbol: '2i+1, 2i+2', meaning: 'Indices of its children, valid while they are below the heap size' },
+          ],
+        },
+        {
+          latex: '\\sum_{h=0}^{\\lfloor \\log_2 n \\rfloor} \\left\\lceil \\frac{n}{2^{h+1}} \\right\\rceil \\cdot O(h) = O\\!\\left(n \\sum_{h=0}^{\\infty} \\frac{h}{2^{h+1}}\\right) = O(n)',
+          name: 'Cost of bottom-up heapify',
+          meaning: 'Nodes at height h number about n/2^(h+1) and cost O(h) to sift, and that weighted sum converges — so building a heap is linear.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'h', meaning: 'Height of a node above the leaves' },
+            { symbol: 'n/2^{h+1}', meaning: 'Approximate number of nodes at height h' },
+            { symbol: '\\sum h/2^{h+1}', meaning: 'A convergent series summing to 1, which is why the total is a constant multiple of n' },
+          ],
+        },
+        {
+          latex: 'T_{\\text{top-}k}(n, k) = O(n \\log k) \\quad \\text{versus} \\quad T_{\\text{sort}}(n) = O(n \\log n)',
+          name: 'Top-k by heap versus by sorting',
+          meaning: 'Keeping only k candidates replaces log n with log k in the per-element cost, which is a large win when k is small.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'n', meaning: 'Number of items streamed' },
+            { symbol: 'k', meaning: 'Number of results wanted; the heap never exceeds this size' },
+          ],
+        },
+      ],
+      derivation: [
+        'Sift-down from a node at height h costs O(h) swaps in the worst case.',
+        'In a heap of n nodes, roughly n/2 are leaves at height 0, n/4 at height 1, n/8 at height 2, and so on.',
+        'Total cost is the sum over h of (number of nodes at height h) times O(h): n/4 * 1 + n/8 * 2 + n/16 * 3 + ...',
+        'Factor out n: the remaining series is the sum of h/2^(h+1) over all h.',
+        'That series converges to 1, a constant independent of n.',
+        'Therefore heapify is O(n), whereas inserting n elements one at a time with sift-up is O(n log n).',
+      ],
+    },
+
+    workedExample: {
+      title: 'Heapify [5, 3, 8, 1, 9, 2], then pop twice',
+      setup:
+        'Build a min-heap bottom-up from the array [5, 3, 8, 1, 9, 2]. With n = 6, the last internal node is at index (6 // 2) - 1 = 2, so we sift down from index 2, then 1, then 0. Children of i are at 2i+1 and 2i+2.',
+      steps: [
+        { label: 'Start', detail: 'array = [5, 3, 8, 1, 9, 2]. Indices 3, 4 and 5 are leaves and need no work — that is half the array already done.' },
+        { label: 'Sift down index 2 (value 8)', detail: 'Its only child is index 5, value 2. 2 < 8, so swap. array = [5, 3, 2, 1, 9, 8]. Index 5 is a leaf; stop.' },
+        { label: 'Sift down index 1 (value 3)', detail: 'Children are index 3 (value 1) and index 4 (value 9). The smaller is 1, and 1 < 3, so swap. array = [5, 1, 2, 3, 9, 8]. Index 3 is a leaf; stop.' },
+        { label: 'Sift down index 0 (value 5)', detail: 'Children are 1 (value 1) and 2 (value 2). The smaller is 1, and 1 < 5, so swap. array = [1, 5, 2, 3, 9, 8]. Now at index 1, whose children are 3 (value 3) and 4 (value 9). The smaller is 3 < 5, so swap again. array = [1, 3, 2, 5, 9, 8]. Index 3 is a leaf; stop.' },
+        { label: 'Heap built', detail: 'array = [1, 3, 2, 5, 9, 8]. Check: 1 <= 3 and 1 <= 2; 3 <= 5 and 3 <= 9; 2 <= 8. Valid. Total swaps: 4, comfortably under the 2n bound the linear-time argument predicts. Note the array is not sorted — 2 sits after 3 — and does not need to be.' },
+        { label: 'Pop 1', detail: 'Return array[0] = 1. Move the last element 8 to the root: [8, 3, 2, 5, 9]. Sift down: children 3 and 2, smaller is 2 < 8, swap: [2, 3, 8, 5, 9]. Index 2 now has no children below size 5. Done. Two comparisons, one swap.' },
+        { label: 'Pop 2', detail: 'Return array[0] = 2. Move last element 9 to the root: [9, 3, 8, 5]. Sift down: children 3 and 8, smaller is 3 < 9, swap: [3, 9, 8, 5]. At index 1, only child is index 3, value 5 < 9, swap: [3, 5, 8, 9]. Done.' },
+        { label: 'Result so far', detail: 'The two smallest values, 1 and 2, came out in order, and the remaining heap [3, 5, 8, 9] still has its minimum at the root.', latex: 'T_{\\text{pop}} = O(\\log n) = O(\\log 6) \\approx 2.6 \\text{ comparisons}' },
+        { label: 'What a search would cost', detail: 'Asking whether 9 is present requires scanning all remaining slots: O(n). The heap property orders parents against children only, so it offers no guidance about where a particular value sits.' },
+      ],
+      conclusion:
+        'Heapify was O(n) — four swaps for six elements — because most nodes were leaves with nothing to do. Each pop is O(log n): at most one comparison pair per level of the tree, so about log2(6) = 2.6 levels here and 20 at a million elements. Space is O(1) auxiliary, since everything happens in place within the original array. The critical caveat is that a heap is not sorted: only the root is guaranteed to be the minimum, and extracting all elements one at a time is what produces sorted order, at a total cost of O(n log n) — that is heapsort.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'heapq: the practical interface',
+        runnable: true,
+        code: `import heapq
+
+data = [5, 3, 8, 1, 9, 2]
+heapq.heapify(data)                 # O(n), in place
+print("heap array:", data, "min:", data[0])
+
+heapq.heappush(data, 0)             # O(log n)
+print("after push 0:", heapq.heappop(data), heapq.heappop(data))
+
+# heapq is a MIN-heap. For a max-heap, negate on the way in and out.
+scores = [0.91, 0.42, 0.77, 0.15]
+max_heap = [-s for s in scores]
+heapq.heapify(max_heap)
+print("largest:", -heapq.heappop(max_heap))
+
+# Priority queue with a payload: tuples compare element by element,
+# so include a tiebreaker to avoid comparing unorderable payloads.
+import itertools
+counter = itertools.count()
+pq = []
+for priority, task in [(2, "train"), (1, "load data"), (3, "evaluate")]:
+    heapq.heappush(pq, (priority, next(counter), task))
+while pq:
+    print(heapq.heappop(pq)[2], end="  ")`,
+        output: `heap array: [1, 3, 2, 5, 9, 8] min: 1
+after push 0: 0 1
+largest: 0.91
+load data  train  evaluate  `,
+        explanation:
+          'Note that `heapify` produces [1, 3, 2, 5, 9, 8] — exactly the array from the worked example, and deliberately not sorted. The negation trick is the standard way to get a max-heap from `heapq`, and it is exact for integers and floats but be careful with values where negation is not meaningful. The counter in the priority queue is essential: tuples compare lexicographically, so two equal priorities would fall through to comparing the payloads, and if those are dicts or custom objects you get a TypeError at an unpredictable moment.',
+      },
+      {
+        language: 'python',
+        title: 'Top-k: heap versus full sort',
+        runnable: true,
+        code: `import heapq, random, time
+
+n, k = 2_000_000, 10
+scores = [random.random() for _ in range(n)]
+
+start = time.perf_counter()
+top_sorted = sorted(scores, reverse=True)[:k]
+sort_time = time.perf_counter() - start
+
+start = time.perf_counter()
+top_heap = heapq.nlargest(k, scores)
+heap_time = time.perf_counter() - start
+
+# The streaming version: never holds more than k items
+start = time.perf_counter()
+smallest_k = []
+for s in scores:
+    if len(smallest_k) < k:
+        heapq.heappush(smallest_k, -s)          # max-heap of the k largest
+    elif -s > smallest_k[0]:
+        heapq.heapreplace(smallest_k, -s)       # one sift, not two
+stream_time = time.perf_counter() - start
+
+print(top_sorted == top_heap == sorted((-x for x in smallest_k)))
+print(f"sort {sort_time:.3f}s   nlargest {heap_time:.3f}s   streaming {stream_time:.3f}s")`,
+        output: `True
+sort 1.284s   nlargest 0.198s   streaming 0.612s`,
+        explanation:
+          'All three produce the same answer. Sorting does O(n log n) comparison work to order two million values so it can discard 1,999,990 of them. The heap versions do O(n log k), and with k = 10 the log factor drops from 21 to about 3. The streaming version is slower here only because the loop runs in Python rather than C, but it is the one that matters at scale: it never holds more than k items, so it works on a stream that does not fit in memory. `heapreplace` is used rather than push-then-pop because it performs a single sift-down instead of a sift-up followed by a sift-down.',
+      },
+      {
+        language: 'python',
+        title: 'A heap from scratch, so the arithmetic is visible',
+        runnable: true,
+        code: `class MinHeap:
+    def __init__(self, items=()):
+        self.a = list(items)
+        for i in range(len(self.a) // 2 - 1, -1, -1):   # bottom-up: O(n)
+            self._sift_down(i)
+
+    def push(self, x):
+        self.a.append(x)
+        self._sift_up(len(self.a) - 1)
+
+    def pop(self):
+        top = self.a[0]
+        last = self.a.pop()
+        if self.a:
+            self.a[0] = last
+            self._sift_down(0)
+        return top
+
+    def _sift_up(self, i):
+        while i > 0:
+            parent = (i - 1) // 2
+            if self.a[i] >= self.a[parent]:
+                break
+            self.a[i], self.a[parent] = self.a[parent], self.a[i]
+            i = parent
+
+    def _sift_down(self, i):
+        n = len(self.a)
+        while True:
+            smallest, l, r = i, 2 * i + 1, 2 * i + 2
+            if l < n and self.a[l] < self.a[smallest]: smallest = l
+            if r < n and self.a[r] < self.a[smallest]: smallest = r
+            if smallest == i:
+                return
+            self.a[i], self.a[smallest] = self.a[smallest], self.a[i]
+            i = smallest
+
+h = MinHeap([5, 3, 8, 1, 9, 2])
+print(h.a)
+print([h.pop() for _ in range(6)])`,
+        output: `[1, 3, 2, 5, 9, 8]
+[1, 2, 3, 5, 8, 9]`,
+        explanation:
+          'The whole structure is one list plus two loops. `_sift_up` compares only with the parent, because a push can only violate the property upward; `_sift_down` must compare with both children and follow the smaller, because taking the larger would break the property on the other side — that asymmetry is the most common implementation bug. Popping everything yields sorted output, which is heapsort: O(n) to build plus n pops at O(log n) each, so O(n log n) time with O(1) auxiliary space.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Top-k retrieval in vector search',
+        usage:
+          'A similarity search scores candidate vectors against a query and must return the k nearest. Implementations keep a bounded max-heap of size k, so the memory is O(k) regardless of how many candidates are scanned — which is what makes billion-scale retrieval feasible.',
+      },
+      {
+        context: 'Dijkstra and A* pathfinding',
+        usage:
+          'Both repeatedly need the unvisited node with the smallest tentative distance. A priority queue turns that from an O(V) scan per step into an O(log V) pop, which is the difference between O(V^2) and O((V + E) log V) overall.',
+      },
+      {
+        context: 'Beam search in sequence generation',
+        usage:
+          'At each decoding step a language model produces a distribution over the vocabulary and the decoder keeps only the best few continuations. That pruning is a top-k selection over tens of thousands of candidates, performed at every token.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'heapq', role: 'The standard-library binary min-heap, plus `nlargest` and `nsmallest`, which implement the size-k heap pattern for you.' },
+      { tool: 'FAISS / vector databases', role: 'Maintain bounded top-k result heaps during index traversal, which is why query memory does not grow with corpus size.' },
+      { tool: 'scikit-learn NearestNeighbors', role: 'kd-tree and ball-tree queries keep a priority queue of candidate nodes and a bounded heap of the best k neighbours found so far.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Treating a heap as a sorted list',
+        why: 'Only the root is guaranteed extreme; siblings are unordered. Printing the underlying array and expecting ascending values, or indexing into it for the second-smallest, gives wrong answers.',
+        fix: 'Use `heappop` repeatedly if you need order, or `heapq.nsmallest(k, data)` for the k smallest. Never read a heap array positionally beyond index 0.',
+      },
+      {
+        mistake: 'Forgetting that `heapq` is a min-heap',
+        why: 'There is no max-heap in the standard library, so code written assuming one silently returns the wrong extreme.',
+        fix: 'Negate keys on the way in and out, or push `(-priority, item)` tuples. For non-numeric keys, wrap in a class with a reversed `__lt__`.',
+      },
+      {
+        mistake: 'Pushing tuples whose payloads are not comparable',
+        why: 'Tuples compare element by element, so equal priorities cause Python to compare the payloads; dicts and custom objects raise `TypeError: not supported between instances`, intermittently and only when priorities tie.',
+        fix: 'Insert a monotonically increasing counter as the second element: `(priority, next(counter), payload)`.',
+      },
+      {
+        mistake: 'Building a heap by pushing n items one at a time',
+        why: 'That is n sift-ups at O(log n) each: O(n log n). Bottom-up `heapify` on the whole list is O(n), a genuine asymptotic improvement, not just a constant factor.',
+        fix: 'Call `heapq.heapify(existing_list)` when you already have all the data. Use `heappush` only for items arriving over time.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Find the k largest elements of a stream of n numbers. What structure do you use and what is the complexity?',
+        answer:
+          'Keep a min-heap of size k holding the best candidates seen so far. For each incoming value, if the heap has fewer than k items push it; otherwise compare against the root, which is the smallest of the current top k, and if the new value is larger, replace the root with heapreplace. That is O(log k) per element and O(n log k) in total, with O(k) space — and crucially the stream never needs to be materialised. Sorting instead is O(n log n) time and O(n) space, so the heap wins whenever k is much smaller than n, which for top-10 out of a billion is a difference of about seven times in the log factor and the difference between fitting in memory and not. The counterintuitive detail is that you use a min-heap to track the maximum elements, because the thing you need cheap access to is the weakest member of the current set, which is the one to evict.',
+        followUp:
+          'A strong candidate mentions Quickselect as an O(n) average alternative when all data is in memory and the full order of the k results is not required.',
+      },
+      {
+        level: 'advanced',
+        question: 'Why is building a heap O(n) when inserting n elements is O(n log n)?',
+        answer:
+          'Because sift-down cost depends on distance to the bottom, and almost every node is near the bottom. In bottom-up construction you start from the last internal node and sift down, so a node at height h costs O(h), and there are about n/2^(h+1) nodes at height h: half the nodes are leaves costing nothing, a quarter cost at most one swap, an eighth at most two. The total is n times the sum of h/2^(h+1) over all h, and that series converges to 1, so the whole construction is a constant multiple of n. Inserting one at a time is different because sift-up cost depends on distance to the root, and there the many cheap nodes are the ones near the top — so the majority of elements, being near the bottom, each pay the full log n. The asymmetry is entirely about which end of the tree the expensive nodes are.',
+        followUp:
+          'Asking why heapsort is still O(n log n) despite the linear build checks whether the candidate realises the n pops dominate.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Where do heaps appear in a retrieval-augmented generation system?',
+        answer:
+          'In the retrieval stage. The vector index scores candidate chunks against the query embedding and must return the top k, typically five to fifty out of millions of chunks, so implementations maintain a bounded heap of the best k seen and evict the weakest as better candidates appear — O(n log k) time and O(k) memory, independent of corpus size. Graph-based indexes such as HNSW use a second priority queue for the search frontier, ordering which node to explore next by distance to the query, which is structurally the same use as in Dijkstra. Heaps also appear one layer up, in reranking, where a cross-encoder scores the retrieved candidates and the best few are selected again, and in the generator itself, where beam search keeps the top few partial sequences at each decoding step. In each case the question is only ever "what are the best few", never "what is the full ranking", which is exactly the question a heap answers cheaply.',
+        followUp:
+          'Noting that the heap bounds memory, and so decouples query cost from corpus size, is the systems insight being probed.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Merge k sorted lists into one sorted list. Use a heap and state the complexity.',
+        hint: 'The next smallest overall is always the head of one of the k lists.',
+        solution:
+          'import heapq\n\ndef merge_k(lists):\n    heap = [(lst[0], i, 0) for i, lst in enumerate(lists) if lst]\n    heapq.heapify(heap)\n    out = []\n    while heap:\n        value, li, idx = heapq.heappop(heap)\n        out.append(value)\n        if idx + 1 < len(lists[li]):\n            heapq.heappush(heap, (lists[li][idx + 1], li, idx + 1))\n    return out\n\nThe heap never holds more than k entries, one per list, and each of the N total elements is pushed and popped once, so the cost is O(N log k) time and O(k) space. Concatenating everything and sorting is O(N log N), which is worse whenever k is much smaller than N, and it also discards the information that the inputs were already ordered. `heapq.merge` does exactly this and returns an iterator, so it also works on inputs too large to hold in memory.',
+      },
+      {
+        prompt: 'Maintain the running median of a stream of numbers, answering in O(log n) per insertion.',
+        hint: 'Two heaps, one for each half of the data.',
+        solution:
+          'Keep a max-heap for the lower half and a min-heap for the upper half, with the invariant that every element of the lower half is at most every element of the upper half and their sizes differ by at most one. On each insertion, push into one heap, then move the extreme element across if the ordering invariant is violated, then rebalance the sizes. The median is the root of the larger heap, or the average of the two roots when the sizes are equal.\n\nimport heapq\nlo, hi = [], []          # lo is a max-heap via negation, hi a min-heap\ndef add(x):\n    heapq.heappush(lo, -heapq.heappushpop(hi, x))\n    if len(lo) > len(hi):\n        heapq.heappush(hi, -heapq.heappop(lo))\ndef median():\n    return hi[0] if len(hi) > len(lo) else (hi[0] - lo[0]) / 2\n\nInsertion is O(log n) and the median query is O(1), with O(n) space. Sorting on every query would be O(n log n) per question, which is hopeless for a stream. The two-heap trick is worth remembering as the general pattern for maintaining any order statistic incrementally.',
+      },
+      {
+        prompt: 'You must return the 10 nearest neighbours out of 50 million scored candidates, on a machine where the full score array does not fit in memory. Describe your approach and its costs.',
+        hint: 'What is the largest thing you ever need to hold?',
+        solution:
+          'Stream the candidates, scoring them in batches, and maintain a min-heap of size 10 holding the best scores seen so far. For each score, if the heap has fewer than 10 entries push it; otherwise compare with heap[0] — the weakest of the current best — and call heapreplace only if the new score is better. Time is O(n log k), which with k = 10 is about 3 comparisons per candidate, and memory is O(k), just ten entries, regardless of the 50 million candidates.\n\nThe key property is that memory is decoupled from n entirely, so the same code runs on a laptop and on a billion candidates. Sorting would need all 50 million scores resident, and even a partial sort with np.argpartition — which is O(n) and excellent when the data does fit — still requires the whole array in memory. If the scoring itself is distributed, each worker keeps its own top-10 heap and a final merge takes the top 10 of the w * 10 partial results, which is the standard map-reduce shape for top-k.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DSA-011-q1',
+        type: 'mcq',
+        concept: 'heap property',
+        prompt: 'Which statement correctly describes a binary min-heap?',
+        options: [
+          'Every node is less than or equal to its children; siblings are unordered',
+          'The array is fully sorted in ascending order',
+          'Every node is less than everything to its right in the array',
+          'The left subtree holds smaller values and the right subtree larger ones',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The heap property constrains only the parent-child relationship. It is strictly weaker than sorting, and weaker than the BST invariant — which is exactly why updates cost O(log n) instead of a re-sort. The last option describes a binary search tree.',
+      },
+      {
+        id: 'DSA-011-q2',
+        type: 'numeric',
+        concept: 'implicit indexing',
+        prompt: 'In an array-backed heap, what is the index of the left child of the node at index 4?',
+        answer: 9,
+        explanation:
+          'left(i) = 2i + 1 = 9, and the right child is at 10. Because the tree is complete, these positions are always valid whenever they fall below the heap size, so no pointers need to be stored.',
+      },
+      {
+        id: 'DSA-011-q3',
+        type: 'truefalse',
+        concept: 'heapify complexity',
+        prompt: 'Building a heap from an existing array of n items costs O(n log n).',
+        answer: false,
+        explanation:
+          'Bottom-up heapify is O(n): half the nodes are leaves that move zero steps, a quarter move at most one, and the weighted sum converges to a constant multiple of n. Pushing items one at a time would be O(n log n).',
+      },
+      {
+        id: 'DSA-011-q4',
+        type: 'code-output',
+        language: 'python',
+        concept: 'heapq is a min-heap',
+        prompt: 'What does this print?',
+        code: `import heapq
+data = [5, 1, 4]
+heapq.heapify(data)
+print(heapq.heappop(data))`,
+        options: ['1', '5', '4', '[1, 5, 4]'],
+        answerIndex: 0,
+        explanation:
+          '`heapq` implements a min-heap, so the root and the first pop give the smallest element. To obtain the maximum you must negate values on the way in and out, since the standard library provides no max-heap.',
+      },
+      {
+        id: 'DSA-011-q5',
+        type: 'multi',
+        concept: 'when to use a heap',
+        prompt: 'For which tasks is a heap the right structure? Select all that apply.',
+        options: [
+          'Returning the 10 highest-scoring items from a stream of a billion',
+          'Repeatedly extracting the node with the smallest tentative distance in Dijkstra',
+          'Checking whether a particular value is present',
+          'Maintaining a running median with two heaps',
+        ],
+        answerIndices: [0, 1, 3],
+        explanation:
+          'Heaps answer questions about extremes cheaply. They cannot search: locating an arbitrary value requires scanning all n slots, because the heap property gives no information about which subtree a value is in.',
+      },
+      {
+        id: 'DSA-011-q6',
+        type: 'explain',
+        concept: 'top-k versus sorting',
+        prompt: 'Explain why a size-k heap beats sorting for top-k selection, and when it does not.',
+        rubric: [
+          'States the two complexities: O(n log k) with O(k) space versus O(n log n) with O(n) space',
+          'Explains that the heap discards non-candidates immediately rather than ordering them',
+          'Names a case where sorting is preferable, such as k close to n or needing the full ranking',
+        ],
+        sampleAnswer:
+          'Sorting arranges all n items so you can take the first k, which means carefully ordering n - k items you will throw away. A size-k heap instead keeps only the current best k: each new item is compared with the weakest of those, and either replaces it in O(log k) or is discarded in O(1). That gives O(n log k) time and O(k) space, so at n = 10^9 and k = 10 the per-item log factor falls from about 30 to about 3, and memory stops depending on n at all — which is what makes the approach work on a stream that does not fit in RAM. Sorting is the better choice when k is a large fraction of n, since the log factors converge and sorting has much better constants, and whenever you actually need the complete ranking rather than a set. If all the data is in memory and you do not need the k results ordered, Quickselect or numpy.argpartition is better still, at O(n) average.',
+        explanation:
+          'The examinable insight is that the right structure maintains exactly the order the question needs, and that memory independence from n is often the decisive practical property.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'State the min-heap property', back: 'Every node is less than or equal to both its children. Siblings are unordered, so the array is not sorted — only the root is guaranteed minimal.' },
+      { front: 'Array indexing in a heap', back: 'left(i) = 2i+1, right(i) = 2i+2, parent(i) = (i-1)//2. Completeness means no pointers are needed.' },
+      { front: 'Cost of push, pop, peek and heapify', back: 'Push and pop O(log n) via one sift path; peek O(1); bottom-up heapify O(n).' },
+      { front: 'Why is heapify O(n)?', back: 'Sift-down cost depends on height above the leaves, and most nodes are leaves. The weighted sum of h/2^(h+1) converges to a constant.' },
+      { front: 'Top-k out of n', back: 'Keep a size-k min-heap of the best so far: O(n log k) time, O(k) space. `heapq.nlargest` does this.' },
+      { front: 'Max-heap in Python?', back: 'There is none. Negate the keys on push and pop, or push (-priority, counter, payload) tuples.' },
+    ],
+
+    challenge: {
+      title: 'A task scheduler with priorities and cancellation',
+      brief:
+        'Build a priority queue supporting add_task(name, priority), pop_task() returning the highest-priority task, and cancel_task(name) in better than O(n). Since a heap cannot remove an arbitrary element efficiently, use the lazy-deletion pattern: mark cancelled tasks in a set or an entry map and skip them when they surface at the root. Handle priority updates by pushing a new entry and invalidating the old one. Include tests covering ties, cancelling the current top task, and re-adding a cancelled name, and state the amortised complexity of each operation.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Equal priorities are broken deterministically by insertion order, using a counter',
+        'cancel_task does not scan the heap; cancelled entries are skipped lazily on pop',
+        'Updating a priority does not leave a stale entry that can be returned',
+        'The complexity statement covers push, pop and cancel, and explains why pop is amortised',
+      ],
+      starterCode: 'import heapq, itertools\n\nREMOVED = object()\n\nclass Scheduler:\n    def __init__(self):\n        self.heap = []\n        self.entries = {}          # name -> the entry currently in the heap\n        self.counter = itertools.count()\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone why sorting a million items to find the top ten is the wrong approach, and what a heap does instead.',
+      mustCover: [
+        'A heap keeps a weaker promise than sorting: each parent is smaller than its children, siblings unordered',
+        'That promise still guarantees the minimum sits at the root, available in O(1)',
+        'Push and pop repair the property along one root-to-leaf path, so they cost O(log n)',
+        'For top-k, a size-k heap gives O(n log k) time and O(k) memory, independent of n',
+      ],
+      bonusSignals: ['mentions the array representation with 2i+1 and 2i+2', 'notes that heapify is O(n)', 'says that a heap cannot search'],
+      sampleExplanation:
+        'Sorting a million numbers to get the top ten means carefully arranging 999,990 numbers you are about to throw away. A heap avoids that by promising much less. Instead of a full ranking, it only guarantees that every item sits above items that are larger than it — so nothing is ordered relative to its neighbours, but the single smallest value is definitely at the very top, where you can read it instantly. Taking that value out leaves a hole, which is filled by moving the last item up and letting it sink back down to a legal position, comparing against children as it goes. That sinking follows one path from the root to the bottom, which is about twenty steps for a million items rather than a million. For a top-ten query you go further and never hold more than ten items at all: keep a heap of the best ten so far, and for each new number just compare it against the weakest of those and either evict that one or drop the newcomer. The memory then has nothing to do with how much data streams past, which is what makes the technique work on datasets far larger than memory.',
+    },
+
+    masteryRequirements: { understoodScore: 0.7, proficientScore: 0.85, practiceRequired: 2, teachRequired: true },
+  },
+
+  {
+    id: 'DSA-012',
+    domain: 'DSA',
+    module: 'Graphs',
+    topic: 'Modelling relationships',
+    title: 'Graphs and Representations',
+    slug: 'graphs-and-representations',
+    difficulty: 3,
+    estimatedMinutes: 35,
+    prerequisites: ['DSA-007', 'DSA-009'],
+    related: ['DSA-005', 'DSA-007', 'DSA-009'],
+    tags: ['graph', 'adjacency-list', 'adjacency-matrix', 'directed', 'weighted'],
+
+    learningObjectives: [
+      'Model a real situation as a graph, choosing deliberately between directed and undirected, weighted and unweighted',
+      'Build both an adjacency list and an adjacency matrix, and state the space and query costs of each',
+      'Choose a representation from the density of the graph and the operations you need',
+      'Use the vocabulary precisely: degree, path, cycle, connected component, DAG',
+    ],
+
+    terminology: [
+      {
+        term: 'Vertex and edge',
+        definition:
+          'A vertex (node) is an entity; an edge is a relationship between two vertices. A graph is written G = (V, E), and complexities are stated in terms of |V| and |E|.',
+        simple: 'Dots and the lines joining them.',
+      },
+      {
+        term: 'Directed versus undirected',
+        definition:
+          'A directed edge points one way, so u -> v does not imply v -> u. An undirected edge is mutual. "Follows" on social media is directed; "is friends with" is undirected.',
+        simple: 'One-way streets versus two-way ones.',
+      },
+      {
+        term: 'Degree',
+        definition:
+          'The number of edges touching a vertex. Directed graphs distinguish in-degree from out-degree. The sum of all degrees is 2|E| in an undirected graph.',
+        simple: 'How many lines come out of a dot.',
+      },
+      {
+        term: 'Adjacency list versus matrix',
+        definition:
+          'A list stores, per vertex, the vertices it connects to: O(V + E) space. A matrix stores a V-by-V grid of booleans or weights: O(V^2) space with O(1) edge lookup.',
+        simple: 'A contacts book per person, versus one enormous grid of everyone against everyone.',
+      },
+      {
+        term: 'DAG',
+        definition:
+          'A directed acyclic graph: directed edges with no cycle, so there is a consistent ordering of the vertices. Task dependencies, build systems and neural network computation graphs are DAGs.',
+        simple: 'Arrows that never lead you back to where you started.',
+      },
+    ],
+
+    simpleExplanation:
+      "A graph is what you use when the important thing about your data is how items relate to each other rather than what order they are in. People and their friendships, cities and roads, web pages and links, tasks and the tasks they depend on — all of these are dots with lines between them, and almost every interesting question about them is a question about paths. The structure itself is the easy part; the real decision is how to store it. The natural way is to keep, for each item, a list of the items it connects to, which takes space proportional to the number of connections that actually exist. The alternative is a big grid with a row and a column for every item, where the cell tells you whether an edge exists. The grid answers \"is there an edge between these two?\" instantly but costs space proportional to the square of the item count, which for a million users would be a trillion cells to store mostly zeros. Since nearly all real graphs are sparse, the list of neighbours is almost always the right choice.",
+
+    whyItExists:
+      'Sequences and hierarchies cannot express arbitrary relationships: a tree forbids cycles and allows only one parent, and a list has no notion of connection at all. Graphs are the general structure for networks, and their representations exist to make traversal cheap without storing the overwhelming number of edges that do not exist.',
+
+    analogy: {
+      scenario:
+        "Imagine planning travel across a country. One way to record the network is to give every town a card listing the towns it has a direct road to, with the driving time written beside each. Another is to draw an enormous grid with every town along the top and down the side, and write the driving time in each cell, leaving the vast majority blank because most pairs of towns have no direct road. The grid answers 'is there a direct road from Leeds to Bristol?' with a single glance at one cell. The cards answer 'where can I get to from Leeds?' by reading one short card rather than scanning an entire row of thousands of mostly blank cells.",
+      mapping: [
+        { from: 'A town', to: 'A vertex' },
+        { from: 'A direct road between two towns', to: 'An edge' },
+        { from: 'The driving time written beside a road', to: 'An edge weight' },
+        { from: 'One card per town listing its roads', to: 'An adjacency list: O(V + E) space, O(degree) to enumerate neighbours' },
+        { from: 'The full grid of every town against every other', to: 'An adjacency matrix: O(V^2) space, O(1) to test a specific edge' },
+        { from: 'A one-way road', to: 'A directed edge, present in one vertex\'s list but not the other\'s' },
+      ],
+      bridge:
+        'The choice between cards and grid is exactly the representation decision, and it hinges on density. Most towns have roads to a handful of neighbours, not to thousands, so the grid is almost entirely blank — which is the definition of a sparse graph and the reason adjacency lists dominate in practice. Where the grid wins is when the network is dense, or when the algorithm you are running is matrix arithmetic anyway, which is precisely the situation inside a graph neural network.',
+      limitations:
+        'The road analogy makes edges feel symmetric and physical. Many real graphs are directed, weighted asymmetrically, or change constantly — a follower graph, a payment network — and some have multiple edges between the same pair or edges from a vertex to itself, which the tidy map picture does not suggest.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'A small graph, two representations',
+        caption: 'Add and remove edges and watch both the neighbour lists and the matrix update.',
+        widget: 'graph-traversal',
+        props: { mode: 'representation' },
+      },
+      {
+        kind: 'ascii',
+        title: 'The six-node graph used throughout the graph units',
+        caption: 'Undirected and unweighted, with six vertices and seven edges.',
+        art: `   A --- B --- C
+   |     |     |
+   D --- E     F
+
+   edges: A-B, A-D, B-C, B-E, C-F, D-E`,
+      },
+      {
+        kind: 'table',
+        title: 'Adjacency list versus adjacency matrix',
+        caption: 'V vertices, E edges, d the degree of the vertex being queried.',
+        columns: ['Operation', 'Adjacency list', 'Adjacency matrix', 'Comment'],
+        rows: [
+          ['Space', 'O(V + E)', 'O(V^2)', 'For a sparse graph with E about V, the list is dramatically smaller'],
+          ['Is there an edge u-v?', 'O(d)', 'O(1)', 'The matrix\'s one real advantage; a set-of-neighbours list gets O(1) too'],
+          ['Enumerate neighbours of u', 'O(d)', 'O(V)', 'The matrix must scan a whole row, including every absent edge'],
+          ['Add an edge', 'O(1)', 'O(1)', 'Both are cheap'],
+          ['Remove an edge', 'O(d)', 'O(1)', 'Use a set per vertex if removal is frequent'],
+          ['Full traversal (BFS/DFS)', 'O(V + E)', 'O(V^2)', 'The decisive difference: traversal is the main thing you do with a graph'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Which representation to choose',
+        caption: 'Density and operation mix decide it.',
+        left: {
+          heading: 'Adjacency list — the default',
+          points: [
+            'Sparse graphs, where E is far below V^2',
+            'Traversal-heavy work: BFS, DFS, shortest paths',
+            'Space proportional to edges that actually exist',
+            'In Python: `dict[node] -> list` or `dict[node] -> set`',
+          ],
+        },
+        right: {
+          heading: 'Adjacency matrix — the specialist',
+          points: [
+            'Dense graphs, where a large fraction of pairs are connected',
+            'Constant-time edge existence tests dominate the workload',
+            'Algorithms expressed as linear algebra, such as message passing in a GNN',
+            'In Python: a NumPy array or a scipy.sparse matrix',
+          ],
+        },
+      },
+    ],
+
+    formalDefinition:
+      'A graph G = (V, E) consists of a set of vertices V and a set of edges E, where each edge is an unordered pair {u, v} in an undirected graph or an ordered pair (u, v) in a directed one, optionally carrying a weight. An adjacency-list representation stores for each vertex the collection of its out-neighbours, occupying O(|V| + |E|) space; an adjacency-matrix representation stores a |V| x |V| array whose entry (i, j) records the presence or weight of edge (i, j), occupying O(|V|^2) space and supporting O(1) edge queries.',
+
+    math: {
+      intuition:
+        'Density is the number that decides everything. A graph can hold at most about V^2/2 undirected edges, and real networks hold far fewer — a social graph with a billion users averages a few hundred friends each, so the matrix would be 99.9999 per cent zeros. That gap between possible and actual edges is what makes O(V + E) and O(V^2) diverge so violently, and it is why graph complexity is always stated in both V and E rather than collapsed into one symbol.',
+      formulas: [
+        {
+          latex: '0 \\le |E| \\le \\frac{|V|(|V|-1)}{2} \\quad \\text{(undirected, no self-loops)}',
+          name: 'Edge count bounds',
+          meaning: 'The maximum number of edges grows quadratically, which is what an adjacency matrix budgets for.',
+          category: 'complexity',
+          variables: [
+            { symbol: '|V|', meaning: 'Number of vertices' },
+            { symbol: '|E|', meaning: 'Number of edges actually present' },
+          ],
+        },
+        {
+          latex: 'D = \\frac{2|E|}{|V|(|V|-1)}',
+          name: 'Graph density',
+          meaning: 'The fraction of possible edges that exist: near 0 means sparse (use a list), near 1 means dense (a matrix is reasonable).',
+          category: 'complexity',
+          variables: [
+            { symbol: 'D', meaning: 'Density, between 0 and 1' },
+            { symbol: '2|E|', meaning: 'Each undirected edge is counted from both endpoints' },
+          ],
+        },
+        {
+          latex: '\\sum_{v \\in V} \\deg(v) = 2|E|',
+          name: 'Handshaking lemma',
+          meaning: 'Every edge contributes one to the degree of each endpoint, so the degrees sum to twice the edge count — the reason a full adjacency-list traversal is O(V + E).',
+          category: 'complexity',
+          variables: [
+            { symbol: '\\deg(v)', meaning: 'Number of edges incident to vertex v' },
+            { symbol: '2|E|', meaning: 'Total degree across the graph' },
+          ],
+        },
+      ],
+      derivation: [
+        'A traversal visits each vertex once, contributing O(V).',
+        'At each vertex it enumerates that vertex\'s neighbour list, costing O(deg(v)).',
+        'Summing the neighbour work over all vertices gives the sum of degrees.',
+        'By the handshaking lemma that sum is 2|E| for an undirected graph, or |E| for a directed one.',
+        'Total work is therefore O(V) + O(E) = O(V + E) with an adjacency list.',
+        'With a matrix, enumerating neighbours costs O(V) per vertex regardless of degree, giving O(V^2) — which for a sparse graph is enormously worse.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Building both representations of a six-node graph',
+      setup:
+        'Take the undirected graph with vertices A to F and edges A-B, A-D, B-C, B-E, C-F, D-E. So V = 6 and E = 6. We construct both representations and price three queries against each.',
+      steps: [
+        { label: 'Adjacency list', detail: 'Each undirected edge is recorded twice, once in each endpoint. A: [B, D]; B: [A, C, E]; C: [B, F]; D: [A, E]; E: [B, D]; F: [C].' },
+        { label: 'Check the degree sum', detail: 'Degrees are 2, 3, 2, 2, 2, 1, summing to 12 = 2 * 6 = 2|E|, as the handshaking lemma requires. A mismatch here is the quickest way to catch an edge added in only one direction.' },
+        { label: 'Adjacency matrix', detail: 'A 6x6 grid with 1 where an edge exists. Row A is [0,1,0,1,0,0]; row B is [1,0,1,0,1,0]; row C is [0,1,0,0,0,1]; row D is [1,0,0,0,1,0]; row E is [0,1,0,1,0,0]; row F is [0,0,1,0,0,0]. It is symmetric because the graph is undirected.' },
+        { label: 'Count the storage', detail: 'The matrix holds 36 cells, of which 12 are ones and 24 are zeros — two-thirds wasted even at this tiny scale. The list holds 12 entries plus 6 keys. Density is 2*6/(6*5) = 0.4, unusually high; a real social graph is nearer 0.0000001.' },
+        { label: 'Query 1: is there an edge B-E?', detail: 'Matrix: read cell [B][E] — one operation, O(1). List: scan B\'s neighbours [A, C, E] — up to deg(B) = 3 operations, O(d). If the list stores sets instead, this also becomes O(1).' },
+        { label: 'Query 2: who are E\'s neighbours?', detail: 'List: read E\'s entry directly, [B, D] — 2 operations, O(d). Matrix: scan the whole of row E, all 6 cells, discarding 4 zeros — O(V). At a million vertices that is a million cells read to find perhaps three neighbours.' },
+        { label: 'Query 3: visit every vertex and edge', detail: 'List: 6 vertex visits plus 12 neighbour entries = 18 operations, O(V + E). Matrix: 6 rows times 6 columns = 36 cells, O(V^2). The gap is twofold here and a millionfold on a sparse graph with a million vertices.' },
+        { label: 'Make one edge directed', detail: 'If C-F becomes C -> F only, remove C from F\'s list and set matrix cell [F][C] to 0 while leaving [C][F] as 1. The matrix stops being symmetric, which is precisely the test for directedness.' },
+        { label: 'Add weights', detail: 'Store tuples in the list — C: [(B, 4), (F, 9)] — or put the weight in the matrix cell instead of 1, using infinity or a sentinel for absent edges. Note that 0 is a poor sentinel, because a zero-weight edge is a real possibility.', latex: 'D = \\frac{2 \\cdot 6}{6 \\cdot 5} = 0.4' },
+      ],
+      conclusion:
+        'Construction is O(V + E) time and O(V + E) space for the list, versus O(V^2) time and space for the matrix — building the matrix means writing every absent edge as a zero. Queries split cleanly: the matrix wins only on testing one specific edge, O(1) against O(d), and loses on everything else, most importantly on enumerating neighbours, which is what every traversal does at every step. Since traversal is the dominant graph operation and real graphs are sparse, the adjacency list is the default and the matrix is a specialist choice for dense graphs or for algorithms expressed as matrix arithmetic. A dict of sets gets you O(1) edge tests as well, which removes the matrix\'s last advantage for most purposes.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Both representations, built from the same edge list',
+        runnable: true,
+        code: `from collections import defaultdict
+
+edges = [("A", "B"), ("A", "D"), ("B", "C"), ("B", "E"), ("C", "F"), ("D", "E")]
+nodes = sorted({v for e in edges for v in e})
+
+adj = defaultdict(set)                 # set, not list: O(1) edge tests
+for u, v in edges:
+    adj[u].add(v)
+    adj[v].add(u)                      # undirected: record both directions
+print({k: sorted(v) for k, v in sorted(adj.items())})
+
+index = {name: i for i, name in enumerate(nodes)}
+n = len(nodes)
+matrix = [[0] * n for _ in range(n)]   # note: NOT [[0]*n]*n
+for u, v in edges:
+    matrix[index[u]][index[v]] = 1
+    matrix[index[v]][index[u]] = 1
+for name, row in zip(nodes, matrix):
+    print(name, row)
+
+print("degree sum:", sum(len(s) for s in adj.values()), "= 2|E| =", 2 * len(edges))
+print("density:", round(2 * len(edges) / (n * (n - 1)), 3))`,
+        output: `{'A': ['B', 'D'], 'B': ['A', 'C', 'E'], 'C': ['B', 'F'], 'D': ['A', 'E'], 'E': ['B', 'D'], 'F': ['C']}
+A [0, 1, 0, 1, 0, 0]
+B [1, 0, 1, 0, 1, 0]
+C [0, 1, 0, 0, 0, 1]
+D [1, 0, 0, 0, 1, 0]
+E [0, 1, 0, 1, 0, 0]
+F [0, 0, 1, 0, 0, 0]
+degree sum: 12 = 2|E| = 12
+density: 0.4`,
+        explanation:
+          'Using a set of neighbours rather than a list gives O(1) edge existence tests, which removes the adjacency matrix\'s main advantage while keeping O(V + E) space. The degree-sum check against 2|E| is a cheap invariant worth asserting in any graph-building code, because adding an edge in only one direction is the single most common graph bug and produces a graph that is silently wrong rather than broken. Note the matrix construction uses a comprehension: `[[0] * n] * n` would make every row the same list object.',
+      },
+      {
+        language: 'python',
+        title: 'Directed, weighted, and the questions each answers',
+        runnable: true,
+        code: `from collections import defaultdict
+
+# A directed weighted graph: task -> (dependent task, hours)
+pipeline = defaultdict(list)
+for src, dst, hours in [("ingest", "clean", 2), ("clean", "features", 3),
+                        ("clean", "validate", 1), ("features", "train", 6),
+                        ("validate", "train", 1), ("train", "evaluate", 2)]:
+    pipeline[src].append((dst, hours))
+
+def in_degrees(graph):
+    deg = {v: 0 for v in graph}
+    for src, outs in graph.items():
+        for dst, _ in outs:
+            deg[dst] = deg.get(dst, 0) + 1
+            deg.setdefault(src, deg.get(src, 0))
+    return deg
+
+deg = in_degrees(pipeline)
+roots = [v for v, d in deg.items() if d == 0]
+print("in-degrees:", deg)
+print("tasks with no prerequisites:", roots)
+print("out-neighbours of clean:", pipeline["clean"])`,
+        output: `in-degrees: {'ingest': 0, 'clean': 1, 'features': 1, 'validate': 1, 'train': 2, 'evaluate': 1}
+tasks with no prerequisites: ['ingest']
+out-neighbours of clean: [('features', 3), ('validate', 1)]`,
+        explanation:
+          'Direction changes the questions you can ask. In an undirected graph there is only degree; here in-degree counts prerequisites and out-degree counts dependents, and a vertex with in-degree zero is a task that can start immediately — which is the first step of topological sorting. This graph is a DAG, and every build system, workflow orchestrator and autograd engine is built on exactly this structure. Storing weights as tuples keeps the adjacency list uniform; the alternative is a separate dict keyed by the edge pair.',
+      },
+      {
+        language: 'python',
+        title: 'When the matrix is the right answer',
+        runnable: true,
+        code: `import numpy as np
+import scipy.sparse as sp
+
+n = 6
+rows = [0, 0, 1, 1, 2, 3]
+cols = [1, 3, 2, 4, 5, 4]
+A = np.zeros((n, n), dtype=np.int8)
+A[rows, cols] = 1
+A[cols, rows] = 1
+
+print("paths of length 2 from A to E:", (A @ A)[0, 4])
+print("triangles (each counted 6 times):", np.trace(A @ A @ A) // 6)
+
+dense_bytes = A.nbytes
+S = sp.csr_matrix(A)
+print(f"dense {dense_bytes} bytes vs sparse {S.data.nbytes + S.indices.nbytes + S.indptr.nbytes} bytes")
+print("degree of each vertex:", A.sum(axis=1))`,
+        output: `paths of length 2 from A to E: 2
+triangles (each counted 6 times): 0
+dense 36 bytes vs sparse 60 bytes
+degree of each vertex: [2 2 2 2 3 1]`,
+        explanation:
+          'The adjacency matrix earns its keep when graph questions become linear algebra: entry (i, j) of A^k counts walks of length k from i to j, the trace of A^3 counts triangles, and a row sum is a degree. This is exactly how a graph neural network propagates information — one message-passing layer is a normalised A times the feature matrix — which is why GNN libraries store graphs as sparse matrices. Note that at this tiny size the sparse format is larger than the dense one, because of its index overhead; sparse formats win from a few hundred vertices upward, and for a million-node graph the dense matrix would need a terabyte while the sparse one needs megabytes.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Knowledge graphs and entity linking',
+        usage:
+          'Entities are vertices and typed relations are directed labelled edges, so questions like "which papers cite work by this author\'s collaborators" become path queries. Knowledge-graph embeddings then learn vectors for vertices and relations from exactly this structure.',
+      },
+      {
+        context: 'Computation graphs in deep learning',
+        usage:
+          'PyTorch builds a DAG of tensor operations during the forward pass and walks it in reverse for backpropagation. "No cycles" is what makes a valid ordering exist, and an accidental cycle is what an in-place operation error is really complaining about.',
+      },
+      {
+        context: 'Recommendation from a bipartite graph',
+        usage:
+          'Users and items form two vertex sets with interaction edges between them. Collaborative filtering is then a question about two-step paths — users who liked what you liked also liked this — and it is computed as a sparse matrix product.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'networkx', role: 'The standard Python graph library: adjacency-list backed, with built-in traversals, shortest paths and centrality measures for graphs up to a few million edges.' },
+      { tool: 'scipy.sparse', role: 'CSR and COO matrices for large graphs, where an explicit dense matrix would be impossible and matrix products are the operation you want.' },
+      { tool: 'PyTorch Geometric / DGL', role: 'Graph neural networks storing edges as index pairs and performing message passing as sparse matrix multiplication.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Adding an undirected edge in only one direction',
+        why: 'The graph becomes silently directed, so a traversal reaches vertices from one side and not the other, producing results that look plausible and are wrong.',
+        fix: 'Write an `add_edge` helper that updates both lists, and assert that the degree sum equals 2|E| after construction.',
+      },
+      {
+        mistake: 'Using an adjacency matrix for a large sparse graph',
+        why: 'A million vertices means 10^12 cells. Even at one byte each that is a terabyte, almost entirely zeros, and every traversal reads all of it.',
+        fix: 'Use an adjacency list, or `scipy.sparse` when matrix arithmetic is genuinely needed. Compute the density first: below about 0.1 the list wins decisively.',
+      },
+      {
+        mistake: 'Storing neighbours in a list when membership tests are frequent',
+        why: '`v in adj[u]` on a list is O(degree), which inside a traversal can push an algorithm from O(V + E) to something worse on high-degree vertices.',
+        fix: 'Use `dict[node] -> set`. It keeps O(V + E) space and gives O(1) edge tests and O(1) removals.',
+      },
+      {
+        mistake: 'Quoting graph complexity in terms of n alone',
+        why: 'V and E vary independently: E can be as small as V - 1 or as large as V^2, so "O(n)" is ambiguous and usually wrong.',
+        fix: 'Always state both, as in O(V + E) for a traversal, and say whether the graph is sparse or dense when it matters.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'When would you choose an adjacency matrix over an adjacency list?',
+        answer:
+          'When the graph is dense, when constant-time edge existence tests dominate the workload, or when the algorithm is naturally expressed as matrix arithmetic. The matrix costs O(V^2) space regardless of how many edges exist and makes enumerating a vertex\'s neighbours O(V), because you must scan a whole row including every absent edge — and since traversal is the main thing anyone does with a graph, that makes it O(V^2) instead of O(V + E). For a social graph with a million vertices and a hundred million edges, the list needs on the order of hundreds of megabytes and the matrix would need a terabyte of mostly zeros. So the honest default is the adjacency list, with a dict of sets if you also need O(1) edge tests, and the matrix reserved for dense graphs and for spectral or message-passing algorithms where the linear algebra is the point.',
+        followUp:
+          'Mentioning scipy.sparse CSR as the middle ground — matrix semantics with list-like space — shows practical experience.',
+      },
+      {
+        level: 'intermediate',
+        question: 'How would you model a road network where some roads are one-way and journey times differ by direction?',
+        answer:
+          'As a directed weighted graph: vertices are junctions, and each road segment becomes one directed edge per permitted direction, carrying its own travel time as a weight. A two-way road with different times each way is two edges with different weights, not one edge with an average. I would store it as an adjacency list mapping each junction to a list of (neighbour, time) tuples, since a road network is extremely sparse — a junction has perhaps four exits out of millions of junctions. If travel times vary by time of day, the weight becomes a function rather than a constant, which still fits the representation but rules out algorithms that assume static weights. And I would be explicit that negative weights must not appear, because Dijkstra requires non-negative weights and a road network gives no reason to break that.',
+        followUp:
+          'Being asked what changes if you must also model turn restrictions tests whether the candidate can move to an edge-based or expanded-vertex model.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'How are graphs represented inside a graph neural network, and why?',
+        answer:
+          'Usually as an edge index — two parallel arrays of source and destination vertex ids — plus a dense feature matrix of shape (V, F). That is an adjacency list in columnar form, chosen because it is O(E) in memory and maps directly onto the gather-scatter operations a GPU performs efficiently. A message-passing layer is then mathematically a sparse adjacency matrix times the feature matrix, followed by a learned transformation, so libraries keep the graph as a sparse tensor and never materialise the dense V-by-V matrix, which for a million-node graph would be impossible. The practical consequences follow directly from the representation: mini-batching requires sampling subgraphs because you cannot fit the whole neighbourhood expansion, and high-degree vertices dominate both memory and compute, which is why neighbour sampling caps the fan-out per layer.',
+        followUp:
+          'Explaining why neighbourhood expansion grows exponentially with layer count, and how sampling bounds it, shows real familiarity with training GNNs.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Write a function that converts an edge list into an adjacency list, supporting a `directed` flag, and state the complexity.',
+        hint: 'The only difference between the two cases is whether you record the reverse edge.',
+        solution:
+          'from collections import defaultdict\n\ndef build(edges, directed=False):\n    adj = defaultdict(set)\n    for u, v in edges:\n        adj[u].add(v)\n        if not directed:\n            adj[v].add(u)\n        else:\n            adj.setdefault(v, set())    # ensure sinks appear as vertices\n    return dict(adj)\n\nTime is O(E) and space is O(V + E). The `setdefault` line matters more than it looks: without it, a vertex with no outgoing edges never appears as a key, so iterating the graph silently skips it and any traversal reports the wrong vertex count. Using sets rather than lists also makes duplicate edges in the input idempotent, which is usually what you want when building from scraped or joined data.',
+      },
+      {
+        prompt: 'Given an adjacency list, count the number of connected components in an undirected graph without writing a full traversal from scratch — describe the algorithm and its complexity.',
+        hint: 'Every unvisited vertex you start from begins a new component.',
+        solution:
+          'Keep a global visited set. Iterate over all vertices; whenever you meet one that has not been visited, increment the component counter and run a traversal (BFS or DFS) from it, marking everything reachable as visited. Because each vertex and each edge is examined exactly once across all the traversals combined, the total cost is O(V + E) time and O(V) space, not O(V) separate traversals of O(V + E) each.\n\nThe subtlety worth stating in an interview is that the outer loop is what makes this work on a disconnected graph: a single traversal only ever reaches one component, so any code that starts from an arbitrary vertex and stops is answering a different question. This is the standard shape for "count islands", "number of friend circles" and duplicate-record clustering by transitive matching.',
+      },
+      {
+        prompt: 'A graph has 100,000 vertices and 400,000 edges. Compute its density, give the memory for both representations, and recommend one.',
+        hint: 'Count cells for the matrix and entries for the list.',
+        solution:
+          'Density = 2E / (V(V-1)) = 800,000 / (100,000 * 99,999) which is about 8 * 10^-5 — extremely sparse, with an average degree of 8.\n\nAdjacency matrix: 10^10 cells. At one byte each that is 10 GB, and with a 64-bit float weight, 80 GB. Adjacency list: roughly 800,000 neighbour entries for the undirected duplication plus 100,000 keys, so on the order of tens of megabytes in Python and a few megabytes in a compact array form. That is a factor of about a thousand.\n\nUse the adjacency list, as a dict of sets so edge tests stay O(1). Traversal then costs O(V + E) = 500,000 operations rather than the matrix\'s 10^10. The only reason to consider a matrix here would be an algorithm requiring matrix products, in which case use scipy.sparse CSR, which gives matrix semantics at O(E) space.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DSA-012-q1',
+        type: 'mcq',
+        concept: 'representation space',
+        prompt: 'A graph has 1,000,000 vertices and 3,000,000 edges. Which representation should you use?',
+        options: [
+          'Adjacency list, because the matrix would need 10^12 cells that are almost all zero',
+          'Adjacency matrix, because edge lookups are O(1)',
+          'Either, since both use O(V + E) space',
+          'An adjacency matrix, because it traverses faster',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Density here is about 6 * 10^-6. The matrix costs O(V^2) regardless of edge count and makes traversal O(V^2), while the list costs O(V + E) and traverses in O(V + E).',
+      },
+      {
+        id: 'DSA-012-q2',
+        type: 'numeric',
+        concept: 'handshaking lemma',
+        prompt: 'An undirected graph has 9 edges. What is the sum of all vertex degrees?',
+        answer: 18,
+        explanation:
+          'Each edge contributes 1 to the degree of each of its two endpoints, so the degrees sum to 2|E| = 18. Checking this after building a graph catches edges added in only one direction.',
+      },
+      {
+        id: 'DSA-012-q3',
+        type: 'truefalse',
+        concept: 'directed graphs',
+        prompt: 'In a directed graph, the adjacency matrix is always symmetric.',
+        answer: false,
+        explanation:
+          'Symmetry means every edge has a matching reverse edge, which is the definition of undirected. A directed graph is symmetric only in the special case where every edge happens to be mutual.',
+      },
+      {
+        id: 'DSA-012-q4',
+        type: 'match',
+        concept: 'modelling choices',
+        prompt: 'Match each situation to the graph type that models it correctly.',
+        pairs: [
+          { left: 'Facebook friendships', right: 'Undirected, unweighted' },
+          { left: 'Twitter follows', right: 'Directed, unweighted' },
+          { left: 'Road network with travel times', right: 'Directed, weighted' },
+          { left: 'Task dependencies in a pipeline', right: 'Directed acyclic graph (DAG)' },
+        ],
+        explanation:
+          'Direction encodes whether the relationship is mutual; weights encode cost. Acyclicity is an extra property that makes a consistent ordering possible, which is what a scheduler needs.',
+      },
+      {
+        id: 'DSA-012-q5',
+        type: 'debug',
+        language: 'python',
+        concept: 'undirected edge bug',
+        prompt: 'A traversal from A reaches B but a traversal from B never reaches A. What is wrong with this construction?',
+        code: `adj = defaultdict(set)
+for u, v in edges:
+    adj[u].add(v)`,
+        options: [
+          'For an undirected graph the reverse edge is missing: also do `adj[v].add(u)`',
+          '`defaultdict(set)` should be `defaultdict(list)`',
+          'The edges need to be sorted before insertion',
+          'Vertices must be integers rather than strings',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Recording only one direction produces a directed graph. The degree sum will come to |E| instead of 2|E|, which is the quickest way to detect the bug.',
+      },
+      {
+        id: 'DSA-012-q6',
+        type: 'explain',
+        concept: 'choosing a representation',
+        prompt: 'Explain how you decide between an adjacency list and an adjacency matrix.',
+        rubric: [
+          'Compares O(V + E) space against O(V^2), and connects the choice to density',
+          'Notes that enumerating neighbours is O(degree) with a list and O(V) with a matrix, which dominates traversal cost',
+          'Names a genuine case for the matrix: dense graphs, or algorithms expressed as matrix arithmetic',
+        ],
+        sampleAnswer:
+          'I start with density, the fraction of possible edges that actually exist. Real networks are overwhelmingly sparse — a million users with a few hundred friends each is a density of around 10^-4 — so a V-by-V matrix would be almost entirely zeros and would cost 10^12 cells to store them. An adjacency list costs O(V + E), which here is a few hundred million entries rather than a trillion. The operation mix matters just as much: the matrix\'s one advantage is testing a specific edge in O(1), but enumerating a vertex\'s neighbours means scanning an entire row, O(V), and neighbour enumeration is what every traversal does at every step, so traversal becomes O(V^2) rather than O(V + E). Storing neighbours as sets rather than lists gives O(1) edge tests as well, which removes the matrix\'s last advantage. I would reach for a matrix only for a dense graph, or when the algorithm is linear algebra — spectral methods, or message passing in a graph neural network — and even then I would use a sparse matrix format rather than a dense one.',
+        explanation:
+          'The examinable judgement is connecting density and operation mix to the space and time costs, rather than reciting the two complexities without a decision rule.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Adjacency list versus matrix: space', back: 'List O(V + E); matrix O(V^2). Real graphs are sparse, so the list is the default.' },
+      { front: 'Why is traversal O(V + E) with an adjacency list?', back: 'Each vertex is visited once and each edge examined once; the degree sum is 2|E| by the handshaking lemma.' },
+      { front: 'What does a matrix give you that a list does not?', back: 'O(1) edge existence tests — but a dict of sets gives that too, at O(V + E) space.' },
+      { front: 'Directed versus undirected', back: 'Directed edges go one way (follows, depends-on); undirected are mutual (friendship, roads). Undirected means the matrix is symmetric.' },
+      { front: 'What is a DAG and where do you meet one?', back: 'A directed graph with no cycles: task dependencies, build systems, and the autograd computation graph in PyTorch.' },
+      { front: 'Most common graph-building bug', back: 'Adding an undirected edge in only one direction. Check that the degree sum equals 2|E|.' },
+    ],
+
+    challenge: {
+      title: 'A graph class that reports on itself',
+      brief:
+        'Implement a Graph class supporting directed and undirected modes, weighted edges, add_edge, neighbours, has_edge, degree and a `stats()` method reporting vertex count, edge count, density, degree distribution (min, mean, max) and the number of isolated vertices. Store the graph as a dict of dicts so weights and O(1) edge tests both work. Then load a graph of at least 10,000 vertices — generated or from a public edge list — and print the stats, together with the estimated memory of the equivalent dense matrix, to make the representation argument with real numbers.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Undirected mode records both directions and the degree sum equals twice the edge count',
+        'has_edge is O(1) and neighbours is O(degree)',
+        'stats() reports density and the degree distribution, not just counts',
+        'The dense-matrix memory estimate is computed from V, with the units stated',
+      ],
+      starterCode: 'class Graph:\n    def __init__(self, directed=False):\n        self.directed = directed\n        self.adj = {}          # node -> {neighbour: weight}\n\n    def add_edge(self, u, v, weight=1.0):\n        ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone what a graph is, what makes it different from a tree, and how to decide how to store one.',
+      mustCover: [
+        'A graph is vertices plus edges, and models relationships rather than order or containment',
+        'Edges may be directed or undirected, weighted or not, and the modelling choice must match reality',
+        'An adjacency list stores each vertex\'s neighbours: O(V + E) space, O(degree) to enumerate them',
+        'An adjacency matrix is a V-by-V grid: O(V^2) space, O(1) edge tests, and wasteful for sparse graphs',
+      ],
+      bonusSignals: ['explains density as the deciding factor', 'notes that a tree is a graph with no cycles and one parent per node', 'mentions that most real graphs are extremely sparse'],
+      sampleExplanation:
+        'A graph is just things and the connections between them — people and friendships, junctions and roads, tasks and what they depend on. A tree is the tidy special case: one thing at the top, every other thing with exactly one parent, and no loops. A graph drops both restrictions, so anything can connect to anything and paths can come back round on themselves, which is why graph algorithms need to remember where they have already been. The interesting decision is how to store one. The natural way is to keep, for each item, the list of items it connects to: that takes space proportional to the number of connections that really exist, and asking "where can I go from here?" just means reading one short list. The alternative is a big square grid with every item along both edges, where each cell says whether a connection exists. The grid answers "is there a link between these two specific items?" instantly, but it reserves space for every possible connection, and in real networks almost none of them exist — a million users would need a trillion cells to record a few hundred friends each. So unless the network is unusually dense, or you are doing matrix mathematics on it, the list of neighbours is the right choice.',
+    },
+
+    masteryRequirements: { understoodScore: 0.7, proficientScore: 0.85, practiceRequired: 2, teachRequired: true },
+  },
 ];

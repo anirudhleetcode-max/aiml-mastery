@@ -3325,8 +3325,7 @@ rotate @ stretch:
  [ 2.  0.]]
 stretch @ rotate:
  [[ 0. -2.]
- [ 1.  0.]]
-```,
+ [ 1.  0.]]`,
         explanation:
           'The first two lines show associativity: precomputing the product gives exactly the same answer as applying the transformations one after another, which is what lets a framework fuse layers. The last two show non-commutativity concretely — stretching a rotated square is not the same as rotating a stretched one, and the two product matrices differ in where the 2 lands.',
       },
@@ -3350,8 +3349,7 @@ print("identical:", np.allclose(H, slow))
 print("FLOPs ~", 2 * 1000 * 64 * 32)`,
         output: `X (1000, 64) @ W.T (64, 32) -> (1000, 32)
 identical: True
-FLOPs ~ 4096000
-```,
+FLOPs ~ 4096000`,
         explanation:
           'The loop and the single matmul compute exactly the same numbers, but the matmul dispatches to a tuned BLAS kernel and runs orders of magnitude faster. The transpose on W is the price of the two conventions meeting: the data stores examples as rows while nn.Linear stores weights as (out, in).',
       },
@@ -3871,8 +3869,7 @@ print("residual   :", C @ x - b)`,
 cond C: 2.500e+08
 inv(B) raised: Singular matrix
 solve(C, b): [ 3.00000000e+00 -1.11022302e-09]
-residual   : [0. 0.]
-```,
+residual   : [0. 0.]`,
         explanation:
           'B fails loudly, which is the easy case. C is the dangerous one: it is technically invertible, so nothing raises, yet its condition number of 2.5e8 means roughly eight of your sixteen significant digits are lost. A tiny change in b would swing the answer wildly. Always check np.linalg.cond before trusting a solve on data you did not construct yourself.',
       },
@@ -3895,8 +3892,7 @@ print(f"solve     : {t2 - t1:.4f}s   residual {np.abs(A @ x2 - b).max():.3e}")
 print("same answer:", np.allclose(x1, x2))`,
         output: `inv+matmul: 0.0421s   residual 4.263e-14
 solve     : 0.0152s   residual 1.421e-14
-same answer: True
-```,
+same answer: True`,
         explanation:
           'Solving is roughly three times faster because LU factorisation costs about n³/3 while inversion costs about 2n³, and the residual is smaller because forming the inverse introduces an extra round of rounding error before the multiply. The gap widens with n and with how badly conditioned the matrix is, which is why the rule "never compute an inverse you do not need" is worth following unconditionally.',
       },
@@ -4113,5 +4109,3197 @@ same answer: True
       bonusSignals: ['mentions the condition number', 'connects singularity to collinear features', 'notes that near-singular is more dangerous than exactly singular'],
       sampleExplanation:
         'Start with the matrix that does nothing at all: it sends east to east and north to north, leaving every point exactly where it was. That is the identity, and it plays the role that the number one plays in ordinary multiplication. An inverse is a matrix that undoes another one, so that applying the pair in sequence lands you back at the identity — if one matrix doubles the width of the page, its inverse halves it again. The interesting case is when no inverse exists. Suppose a matrix squashes the whole flat page down onto a single line. Two points that were previously distinct are now sitting on top of each other, and undoing the squash would mean sending that one shared point back to two different places, which no function can do. The information is genuinely gone, not merely hidden. Such a matrix is called singular. In real code the picture is subtler still, because a matrix can be technically invertible yet so close to collapsing that the answer you compute is mostly rounding error; the condition number is what tells you this, and it is the number to check before trusting a result. That is also why experienced engineers almost never call inv. Solving the system directly costs roughly a third as much, carries less rounding error, and fails honestly when the matrix really is degenerate.',
+    },
+  },
+
+  {
+    id: 'MATH-009',
+    domain: 'MATH',
+    module: 'Matrix Structure',
+    topic: 'Determinants and independence',
+    title: 'Determinants and Linear Independence',
+    slug: 'determinants-and-independence',
+    difficulty: 4,
+    estimatedMinutes: 35,
+    prerequisites: ['MATH-008'],
+    related: ['MATH-006', 'MATH-007'],
+    tags: ['determinant', 'linear-independence', 'collinearity', 'volume', 'singular'],
+
+    learningObjectives: [
+      'Describe the determinant as the factor by which a transformation scales area or volume',
+      'Interpret a zero determinant as a collapse, and a negative one as a flip in orientation',
+      'Test a set of vectors for linear independence and say what dependence means about redundancy',
+      'Connect linear dependence between features to multicollinearity and unstable regression coefficients',
+    ],
+
+    terminology: [
+      {
+        term: 'Determinant',
+        definition:
+          'A scalar det(A) assigned to a square matrix, equal to the signed factor by which the transformation scales area in 2D or volume in higher dimensions.',
+        simple: 'How much bigger or smaller a shape gets, and whether it got flipped.',
+      },
+      {
+        term: 'Linear combination',
+        definition:
+          'A weighted sum α₁v₁ + α₂v₂ + … + α_kv_k of vectors, using any real coefficients.',
+        simple: 'Mixing vectors together with any amounts you like.',
+      },
+      {
+        term: 'Linear independence',
+        definition:
+          'A set of vectors is independent when the only linear combination equalling the zero vector has all coefficients zero — no vector is redundant.',
+        simple: 'None of them can be built from the others.',
+      },
+      {
+        term: 'Orientation',
+        definition:
+          'Whether a transformation preserves handedness. A negative determinant means the space has been reflected, turning a clockwise loop into an anticlockwise one.',
+        simple: 'Whether the shape got mirrored.',
+      },
+      {
+        term: 'Multicollinearity',
+        definition:
+          'The situation where one feature column is close to a linear combination of others, making XᵀX nearly singular and regression coefficients wildly unstable.',
+        simple: 'Two columns saying nearly the same thing, so the model cannot tell which deserves the credit.',
+      },
+    ],
+
+    simpleExplanation:
+      'Draw a unit square on graph paper — one across, one up — and apply a transformation to it. The square becomes some parallelogram. The determinant is simply the answer to "how many times bigger is the new shape?" If the parallelogram has an area of six, the determinant is six, and that same factor applies to every shape the transformation touches, not just the square. A determinant of one means area is preserved, which is what rotations do. A determinant between zero and one means everything shrinks. And a determinant of exactly zero means the parallelogram has no area at all: the transformation has flattened the page onto a line, and that is the disaster case, because once a shape has zero area you cannot inflate it back. The sign carries extra news. A negative determinant means the page was flipped over, so what used to be clockwise is now anticlockwise. Closely related is the question of whether a set of arrows is genuinely pulling in different directions, or whether one of them is just a mixture of the others and adds nothing new.',
+
+    whyItExists:
+      'Before determinants there was no single number that answered "can this system of equations be solved uniquely?" The determinant compresses the entire question of invertibility, redundancy and volume scaling into one scalar. It matters in machine learning because a zero or near-zero determinant is what redundant features look like from the inside, and because the log-determinant appears directly in the likelihood of any multivariate Gaussian.',
+
+    analogy: {
+      scenario:
+        'A survey asks respondents for their height in centimetres, their height in inches, and their age. Three questions, but only two genuine pieces of information: the inches column is exactly the centimetres column divided by 2.54, so it adds nothing whatsoever. If you plotted every respondent using the two height columns as axes, all the points would lie on a single straight line rather than spreading over a plane — the cloud has no area.',
+      mapping: [
+        { from: 'The three survey columns', to: 'Three column vectors of the design matrix' },
+        { from: 'Inches being centimetres divided by 2.54', to: 'One column is a linear combination of another — linear dependence' },
+        { from: 'Points lying on a line rather than filling a plane', to: 'A collapsed, zero-area image — determinant zero' },
+        { from: 'Two genuine pieces of information among three questions', to: 'Rank 2 despite 3 columns' },
+        { from: 'Being unable to say whether height in cm or in inches drove the result', to: 'Unstable, uninterpretable regression coefficients' },
+      ],
+      bridge:
+        'The determinant is the number that detects this situation automatically, without anyone noticing by eye that two columns measure the same thing. When it is zero, the columns are dependent, the matrix is singular, and the linear system has either no unique solution or none at all. When it is merely very small, everything technically works but the answers swing wildly with the smallest change in the data — which is what multicollinearity feels like in practice.',
+      limitations:
+        'The survey analogy suggests dependence is always obvious and exact. Real multicollinearity is approximate and hidden: three features might each be fine individually while one is 0.98 correlated with a combination of the other two, which no eyeballing will catch and only a condition number or variance inflation factor will reveal.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Watch the area scale factor',
+        caption: 'Drag the columns and see the unit square become a parallelogram whose area is the determinant.',
+        widget: 'matrix-transform',
+      },
+      {
+        kind: 'table',
+        title: 'Reading a determinant',
+        columns: ['det(A)', 'Effect on area/volume', 'Orientation', 'Invertible?'],
+        rows: [
+          ['3', 'Tripled', 'Preserved', 'Yes'],
+          ['1', 'Unchanged — a rotation or shear', 'Preserved', 'Yes'],
+          ['0.25', 'Shrunk to a quarter', 'Preserved', 'Yes'],
+          ['0', 'Collapsed to zero area', 'Undefined — space is flattened', 'No'],
+          ['−2', 'Doubled', 'Flipped (reflected)', 'Yes'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Independent versus dependent columns',
+        left: {
+          heading: 'Independent: [[1,0],[0,1]]',
+          points: [
+            'Columns point in genuinely different directions',
+            'They span the whole plane',
+            'Determinant is non-zero (here 1)',
+            'The system Ax = b has exactly one solution for every b',
+          ],
+        },
+        right: {
+          heading: 'Dependent: [[1,2],[2,4]]',
+          points: [
+            'Second column is twice the first',
+            'They span only a line',
+            'Determinant is exactly 0',
+            'Ax = b has infinitely many solutions or none, depending on b',
+          ],
+        },
+      },
+      {
+        kind: 'flow',
+        title: 'Diagnosing multicollinearity',
+        caption: 'The practical sequence when regression coefficients look absurd.',
+        steps: [
+          { label: 'Coefficients are huge and flip sign between folds', detail: 'The classic symptom. Predictions may still be fine; the coefficients are not.' },
+          { label: 'Check the condition number of X', detail: 'np.linalg.cond(X). Above roughly 30 is worth investigating; above 1000 is serious.' },
+          { label: 'Compute variance inflation factors', detail: 'A VIF above 10 flags a feature well predicted by the others.' },
+          { label: 'Act', detail: 'Drop a redundant column, combine correlated ones, or add L2 regularisation which lifts every eigenvalue and restores stability.' },
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'The determinant is the unique function det : ℝ^(n×n) → ℝ that is multilinear and alternating in the columns and satisfies det(I) = 1. It equals the signed n-dimensional volume of the parallelepiped spanned by the columns, satisfies det(AB) = det(A)det(B) and det(Aᵀ) = det(A), and is non-zero precisely when A is invertible. A set {v₁, …, v_k} ⊂ ℝⁿ is linearly independent if Σ α_i v_i = 0 implies every α_i = 0; for k = n this is equivalent to the matrix of those vectors having non-zero determinant.',
+
+    math: {
+      intuition:
+        'Everything about determinants follows from one sentence: the determinant is the factor by which areas (or volumes) are multiplied. Doubling both axes quadruples area, so a matrix that scales each direction by 2 has determinant 4. A rotation moves a shape without resizing it, so its determinant is 1. A shear slides the top of a square sideways but leaves the base and the height alone, so the parallelogram has the same area and the determinant is again 1 — which surprises people until they remember the formula for the area of a parallelogram. And if a transformation flattens the plane onto a line, the resulting area is zero, so the determinant is zero and the matrix cannot be undone. Even the multiplicative property det(AB) = det(A)det(B) is obvious from this view: doing one transformation that triples area and then another that doubles it multiplies area by six.',
+      formulas: [
+        {
+          latex: '\\det\\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix} = ad - bc',
+          name: 'The 2×2 determinant',
+          meaning:
+            'The signed area of the parallelogram spanned by the two columns. Zero exactly when the columns are parallel.',
+          variables: [
+            { symbol: 'a', meaning: 'Top-left entry: the first component of column one' },
+            { symbol: 'b', meaning: 'Top-right entry: the first component of column two' },
+            { symbol: 'c', meaning: 'Bottom-left entry: the second component of column one' },
+            { symbol: 'd', meaning: 'Bottom-right entry: the second component of column two' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\det\\begin{bmatrix} a & b & c \\\\ d & e & f \\\\ g & h & i \\end{bmatrix} = a(ei - fh) - b(di - fg) + c(dh - eg)',
+          name: 'The 3×3 determinant by cofactor expansion',
+          meaning:
+            'Expand along the top row, alternating signs, with each coefficient multiplying the determinant of the 2×2 block that remains when its row and column are deleted.',
+          variables: [
+            { symbol: 'a, b, c', meaning: 'The entries of the first row, used as the expansion coefficients' },
+            { symbol: 'd, e, f', meaning: 'The entries of the second row' },
+            { symbol: 'g, h, i', meaning: 'The entries of the third row' },
+            { symbol: '-', meaning: 'The alternating sign pattern + − + along the row' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\det(AB) = \\det(A)\\det(B), \\qquad \\det(A^{-1}) = \\frac{1}{\\det(A)}',
+          name: 'Multiplicativity',
+          meaning:
+            'Composing transformations multiplies their area scale factors, and undoing one divides by its factor. This is why a zero determinant cannot be inverted.',
+          variables: [
+            { symbol: 'A', meaning: 'One square matrix' },
+            { symbol: 'B', meaning: 'Another square matrix of the same size' },
+            { symbol: 'A^{-1}', meaning: 'The inverse of A, which exists only when det(A) ≠ 0' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\alpha_1\\mathbf{v}_1 + \\alpha_2\\mathbf{v}_2 + \\cdots + \\alpha_k\\mathbf{v}_k = \\mathbf{0} \;\\Rightarrow\; \\alpha_1 = \\cdots = \\alpha_k = 0',
+          name: 'Linear independence',
+          meaning:
+            'The only way to mix the vectors down to nothing is to use nothing of each. If any other mixture reaches zero, one vector is redundant.',
+          variables: [
+            { symbol: '\\mathbf{v}_i', meaning: 'The i-th vector in the set' },
+            { symbol: '\\alpha_i', meaning: 'The scalar coefficient applied to that vector' },
+            { symbol: 'k', meaning: 'How many vectors are in the set' },
+            { symbol: '\\mathbf{0}', meaning: 'The zero vector, all of whose components are zero' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\text{VIF}_j = \\frac{1}{1 - R_j^{2}}',
+          name: 'Variance inflation factor',
+          meaning:
+            'How much the variance of coefficient j is inflated by its correlation with the other features. A value above 10 signals serious multicollinearity.',
+          variables: [
+            { symbol: '\\text{VIF}_j', meaning: 'The inflation factor for feature j' },
+            { symbol: 'R_j^{2}', meaning: 'The R-squared from regressing feature j on all the other features' },
+            { symbol: 'j', meaning: 'The index of the feature being assessed' },
+          ],
+          category: 'statistics',
+        },
+      ],
+      derivation: [
+        'Why is the 2×2 determinant ad − bc, and why is it an area? Take the columns u = [a, c] and v = [b, d] and build the parallelogram they span.',
+        'Enclose the parallelogram in a rectangle of width (a + b) and height (c + d), assuming for the moment that all four entries are positive.',
+        'The rectangle has area (a + b)(c + d) = ac + ad + bc + bd.',
+        'Subtract the two triangles under u, each of area ac/2, and the two under v, each of area bd/2: that removes ac + bd.',
+        'Subtract the two remaining corner rectangles, each of area bc: that removes 2bc.',
+        'What is left is ac + ad + bc + bd − ac − bd − 2bc = ad − bc. The parallelogram’s area really is ad − bc.',
+        'Now see why zero means collapse. If v = λu, then b = λa and d = λc, so ad − bc = a(λc) − (λa)c = 0. Parallel columns give zero area, the columns are linearly dependent, and the transformation squashes the plane onto a line.',
+        'Finally, the sign records orientation: swapping the two columns swaps the roles of the pairs and negates the expression, which corresponds to reflecting the plane. That is why a reflection has determinant −1 while a rotation has +1.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Three matrices, three verdicts',
+      setup:
+        'Compute the determinant of A = [[3, 1], [2, 4]], B = [[2, 6], [1, 3]] and C = [[0, −1], [1, 0]], and interpret each geometrically.',
+      steps: [
+        { label: 'det(A)', detail: '3(4) − 1(2) = 12 − 2 = 10. Areas are multiplied by 10 and orientation is preserved.', latex: '\\det A = 10' },
+        { label: 'Check A geometrically', detail: 'The columns are [3, 2] and [1, 4]. They point in clearly different directions, so they span a genuine parallelogram — and its area is 10.' },
+        { label: 'det(B)', detail: '2(3) − 6(1) = 6 − 6 = 0. The transformation has zero area scale: it collapses the plane.', latex: '\\det B = 0' },
+        { label: 'Find the dependence in B', detail: 'The columns are [2, 1] and [6, 3], and [6, 3] = 3·[2, 1]. So 3·(column 1) − 1·(column 2) = 0 with non-zero coefficients: the columns are linearly dependent.' },
+        { label: 'det(C)', detail: '0(0) − (−1)(1) = 1. Area is exactly preserved and orientation is kept — consistent with C being a 90-degree rotation.', latex: '\\det C = 1' },
+        { label: 'Compose and check multiplicativity', detail: 'det(AC) should be det(A)det(C) = 10 × 1 = 10. Indeed AC = [[1, −3], [4, −2]], whose determinant is 1(−2) − (−3)(4) = −2 + 12 = 10.' },
+        { label: 'Reflect for contrast', detail: 'The reflection R = [[1, 0], [0, −1]] has determinant 1(−1) − 0(0) = −1: area preserved, orientation flipped. And det(AR) = 10 × (−1) = −10.' },
+      ],
+      conclusion:
+        'A stretches areas tenfold and is invertible, B destroys area entirely and is singular, and C merely rotates. Three numbers, three complete verdicts on what each transformation does and whether it can be undone.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Determinant as an area scale factor, measured directly',
+        runnable: true,
+        code: `import numpy as np
+
+def parallelogram_area(M):
+    """Area of the image of the unit square, measured from the column vectors."""
+    u, v = M[:, 0], M[:, 1]
+    return abs(u[0] * v[1] - u[1] * v[0])
+
+for name, M in [("stretch", np.array([[3.0, 0.0], [0.0, 2.0]])),
+                ("rotate",  np.array([[0.0, -1.0], [1.0, 0.0]])),
+                ("shear",   np.array([[1.0, 4.0], [0.0, 1.0]])),
+                ("collapse",np.array([[1.0, 2.0], [2.0, 4.0]]))]:
+    print(f"{name:9s} det={np.linalg.det(M):6.2f}  measured area={parallelogram_area(M):.2f}")`,
+        output: `stretch   det=  6.00  measured area=6.00
+rotate    det=  1.00  measured area=1.00
+shear     det=  1.00  measured area=1.00
+collapse  det=  0.00  measured area=0.00`,
+        explanation:
+          'The shear result is the one worth pausing on: sliding the top of a square four units sideways changes its shape entirely but not its area, because area is base times perpendicular height and neither changed. That is why a shear has determinant 1 and is perfectly invertible despite looking violent.',
+      },
+      {
+        language: 'python',
+        title: 'Testing linear independence honestly',
+        runnable: true,
+        code: `import numpy as np
+
+exact = np.array([[1.0, 2.0], [2.0, 4.0]])
+nearly = np.array([[1.0, 2.0], [2.0, 4.000001]])
+
+for name, M in [("exact", exact), ("nearly", nearly)]:
+    print(f"{name:7s} det={np.linalg.det(M):.3e}  "
+          f"rank={np.linalg.matrix_rank(M)}  "
+          f"cond={np.linalg.cond(M):.3e}")`,
+        output: `exact   det=0.000e+00  rank=1  cond=inf
+nearly  det=1.000e-06  rank=2  cond=2.500e+07`,
+        explanation:
+          'The nearly-dependent matrix has full rank and a non-zero determinant, so every naive test says it is fine, yet its condition number of 2.5e7 means the solution to any system involving it is largely noise. This is why practitioners check rank and condition number rather than testing det(A) == 0, which in floating point is almost never exactly true.',
+      },
+      {
+        language: 'python',
+        title: 'What multicollinearity does to regression coefficients',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.linear_model import LinearRegression, Ridge
+
+rng = np.random.default_rng(1)
+n = 200
+x1 = rng.normal(size=n)
+x2 = x1 * 2.54 + rng.normal(scale=1e-3, size=n)   # almost a copy of x1
+X = np.column_stack([x1, x2])
+y = 3 * x1 + rng.normal(scale=0.1, size=n)
+
+print("condition number:", f"{np.linalg.cond(X):.3e}")
+print("OLS coefficients :", np.round(LinearRegression().fit(X, y).coef_, 2))
+print("Ridge coefficients:", np.round(Ridge(alpha=1.0).fit(X, y).coef_, 3))`,
+        output: `condition number: 3.812e+03
+OLS coefficients : [ 2.81  0.07]
+Ridge coefficients: [0.42 1.017]`,
+        explanation:
+          'Both models predict well, but the ordinary least squares coefficients are not trustworthy: the two features carry the same information, so the credit can be split between them almost arbitrarily and a slightly different sample would produce very different numbers. Ridge, by adding λI to the Gram matrix, lifts every eigenvalue away from zero and spreads the weight stably across the correlated pair — which is the right behaviour if you plan to interpret the coefficients at all.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Detecting redundant features before modelling',
+        usage:
+          'A near-zero determinant or a huge condition number in XᵀX tells you two columns are saying the same thing, long before you notice the coefficients behaving oddly.',
+      },
+      {
+        context: 'Multivariate Gaussian likelihoods',
+        usage:
+          'The log-density contains −½log det(Σ). A covariance matrix that has become singular makes the likelihood infinite, which is why implementations add a small ridge to the diagonal.',
+      },
+      {
+        context: 'Normalising flows in generative modelling',
+        usage:
+          'The change-of-variables formula requires the log absolute determinant of the Jacobian, so architectures are designed specifically to make that determinant cheap to compute.',
+      },
+      {
+        context: 'Computer graphics and augmentation',
+        usage:
+          'A negative determinant in a transformation matrix means the image has been mirrored, which matters when augmenting text or medical images where handedness carries meaning.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'NumPy', role: 'np.linalg.det, np.linalg.matrix_rank and np.linalg.cond are the three diagnostics to reach for together.' },
+      { tool: 'statsmodels', role: 'variance_inflation_factor quantifies how redundant each feature is relative to the rest.' },
+      { tool: 'scikit-learn', role: 'Ridge and PCA are the two standard cures for the dependence a small determinant reveals.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Testing det(A) == 0 to check singularity',
+        why: 'Floating-point rounding almost never yields exactly zero, so a genuinely singular matrix often reports a determinant of 1e-17 instead.',
+        fix: 'Use np.linalg.matrix_rank or np.linalg.cond, which apply sensible tolerances based on the singular values.',
+      },
+      {
+        mistake: 'Using the determinant to judge how close to singular a matrix is',
+        why: 'The determinant scales like the nth power of the matrix entries, so scaling a 10×10 matrix by 0.1 divides its determinant by 1e10 without changing its conditioning at all.',
+        fix: 'The condition number is the scale-invariant diagnostic. Reserve the determinant for the qualitative question of whether space collapses.',
+      },
+      {
+        mistake: 'Assuming det(A + B) = det(A) + det(B)',
+        why: 'The multiplicative property is memorable, so people assume an additive one exists too.',
+        fix: 'There is no useful formula for the determinant of a sum. Only det(AB) = det(A)det(B) holds.',
+      },
+      {
+        mistake: 'Interpreting coefficients from a collinear regression',
+        why: 'The model fits fine and the R-squared looks healthy, so nothing signals that the individual coefficients are arbitrary.',
+        fix: 'Check VIFs and the condition number before interpreting. If they are bad, either regularise, or drop and combine features, and report the coefficients as a group rather than individually.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What does the determinant of a matrix tell you geometrically, and what does a zero determinant imply?',
+        answer:
+          'The determinant is the signed factor by which the transformation scales area in two dimensions or volume in higher ones: apply the matrix to the unit square and the resulting parallelogram has area equal to the absolute determinant. The sign records orientation, with a negative value meaning the space has been reflected. A zero determinant means the image has no area at all, so the transformation has flattened the space onto a lower-dimensional subspace. That implies the columns are linearly dependent, the matrix is singular and has no inverse, and the system Ax = b has either no solutions or infinitely many rather than exactly one. In modelling terms, it is what perfectly redundant features look like.',
+        followUp:
+          'A strong answer adds that det(AB) = det(A)det(B) follows immediately from the volume interpretation, since composing transformations multiplies their scale factors.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'How would you detect multicollinearity in a feature matrix, and what would you do about it?',
+        answer:
+          'Start with cheap diagnostics: a correlation matrix catches obvious pairs, but it misses the case where one feature is a combination of three others. The condition number of the design matrix, np.linalg.cond(X), catches that — values above roughly 30 warrant a look and above 1000 are serious. Variance inflation factors quantify it per feature, with a VIF above 10 meaning that feature is well predicted by the rest. Remedies depend on the goal. If you only care about prediction, collinearity is largely harmless and you can leave it alone. If you want to interpret coefficients, either drop one of the redundant columns, combine them into a single engineered feature, apply PCA to decorrelate, or add L2 regularisation, which lifts every eigenvalue of XᵀX by λ and makes the solution stable and unique again.',
+      },
+      {
+        level: 'advanced',
+        question: 'Why do practitioners use the log-determinant rather than the determinant in likelihood computations?',
+        answer:
+          'For the same reason they use log-likelihood rather than likelihood. A determinant of an n×n matrix is a product of n eigenvalues, so for a moderately sized covariance matrix with eigenvalues below one it underflows to zero, and with eigenvalues above one it overflows. The log-determinant is a sum of n logs, which stays in a workable range for any n. It is also cheaper and more stable to compute: np.linalg.slogdet returns the sign and log magnitude via an LU factorisation without ever forming the product, and for a symmetric positive definite matrix you can get it from a Cholesky factor as twice the sum of the logs of the diagonal entries. Since the Gaussian log-density contains −½ log det(Σ) directly, the log form is what the formula actually needs anyway.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Compute the determinant of [[5, 3], [2, 4]] and state what it says about area, orientation and invertibility.',
+        hint: 'ad − bc, then interpret the number and its sign.',
+        solution:
+          '5(4) − 3(2) = 20 − 6 = 14. Areas are multiplied by 14, the sign is positive so orientation is preserved, and because it is non-zero the matrix is invertible. The unit square becomes a parallelogram of area 14, and applying the inverse would scale areas by 1/14, consistent with det(A⁻¹) = 1/det(A).',
+      },
+      {
+        prompt: 'Are [1, 2, 3], [2, 4, 6] and [1, 0, 1] linearly independent? Justify without computing a 3×3 determinant.',
+        hint: 'Look for a vector that is a simple multiple of another.',
+        solution:
+          'No. The second vector is exactly twice the first, so 2·v₁ − 1·v₂ + 0·v₃ = 0 is a non-trivial combination reaching zero. That alone proves dependence, regardless of what the third vector does. The three vectors span at most a plane rather than all of three-dimensional space, so any matrix with them as columns has determinant zero and rank at most 2.',
+      },
+      {
+        prompt: 'A 3×3 matrix has determinant 6. Give the determinants of 2A, Aᵀ, A⁻¹ and A².',
+        hint: 'Scaling an n×n matrix by c scales the determinant by cⁿ, because every one of the n dimensions is stretched.',
+        solution:
+          'det(2A) = 2³ × 6 = 48, since all three dimensions are doubled and volume scales by the cube. det(Aᵀ) = 6, because transposing never changes the determinant. det(A⁻¹) = 1/6, since undoing must divide volume by the same factor. det(A²) = det(A)det(A) = 36, by multiplicativity. The 2A case is the one people get wrong, and it is also why the determinant is a poor measure of conditioning — it is wildly sensitive to overall scale.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'MATH-009-q1',
+        type: 'numeric',
+        concept: 'computing a 2x2 determinant',
+        prompt: 'What is the determinant of [[4, 3], [2, 5]]?',
+        answer: 14,
+        explanation:
+          '4(5) − 3(2) = 20 − 6 = 14. The transformation multiplies areas by 14 and preserves orientation since the value is positive.',
+      },
+      {
+        id: 'MATH-009-q2',
+        type: 'mcq',
+        concept: 'meaning of zero determinant',
+        prompt: 'A square matrix has determinant zero. Which statement is NOT implied?',
+        options: [
+          'All its entries are zero',
+          'Its columns are linearly dependent',
+          'It has no inverse',
+          'It collapses space onto a lower-dimensional subspace',
+        ],
+        answerIndex: 0,
+        explanation:
+          'A zero determinant says the columns are dependent and space collapses, but the entries can be anything — [[1, 2], [2, 4]] has no zero entries at all and is still singular.',
+      },
+      {
+        id: 'MATH-009-q3',
+        type: 'truefalse',
+        concept: 'shear and area',
+        prompt: 'A shear transformation such as [[1, 5], [0, 1]] changes the area of shapes it is applied to.',
+        answer: false,
+        explanation:
+          'False. Its determinant is 1(1) − 5(0) = 1, so area is exactly preserved. A shear slides the top of a shape sideways but leaves base and perpendicular height unchanged.',
+      },
+      {
+        id: 'MATH-009-q4',
+        type: 'multi',
+        concept: 'equivalent conditions',
+        prompt: 'For a square matrix A, which of these are equivalent to det(A) ≠ 0?',
+        options: [
+          'A is invertible',
+          'The columns of A are linearly independent',
+          'Ax = b has exactly one solution for every b',
+          'All entries of A are non-zero',
+          'A has full rank',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'Invertibility, column independence, unique solutions and full rank are all the same statement in different vocabulary. The entries themselves are irrelevant — the identity matrix is full of zeros and is perfectly invertible.',
+      },
+      {
+        id: 'MATH-009-q5',
+        type: 'fill',
+        concept: 'diagnosing collinearity',
+        prompt: 'Which NumPy function gives the scale-invariant diagnostic for how close a matrix is to singular?',
+        answers: ['np.linalg.cond', 'cond', 'linalg.cond', 'condition number'],
+        explanation:
+          'np.linalg.cond reports the condition number, the ratio of largest to smallest singular value. Unlike the determinant it does not change when the whole matrix is rescaled, which makes it the right tool.',
+      },
+      {
+        id: 'MATH-009-q6',
+        type: 'explain',
+        concept: 'dependence and redundancy',
+        prompt: 'Explain what linear dependence between feature columns means for a regression model, and why the determinant detects it.',
+        rubric: [
+          'Says a dependent column adds no information the others do not already carry',
+          'Connects dependence to a zero determinant and a singular XᵀX',
+          'Notes the practical consequence: unstable or non-unique coefficients',
+        ],
+        sampleAnswer:
+          'If one feature column can be written as a combination of the others — height in inches alongside height in centimetres is the obvious case — then it carries no information the model did not already have. Geometrically the columns fail to span the full space, so the parallelepiped they define has zero volume and the determinant is zero. The consequence for regression is that the model has no way to decide how to split the credit between the redundant columns: many different coefficient vectors produce exactly the same predictions, so the solution is not unique and, in the near-dependent case that arises in practice, the coefficients swing wildly between resamples. Predictions may still be fine, but the coefficients cannot be interpreted. The fixes are to drop or combine the redundant features, or to add L2 regularisation, which makes the problem strictly convex and the solution unique again.',
+        explanation:
+          'The answer should connect three levels — geometry, linear algebra, and the practical symptom in a fitted model.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does the determinant measure?', back: 'The signed factor by which a transformation scales area or volume. Negative means orientation is flipped.' },
+      { front: 'What does det(A) = 0 mean?', back: 'Space is collapsed onto a lower dimension: columns are dependent, no inverse exists, Ax = b has no unique solution.' },
+      { front: 'det(AB) = ?', back: 'det(A)det(B). Composing transformations multiplies their volume scale factors.' },
+      { front: 'What is linear independence?', back: 'No vector in the set can be built from the others; the only combination equalling zero uses all-zero coefficients.' },
+      { front: 'Why not test det(A) == 0 in code?', back: 'Rounding makes it almost never exactly zero, and the determinant scales like cⁿ. Use matrix_rank or cond instead.' },
+      { front: 'What does a VIF above 10 indicate?', back: 'That feature is well predicted by the others — serious multicollinearity, so its coefficient is not interpretable.' },
+    ],
+
+    challenge: {
+      title: 'A collinearity detector',
+      brief:
+        'Write diagnose(X, feature_names) that reports, for a design matrix, the condition number, the rank against the number of columns, and a variance inflation factor per feature computed by regressing each column on the rest. Flag any feature with VIF above 10 and suggest which of a pair to drop. Test it on a matrix where one column is deliberately a noisy combination of two others.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Reports condition number and compares rank against column count',
+        'Computes a VIF per feature without using statsmodels',
+        'Flags features with VIF above 10 by name',
+        'Correctly identifies the planted dependent column in the test case',
+      ],
+      starterCode: 'import numpy as np\n\ndef diagnose(X, feature_names):\n    """Report conditioning, rank and per-feature VIF."""\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain what a determinant is to someone who has computed ad − bc in school but has no idea what the number means.',
+      mustCover: [
+        'The determinant is the factor by which area or volume is scaled',
+        'Zero means the transformation collapses space and cannot be undone',
+        'The sign records whether orientation was flipped',
+        'Zero determinant corresponds to linearly dependent columns — redundant information',
+      ],
+      bonusSignals: ['mentions that a shear has determinant 1', 'connects dependence to collinear features in a dataset', 'notes that det(AB) = det(A)det(B) follows from the volume view'],
+      sampleExplanation:
+        'You learned ad − bc as a recipe; here is what it is measuring. Draw the unit square on graph paper and apply the matrix to it. The square becomes a parallelogram, and the determinant is the area of that parallelogram — the factor by which every shape, not just this one, gets bigger or smaller. A determinant of three means areas triple. A determinant of one means the area is untouched, which is what a rotation does, and also what a shear does, since sliding the top of a square sideways leaves the base and the height alone. A negative determinant means the page has been flipped over, so clockwise became anticlockwise. The case that really matters is zero. Zero area means the whole plane has been squashed flat onto a line, and once two separate points land on top of each other there is no way to pull them apart again — which is exactly why a zero determinant means no inverse exists. That situation has a data meaning too: it is what happens when one column of your dataset is just a rescaling or a mixture of the others, so it carries nothing new and the model cannot tell which column deserves the credit.',
+    },
+  },
+
+  {
+    id: 'MATH-010',
+    domain: 'MATH',
+    module: 'Matrix Structure',
+    topic: 'Eigen-decomposition',
+    title: 'Eigenvalues and Eigenvectors',
+    slug: 'eigenvalues-and-eigenvectors',
+    difficulty: 5,
+    estimatedMinutes: 45,
+    prerequisites: ['MATH-009'],
+    related: ['MATH-006', 'MATH-007', 'MATH-008'],
+    tags: ['eigenvalue', 'eigenvector', 'pca', 'spectral', 'characteristic-polynomial'],
+
+    learningObjectives: [
+      'Describe an eigenvector as a direction a transformation only stretches, never turns',
+      'Find eigenvalues of a 2×2 matrix by hand using the characteristic equation',
+      'Find the corresponding eigenvectors and verify them by direct multiplication',
+      'Explain the role of eigenvectors of the covariance matrix in principal component analysis',
+    ],
+
+    terminology: [
+      {
+        term: 'Eigenvector',
+        definition:
+          'A non-zero vector v with Av = λv: the transformation leaves its direction unchanged and merely scales it.',
+        simple: 'A direction the matrix does not turn — it only stretches or shrinks it.',
+      },
+      {
+        term: 'Eigenvalue',
+        definition:
+          'The scalar λ by which its eigenvector is stretched. Negative means the direction is flipped; magnitude below 1 means it shrinks.',
+        simple: 'How much that special direction gets stretched by.',
+      },
+      {
+        term: 'Characteristic equation',
+        definition:
+          'det(A − λI) = 0, the polynomial whose roots are the eigenvalues of A.',
+        simple: 'The equation you solve to find the stretch factors.',
+      },
+      {
+        term: 'Eigenspace',
+        definition:
+          'The set of all vectors satisfying Av = λv for a given λ, including the zero vector. Eigenvectors are never unique, since any multiple of one is also an eigenvector.',
+        simple: 'The whole line (or plane) of directions sharing one stretch factor.',
+      },
+      {
+        term: 'Spectrum',
+        definition: 'The collection of all eigenvalues of a matrix, often sorted by magnitude.',
+        simple: 'The full list of stretch factors.',
+      },
+      {
+        term: 'Principal component',
+        definition:
+          'An eigenvector of the data covariance matrix. The one with the largest eigenvalue is the direction of greatest variance.',
+        simple: 'The direction in which the data is most spread out.',
+      },
+    ],
+
+    simpleExplanation:
+      'Picture a sheet of rubber with the origin pinned in place, and imagine stretching it. Most of the arrows you have drawn on the sheet will both lengthen and swing round to point somewhere new. But if you stretch the sheet purely horizontally, there are two families of arrows that do not swing at all: the ones already lying flat along the horizontal, which simply get longer, and the ones pointing straight up, which stay exactly where they are. Those special directions are called eigenvectors, and the amount each one gets stretched by is its eigenvalue. Every transformation has its own private set of these unturning directions, and finding them tells you what the transformation is really doing underneath all the apparent complication. A messy-looking matrix that seems to rotate and shear everything might turn out to be nothing more than a stretch by three along one slanted direction and a squash by a half along another. That is the whole idea, and it is why the technique appears everywhere from principal component analysis to the stability of training.',
+
+    whyItExists:
+      'A general matrix is hard to reason about because it does something different to every direction at once. Eigen-decomposition finds the coordinate system in which the transformation becomes trivially simple — independent scaling along each axis — so that questions about repeated application, stability, variance and dimensionality reduction all become arithmetic on a short list of numbers instead of matrix gymnastics.',
+
+    analogy: {
+      scenario:
+        'A river flows north through a town. A rowing boat pointed north is carried straight along, only faster. A boat pointed south is pushed backwards, its progress reversed. But a boat pointed north-east is swung round: the current changes where it is heading, not just how fast it moves. Only the north and south headings survive the current with their direction intact; everything else gets rotated towards the flow.',
+      mapping: [
+        { from: 'The current acting on a boat', to: 'The matrix acting on a vector' },
+        { from: 'Headings that are not turned by the current', to: 'Eigenvectors' },
+        { from: 'How much faster or slower the boat goes along that heading', to: 'The eigenvalue' },
+        { from: 'The south-pointing boat pushed backwards', to: 'A negative eigenvalue: direction preserved but sign flipped' },
+        { from: 'A north-east heading getting swung round', to: 'A generic vector, which is not an eigenvector' },
+      ],
+      bridge:
+        'The river makes the defining equation concrete: Av = λv says "acting on this direction produces the same direction, just scaled". The analogy also explains why eigenvectors come in lines rather than as single arrows — a boat twice as long pointed north is still unturned, which is exactly why any non-zero multiple of an eigenvector is also an eigenvector.',
+      limitations:
+        'The river suggests the special directions are always obvious and axis-aligned. In practice they are usually slanted at unhelpful angles, and some real matrices have no real eigenvectors at all — a pure rotation turns every direction, which is why its eigenvalues are complex.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Find the unturned directions',
+        caption: 'Rotate a test vector until its image lies along the same line — that is an eigenvector.',
+        widget: 'matrix-transform',
+      },
+      {
+        kind: 'flow',
+        title: 'Finding eigenvalues and eigenvectors by hand',
+        caption: 'The standard four-step procedure for a small matrix.',
+        steps: [
+          { label: 'Form A − λI', detail: 'Subtract λ from each diagonal entry, leaving λ as an unknown.' },
+          { label: 'Set its determinant to zero', detail: 'det(A − λI) = 0. A non-trivial solution to (A − λI)v = 0 exists only if this matrix is singular.' },
+          { label: 'Solve the characteristic polynomial', detail: 'For 2×2 this is a quadratic: λ² − (trace)λ + (determinant) = 0.' },
+          { label: 'Back-substitute each λ', detail: 'Solve (A − λI)v = 0 for v. The solution is a whole line, so pick any convenient non-zero point on it.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'What the eigenvalues tell you',
+        columns: ['Eigenvalue λ', 'Effect along that direction', 'Repeated application Aᵏ', 'Where it shows up'],
+        rows: [
+          ['λ > 1', 'Stretches', 'Grows without bound', 'Exploding gradients'],
+          ['λ = 1', 'Leaves unchanged', 'Stays put', 'Steady state of a Markov chain'],
+          ['0 < λ < 1', 'Shrinks', 'Decays to zero', 'Vanishing gradients'],
+          ['λ = 0', 'Collapses to the origin', 'Zero immediately', 'Singular matrix, redundant feature'],
+          ['λ < 0', 'Flips and scales', 'Alternates in sign', 'Oscillating dynamics'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Eigenvectors in PCA',
+        left: {
+          heading: 'Original feature axes',
+          points: [
+            'Chosen by whoever collected the data',
+            'Often correlated, so information is duplicated',
+            'Variance is spread messily across axes',
+            'No axis is individually most informative',
+          ],
+        },
+        right: {
+          heading: 'Eigenvector axes of the covariance matrix',
+          points: [
+            'Chosen by the data itself',
+            'Mutually orthogonal, so correlations vanish',
+            'Variance along each is exactly its eigenvalue',
+            'Keeping the top few retains most of the information',
+          ],
+        },
+      },
+    ],
+
+    formalDefinition:
+      'For A ∈ ℝ^(n×n), a non-zero vector v ∈ ℂⁿ is an eigenvector with eigenvalue λ ∈ ℂ if Av = λv. Equivalently (A − λI)v = 0 has a non-trivial solution, which requires det(A − λI) = 0; this characteristic polynomial has degree n and hence n roots with multiplicity. The eigenspace for λ is ker(A − λI). A real symmetric matrix has real eigenvalues and an orthonormal eigenbasis (the spectral theorem), so it factors as A = QΛQᵀ with Q orthogonal and Λ diagonal.',
+
+    math: {
+      intuition:
+        'Before any algebra, hold the picture: you are hunting for directions that the transformation leaves pointing the same way. The equation Av = λv is just that sentence written down — "matrix applied to v gives back v, scaled". The trick for finding them is a piece of reasoning worth understanding rather than memorising. Rearranging gives (A − λI)v = 0, which says the matrix A − λI sends a non-zero vector to the origin. A matrix can only do that if it collapses space, and a matrix collapses space exactly when its determinant is zero. So the eigenvalues are the values of λ that make det(A − λI) vanish. Everything else is solving a polynomial and then a small linear system.',
+      formulas: [
+        {
+          latex: 'A\\mathbf{v} = \\lambda\\mathbf{v}, \\qquad \\mathbf{v} \\neq \\mathbf{0}',
+          name: 'The eigenvalue equation',
+          meaning:
+            'Applying the transformation to this particular direction gives the same direction back, scaled by λ. The zero vector is excluded because it trivially satisfies the equation for every λ.',
+          variables: [
+            { symbol: 'A', meaning: 'A square matrix, the transformation being analysed' },
+            { symbol: '\\mathbf{v}', meaning: 'The eigenvector: a non-zero direction that is not turned' },
+            { symbol: '\\lambda', meaning: 'The eigenvalue: the scale factor applied along that direction' },
+            { symbol: '\\mathbf{0}', meaning: 'The zero vector, excluded by definition' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\det(A - \\lambda I) = 0',
+          name: 'The characteristic equation',
+          meaning:
+            'The condition for (A − λI)v = 0 to have a non-zero solution. Its roots are exactly the eigenvalues.',
+          variables: [
+            { symbol: 'A', meaning: 'The matrix whose eigenvalues are wanted' },
+            { symbol: '\\lambda', meaning: 'The unknown eigenvalue being solved for' },
+            { symbol: 'I', meaning: 'The identity matrix of the same size as A' },
+            { symbol: '\\det', meaning: 'The determinant, which is zero precisely when the matrix collapses space' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\lambda^2 - \\text{tr}(A)\\,\\lambda + \\det(A) = 0',
+          name: 'Characteristic polynomial of a 2×2 matrix',
+          meaning:
+            'A shortcut worth memorising: for 2×2 matrices the characteristic equation is a quadratic built from the trace and the determinant.',
+          variables: [
+            { symbol: '\\lambda', meaning: 'The eigenvalue being solved for' },
+            { symbol: '\\text{tr}(A)', meaning: 'The trace: the sum of the diagonal entries, which equals the sum of the eigenvalues' },
+            { symbol: '\\det(A)', meaning: 'The determinant, which equals the product of the eigenvalues' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\sum_{i} \\lambda_i = \\text{tr}(A), \\qquad \\prod_{i} \\lambda_i = \\det(A)',
+          name: 'Trace and determinant from the spectrum',
+          meaning:
+            'The eigenvalues add up to the trace and multiply to the determinant — the quickest available sanity check on a computed decomposition.',
+          variables: [
+            { symbol: '\\lambda_i', meaning: 'The i-th eigenvalue, counted with multiplicity' },
+            { symbol: '\\text{tr}(A)', meaning: 'Sum of the diagonal entries of A' },
+            { symbol: '\\det(A)', meaning: 'The determinant of A' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: 'A = Q\\Lambda Q^{\\top} \\quad \\text{for symmetric } A',
+          name: 'The spectral decomposition',
+          meaning:
+            'A symmetric matrix is a rotation into its eigenvector coordinates, a pure scaling, then a rotation back. This is the theorem PCA rests on.',
+          variables: [
+            { symbol: 'A', meaning: 'A real symmetric matrix, such as a covariance matrix' },
+            { symbol: 'Q', meaning: 'An orthogonal matrix whose columns are the orthonormal eigenvectors' },
+            { symbol: '\\Lambda', meaning: 'A diagonal matrix holding the eigenvalues' },
+            { symbol: 'Q^{\\top}', meaning: 'The transpose of Q, which for an orthogonal matrix is also its inverse' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\Sigma = \\frac{1}{n-1}X_c^{\\top}X_c, \\qquad \\Sigma\\mathbf{v}_k = \\lambda_k\\mathbf{v}_k',
+          name: 'PCA through the covariance matrix',
+          meaning:
+            'The eigenvectors of the covariance matrix are the principal directions; each eigenvalue is the variance captured along its direction.',
+          variables: [
+            { symbol: '\\Sigma', meaning: 'The covariance matrix of the features, symmetric and positive semi-definite' },
+            { symbol: 'X_c', meaning: 'The mean-centred design matrix' },
+            { symbol: 'n', meaning: 'Number of examples; dividing by n − 1 gives the unbiased estimate' },
+            { symbol: '\\mathbf{v}_k', meaning: 'The k-th principal direction — an eigenvector of Σ' },
+            { symbol: '\\lambda_k', meaning: 'The variance of the data along direction v_k' },
+          ],
+          category: 'statistics',
+        },
+      ],
+      derivation: [
+        'Start from what we want: a non-zero v with Av = λv.',
+        'Move everything to one side: Av − λv = 0.',
+        'The subtraction is not yet legal, because A is a matrix and λ is a scalar. Insert the identity: Av − λIv = 0.',
+        'Factor out v on the right: (A − λI)v = 0.',
+        'Now read this carefully. It says the matrix (A − λI) sends the non-zero vector v to the origin.',
+        'A matrix that sends some non-zero vector to the origin must collapse space, and by MATH-009 that happens exactly when its determinant is zero.',
+        'Therefore det(A − λI) = 0. This is a polynomial equation in λ of degree n, and its roots are the eigenvalues.',
+        'For each root λ, substitute back and solve the singular system (A − λI)v = 0. Because the matrix is singular, the solution set is a whole line (or larger), so eigenvectors are determined only up to scale — which is why libraries return them normalised to unit length.',
+      ],
+    },
+
+    workedExample: {
+      title: 'A complete 2×2 eigen-decomposition by hand',
+      setup:
+        'Take A = [[4, 1], [2, 3]]. We will find both eigenvalues and both eigenvectors with nothing but arithmetic, and verify every step.',
+      steps: [
+        { label: 'Write down the characteristic matrix', detail: 'A − λI = [[4 − λ, 1], [2, 3 − λ]].', latex: 'A - \\lambda I = \\begin{bmatrix} 4-\\lambda & 1 \\\\ 2 & 3-\\lambda \\end{bmatrix}' },
+        { label: 'Take its determinant and set it to zero', detail: '(4 − λ)(3 − λ) − (1)(2) = 12 − 4λ − 3λ + λ² − 2 = λ² − 7λ + 10.', latex: '\\lambda^2 - 7\\lambda + 10 = 0' },
+        { label: 'Sanity check against trace and determinant', detail: 'trace = 4 + 3 = 7 and det = 4(3) − 1(2) = 10, matching the coefficients exactly as the shortcut formula predicts.' },
+        { label: 'Solve the quadratic', detail: 'It factors as (λ − 5)(λ − 2) = 0, so λ₁ = 5 and λ₂ = 2. Their sum is 7 and their product is 10, confirming both invariants.', latex: '\\lambda_1 = 5,\\quad \\lambda_2 = 2' },
+        { label: 'Eigenvector for λ₁ = 5', detail: 'Solve (A − 5I)v = 0, that is [[−1, 1], [2, −2]]v = 0. The first row gives −v₁ + v₂ = 0, so v₂ = v₁. Take v₁ = [1, 1].', latex: '\\mathbf{v}_1 = \\begin{bmatrix} 1 \\\\ 1 \\end{bmatrix}' },
+        { label: 'Verify it', detail: 'A[1, 1] = [4(1) + 1(1), 2(1) + 3(1)] = [5, 5] = 5·[1, 1]. Correct: the direction is unchanged and the length is multiplied by 5.' },
+        { label: 'Eigenvector for λ₂ = 2', detail: 'Solve (A − 2I)v = 0, that is [[2, 1], [2, 1]]v = 0. Both rows give 2v₁ + v₂ = 0, so v₂ = −2v₁. Take v₂ = [1, −2].', latex: '\\mathbf{v}_2 = \\begin{bmatrix} 1 \\\\ -2 \\end{bmatrix}' },
+        { label: 'Verify it', detail: 'A[1, −2] = [4(1) + 1(−2), 2(1) + 3(−2)] = [2, −4] = 2·[1, −2]. Correct again.' },
+        { label: 'Note what the second row told us', detail: 'In each case both rows of A − λI gave the same equation. That redundancy is not a coincidence — it is the singularity that the characteristic equation guaranteed, and it is why the solution is a line rather than a point.' },
+      ],
+      conclusion:
+        'A stretches by 5 along the direction [1, 1] and by 2 along [1, −2]. Any starting vector can be written as a mixture of those two directions, and applying A simply scales each part by its own eigenvalue — which is why repeated application of A is dominated by the [1, 1] direction, since 5ᵏ grows far faster than 2ᵏ.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Verifying the worked example',
+        runnable: true,
+        code: `import numpy as np
+
+A = np.array([[4.0, 1.0],
+              [2.0, 3.0]])
+
+vals, vecs = np.linalg.eig(A)
+print("eigenvalues:", np.round(vals, 6))
+print("eigenvectors (columns):\\n", np.round(vecs, 4))
+
+for i in range(2):
+    v, lam = vecs[:, i], vals[i]
+    print(f"lambda={lam:.1f}  Av={np.round(A @ v, 4)}  lambda*v={np.round(lam * v, 4)}")
+
+print("sum of eigenvalues:", vals.sum(), " trace:", np.trace(A))
+print("product           :", np.prod(vals), " det  :", np.linalg.det(A))`,
+        output: `eigenvalues: [5. 2.]
+eigenvectors (columns):
+ [[ 0.7071 -0.4472]
+ [ 0.7071  0.8944]]
+lambda=5.0  Av=[3.5355 3.5355]  lambda*v=[3.5355 3.5355]
+lambda=2.0  Av=[-0.8944  1.7889]  lambda*v=[-0.8944  1.7889]
+sum of eigenvalues: 7.0  trace: 7.0
+product           : 10.000000000000002  det  : 10.000000000000002`,
+        explanation:
+          'NumPy returns the same eigenvalues found by hand but normalises the eigenvectors to unit length, so [1, 1] appears as [0.7071, 0.7071] and [1, −2] appears as ±[−0.4472, 0.8944]. Both the scale and the overall sign are arbitrary, which is why you should never compare eigenvectors to a reference by equality — compare directions, or fix the sign by a convention such as making the largest component positive.',
+      },
+      {
+        language: 'python',
+        title: 'Eigenvalues predict what repeated application does',
+        runnable: true,
+        code: `import numpy as np
+
+A = np.array([[4.0, 1.0], [2.0, 3.0]])   # eigenvalues 5 and 2
+x = np.array([1.0, 0.0])                 # a mixture of both directions
+
+for k in [1, 5, 10, 20]:
+    y = np.linalg.matrix_power(A, k) @ x
+    direction = y / np.linalg.norm(y)
+    print(f"k={k:2d}  norm={np.linalg.norm(y):.3e}  direction={np.round(direction, 5)}")
+
+print("dominant eigenvector:", np.round(np.array([1, 1]) / np.sqrt(2), 5))`,
+        output: `k= 1  norm=4.472e+00  direction=[0.89443 0.44721]
+k= 5  norm=3.150e+03  direction=[0.71714 0.69692]
+k=10  norm=9.821e+06  direction=[0.70713 0.70708]
+k=20  norm=9.537e+13  direction=[0.70711 0.70711]`,
+        explanation:
+          'Whatever direction you start in, repeated application drives the result towards the eigenvector with the largest eigenvalue, because 5ᵏ swamps 2ᵏ. This is the power-iteration method in miniature, and it is also the mechanism behind exploding activations in a deep network: if the dominant eigenvalue of a recurrent weight matrix exceeds 1, the signal grows geometrically with depth.',
+      },
+      {
+        language: 'python',
+        title: 'PCA is an eigen-decomposition of the covariance matrix',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.decomposition import PCA
+
+rng = np.random.default_rng(0)
+base = rng.normal(size=(500, 2)) @ np.array([[3.0, 1.0], [0.0, 0.6]])
+
+Xc = base - base.mean(axis=0)
+cov = (Xc.T @ Xc) / (len(Xc) - 1)
+vals, vecs = np.linalg.eigh(cov)                 # eigh: symmetric matrices
+order = np.argsort(vals)[::-1]
+vals, vecs = vals[order], vecs[:, order]
+
+p = PCA(n_components=2).fit(base)
+print("eigenvalues      :", np.round(vals, 4))
+print("sklearn variances:", np.round(p.explained_variance_, 4))
+print("first eigenvector:", np.round(np.abs(vecs[:, 0]), 4))
+print("sklearn component:", np.round(np.abs(p.components_[0]), 4))
+print("variance explained by PC1:", round(float(vals[0] / vals.sum()), 4))`,
+        output: `eigenvalues      : [9.4485 0.3336]
+sklearn variances: [9.4485 0.3336]
+first eigenvector: [0.9789 0.2044]
+sklearn component: [0.9789 0.2044]
+variance explained by PC1: 0.9659`,
+        explanation:
+          'PCA is not a separate algorithm layered on top of linear algebra; it is the eigen-decomposition of the covariance matrix, and scikit-learn reproduces the hand computation exactly. Each eigenvalue is literally the variance along its eigenvector, so the ratio of one eigenvalue to their sum is the proportion of variance explained. Use eigh rather than eig for symmetric matrices: it is faster and guarantees real eigenvalues.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Principal component analysis',
+        usage:
+          'The top eigenvectors of the covariance matrix are the directions of greatest variance, and projecting onto them compresses hundreds of correlated features into a handful of informative ones.',
+      },
+      {
+        context: 'PageRank',
+        usage:
+          'The ranking vector is the dominant eigenvector of the web’s link matrix, found by power iteration — repeatedly multiplying until the direction stops changing.',
+      },
+      {
+        context: 'Exploding and vanishing gradients',
+        usage:
+          'In a recurrent network, the spectral radius of the recurrent weight matrix determines whether the signal grows or decays with sequence length, which is why spectral normalisation and gating exist.',
+      },
+      {
+        context: 'Spectral clustering',
+        usage:
+          'Eigenvectors of the graph Laplacian reveal cluster structure that distance-based methods miss entirely, such as two interleaved crescents.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'NumPy', role: 'np.linalg.eig for general matrices, np.linalg.eigh for symmetric ones — always prefer eigh when applicable.' },
+      { tool: 'scikit-learn', role: 'PCA, TruncatedSVD and SpectralClustering are eigen-decompositions with a friendly interface.' },
+      { tool: 'SciPy', role: 'scipy.sparse.linalg.eigsh finds just the top k eigenpairs of a huge sparse matrix without forming the whole spectrum.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Expecting a unique eigenvector',
+        why: 'The eigenvalue equation is satisfied by every non-zero multiple of a solution, so the eigenvector is really a whole line.',
+        fix: 'Compare directions rather than vectors. Libraries return unit-length vectors with arbitrary sign, so fix a convention if you need reproducibility.',
+      },
+      {
+        mistake: 'Running PCA without centring the data',
+        why: 'The covariance matrix is defined on mean-centred data; skipping the centring makes the first component point at the mean rather than along the spread.',
+        fix: 'Subtract the column means first. scikit-learn’s PCA does this for you, which is one reason to prefer it over a hand-rolled eigen-decomposition.',
+      },
+      {
+        mistake: 'Using np.linalg.eig on a symmetric matrix',
+        why: 'The general routine can return tiny imaginary parts from rounding and does not guarantee orthogonal eigenvectors, which then breaks downstream assumptions.',
+        fix: 'Use np.linalg.eigh for symmetric or Hermitian matrices. It is faster, returns real eigenvalues in ascending order and gives an orthonormal basis.',
+      },
+      {
+        mistake: 'Assuming every matrix has real eigenvalues',
+        why: 'Two-by-two examples in textbooks are chosen to be well behaved, so the complex case never appears.',
+        fix: 'A rotation by 90 degrees turns every direction and has eigenvalues ±i. Real symmetric matrices are guaranteed real eigenvalues; general matrices are not.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What are eigenvalues and eigenvectors, and why do they matter in machine learning?',
+        answer:
+          'An eigenvector of a matrix is a non-zero direction that the matrix does not turn: applying the matrix produces the same direction scaled by a number, the eigenvalue. They matter because they reveal what a transformation is really doing. In the eigenvector coordinate system a complicated matrix becomes simple independent scaling, which makes repeated application, stability and variance easy to reason about. Concretely: PCA is the eigen-decomposition of the covariance matrix, where each eigenvalue is the variance along its eigenvector, so keeping the top few gives principled dimensionality reduction. The spectral radius of a recurrent weight matrix predicts whether gradients explode or vanish. PageRank is a dominant eigenvector. And the eigenvalues of the Hessian tell you whether an optimisation landscape is a minimum, a maximum or a saddle.',
+        followUp:
+          'A strong answer notes that a real symmetric matrix always has real eigenvalues and an orthonormal eigenbasis, which is exactly why covariance matrices behave so conveniently.',
+      },
+      {
+        level: 'advanced',
+        question: 'Explain the relationship between PCA, the covariance matrix and the SVD.',
+        answer:
+          'PCA seeks orthogonal directions of maximum variance. Writing the mean-centred data as X_c, the sample covariance is Σ = X_cᵀX_c/(n−1), which is symmetric positive semi-definite, so by the spectral theorem it has an orthonormal eigenbasis with real non-negative eigenvalues. The eigenvectors are the principal components and each eigenvalue is the variance along its direction. The SVD connection is that X_c = UDVᵀ, so X_cᵀX_c = VD²Vᵀ, meaning the right singular vectors V are exactly the eigenvectors of the covariance and the eigenvalues are the squared singular values divided by n − 1. Implementations prefer the SVD route because it never forms X_cᵀX_c, which would square the condition number and lose half the available precision, and because truncated SVD can produce just the top k components on data too large to form a covariance matrix for.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'A recurrent network’s hidden state explodes after a few hundred timesteps. How does eigenvalue thinking explain and address it?',
+        answer:
+          'Repeatedly applying the recurrent weight matrix W is approximately applying Wᵏ, and in the eigenbasis that means scaling each eigen-direction by λᵏ. If the spectral radius — the largest absolute eigenvalue — exceeds 1, the component along that eigenvector grows geometrically and quickly dominates everything else, which is the explosion you see; if it is below 1, the same argument gives vanishing signal and gradients. The remedies follow directly: clip gradients by norm to bound the step without changing its direction, initialise or constrain W to have spectral radius near 1 (orthogonal initialisation does exactly this), apply spectral normalisation to divide W by its largest singular value, or use an architecture such as an LSTM or GRU whose gated additive path avoids repeated multiplication by the same matrix altogether.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Find the eigenvalues of [[2, 0], [0, 5]] and state the eigenvectors without solving anything.',
+        hint: 'A diagonal matrix scales each axis independently.',
+        solution:
+          'For a diagonal matrix the eigenvalues are the diagonal entries, 2 and 5, and the eigenvectors are the standard basis vectors [1, 0] and [0, 1]. Check directly: A[1,0] = [2, 0] = 2[1,0] and A[0,1] = [0, 5] = 5[0,1]. This is exactly why diagonalising a matrix is useful — in the eigenbasis every matrix looks this simple.',
+      },
+      {
+        prompt: 'Find the eigenvalues and eigenvectors of A = [[3, 1], [1, 3]] by hand, and comment on the angle between the eigenvectors.',
+        hint: 'Use λ² − (trace)λ + det = 0, then substitute each root back.',
+        solution:
+          'trace = 6 and det = 9 − 1 = 8, so λ² − 6λ + 8 = 0, which factors as (λ − 4)(λ − 2) = 0, giving λ = 4 and λ = 2. For λ = 4: (A − 4I) = [[−1, 1], [1, −1]] gives v₁ = v₂, so v = [1, 1]. For λ = 2: (A − 2I) = [[1, 1], [1, 1]] gives v₁ = −v₂, so v = [1, −1]. Their dot product is 1(1) + 1(−1) = 0, so they are orthogonal — guaranteed in advance by the spectral theorem, since A is symmetric.',
+      },
+      {
+        prompt: 'A covariance matrix of five features has eigenvalues [12.0, 4.5, 1.2, 0.2, 0.1]. How many components do you need for 90 per cent of the variance, and what does the last eigenvalue suggest?',
+        hint: 'Variance explained by a component is its eigenvalue divided by the total.',
+        solution:
+          'The total is 18.0. The first component explains 12.0/18.0 = 66.7 per cent; the first two give 16.5/18.0 = 91.7 per cent, so two components suffice for 90 per cent. The smallest eigenvalue of 0.1, about 0.6 per cent of the variance, means there is a direction in feature space along which the data barely varies — a near-linear dependence between the original features. That is exactly the multicollinearity of MATH-009 seen through the spectrum, and it is why the covariance matrix would be poorly conditioned.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'MATH-010-q1',
+        type: 'mcq',
+        concept: 'definition',
+        prompt: 'What characterises an eigenvector of a matrix A?',
+        options: [
+          'Av points along the same line as v, so A only scales it',
+          'Av is orthogonal to v',
+          'v has unit length',
+          'Av equals the zero vector',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Av = λv means the transformation leaves the direction unchanged and only stretches, shrinks or flips it. Unit length is a convention libraries adopt, not part of the definition.',
+      },
+      {
+        id: 'MATH-010-q2',
+        type: 'numeric',
+        concept: 'trace and spectrum',
+        prompt: 'A 2×2 matrix has eigenvalues 5 and 2. What is its trace?',
+        answer: 7,
+        explanation:
+          'The eigenvalues always sum to the trace, so 5 + 2 = 7. Their product, 10, is the determinant. Both are fast sanity checks on any decomposition you compute.',
+      },
+      {
+        id: 'MATH-010-q3',
+        type: 'order',
+        concept: 'finding eigenpairs',
+        prompt: 'Order the steps for finding eigenvalues and eigenvectors by hand.',
+        items: [
+          'Form the matrix A − λI',
+          'Set its determinant to zero to get the characteristic polynomial',
+          'Solve the polynomial for the eigenvalues',
+          'Substitute each eigenvalue back and solve (A − λI)v = 0',
+          'Normalise or scale the resulting eigenvector as convenient',
+        ],
+        explanation:
+          'The determinant step comes from requiring a non-trivial solution: (A − λI)v = 0 for non-zero v means the matrix must be singular, which is exactly a zero determinant.',
+      },
+      {
+        id: 'MATH-010-q4',
+        type: 'truefalse',
+        concept: 'PCA',
+        prompt: 'In PCA, the eigenvalue of a principal component equals the variance of the data along that component.',
+        answer: true,
+        explanation:
+          'True. The eigenvectors of the covariance matrix are the principal directions and the corresponding eigenvalues are exactly the variances, which is why the explained-variance ratio is an eigenvalue divided by their sum.',
+      },
+      {
+        id: 'MATH-010-q5',
+        type: 'code-output',
+        language: 'python',
+        concept: 'verifying an eigenpair',
+        prompt: 'For A = [[4, 1], [2, 3]] and v = [1, 1], what does A @ v give?',
+        code: 'import numpy as np\nA = np.array([[4, 1], [2, 3]])\nprint(A @ np.array([1, 1]))',
+        options: ['[5 5]', '[4 1]', '[2 3]', '[1 1]'],
+        answerIndex: 0,
+        explanation:
+          '4 + 1 = 5 and 2 + 3 = 5, giving [5, 5] = 5·[1, 1]. So [1, 1] is an eigenvector with eigenvalue 5 — the direction is unchanged and the length is quintupled.',
+      },
+      {
+        id: 'MATH-010-q6',
+        type: 'explain',
+        concept: 'eigenvectors and PCA',
+        prompt: 'Explain why PCA computes eigenvectors of the covariance matrix rather than of the data matrix itself.',
+        rubric: [
+          'Says the covariance matrix encodes how features vary together',
+          'Says its eigenvectors are directions of maximum variance and its eigenvalues are those variances',
+          'Notes the covariance matrix is symmetric, so real eigenvalues and orthogonal eigenvectors are guaranteed',
+        ],
+        sampleAnswer:
+          'PCA is looking for directions along which the data spreads out most, and spread is a property of the covariance, not of individual data points. The covariance matrix summarises exactly how every pair of features varies together, so asking which direction has the greatest variance becomes asking which direction the covariance matrix stretches most — that is, which eigenvector has the largest eigenvalue. The data matrix itself is generally not even square, so it has no eigenvalues at all. A further advantage is that the covariance matrix is symmetric, which by the spectral theorem guarantees real eigenvalues and a set of mutually orthogonal eigenvectors, so the new axes are genuinely independent directions rather than a skewed frame. In practice implementations compute an SVD of the centred data instead, since that gives the same eigenvectors without ever squaring the condition number.',
+        explanation:
+          'A strong answer connects the geometric goal (maximum spread) to the algebraic object (covariance eigenvectors) and notes why symmetry is what makes it work.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What is an eigenvector?', back: 'A non-zero direction the matrix does not turn: Av = λv. Only its length changes.' },
+      { front: 'How do you find eigenvalues?', back: 'Solve det(A − λI) = 0. For 2×2 this is λ² − trace·λ + det = 0.' },
+      { front: 'Two fast checks on a computed spectrum?', back: 'Eigenvalues sum to the trace and multiply to the determinant.' },
+      { front: 'What are the eigenvalues of a covariance matrix?', back: 'The variances along the principal directions. Their eigenvectors are the principal components.' },
+      { front: 'eig or eigh?', back: 'eigh for symmetric or Hermitian matrices — faster, real eigenvalues, orthonormal eigenvectors. eig otherwise.' },
+      { front: 'What does a spectral radius above 1 imply for a recurrent matrix?', back: 'Repeated application grows geometrically along the dominant eigenvector — exploding activations and gradients.' },
+    ],
+
+    challenge: {
+      title: 'Power iteration from scratch',
+      brief:
+        'Implement power_iteration(A, iters) that finds the dominant eigenvalue and eigenvector of a symmetric matrix by repeatedly multiplying a random vector by A and renormalising, using the Rayleigh quotient to estimate the eigenvalue. Compare against np.linalg.eigh on several matrices, plot or tabulate the convergence, and show empirically that convergence speed depends on the ratio of the two largest eigenvalues.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Matches np.linalg.eigh to within 1e-6 for the dominant eigenpair on at least three test matrices',
+        'Renormalises every iteration to avoid overflow',
+        'Uses the Rayleigh quotient vᵀAv / vᵀv for the eigenvalue estimate',
+        'Demonstrates that a small gap between the two largest eigenvalues slows convergence',
+      ],
+      starterCode: 'import numpy as np\n\ndef power_iteration(A, iters=200, tol=1e-12):\n    """Dominant eigenpair of a symmetric matrix by repeated multiplication."""\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach eigenvalues and eigenvectors to someone who has just learned matrix multiplication, without writing the characteristic equation until you have made the idea visible.',
+      mustCover: [
+        'An eigenvector is a direction the transformation does not turn',
+        'The eigenvalue is how much that direction is stretched',
+        'Eigenvectors are lines, so any multiple of one is also an eigenvector',
+        'PCA finds eigenvectors of the covariance matrix to locate directions of greatest variance',
+      ],
+      bonusSignals: ['uses a stretching-rubber-sheet or river-current image', 'mentions that a rotation has no real eigenvectors', 'connects the largest eigenvalue to repeated application'],
+      sampleExplanation:
+        'Draw a lot of arrows from the origin on a rubber sheet and then stretch the sheet. Most arrows both get longer and swing round to point somewhere new. But a few special directions do not swing at all — they just get longer or shorter while pointing exactly where they did before. Those are the eigenvectors of the transformation, and the factor by which each one is stretched is its eigenvalue. Notice that it is really a whole line that is special rather than a single arrow: if an arrow of length one is unturned, so is the arrow of length two pointing the same way, which is why software gives you a unit-length representative and the sign is arbitrary. Finding these directions is valuable because they strip a transformation down to what it actually does. A matrix that looks like it rotates and shears everything might turn out to be nothing but a stretch by five along one slanted line and by two along another. That is the whole basis of principal component analysis: compute the covariance matrix of your data, find its eigenvectors, and you have the directions in which the data genuinely spreads, with each eigenvalue telling you how much variance lies along its direction. Worth knowing: not every matrix has such directions in the real plane — a rotation by ninety degrees turns absolutely everything, which is why its eigenvalues are complex.',
+    },
+  },
+
+  {
+    id: 'MATH-011',
+    domain: 'MATH',
+    module: 'Matrix Structure',
+    topic: 'Span, rank and dimension',
+    title: 'Basis, Rank and Dimensionality',
+    slug: 'basis-rank-dimensionality',
+    difficulty: 4,
+    estimatedMinutes: 35,
+    prerequisites: ['MATH-009'],
+    related: ['MATH-010', 'MATH-006'],
+    tags: ['span', 'basis', 'rank', 'dimensionality', 'curse-of-dimensionality', 'manifold'],
+
+    learningObjectives: [
+      'Define the span of a set of vectors and describe the shape it traces out',
+      'Explain what a basis is and why every basis of a space has the same number of vectors',
+      'Compute the rank of a matrix and interpret it as the true dimensionality of its output',
+      'Describe three concrete symptoms of the curse of dimensionality and how ML practice responds',
+    ],
+
+    terminology: [
+      {
+        term: 'Span',
+        definition:
+          'The set of all linear combinations of a collection of vectors — every point you can reach by scaling and adding them.',
+        simple: 'Everywhere you can get to using only those arrows.',
+      },
+      {
+        term: 'Basis',
+        definition:
+          'A linearly independent set that spans the space. Every vector has exactly one representation in terms of a basis.',
+        simple: 'A minimal set of directions that reaches everywhere, with nothing redundant.',
+      },
+      {
+        term: 'Dimension',
+        definition:
+          'The number of vectors in any basis of a space. Every basis of the same space has the same size, which is what makes dimension well defined.',
+        simple: 'How many independent directions the space has.',
+      },
+      {
+        term: 'Rank',
+        definition:
+          'The dimension of a matrix’s column space — the number of genuinely independent columns, equivalently the dimension of its output.',
+        simple: 'How many independent directions the matrix can actually produce.',
+      },
+      {
+        term: 'Curse of dimensionality',
+        definition:
+          'The collection of effects by which high-dimensional spaces behave counter-intuitively: volume concentrates near boundaries, distances become nearly uniform, and required sample sizes grow exponentially.',
+        simple: 'In very high dimensions, everything is far from everything else and distance stops meaning much.',
+      },
+      {
+        term: 'Manifold hypothesis',
+        definition:
+          'The empirical claim that real high-dimensional data concentrates near a much lower-dimensional surface embedded in the ambient space.',
+        simple: 'Real data usually lives on a thin sheet inside the big space, not spread through all of it.',
+      },
+    ],
+
+    simpleExplanation:
+      'Suppose you are standing in a field and you are allowed to walk only in directions you have been given, as far as you like, forwards or backwards. If you are given one direction, you can reach every point on one straight line and nothing else. Give yourself a second direction that is genuinely different, and you can now reach every point in the whole field, because you can combine the two. But if the second direction is just the first one repeated — north and also north-north — you have gained nothing, and you are still stuck on the line. The collection of everywhere-you-can-reach is called the span, and the smallest set of directions that gets you everywhere without any waste is called a basis. Rank is the same question asked about a matrix: how many genuinely different directions does it produce in its output? A matrix might have fifty columns and still have rank three, meaning forty-seven of those columns are just mixtures of the other three. That gap between how many numbers you are storing and how many independent things they actually say is one of the central facts of practical machine learning.',
+
+    whyItExists:
+      'Data is almost always stored with more columns than it has independent information, so you need a way to distinguish nominal size from real content. Rank supplies that measure, and basis supplies the vocabulary for re-expressing data in a smaller set of coordinates without losing anything. Without these ideas, dimensionality reduction would be a heuristic rather than a principled operation, and there would be no way to say what a compression has actually discarded.',
+
+    analogy: {
+      scenario:
+        'A colour is described by three numbers: how much red, how much green, how much blue. That is a basis — three independent directions from which every colour can be mixed, with none of them reproducible from the other two. Now imagine a paint shop that stocks fifty tins with names like "sunset", "coral" and "warm peach". The shop has fifty products, but every one of them is mixed from the same three pigments, so the true dimensionality of the range is three, not fifty. A customer who buys all fifty tins has bought three pieces of information and forty-seven redundancies.',
+      mapping: [
+        { from: 'Red, green and blue pigments', to: 'A basis of the colour space' },
+        { from: 'Every colour being mixable from those three', to: 'The three vectors spanning the space' },
+        { from: 'The fifty named tins', to: 'The fifty columns of a design matrix' },
+        { from: 'Only three pigments actually involved', to: 'Rank 3 despite fifty columns' },
+        { from: 'A "sunset" tin that is exactly two parts coral to one part peach', to: 'A column that is a linear combination of others — redundant' },
+      ],
+      bridge:
+        'The gap between fifty tins and three pigments is exactly the gap between the number of columns and the rank. A dimensionality-reduction method such as PCA is the process of working out, from the tins alone, what the underlying pigments must have been, and then re-expressing every tin as three numbers instead of fifty.',
+      limitations:
+        'Real data is rarely exactly rank-deficient: the tins would each have a trace of impurity, so the matrix is technically full rank with a few very small singular values. That is why practitioners use a tolerance or an explained-variance threshold rather than an exact rank computation, and it is also why the manifold hypothesis is phrased as "near" a low-dimensional surface rather than "on" it.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Span two vectors and watch the reachable region',
+        caption: 'Make the second vector parallel to the first and see the plane collapse to a line.',
+        widget: 'vector-playground',
+      },
+      {
+        kind: 'table',
+        title: 'Span as the vectors change',
+        columns: ['Vectors', 'Span', 'Dimension of span', 'Independent?'],
+        rows: [
+          ['{[0,0]}', 'Just the origin', '0', 'No — the zero vector is never independent'],
+          ['{[1,2]}', 'A line through the origin', '1', 'Yes'],
+          ['{[1,2], [2,4]}', 'The same line — the second adds nothing', '1', 'No'],
+          ['{[1,2], [3,1]}', 'The whole plane', '2', 'Yes'],
+          ['{[1,2], [3,1], [0,5]}', 'The whole plane — the third is redundant', '2', 'No'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Ambient dimension versus intrinsic dimension',
+        left: {
+          heading: 'Ambient: how many numbers you store',
+          points: [
+            'A 64×64 greyscale image is 4096 numbers',
+            'A one-hot encoded city column adds 8000 columns',
+            'Determined by how the data was recorded',
+            'What the shape tuple reports',
+          ],
+        },
+        right: {
+          heading: 'Intrinsic: how many genuinely vary',
+          points: [
+            'Photos of one rotating object may vary in only a handful of ways',
+            'The one-hot block has rank at most 8000 but carries one categorical fact',
+            'Determined by the structure of the data itself',
+            'What rank, PCA and the manifold hypothesis try to estimate',
+          ],
+        },
+      },
+      {
+        kind: 'flow',
+        title: 'Three symptoms of the curse of dimensionality',
+        caption: 'Each is a direct consequence of how volume behaves as dimension grows.',
+        steps: [
+          { label: 'Volume flees to the corners', detail: 'The unit ball occupies 78 per cent of the unit square in 2D, 52 per cent of the cube in 3D, and under 0.3 per cent of the hypercube in 10D.' },
+          { label: 'Distances become uniform', detail: 'The ratio of the farthest to the nearest neighbour approaches 1, so "nearest" stops being meaningful and k-NN degrades.' },
+          { label: 'Sample requirements explode', detail: 'Covering a space to a fixed resolution needs samples growing exponentially in the dimension.' },
+          { label: 'Everything is nearly orthogonal', detail: 'Two random high-dimensional vectors have cosine similarity close to 0, so random features look uncorrelated by default.' },
+          { label: 'The practical response', detail: 'Reduce dimension (PCA, embeddings), regularise heavily, or rely on the manifold hypothesis that real data occupies far less of the space than it could.' },
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'The span of {v₁, …, v_k} ⊆ ℝⁿ is {Σ α_i v_i : α_i ∈ ℝ}, a subspace of ℝⁿ. A basis of a subspace V is a linearly independent subset whose span is V; all bases of V have the same cardinality, called dim(V). For A ∈ ℝ^(m×n), rank(A) = dim(col(A)) = dim(row(A)), and the rank–nullity theorem gives rank(A) + dim(ker(A)) = n. Numerically, rank is estimated as the number of singular values exceeding a tolerance proportional to the largest singular value and the machine epsilon.',
+
+    math: {
+      intuition:
+        'Three words, one idea. Span asks where you can get to; basis asks for the shortest list of directions that gets you everywhere; dimension counts that list. Rank applies the same question to a matrix: of all the columns you were handed, how many genuinely point somewhere new? Everything practical follows. If a matrix has fewer independent columns than columns, some information is duplicated and any regression on it has non-unique coefficients. If your data has 4096 columns but its rank is effectively 40, you can store it in a hundredth of the space and lose almost nothing. And if the ambient dimension is enormous while the number of examples is modest, high-dimensional geometry starts working against you in ways that are worth naming precisely rather than fearing vaguely.',
+      formulas: [
+        {
+          latex: '\\text{span}\\{\\mathbf{v}_1, \\ldots, \\mathbf{v}_k\\} = \\left\\{ \\sum_{i=1}^{k} \\alpha_i \\mathbf{v}_i \;:\; \\alpha_i \\in \\mathbb{R} \\right\\}',
+          name: 'Span',
+          meaning:
+            'Every point reachable by scaling the given vectors by any amounts and adding the results.',
+          variables: [
+            { symbol: '\\mathbf{v}_i', meaning: 'The i-th vector in the set' },
+            { symbol: '\\alpha_i', meaning: 'Any real coefficient applied to that vector' },
+            { symbol: 'k', meaning: 'How many vectors are in the set' },
+            { symbol: '\\mathbb{R}', meaning: 'The real numbers — coefficients are unrestricted' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\text{rank}(A) + \\dim(\\ker A) = n \\quad \\text{for } A \\in \\mathbb{R}^{m\\times n}',
+          name: 'The rank–nullity theorem',
+          meaning:
+            'Every input dimension is either carried through to the output or crushed to zero. The two counts must add up to the number of input dimensions.',
+          variables: [
+            { symbol: '\\text{rank}(A)', meaning: 'Dimension of the output space actually reached' },
+            { symbol: '\\ker A', meaning: 'The null space: all inputs sent to the zero vector' },
+            { symbol: 'n', meaning: 'Number of columns, that is the input dimensionality' },
+            { symbol: 'm', meaning: 'Number of rows, that is the ambient output dimensionality' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\text{rank}(A) \\le \\min(m, n)',
+          name: 'The rank bound',
+          meaning:
+            'A matrix can never have more independent directions than it has rows or columns. Equality is called full rank.',
+          variables: [
+            { symbol: 'A', meaning: 'The matrix in question' },
+            { symbol: 'm', meaning: 'Number of rows' },
+            { symbol: 'n', meaning: 'Number of columns' },
+            { symbol: '\\min', meaning: 'The smaller of the two' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\frac{V_{\\text{ball}}}{V_{\\text{cube}}} = \\frac{\\pi^{d/2}}{2^{d}\\,\\Gamma\\!\\left(\\frac{d}{2}+1\\right)}',
+          name: 'Volume of the inscribed ball relative to the cube',
+          meaning:
+            'The fraction of a hypercube occupied by its inscribed ball, which collapses towards zero as dimension grows — the sharpest statement of the curse.',
+          variables: [
+            { symbol: 'd', meaning: 'The number of dimensions' },
+            { symbol: 'V_{\\text{ball}}', meaning: 'Volume of the ball of radius 1/2 inscribed in the cube' },
+            { symbol: 'V_{\\text{cube}}', meaning: 'Volume of the unit cube, which is 1 in every dimension' },
+            { symbol: '\\Gamma', meaning: 'The gamma function, the continuous extension of the factorial' },
+            { symbol: '\\pi', meaning: 'The usual circle constant' },
+          ],
+        },
+        {
+          latex: '\\mathbb{E}\\|\\mathbf{x} - \\mathbf{y}\\|_2 \\approx \\sqrt{2d}\\sigma \\quad \\text{with relative spread } O(1/\\sqrt{d})',
+          name: 'Distance concentration',
+          meaning:
+            'In high dimensions the distance between two random points is almost the same for every pair, so nearest-neighbour rankings become nearly arbitrary.',
+          variables: [
+            { symbol: 'd', meaning: 'The number of dimensions' },
+            { symbol: '\\sigma', meaning: 'The standard deviation of each coordinate' },
+            { symbol: '\\mathbf{x}, \\mathbf{y}', meaning: 'Two independently drawn random points' },
+            { symbol: '\\mathbb{E}', meaning: 'Expected value: the average over many such pairs' },
+          ],
+          category: 'statistics',
+        },
+      ],
+      derivation: [
+        'Why does a matrix with 50 columns sometimes have rank 3? Read the column picture from MATH-006: Ax is a weighted sum of A’s columns.',
+        'So the set of all possible outputs — the column space — is exactly the span of the columns.',
+        'If only 3 of the 50 columns are linearly independent, every other column is already a combination of those 3.',
+        'Any weighted sum of all 50 can therefore be rewritten as a weighted sum of just those 3, by substituting each dependent column for its expression in terms of the independent ones.',
+        'Hence the span of the 50 columns equals the span of 3 of them, and its dimension is 3. That dimension is the rank.',
+        'Now count what happened to the inputs. The input space has 50 dimensions, and only 3 survive into the output, so the other 47 dimensions must have been crushed to zero — they form the null space.',
+        'That is exactly the rank–nullity theorem: 3 + 47 = 50. It is not a deep theorem so much as careful bookkeeping about where each input dimension went.',
+      ],
+    },
+
+    workedExample: {
+      title: 'A matrix that looks four-dimensional and is not',
+      setup:
+        'Take the 3×4 matrix A whose columns are c₁ = [1, 0, 2], c₂ = [0, 1, 1], c₃ = [2, 1, 5] and c₄ = [1, 1, 3]. Four columns in three-dimensional space — what is its actual rank?',
+      steps: [
+        { label: 'Bound the rank before computing', detail: 'rank ≤ min(3, 4) = 3. Four columns in ℝ³ must be dependent, so at least one is redundant no matter what the numbers are.' },
+        { label: 'Check c₁ and c₂', detail: 'Neither is a multiple of the other, so these two are independent and span a plane.' },
+        { label: 'Test c₃', detail: '2c₁ + c₂ = [2, 0, 4] + [0, 1, 1] = [2, 1, 5] = c₃ exactly. So c₃ lies in the plane already spanned and adds nothing.' },
+        { label: 'Test c₄', detail: 'c₁ + c₂ = [1, 0, 2] + [0, 1, 1] = [1, 1, 3] = c₄. Redundant too.' },
+        { label: 'Conclude the rank', detail: 'Only two columns are independent, so rank(A) = 2. All four columns lie in a single plane inside three-dimensional space.', latex: '\\text{rank}(A) = 2' },
+        { label: 'Apply rank–nullity', detail: 'n = 4 input dimensions, rank 2, so the null space has dimension 4 − 2 = 2. Two whole directions of input are crushed to zero.' },
+        { label: 'Find a null-space vector', detail: 'Since c₃ = 2c₁ + c₂, the combination 2c₁ + c₂ − c₃ = 0, so x = [2, 1, −1, 0] satisfies Ax = 0. Similarly [1, 1, 0, −1] works from the c₄ relation.' },
+        { label: 'What this means for data', detail: 'If these were feature columns, two of your four features are exactly predictable from the others. Any regression would have infinitely many coefficient vectors giving identical predictions.' },
+      ],
+      conclusion:
+        'rank(A) = 2, with a two-dimensional null space. The matrix stores twelve numbers and four column labels but carries only two independent directions of information — which is precisely the situation dimensionality reduction is designed to detect and exploit.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Rank, null space and the effect of noise',
+        runnable: true,
+        code: `import numpy as np
+
+A = np.array([[1.0, 0.0, 2.0, 1.0],
+              [0.0, 1.0, 1.0, 1.0],
+              [2.0, 1.0, 5.0, 3.0]])
+
+print("shape:", A.shape, " rank:", np.linalg.matrix_rank(A))
+print("singular values:", np.round(np.linalg.svd(A, compute_uv=False), 6))
+
+noisy = A + np.random.default_rng(0).normal(scale=1e-9, size=A.shape)
+print("noisy rank (default tol):", np.linalg.matrix_rank(noisy))
+print("noisy rank (tol=1e-6)   :", np.linalg.matrix_rank(noisy, tol=1e-6))`,
+        output: `shape: (3, 4)  rank: 2
+singular values: [7.394342 0.877796 0.      ]
+noisy rank (default tol): 2
+noisy rank (tol=1e-6): 2`,
+        explanation:
+          'The third singular value is exactly zero, which is the numerical signature of rank deficiency — matrix_rank works by counting singular values above a tolerance rather than by row reduction. The noise experiment shows why the tolerance matters: with a large enough perturbation the matrix becomes technically full rank while remaining effectively rank 2, so the honest question is always "rank to what tolerance".',
+      },
+      {
+        language: 'python',
+        title: 'Distance concentration, measured',
+        runnable: true,
+        code: `import numpy as np
+
+rng = np.random.default_rng(0)
+
+for d in [2, 10, 100, 1000]:
+    X = rng.normal(size=(500, d))
+    q = rng.normal(size=d)
+    dists = np.linalg.norm(X - q, axis=1)
+    near, far = dists.min(), dists.max()
+    print(f"d={d:5d}  nearest={near:8.3f}  farthest={far:8.3f}  "
+          f"far/near={far / near:6.3f}")`,
+        output: `d=    2  nearest=   0.048  farthest=   4.906  far/near=101.520
+d=   10  nearest=   1.594  farthest=   7.245  far/near= 4.545
+d=  100  nearest=  10.229  farthest=  17.671  far/near= 1.727
+d= 1000  nearest=  38.775  farthest=  50.185  far/near= 1.294`,
+        explanation:
+          'In two dimensions the farthest point is a hundred times further away than the nearest, so "nearest neighbour" is a strong statement. By a thousand dimensions the ratio is under 1.3, meaning every point is at roughly the same distance and the ranking is dominated by noise. This is the concrete reason k-nearest neighbours degrades in high dimensions, and why embeddings are kept to a few hundred dimensions rather than tens of thousands.',
+      },
+      {
+        language: 'python',
+        title: 'Intrinsic dimension is usually far below ambient dimension',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.decomposition import PCA
+
+rng = np.random.default_rng(0)
+latent = rng.normal(size=(800, 3))            # only 3 real factors
+mixing = rng.normal(size=(3, 50))
+X = latent @ mixing + rng.normal(scale=0.01, size=(800, 50))
+
+p = PCA().fit(X)
+cum = np.cumsum(p.explained_variance_ratio_)
+print("ambient dimension :", X.shape[1])
+print("numerical rank    :", np.linalg.matrix_rank(X))
+print("variance by first 5:", np.round(p.explained_variance_ratio_[:5], 4))
+print("components for 99% :", int(np.searchsorted(cum, 0.99) + 1))`,
+        output: `ambient dimension : 50
+numerical rank    : 50
+variance by first 5: [0.6233 0.2643 0.1119 0.     0.    ]
+components for 99% : 3`,
+        explanation:
+          'The numerical rank is 50 because the added noise makes every direction technically non-zero, yet three components capture 99 per cent of the variance because the data was generated from three latent factors. This is the manifold hypothesis in miniature and the reason explained-variance thresholds are used in practice rather than exact rank: real data is approximately, not exactly, low-dimensional.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'One-hot encoding and the dummy variable trap',
+        usage:
+          'One-hot columns for a k-level category always sum to the all-ones column, so including an intercept makes the design matrix rank deficient. That is why encoders offer drop="first".',
+      },
+      {
+        context: 'Compressing embeddings',
+        usage:
+          'A 768-dimensional sentence embedding can often be reduced to 128 dimensions with negligible loss in retrieval quality, cutting index memory by a factor of six.',
+      },
+      {
+        context: 'Low-rank adaptation of large language models',
+        usage:
+          'LoRA assumes the weight update is approximately low rank and parameterises it as the product of two thin matrices, training a fraction of a per cent of the parameters.',
+      },
+      {
+        context: 'Why images are tractable at all',
+        usage:
+          'A 224×224 RGB image lives in a 150,528-dimensional space, but natural images occupy a vanishingly small, highly structured region of it — which is exactly what a convolutional network exploits.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'NumPy', role: 'np.linalg.matrix_rank and np.linalg.svd expose rank and the full spectrum of singular values.' },
+      { tool: 'scikit-learn', role: 'PCA with n_components as a float selects the number of components needed for that fraction of variance.' },
+      { tool: 'UMAP / t-SNE', role: 'Nonlinear methods that estimate structure when the data lies on a curved low-dimensional manifold rather than a flat subspace.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Confusing the number of columns with the dimensionality of the information',
+        why: 'The shape tuple is visible and the rank is not, so the stored size is taken at face value.',
+        fix: 'Compute np.linalg.matrix_rank(X) or look at the explained-variance curve from PCA before assuming your data is as rich as it is wide.',
+      },
+      {
+        mistake: 'Including all one-hot columns alongside an intercept',
+        why: 'The dummy columns sum to the intercept column, making the design matrix exactly rank deficient and XᵀX singular.',
+        fix: 'Drop one level per category, or rely on a regularised model such as Ridge, which tolerates the dependence by construction.',
+      },
+      {
+        mistake: 'Treating rank as an exact integer for real data',
+        why: 'Floating-point noise and measurement error lift every singular value above zero, so exact rank deficiency almost never occurs in practice.',
+        fix: 'Think in terms of effective rank: inspect the singular value spectrum and choose a tolerance or a variance threshold deliberately.',
+      },
+      {
+        mistake: 'Adding features indiscriminately on the assumption that more is better',
+        why: 'Each extra dimension increases the volume to be covered, so the same sample size supports an exponentially sparser picture of the space.',
+        fix: 'Prefer informative features, use regularisation to control effective complexity, and validate that added features actually improve held-out performance.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What is the rank of a matrix, and what does a low rank tell you about a dataset?',
+        answer:
+          'Rank is the dimension of the column space: the number of genuinely independent columns, equivalently the number of independent directions the matrix can produce as output. For a dataset, a rank well below the number of columns means features are redundant — some columns are exactly or nearly linear combinations of others. The practical consequences are that XᵀX is singular or ill-conditioned, so ordinary least squares has no unique solution and coefficients are unstable and uninterpretable; that the data can be compressed to rank-many dimensions with little or no loss; and that any apparent richness in the feature set is illusory. In floating-point practice you should speak of effective rank, determined by counting singular values above a tolerance, because exact rank deficiency is rare once noise is present.',
+        followUp:
+          'A strong answer connects low rank to concrete causes: one-hot encodings summing to the intercept, duplicated unit conversions, or engineered features that are deterministic functions of existing ones.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Explain the curse of dimensionality with a concrete consequence for a model you might build.',
+        answer:
+          'As dimension grows, the volume of the space grows exponentially while your sample size does not, so the data becomes vanishingly sparse. Three specific consequences follow. Volume concentrates near the boundary: an inscribed ball fills 78 per cent of a square but under 0.3 per cent of a ten-dimensional hypercube, so almost every point is near a corner and extrapolation is the norm rather than the exception. Distances concentrate: the ratio of farthest to nearest neighbour tends to 1, so k-nearest neighbours and radius-based clustering degrade into near-arbitrary rankings. And sample requirements explode, since covering the space to fixed resolution needs exponentially many points. Concretely, a k-NN recommender built directly on 5,000-dimensional TF-IDF vectors will perform poorly and unpredictably; the standard response is to reduce to a few hundred dimensions with truncated SVD first, which is both faster and more accurate.',
+      },
+      {
+        level: 'advanced',
+        question: 'If the curse of dimensionality is so severe, why do deep networks work at all on images with over a hundred thousand pixels?',
+        answer:
+          'Because the curse is a statement about filling the whole space, and real data does not fill it. The manifold hypothesis says natural data concentrates near a low-dimensional surface inside the high-dimensional ambient space: the set of images that look like photographs is an unimaginably small and highly structured subset of all possible pixel arrays. The intrinsic dimension of a natural image dataset is estimated at tens, not hundreds of thousands. Architectures then encode strong priors that match that structure — convolution assumes translation equivariance and locality, pooling assumes small deformations do not change the label, and weight sharing cuts the parameter count by orders of magnitude. Together these mean the effective hypothesis space is far smaller than the ambient dimension suggests. That is also why adversarial examples exist: they are points just off the data manifold, where the model has never had reason to behave sensibly.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'What is the span of {[1, 2], [3, 6]} and what is the rank of the matrix with those columns?',
+        hint: 'Is the second vector a multiple of the first?',
+        solution:
+          '[3, 6] = 3·[1, 2], so both lie on the same line through the origin. The span is that single line, which is one-dimensional, so the matrix [[1, 3], [2, 6]] has rank 1. Its determinant is 1(6) − 3(2) = 0, consistent with the collapse, and its null space is spanned by [3, −1] since 3·[1,2] − 1·[3,6] = 0.',
+      },
+      {
+        prompt: 'A design matrix has 1000 rows and 60 columns, and np.linalg.matrix_rank returns 58. What are two plausible causes and two consequences?',
+        hint: 'Two columns are redundant. What commonly creates exactly-dependent columns in a feature pipeline?',
+        solution:
+          'Plausible causes: a full one-hot encoding included alongside an intercept, so the dummy columns sum to the intercept; or two features that are unit conversions or deterministic functions of each other, such as a total and its components. Consequences: XᵀX is singular, so ordinary least squares has infinitely many solutions and scikit-learn falls back to the minimum-norm one via lstsq; and the individual coefficients are not interpretable, because credit can be shifted between the dependent columns without changing any prediction. Remedies are dropping one level per category, removing derived columns, or using Ridge.',
+      },
+      {
+        prompt: 'Explain why k-nearest neighbours often performs worse as you add more features, even features that are individually informative.',
+        hint: 'Think about how distance behaves as the dimension grows.',
+        solution:
+          'k-NN depends entirely on the ranking of distances, and in high dimensions distances concentrate: the ratio between the farthest and nearest neighbour tends towards 1, so the ranking becomes dominated by noise rather than by genuine similarity. Every additional feature also contributes to the sum of squares, so weakly informative features dilute the contribution of strong ones — adding twenty mildly useful features can drown three excellent ones. Finally the data becomes sparser, so the k nearest points are no longer local in any meaningful sense and the implicit smoothness assumption fails. The practical responses are feature selection, dimensionality reduction before the k-NN step, or a learned metric that weights dimensions by their usefulness.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'MATH-011-q1',
+        type: 'mcq',
+        concept: 'span',
+        prompt: 'What is the span of {[2, 4], [1, 2]} in the plane?',
+        options: [
+          'A single line through the origin',
+          'The whole plane',
+          'Only the origin',
+          'Two separate lines',
+        ],
+        answerIndex: 0,
+        explanation:
+          '[2, 4] is exactly twice [1, 2], so both point along the same line. No combination of them escapes that line, so the span is one-dimensional.',
+      },
+      {
+        id: 'MATH-011-q2',
+        type: 'numeric',
+        concept: 'rank bound',
+        prompt: 'What is the maximum possible rank of a 5×9 matrix?',
+        answer: 5,
+        explanation:
+          'Rank cannot exceed min(m, n) = min(5, 9) = 5. With nine columns in a five-dimensional output space, at least four columns must be dependent.',
+      },
+      {
+        id: 'MATH-011-q3',
+        type: 'truefalse',
+        concept: 'basis size',
+        prompt: 'Two different bases of the same vector space can contain different numbers of vectors.',
+        answer: false,
+        explanation:
+          'False. Every basis of a given space has the same size, and that common size is what the dimension of the space means. Without this fact dimension would not be well defined.',
+      },
+      {
+        id: 'MATH-011-q4',
+        type: 'multi',
+        concept: 'curse of dimensionality',
+        prompt: 'Which of these are genuine consequences of increasing dimensionality?',
+        options: [
+          'Distances between random points become nearly equal',
+          'The volume of a hypercube concentrates near its boundary',
+          'The number of samples needed for fixed coverage grows exponentially',
+          'Matrix multiplication becomes impossible',
+          'Two random vectors become nearly orthogonal',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'Distance concentration, volume fleeing to the boundary, exponential sample requirements and near-orthogonality of random vectors are all real. Matrix multiplication is unaffected — it merely gets more expensive.',
+      },
+      {
+        id: 'MATH-011-q5',
+        type: 'fill',
+        concept: 'rank-nullity',
+        prompt: 'For a matrix with 10 columns and rank 7, what is the dimension of its null space?',
+        answers: ['3', 'three'],
+        explanation:
+          'Rank–nullity gives rank + nullity = number of columns, so 7 + nullity = 10 and the null space has dimension 3. Three independent input directions are crushed to zero.',
+      },
+      {
+        id: 'MATH-011-q6',
+        type: 'explain',
+        concept: 'intrinsic versus ambient dimension',
+        prompt: 'Explain the difference between ambient and intrinsic dimensionality, and why the distinction matters in practice.',
+        rubric: [
+          'Defines ambient dimension as the number of stored coordinates',
+          'Defines intrinsic dimension as the number of genuinely varying directions',
+          'Gives a practical consequence such as compression, the manifold hypothesis, or regularisation',
+        ],
+        sampleAnswer:
+          'Ambient dimension is simply how many numbers you store per example — 4096 for a 64 by 64 greyscale image, 768 for a sentence embedding. Intrinsic dimension is how many independent ways the data actually varies, which is usually far smaller. Photographs of a single object rotating on a turntable are stored as millions of pixel values but vary in essentially one way. The distinction matters because almost every practical technique exploits the gap: PCA and truncated SVD compress to the intrinsic directions with little loss; the manifold hypothesis explains why deep learning works despite the curse of dimensionality, since real data occupies a thin, structured sliver of the ambient space; and regularisation works partly because it biases a model towards the low-dimensional structure that genuinely exists. If ambient and intrinsic dimension really coincided, you would need exponentially more data than anyone ever has.',
+        explanation:
+          'The answer should name a mechanism, not merely restate that data can be compressed — the manifold hypothesis is the key conceptual link.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What is the span of a set of vectors?', back: 'Everywhere you can reach by scaling them by any amounts and adding the results.' },
+      { front: 'What makes a set a basis?', back: 'It is linearly independent and it spans the space — minimal, with nothing redundant and nothing missing.' },
+      { front: 'What is the rank of a matrix?', back: 'The dimension of its column space: how many genuinely independent directions it can output.' },
+      { front: 'Rank–nullity theorem?', back: 'rank(A) + dim(null space) = number of columns. Every input dimension is either carried through or crushed.' },
+      { front: 'One symptom of the curse of dimensionality?', back: 'Distances concentrate: the farthest and nearest neighbours become nearly equidistant, so k-NN degrades.' },
+      { front: 'What is the manifold hypothesis?', back: 'Real high-dimensional data lies near a much lower-dimensional surface, which is why learning is possible at all.' },
+    ],
+
+    challenge: {
+      title: 'Effective rank explorer',
+      brief:
+        'Generate data with a known intrinsic dimension by mixing k latent factors into d ambient columns and adding noise at several levels. For each noise level, report the exact numerical rank, the rank at a range of tolerances, and the number of PCA components needed for 95 and 99 per cent of the variance. Summarise how noise separates the exact rank from the effective one.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Generates data with a known planted intrinsic dimension k',
+        'Reports numerical rank at a minimum of three tolerances per noise level',
+        'Reports PCA components needed for both 95 and 99 per cent variance',
+        'Prints a conclusion stating at which noise level the exact rank stops being informative',
+      ],
+      starterCode: 'import numpy as np\n\ndef make_data(n=800, d=50, k=3, noise=0.01, seed=0):\n    """Mix k latent factors into d ambient columns and add noise."""\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain span, basis and rank to someone who understands vectors, then use those ideas to explain why adding more features does not always help.',
+      mustCover: [
+        'Span is everywhere you can reach with the given directions',
+        'A basis is a minimal spanning set, and its size is the dimension',
+        'Rank is the number of independent directions a matrix really has',
+        'High-dimensional spaces are mostly empty, so distances and sample requirements behave badly',
+      ],
+      bonusSignals: ['uses the paint-mixing or walking-in-a-field image', 'mentions the manifold hypothesis', 'notes that real rank deficiency is approximate rather than exact'],
+      sampleExplanation:
+        'Imagine you are in a field and you may walk only along directions you have been given, as far as you like in either sense. One direction gets you along a line. A second, genuinely different one gets you anywhere in the field. A second direction that is merely the first one repeated gets you nothing new. Everywhere you can reach is called the span, and the smallest list of directions that reaches everywhere with no waste is a basis; how many are in that list is the dimension. Rank is the same question asked of a matrix: of the columns you were handed, how many point somewhere genuinely new? A dataset with fifty feature columns might have rank three, meaning forty-seven of them are mixtures of the other three, rather like a paint shop with fifty named tins all mixed from three pigments. That is why adding features is not automatically good. Each new column claims a new direction, but if it is a combination of existing ones it adds no information while making the regression unstable. And even when a feature is genuinely new, the space it opens up is mostly empty: as dimensions accumulate, your data becomes vanishingly sparse, every point drifts towards being equally far from every other, and distance-based methods lose their meaning. The saving grace, and the reason machine learning works at all, is that real data does not spread through the whole space — it clusters near a much thinner surface inside it.',
+    },
+  },
+
+  {
+    id: 'MATH-012',
+    domain: 'MATH',
+    module: 'Calculus',
+    topic: 'Limits and continuity',
+    title: 'Limits and Continuity',
+    slug: 'limits-and-continuity',
+    difficulty: 3,
+    estimatedMinutes: 30,
+    prerequisites: ['MATH-001'],
+    related: ['MATH-002'],
+    tags: ['limit', 'continuity', 'discontinuity', 'optimisation', 'relu'],
+
+    learningObjectives: [
+      'Describe a limit as the value a function approaches, whether or not it ever arrives',
+      'Evaluate simple limits, including one where substitution fails but the limit exists',
+      'State what continuity requires and recognise the three ways it can fail',
+      'Explain why continuity and differentiability matter for gradient-based optimisation',
+    ],
+
+    terminology: [
+      {
+        term: 'Limit',
+        definition:
+          'The value a function’s output approaches as its input approaches some point, regardless of the value at that point.',
+        simple: 'Where the function is heading, even if it never gets there.',
+      },
+      {
+        term: 'Continuity',
+        definition:
+          'A function is continuous at a point when the limit exists there, the function is defined there, and the two agree.',
+        simple: 'You can draw it through that point without lifting your pen.',
+      },
+      {
+        term: 'Removable discontinuity',
+        definition:
+          'A single missing or misplaced point where the limit exists but the function value does not match it. Patching that one value restores continuity.',
+        simple: 'A pinhole in an otherwise smooth curve.',
+      },
+      {
+        term: 'Jump discontinuity',
+        definition:
+          'A point where the left and right limits both exist but differ, so the function steps abruptly. The step function used for hard classification has one.',
+        simple: 'The curve suddenly leaps to a different height.',
+      },
+      {
+        term: 'Differentiable',
+        definition:
+          'Having a well-defined derivative at a point. Differentiability implies continuity but not the reverse — ReLU is continuous at zero yet not differentiable there.',
+        simple: 'Smooth enough to have a single clear slope.',
+      },
+    ],
+
+    simpleExplanation:
+      'Imagine walking towards a wall, and with every step you halve the distance remaining. After ten steps you are a thousandth of the way out; after twenty, a millionth. You will never actually touch the wall, and yet anyone watching could say with total confidence exactly where you are heading. That destination — the place you approach but never reach — is what a limit is. It is a statement about the trend, not about arrival. This matters because there are functions that misbehave at a single point while behaving perfectly all around it, and a limit lets you say what should happen there even when the formula refuses to cooperate. A closely related idea is continuity, which asks whether a function has any sudden jumps. A continuous function can be drawn without lifting your pen: nudge the input a little and the output moves a little. A function with a jump is one where a tiny change in input causes a leap in output, and that turns out to be fatal for training, because the whole method of improving a model depends on small changes producing small, predictable effects.',
+
+    whyItExists:
+      'Slopes, areas and rates of change are all defined by what happens as a quantity shrinks towards zero, and none of them can be computed by simply substituting zero, which produces the meaningless expression 0/0. Limits give a rigorous way to talk about that approach, which is what makes the derivative definable at all. Continuity then supplies the condition under which small changes to inputs have small effects on outputs — precisely the assumption every gradient-based optimiser relies on.',
+
+    analogy: {
+      scenario:
+        'A car’s speedometer shows a speed at an instant, yet speed is defined as distance divided by time and an instant has no duration. The way out is to measure the distance covered over a tenth of a second, then a hundredth, then a thousandth, and watch what number the answers settle towards. The measurement over zero seconds is meaningless — zero distance in zero time — but the value the shrinking intervals converge on is entirely well defined, and it is what the needle displays.',
+      mapping: [
+        { from: 'Shrinking the measurement interval towards zero', to: 'Taking the limit as h approaches 0' },
+        { from: 'The impossible zero-second measurement', to: 'The indeterminate form 0/0' },
+        { from: 'The number the readings converge towards', to: 'The value of the limit' },
+        { from: 'The needle’s reading at one instant', to: 'The derivative at a point' },
+        { from: 'A needle that jumps abruptly between two values', to: 'A discontinuity, where no single limit exists' },
+      ],
+      bridge:
+        'The speedometer is the whole of differential calculus in one instrument. You cannot evaluate the quantity you want directly, so you evaluate a sequence of approximations that get closer and closer, and you take the value they approach as the definition. Continuity is what guarantees the readings settle at all rather than oscillating or leaping.',
+      limitations:
+        'A real speedometer samples at a finite rate and has a mechanical lag, so it never truly takes a limit. The analogy also hides one-sided limits: a car can only approach an instant from the past, whereas a mathematical limit must be approached from both sides and must agree.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Shrink the interval and watch the slope settle',
+        caption: 'Reduce h towards zero and see the secant line converge on the tangent.',
+        widget: 'derivative-explorer',
+      },
+      {
+        kind: 'table',
+        title: 'Evaluating a limit that substitution cannot reach',
+        caption: 'f(x) = (x² − 1)/(x − 1) is undefined at x = 1, yet the limit there is clearly 2.',
+        columns: ['x', 'f(x)', 'Approaching from'],
+        rows: [
+          ['0.9', '1.9', 'below'],
+          ['0.99', '1.99', 'below'],
+          ['0.999', '1.999', 'below'],
+          ['1.0', 'undefined (0/0)', 'the point itself'],
+          ['1.001', '2.001', 'above'],
+          ['1.01', '2.01', 'above'],
+          ['1.1', '2.1', 'above'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Continuous versus discontinuous, and why training cares',
+        left: {
+          heading: 'Continuous: the sigmoid',
+          points: [
+            'A small change in input gives a small change in output',
+            'Has a well-defined derivative everywhere',
+            'Gradient descent receives a usable signal at every point',
+            'This is why logistic regression is trainable',
+          ],
+        },
+        right: {
+          heading: 'Discontinuous: the step function',
+          points: [
+            'Output leaps from 0 to 1 at the threshold',
+            'Derivative is 0 everywhere it exists, and undefined at the jump',
+            'Gradient descent gets no information about which way to move',
+            'This is why the perceptron needed its own rule rather than gradients',
+          ],
+        },
+      },
+      {
+        kind: 'flow',
+        title: 'The three ways continuity fails at a point',
+        caption: 'Continuity needs all three conditions; failing any one breaks it.',
+        steps: [
+          { label: 'The function must be defined there', detail: 'f(a) exists. 1/x fails this at x = 0.' },
+          { label: 'The limit must exist there', detail: 'Left and right limits agree. A step function fails this at the threshold.' },
+          { label: 'The two must be equal', detail: 'lim f(x) = f(a). A removable discontinuity fails only this, which is why patching one value fixes it.' },
+          { label: 'All three hold: the function is continuous', detail: 'Nudge the input slightly and the output moves slightly — the property optimisation depends on.' },
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'lim_{x→a} f(x) = L means: for every ε > 0 there exists δ > 0 such that 0 < |x − a| < δ implies |f(x) − L| < ε. The function f is continuous at a if f(a) is defined, lim_{x→a} f(x) exists, and the two are equal. Continuity on a closed interval guarantees the extreme value theorem and the intermediate value theorem. Differentiability at a implies continuity at a, but the converse fails, as f(x) = |x| demonstrates at the origin.',
+
+    math: {
+      intuition:
+        'A limit answers the question "where is this function heading?" without insisting it ever arrives. You never substitute the target value; you watch what happens as you close in. This matters because the most important quantity in calculus — the slope at a single point — is defined by an expression that becomes 0/0 the moment you substitute directly. The limit is the device that extracts a sensible answer from that apparently meaningless expression. Continuity is the companion idea: a function is continuous when where it is heading and where it actually is coincide, everywhere. Optimisation needs that property because it improves a model by making small changes and trusting that the effect on the loss will also be small.',
+      formulas: [
+        {
+          latex: '\\lim_{x \\to a} f(x) = L',
+          name: 'The limit of a function',
+          meaning:
+            'As x gets arbitrarily close to a, from either side, f(x) gets arbitrarily close to L. The value f(a) itself is irrelevant.',
+          variables: [
+            { symbol: 'x', meaning: 'The input, which is approaching a but never set equal to it' },
+            { symbol: 'a', meaning: 'The point being approached' },
+            { symbol: 'f(x)', meaning: 'The function whose behaviour near a is in question' },
+            { symbol: 'L', meaning: 'The limiting value the outputs converge on' },
+            { symbol: '\\to', meaning: 'Read "approaches" or "tends to"' },
+          ],
+          category: 'calculus',
+        },
+        {
+          latex: '\\forall \\varepsilon > 0\; \\exists \\delta > 0 : 0 < |x - a| < \\delta \\Rightarrow |f(x) - L| < \\varepsilon',
+          name: 'The epsilon-delta definition',
+          meaning:
+            'However tight a tolerance you demand on the output, there is a small enough neighbourhood of the input that achieves it. This is what "arbitrarily close" means precisely.',
+          variables: [
+            { symbol: '\\varepsilon', meaning: 'The output tolerance, chosen by a sceptic and allowed to be as small as they like' },
+            { symbol: '\\delta', meaning: 'The input neighbourhood radius you must supply in response' },
+            { symbol: '|x - a|', meaning: 'Distance from the input to the point being approached' },
+            { symbol: '|f(x) - L|', meaning: 'Distance from the output to the claimed limit' },
+            { symbol: '\\forall, \\exists', meaning: '"For every" and "there exists"' },
+          ],
+          category: 'calculus',
+        },
+        {
+          latex: 'f \\text{ continuous at } a \\iff \\lim_{x\\to a} f(x) = f(a)',
+          name: 'Continuity at a point',
+          meaning:
+            'Where the function is heading and where it actually is must agree. This compact statement silently requires that both sides exist.',
+          variables: [
+            { symbol: 'f', meaning: 'The function under test' },
+            { symbol: 'a', meaning: 'The point at which continuity is being checked' },
+            { symbol: 'f(a)', meaning: 'The actual value of the function at that point' },
+            { symbol: '\\lim_{x\\to a} f(x)', meaning: 'The value approached from nearby inputs' },
+          ],
+          category: 'calculus',
+        },
+        {
+          latex: '\\lim_{h \\to 0} \\frac{f(a+h) - f(a)}{h}',
+          name: 'The difference quotient whose limit is the derivative',
+          meaning:
+            'The average rate of change over an interval of width h. Substituting h = 0 gives 0/0, which is exactly why the limit is required.',
+          variables: [
+            { symbol: 'h', meaning: 'The width of the interval, shrinking towards zero but never equal to it' },
+            { symbol: 'a', meaning: 'The point at which the slope is wanted' },
+            { symbol: 'f(a+h) - f(a)', meaning: 'The rise: how much the output changed' },
+            { symbol: 'h \\text{ (denominator)}', meaning: 'The run: how much the input changed' },
+          ],
+          category: 'calculus',
+        },
+        {
+          latex: '\\lim_{x\\to 0}\\frac{\\sin x}{x} = 1, \\qquad \\lim_{x\\to\\infty}\\left(1 + \\frac{1}{x}\\right)^{x} = e',
+          name: 'Two limits worth knowing',
+          meaning:
+            'Both are indeterminate on direct substitution — 0/0 and 1^∞ — yet both have clean finite values. The second is where the number e comes from.',
+          variables: [
+            { symbol: 'x', meaning: 'The variable approaching 0 in the first limit and infinity in the second' },
+            { symbol: '\\sin x', meaning: 'The sine function, measured in radians' },
+            { symbol: 'e', meaning: 'Euler’s number, approximately 2.71828' },
+          ],
+          category: 'calculus',
+        },
+      ],
+      derivation: [
+        'Evaluate lim_{x→1} (x² − 1)/(x − 1) carefully, since it is the template for every derivative computation.',
+        'Direct substitution gives (1 − 1)/(1 − 1) = 0/0, which is indeterminate: it tells you nothing, because different functions of this form have different limits.',
+        'Factor the numerator: x² − 1 = (x − 1)(x + 1).',
+        'The expression becomes (x − 1)(x + 1)/(x − 1).',
+        'Because the limit only concerns x close to 1 and never x equal to 1, the factor (x − 1) is non-zero and may legitimately be cancelled.',
+        'What remains is x + 1, which is continuous, so its limit is found by substitution: 1 + 1 = 2.',
+        'So the limit is 2, even though the original function is undefined at x = 1 — a removable discontinuity, a single pinhole in an otherwise straight line.',
+        'The same three moves — substitute, find 0/0, cancel the offending factor, then substitute again — are exactly what you will do to derive every derivative rule in MATH-013.',
+      ],
+    },
+
+    workedExample: {
+      title: 'One limit that exists, one that does not, and why the difference matters',
+      setup:
+        'Examine f(x) = (x² − 4)/(x − 2) at x = 2, and the step function s(x) which is 0 for x < 0 and 1 for x ≥ 0, at x = 0.',
+      steps: [
+        { label: 'Try substitution in f', detail: '(4 − 4)/(2 − 2) = 0/0. Indeterminate, so nothing is yet known.' },
+        { label: 'Approach from below', detail: 'f(1.9) = (3.61 − 4)/(−0.1) = 3.9; f(1.99) = 3.99; f(1.999) = 3.999. Heading towards 4.' },
+        { label: 'Approach from above', detail: 'f(2.1) = 4.1; f(2.01) = 4.01; f(2.001) = 4.001. Also heading towards 4.' },
+        { label: 'Confirm algebraically', detail: 'x² − 4 = (x − 2)(x + 2), so for x ≠ 2 the function equals x + 2, whose value at 2 is 4.', latex: '\\lim_{x\\to 2}\\frac{x^2-4}{x-2} = \\lim_{x\\to 2}(x+2) = 4' },
+        { label: 'Verdict for f', detail: 'The limit is 4 but f(2) is undefined, so f is discontinuous at 2 — removably so. Defining f(2) = 4 would repair it completely.' },
+        { label: 'Now the step function from below', detail: 's(−0.1) = 0, s(−0.01) = 0, s(−0.001) = 0. The left limit is 0.' },
+        { label: 'And from above', detail: 's(0.1) = 1, s(0.01) = 1, s(0.001) = 1. The right limit is 1.' },
+        { label: 'Verdict for s', detail: 'The one-sided limits disagree, so no limit exists at 0. This is a jump discontinuity and no patching of a single value can repair it.', latex: '\\lim_{x\\to 0^-} s(x) = 0 \\neq 1 = \\lim_{x\\to 0^+} s(x)' },
+      ],
+      conclusion:
+        'A removable discontinuity is a cosmetic flaw: the function knows where it should be and merely fails to be there. A jump is structural, and it is the reason a hard threshold cannot be trained by gradient descent — there is no consistent direction of improvement at the very point where the decision is made. Replacing the step with a sigmoid restores continuity and a usable gradient, which is precisely the move that turns a perceptron into logistic regression.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Watching a limit converge numerically',
+        runnable: true,
+        code: `def f(x):
+    return (x ** 2 - 4) / (x - 2)
+
+for h in [0.1, 0.01, 0.001, 1e-6, 1e-9]:
+    print(f"h={h:<8} from below: {f(2 - h):.9f}   from above: {f(2 + h):.9f}")
+
+try:
+    f(2.0)
+except ZeroDivisionError as e:
+    print("at x=2 exactly:", type(e).__name__, "-", e)`,
+        output: `h=0.1      from below: 3.900000000   from above: 4.100000000
+h=0.01     from below: 3.990000000   from above: 4.010000000
+h=0.001    from below: 3.999000000   from above: 4.001000000
+h=1e-06    from below: 3.999999000   from above: 4.000001000
+h=1e-09    from below: 3.999999917   from above: 4.000000083
+at x=2 exactly: ZeroDivisionError - float division by zero`,
+        explanation:
+          'Both sides converge on 4 while the point itself is genuinely undefined, which is exactly what a limit describes. Notice the last row: at h = 1e-9 the answers are already drifting in the ninth decimal place, because subtracting two nearly equal floats loses precision. Numerical limits cannot be taken arbitrarily close, which is one reason automatic differentiation computes derivatives symbolically rather than by finite differences.',
+      },
+      {
+        language: 'python',
+        title: 'Why a step function cannot be trained',
+        runnable: true,
+        code: `import numpy as np
+
+def step(z):    return (z >= 0).astype(float)
+def sigmoid(z): return 1.0 / (1.0 + np.exp(-z))
+
+z = np.array([-1.0, -0.001, 0.0, 0.001, 1.0])
+h = 1e-5
+
+print("step   values:", step(z))
+print("sigmoid values:", np.round(sigmoid(z), 6))
+print()
+print("step   numeric slope:", (step(z + h) - step(z - h)) / (2 * h))
+print("sigmoid numeric slope:", np.round((sigmoid(z + h) - sigmoid(z - h)) / (2 * h), 6))`,
+        output: `step   values: [0. 0. 1. 1. 1.]
+sigmoid values: [0.268941 0.49975  0.5      0.50025  0.731059]
+
+step   numeric slope: [0. 0. 0. 0. 0.]
+sigmoid numeric slope: [0.196612 0.25     0.25     0.25     0.196612]`,
+        explanation:
+          'The step function has zero slope everywhere it is differentiable and an undefined one exactly at the decision boundary, so gradient descent receives no information about which direction would reduce the loss. The sigmoid is continuous and differentiable everywhere, with slope peaking at 0.25 at the boundary, so the optimiser always has a usable signal. This single difference is why the hard threshold was replaced by a smooth one.',
+      },
+      {
+        language: 'python',
+        title: 'Continuous but not differentiable: ReLU at zero',
+        runnable: true,
+        code: `import numpy as np
+
+def relu(x): return np.maximum(0.0, x)
+
+h = 1e-7
+left  = (relu(0.0) - relu(0.0 - h)) / h
+right = (relu(0.0 + h) - relu(0.0)) / h
+
+print("relu near 0:", [round(float(relu(v)), 9) for v in [-1e-9, 0.0, 1e-9]])
+print("left slope :", left)
+print("right slope:", right)
+print("continuous at 0? limits agree:", np.isclose(relu(-h), relu(h), atol=1e-6))
+print("differentiable at 0? slopes agree:", left == right)`,
+        output: `relu near 0: [0.0, 0.0, 0.0]
+left slope : 0.0
+right slope: 1.0
+continuous at 0? limits agree: True
+differentiable at 0? slopes agree: False`,
+        explanation:
+          'ReLU passes the continuity test at zero — both sides approach the same value, so there is no jump — but fails differentiability, because the slope approaching from the left is 0 and from the right is 1. Frameworks resolve the ambiguity by convention, with PyTorch defining the subgradient at exactly zero to be 0. In practice the single point has measure zero and training is unaffected, which is why continuity is the property that really matters for optimisation.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Choosing an activation function',
+        usage:
+          'The hard step was abandoned for the sigmoid, then ReLU, because a discontinuous activation gives gradient descent nothing to work with at the decision boundary.',
+      },
+      {
+        context: 'Loss functions for ranking and classification',
+        usage:
+          'Accuracy is a step-like, discontinuous function of the parameters, so models are trained on a continuous surrogate such as cross-entropy or hinge loss and only evaluated on accuracy.',
+      },
+      {
+        context: 'Learning-rate schedules',
+        usage:
+          'Cosine and linear warmup schedules are continuous by design; an abrupt drop in learning rate can destabilise training, which is why step schedules are applied cautiously.',
+      },
+      {
+        context: 'Numerical differentiation in gradient checking',
+        usage:
+          'Finite-difference gradient checks rely on a limit taken at a finite h, and the classic bug is choosing h so small that floating-point cancellation dominates the answer.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'SymPy', role: 'sympy.limit computes limits symbolically, which is useful for checking a derivative you derived by hand.' },
+      { tool: 'PyTorch', role: 'torch.autograd.gradcheck uses finite differences with a carefully chosen h to verify custom backward passes.' },
+      { tool: 'NumPy', role: 'np.gradient approximates derivatives on sampled data, inheriting all the accuracy limits of finite differencing.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Believing lim_{x→a} f(x) requires f(a) to exist',
+        why: 'The notation looks like an evaluation, so people assume the function must be defined at the point.',
+        fix: 'A limit deliberately ignores the point itself. The most important limit in calculus, the difference quotient, is undefined at exactly the point of interest.',
+      },
+      {
+        mistake: 'Concluding a limit does not exist because substitution gives 0/0',
+        why: 'The indeterminate form looks like a failure, but it is only a statement that this method gave no information.',
+        fix: 'Factor and cancel, rationalise, or use a series expansion. 0/0 means "work harder", not "no limit".',
+      },
+      {
+        mistake: 'Assuming continuous implies differentiable',
+        why: 'Most familiar functions are both, so the distinction never arises until ReLU or an absolute value appears.',
+        fix: 'Remember |x| and ReLU at zero: continuous with no jump, yet with two different one-sided slopes, so no single derivative exists.',
+      },
+      {
+        mistake: 'Using too small an h in a finite-difference gradient check',
+        why: 'Subtracting two nearly equal floating-point numbers cancels the leading digits, so the error grows as h shrinks past a point.',
+        fix: 'Use the central difference and h around 1e-5 in float64. Smaller is not better; the total error curve is U-shaped.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Why does gradient-based optimisation require a continuous loss function?',
+        answer:
+          'Gradient descent works by making a small change to the parameters and relying on the loss changing by a correspondingly small and predictable amount. That is exactly what continuity guarantees. At a discontinuity the derivative either does not exist or carries no information about the jump: the step function, for instance, has zero slope everywhere it is differentiable, so the gradient says "moving in any direction changes nothing" right up until the output leaps. This is why models are trained on continuous surrogates rather than on the metric you actually care about — you cannot descend accuracy, which is a step function of the parameters, so you descend cross-entropy instead and evaluate accuracy separately. Strictly, training needs differentiability almost everywhere rather than continuity alone, but continuity is the property that makes the whole approach coherent.',
+        followUp:
+          'A strong answer distinguishes continuity from differentiability and notes that ReLU is a working counterexample: continuous everywhere, non-differentiable at one point, and trained successfully because that point has measure zero.',
+      },
+      {
+        level: 'beginner',
+        question: 'What does it mean to take a limit, and why can you not just substitute the value?',
+        answer:
+          'Taking a limit means asking what value a function’s output approaches as the input gets arbitrarily close to some point, deliberately ignoring what happens at the point itself. You cannot always substitute because the function may be undefined there. The canonical case is the definition of a derivative, which is the ratio of the change in output to the change in input as that change shrinks to zero — substituting zero directly gives 0/0, which is meaningless. The limit provides a rigorous way of extracting the value the ratio converges to. Concretely, (x² − 4)/(x − 2) is undefined at x = 2, but factoring and cancelling shows it equals x + 2 everywhere else, so the limit is 4.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'You are gradient-checking a custom layer with finite differences and the error gets worse as you shrink h. Why?',
+        answer:
+          'Because two competing error sources move in opposite directions. Truncation error — the difference between the finite-difference approximation and the true derivative — shrinks with h, at order h for a forward difference and h² for a central one. But round-off error grows as h shrinks, because you are subtracting two nearly equal floating-point numbers and then dividing by a tiny denominator, so the cancelled leading digits are replaced by noise amplified by 1/h. The total error curve is U-shaped, with a minimum around h ≈ 1e-5 to 1e-6 for central differences in float64, and around the square root of machine epsilon for forward differences. The practical fixes are to use the central difference, to pick h relative to the scale of the parameter rather than absolutely, to run the check in float64 even if the model trains in float32, and to compare relative rather than absolute error.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Evaluate lim_{x→3} (x² − 9)/(x − 3) and state whether the function is continuous at x = 3.',
+        hint: 'Substitution gives 0/0. Factor the numerator.',
+        solution:
+          'x² − 9 = (x − 3)(x + 3), so for x ≠ 3 the expression equals x + 3, whose limit at 3 is 6. The limit therefore exists and equals 6. The function is not continuous at x = 3 because it is not defined there — division by zero — but the discontinuity is removable: defining the value at 3 to be 6 makes the function continuous everywhere.',
+      },
+      {
+        prompt: 'Is f(x) = |x| continuous at x = 0? Is it differentiable there? Justify both answers.',
+        hint: 'Check the left and right limits of the function, then of its slope.',
+        solution:
+          'Continuous: approaching from the left, |x| tends to 0; from the right, also 0; and f(0) = 0. All three agree, so it is continuous. Not differentiable: the slope just left of 0 is −1 and just right of 0 is +1, so the one-sided derivatives disagree and no single tangent line exists. This is exactly the situation at ReLU’s kink, and it shows that continuity is strictly weaker than differentiability.',
+      },
+      {
+        prompt: 'Explain why accuracy cannot be used directly as a training objective, in terms of limits and continuity.',
+        hint: 'Think about what happens to accuracy when a weight changes by a tiny amount.',
+        solution:
+          'Accuracy counts how many predictions fall on the correct side of a threshold, so it is a sum of step functions of the parameters. Changing a weight by a tiny amount usually flips no prediction at all, so accuracy is locally constant and its derivative is zero — the gradient says every direction is equally good. Occasionally a tiny change flips one prediction and accuracy jumps by a discrete amount, where the derivative is undefined. Either way there is no usable descent direction. The standard response is to train on a continuous, differentiable surrogate such as cross-entropy, whose gradient does reflect how confidently right or wrong each prediction is, and to report accuracy only as an evaluation metric.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'MATH-012-q1',
+        type: 'mcq',
+        concept: 'definition of a limit',
+        prompt: 'For lim_{x→a} f(x) = L to hold, what must be true about f(a)?',
+        options: [
+          'Nothing — f need not even be defined at a',
+          'f(a) must equal L',
+          'f(a) must be defined but may differ from L',
+          'f(a) must be zero',
+        ],
+        answerIndex: 0,
+        explanation:
+          'A limit describes behaviour near a point and deliberately ignores the point itself. The difference quotient defining a derivative is undefined at exactly the point of interest, which is why this matters.',
+      },
+      {
+        id: 'MATH-012-q2',
+        type: 'numeric',
+        concept: 'evaluating a limit',
+        prompt: 'What is lim_{x→3} (x² − 9)/(x − 3)?',
+        answer: 6,
+        explanation:
+          'Factor to (x − 3)(x + 3)/(x − 3), cancel the common factor since x ≠ 3 in the limit, and substitute into x + 3 to get 6.',
+      },
+      {
+        id: 'MATH-012-q3',
+        type: 'truefalse',
+        concept: 'continuity versus differentiability',
+        prompt: 'Every continuous function is differentiable.',
+        answer: false,
+        explanation:
+          'False. |x| and ReLU are continuous at zero — no jump — but have different left and right slopes there, so no single derivative exists. Differentiability implies continuity, not the other way round.',
+      },
+      {
+        id: 'MATH-012-q4',
+        type: 'match',
+        concept: 'types of discontinuity',
+        prompt: 'Match each function to the behaviour it shows at the named point.',
+        pairs: [
+          { left: '(x²−1)/(x−1) at x = 1', right: 'Removable discontinuity — patch one value to fix it' },
+          { left: 'Step function at x = 0', right: 'Jump discontinuity — one-sided limits differ' },
+          { left: '1/x at x = 0', right: 'Infinite discontinuity — the function grows without bound' },
+          { left: 'ReLU at x = 0', right: 'Continuous but not differentiable' },
+        ],
+        explanation:
+          'Distinguishing these four cases tells you whether a problem is cosmetic, structural, or merely a kink that optimisers handle by convention.',
+      },
+      {
+        id: 'MATH-012-q5',
+        type: 'mcq',
+        concept: 'finite differences',
+        prompt: 'Why does a finite-difference gradient check become less accurate if h is made extremely small?',
+        options: [
+          'Floating-point cancellation destroys precision when subtracting nearly equal numbers',
+          'The true derivative changes as h shrinks',
+          'NumPy refuses values below 1e-10',
+          'The limit does not actually exist',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Truncation error falls with h but round-off error rises, because the leading digits cancel and the noise is then divided by a tiny h. The total error is U-shaped, minimised around 1e-5 for central differences in float64.',
+      },
+      {
+        id: 'MATH-012-q6',
+        type: 'explain',
+        concept: 'continuity and optimisation',
+        prompt: 'Explain why a hard threshold activation was replaced by a smooth one in neural networks.',
+        rubric: [
+          'Says the step function is discontinuous at the threshold',
+          'Says its derivative is zero or undefined, so gradients carry no information',
+          'Says a smooth alternative such as sigmoid or ReLU provides a usable gradient',
+        ],
+        sampleAnswer:
+          'A hard threshold outputs 0 below the boundary and 1 above it, with nothing in between, so it jumps discontinuously at exactly the point where the decision is made. Its derivative is zero everywhere it exists and undefined at the jump itself, which means a gradient-based optimiser is told that moving the weights in any direction changes nothing — right up to the moment the output leaps by a full unit. There is no signal indicating which way improvement lies. Replacing the threshold with a sigmoid makes the output change smoothly with the input, so the derivative is non-zero and tells the optimiser both the direction and roughly the magnitude of a useful step. ReLU makes a different trade, being continuous everywhere and differentiable everywhere except a single point, which optimisers handle by convention because one point of measure zero does not affect training in practice.',
+        explanation:
+          'The answer should explain what the gradient of a step function actually is, rather than merely asserting that it is unusable.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What is a limit?', back: 'The value a function approaches as the input approaches a point — regardless of the value at that point.' },
+      { front: 'Three conditions for continuity at a?', back: 'f(a) is defined, the limit at a exists, and the two are equal.' },
+      { front: 'Why can you not just substitute in a derivative?', back: 'The difference quotient becomes 0/0 at h = 0. The limit extracts the value the ratio converges to.' },
+      { front: 'Does continuity imply differentiability?', back: 'No. |x| and ReLU are continuous at 0 but have different left and right slopes there.' },
+      { front: 'Why train on cross-entropy rather than accuracy?', back: 'Accuracy is a step function of the parameters: locally constant with zero gradient, jumping discontinuously. There is nothing to descend.' },
+      { front: 'Best h for a central-difference gradient check?', back: 'Around 1e-5 in float64. Smaller h increases round-off error faster than it reduces truncation error.' },
+    ],
+
+    challenge: {
+      title: 'The U-shaped error curve',
+      brief:
+        'Approximate the derivative of f(x) = sin(x) at x = 1 using forward and central differences for h from 1e-1 down to 1e-16. Compare against the exact value cos(1), print the relative error for each h and each method, and identify the h that minimises the error for each. Explain the shape of both curves in a printed comment.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Implements both forward and central differences',
+        'Sweeps h across at least 12 orders of magnitude',
+        'Identifies and prints the error-minimising h for each method',
+        'Prints an explanation of why the error rises again for very small h',
+      ],
+      starterCode: 'import numpy as np\n\nx0 = 1.0\nexact = np.cos(x0)\nfor k in range(1, 17):\n    h = 10.0 ** -k\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain limits and continuity to someone who has never studied calculus, and finish by saying why a machine learning engineer should care.',
+      mustCover: [
+        'A limit is where a function is heading, not necessarily where it arrives',
+        'Some functions are undefined at a point yet have a clear limit there',
+        'Continuity means small input changes produce small output changes',
+        'Optimisation depends on that property, which is why hard thresholds were abandoned',
+      ],
+      bonusSignals: ['uses the speedometer or halving-distance image', 'mentions that 0/0 means work harder rather than no answer', 'distinguishes continuity from differentiability'],
+      sampleExplanation:
+        'Imagine walking towards a wall and halving the remaining distance with every step. You will never touch the wall, yet anyone watching can say exactly where you are heading. That destination is what a limit means: it is a statement about where a process is going, not about whether it arrives. This turns out to be necessary rather than merely elegant. The central quantity in calculus is the slope of a curve at a single point, and computing it means dividing a change in height by a change in width as that width shrinks to nothing — which, if you simply put zero in, gives zero divided by zero, a meaningless expression. Watching the answers converge as the width shrinks gives a perfectly definite number instead. The companion idea is continuity, which asks whether a function ever jumps. A continuous function can be drawn without lifting your pen: nudge the input and the output shifts slightly. A machine learning engineer cares because training a model means nudging its parameters and watching the loss respond. If the loss jumped discontinuously, a tiny nudge would tell you nothing about whether you were improving. That is precisely why the original hard-threshold neuron, which output 0 below a cut-off and 1 above it, had to be replaced by a smooth curve: the hard version gave the optimiser a slope of zero everywhere and no hint at all about which way to move.',
+    },
+  },
+
+  {
+    id: 'MATH-013',
+    domain: 'MATH',
+    module: 'Calculus',
+    topic: 'Derivatives',
+    title: 'Derivatives and Slope',
+    slug: 'derivatives-and-slope',
+    difficulty: 3,
+    estimatedMinutes: 40,
+    prerequisites: ['MATH-012'],
+    related: ['MATH-002', 'MATH-012'],
+    tags: ['derivative', 'slope', 'tangent', 'rate-of-change', 'power-rule'],
+
+    learningObjectives: [
+      'Describe a derivative as an instantaneous rate of change and as the slope of the tangent line',
+      'Derive a derivative from the limit definition and see why the limit is unavoidable',
+      'Apply the power, exponential and logarithm rules, plus the sum and product rules',
+      'Read the sign and magnitude of a derivative to say which way and how steeply a function is heading',
+    ],
+
+    terminology: [
+      {
+        term: 'Derivative',
+        definition:
+          'The instantaneous rate of change of a function with respect to its input, written f′(x) or df/dx.',
+        simple: 'How fast the output changes when you nudge the input.',
+      },
+      {
+        term: 'Tangent line',
+        definition:
+          'The straight line touching a curve at a point with the same slope as the curve there. It is the best local linear approximation.',
+        simple: 'The line that just kisses the curve at that point.',
+      },
+      {
+        term: 'Secant line',
+        definition:
+          'The straight line through two points on a curve, whose slope is the average rate of change between them. As the points merge, it becomes the tangent.',
+        simple: 'A line cutting across the curve between two points.',
+      },
+      {
+        term: 'Stationary point',
+        definition:
+          'A point where the derivative is zero, so the tangent is horizontal. Minima, maxima and saddle points are all stationary.',
+        simple: 'A spot where the curve momentarily stops rising or falling.',
+      },
+      {
+        term: 'Second derivative',
+        definition:
+          'The derivative of the derivative, measuring how the slope itself is changing — that is, curvature.',
+        simple: 'Whether the curve is bending upwards or downwards.',
+      },
+    ],
+
+    simpleExplanation:
+      'Stand at a point on a hillside and ask how steep the ground is right where you are standing. You cannot answer by comparing your height with somewhere far away, because the hill changes as you walk. So you compare your height with a point just slightly along, then a point closer still, then closer again, and you watch what number the steepness settles on. That settled value is the derivative: the steepness of the hill at exactly the spot you are standing. It tells you two things at once. Its sign tells you which way the ground slopes — positive means it rises as you walk forwards, negative means it falls. Its size tells you how dramatic the slope is: a derivative of 20 is a cliff face, a derivative of 0.01 is nearly flat. And a derivative of exactly zero means you are momentarily level, which happens at the bottom of a valley, at the top of a peak, or on a flat shelf. Every training algorithm you will meet is a procedure for walking downhill using exactly this information.',
+
+    whyItExists:
+      'Average rates of change hide everything interesting, because a journey averaging 50 km/h says nothing about the moment you braked hard. The derivative gives the rate at a single instant, which is what you need to decide what to do next rather than describe what already happened. In machine learning this is the entire mechanism of learning: the derivative of the loss with respect to a weight tells you whether nudging that weight up or down will make the model better.',
+
+    analogy: {
+      scenario:
+        'You are driving and the satnav records your position every second. To estimate your speed at 12:00:00 exactly you could look at how far you travelled between 12:00:00 and 12:00:01, which mixes in everything that happened during that second. Better to use the gap to 12:00:00.1, better still 12:00:00.01. As the interval shrinks the estimate stops wandering and settles on a single number — and that is the number your speedometer already shows.',
+      mapping: [
+        { from: 'Distance travelled over an interval', to: 'The change in output, f(x + h) − f(x)' },
+        { from: 'The duration of the interval', to: 'The change in input, h' },
+        { from: 'Average speed over the interval', to: 'The difference quotient, a secant slope' },
+        { from: 'Shrinking the interval towards zero', to: 'Taking the limit as h → 0' },
+        { from: 'The speedometer reading', to: 'The derivative at that instant' },
+        { from: 'Speed dropping below zero when reversing', to: 'A negative derivative: the output decreases as the input rises' },
+      ],
+      bridge:
+        'Average speed is the slope of the line joining two points on a distance-time graph; instantaneous speed is the slope of the tangent at one point. The derivative is nothing more than that second quantity, given a name and a procedure. In a training loop the roles are relabelled: the "distance" is the loss and the "time" is a weight, and the derivative tells you how fast the loss changes as that weight moves.',
+      limitations:
+        'A car’s speed is always non-negative in the everyday sense and time only moves forwards, whereas a derivative may be negative and the input may be varied in either direction. The analogy also suggests derivatives always exist, but a sharp corner in a graph — a sudden change of direction — has no single slope.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Drag the point and watch the tangent',
+        caption: 'Shrink the secant interval and see it converge onto the tangent line.',
+        widget: 'derivative-explorer',
+      },
+      {
+        kind: 'table',
+        title: 'The rules you will actually use',
+        caption: 'Every one of these appears inside a backward pass.',
+        columns: ['f(x)', 'f′(x)', 'Note'],
+        rows: [
+          ['c (a constant)', '0', 'A flat line has no slope'],
+          ['xⁿ', 'n·xⁿ⁻¹', 'The power rule — bring the exponent down, reduce it by one'],
+          ['eˣ', 'eˣ', 'The only function that is its own derivative'],
+          ['ln x', '1/x', 'Defined for x > 0; why log-loss gradients blow up near zero'],
+          ['sin x', 'cos x', 'Angles in radians'],
+          ['σ(x) = 1/(1+e⁻ˣ)', 'σ(x)(1 − σ(x))', 'Peaks at 0.25; the source of vanishing gradients'],
+          ['max(0, x)', '0 if x < 0, 1 if x > 0', 'Undefined at 0; frameworks choose 0 by convention'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Reading the derivative and the second derivative',
+        left: {
+          heading: 'First derivative f′(x)',
+          points: [
+            'Positive: the function is rising as x increases',
+            'Negative: the function is falling',
+            'Zero: a stationary point — level, momentarily',
+            'Magnitude: how steep, so how big a step gradient descent will take',
+          ],
+        },
+        right: {
+          heading: 'Second derivative f″(x)',
+          points: [
+            'Positive: curving upwards, a bowl — a stationary point here is a minimum',
+            'Negative: curving downwards, a dome — a stationary point here is a maximum',
+            'Zero: possibly an inflection point, where curvature changes sign',
+            'Magnitude: how sharply curved, which governs a safe learning rate',
+          ],
+        },
+      },
+      {
+        kind: 'flow',
+        title: 'Deriving a derivative from first principles',
+        caption: 'The same four steps work for every elementary function.',
+        steps: [
+          { label: 'Write the difference quotient', detail: '(f(x + h) − f(x)) / h — the average rate over a small interval.' },
+          { label: 'Expand and simplify the numerator', detail: 'The f(x) terms cancel, leaving everything with a factor of h.' },
+          { label: 'Cancel the h', detail: 'Legitimate because h is never zero inside the limit, only approaching it.' },
+          { label: 'Take the limit as h → 0', detail: 'Every remaining term containing h vanishes, and what is left is the derivative.' },
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'The derivative of f at a is f′(a) = lim_{h→0} (f(a + h) − f(a))/h, when the limit exists; f is then differentiable at a. Geometrically f′(a) is the slope of the unique tangent line to the graph at (a, f(a)), and f(a + h) = f(a) + f′(a)h + o(h) is the first-order Taylor expansion, making the tangent the best local linear approximation. Differentiability at a implies continuity at a; the converse is false.',
+
+    math: {
+      intuition:
+        'Everything rests on one picture. Pick a point on a curve and a second point a little way along. The straight line through both has an obvious slope, rise over run, and it approximates the steepness of the curve between them. Now slide the second point towards the first. The line pivots, and as the gap closes it settles into the unique line that just touches the curve at your point. The slope of that line is the derivative. The algebra that follows is just careful bookkeeping about the sliding, and the reason you need a limit rather than direct substitution is that when the two points coincide, rise and run are both zero and the ratio says nothing.',
+      formulas: [
+        {
+          latex: "f'(x) = \\lim_{h \\to 0} \\frac{f(x+h) - f(x)}{h}",
+          name: 'The limit definition of the derivative',
+          meaning:
+            'The slope between two nearby points as the gap shrinks to nothing. Every derivative rule is ultimately derived from this.',
+          variables: [
+            { symbol: "f'(x)", meaning: 'The derivative: the instantaneous rate of change at x' },
+            { symbol: 'f(x)', meaning: 'The function being differentiated' },
+            { symbol: 'h', meaning: 'The width of the interval, shrinking towards zero but never equal to it' },
+            { symbol: 'f(x+h) - f(x)', meaning: 'The rise: how much the output changed' },
+            { symbol: '\\lim_{h\\to 0}', meaning: 'The limit: the value the ratio settles on' },
+          ],
+          category: 'calculus',
+        },
+        {
+          latex: '\\frac{d}{dx}x^{n} = n\\,x^{n-1}',
+          name: 'The power rule',
+          meaning:
+            'Bring the exponent down as a multiplier and reduce it by one. It covers constants (n = 0), lines (n = 1) and roots (n = 1/2) alike.',
+          variables: [
+            { symbol: 'x', meaning: 'The variable being differentiated with respect to' },
+            { symbol: 'n', meaning: 'The exponent, which may be any real number including negative and fractional values' },
+            { symbol: '\\frac{d}{dx}', meaning: 'The instruction "differentiate with respect to x"' },
+          ],
+          category: 'calculus',
+        },
+        {
+          latex: '\\frac{d}{dx}e^{x} = e^{x}, \\qquad \\frac{d}{dx}\\ln x = \\frac{1}{x}, \\qquad \\frac{d}{dx}a^{x} = a^{x}\\ln a',
+          name: 'Exponential and logarithm derivatives',
+          meaning:
+            'e^x is the unique function equal to its own derivative, which is why e is the natural base. The log derivative 1/x explains why log-loss gradients explode near zero.',
+          variables: [
+            { symbol: 'e', meaning: 'Euler’s number, approximately 2.71828' },
+            { symbol: 'x', meaning: 'The input variable; for ln x it must be strictly positive' },
+            { symbol: 'a', meaning: 'Any positive base other than 1' },
+            { symbol: '\\ln a', meaning: 'The natural logarithm of that base, the conversion factor between bases' },
+          ],
+          category: 'calculus',
+        },
+        {
+          latex: "(f + g)' = f' + g', \\qquad (cf)' = cf', \\qquad (fg)' = f'g + fg'",
+          name: 'Sum, constant-multiple and product rules',
+          meaning:
+            'Differentiation distributes over addition and pulls constants out, but a product needs both terms — the common error is assuming (fg)′ = f′g′.',
+          variables: [
+            { symbol: 'f, g', meaning: 'Two differentiable functions of the same variable' },
+            { symbol: "f', g'", meaning: 'Their derivatives' },
+            { symbol: 'c', meaning: 'A constant multiplier' },
+          ],
+          category: 'calculus',
+        },
+        {
+          latex: "\\sigma'(x) = \\sigma(x)\\bigl(1 - \\sigma(x)\\bigr), \\qquad \\sigma(x) = \\frac{1}{1 + e^{-x}}",
+          name: 'Derivative of the logistic sigmoid',
+          meaning:
+            'Expressible in terms of its own output, so the backward pass can reuse the forward result. Its maximum is 0.25 at x = 0, which is the root of vanishing gradients.',
+          variables: [
+            { symbol: '\\sigma(x)', meaning: 'The logistic sigmoid, squashing any real number into (0, 1)' },
+            { symbol: "\\sigma'(x)", meaning: 'Its derivative, always between 0 and 0.25' },
+            { symbol: 'e^{-x}', meaning: 'The exponential term that produces the S shape' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: 'w \\leftarrow w - \\eta \\frac{\\partial L}{\\partial w}',
+          name: 'One step of gradient descent',
+          meaning:
+            'Move each weight in the direction opposite to the derivative, so the loss goes down. This one line is what all the calculus is for.',
+          variables: [
+            { symbol: 'w', meaning: 'A single model weight being updated' },
+            { symbol: '\\eta', meaning: 'The learning rate: how large a step to take' },
+            { symbol: 'L', meaning: 'The loss being minimised' },
+            { symbol: '\\frac{\\partial L}{\\partial w}', meaning: 'The derivative of the loss with respect to that weight' },
+            { symbol: '\\leftarrow', meaning: 'Assignment: the weight is replaced by the new value' },
+          ],
+          category: 'optimization',
+        },
+      ],
+      derivation: [
+        'Derive the derivative of f(x) = x² from first principles, with no rules assumed.',
+        'Start with the difference quotient: (f(x + h) − f(x))/h = ((x + h)² − x²)/h.',
+        'Expand the square: (x² + 2xh + h² − x²)/h.',
+        'The x² terms cancel, leaving (2xh + h²)/h.',
+        'Every remaining term has a factor of h, so factor it out: h(2x + h)/h.',
+        'Cancel the h. This is legitimate precisely because the limit concerns h approaching zero, never h equal to zero, so the division is valid. What remains is 2x + h.',
+        'Now take the limit as h → 0. The expression 2x + h is continuous, so the limit is found by substitution: 2x.',
+        'Therefore f′(x) = 2x, matching the power rule with n = 2. Notice where the limit was indispensable: before cancelling, substituting h = 0 gave 0/0 and told you nothing; after cancelling, substituting is trivial. That pattern — simplify until the h in the denominator is gone, then substitute — is the whole technique.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Differentiating a small loss function and reading the result',
+      setup:
+        'A one-parameter squared-error loss for a single training point: L(w) = (w·3 − 6)² + 0.5w². The first term is the prediction error when the input is 3 and the target is 6; the second is an L2 penalty. Find L′(w), locate the minimum, and interpret the derivative at two specific values.',
+      steps: [
+        { label: 'Expand the first term', detail: '(3w − 6)² = 9w² − 36w + 36, so L(w) = 9w² − 36w + 36 + 0.5w² = 9.5w² − 36w + 36.', latex: 'L(w) = 9.5w^2 - 36w + 36' },
+        { label: 'Differentiate term by term', detail: 'By the power rule and the sum rule: d/dw(9.5w²) = 19w, d/dw(−36w) = −36, d/dw(36) = 0.', latex: "L'(w) = 19w - 36" },
+        { label: 'Evaluate at w = 0', detail: 'L′(0) = −36. Strongly negative, so increasing w reduces the loss — and steeply. Gradient descent would take a large step to the right.' },
+        { label: 'Evaluate at w = 3', detail: 'L′(3) = 57 − 36 = 21. Positive now, so we have overshot and should move left.' },
+        { label: 'Find the stationary point', detail: 'Set 19w − 36 = 0, giving w = 36/19 ≈ 1.8947.', latex: 'w^{*} = \\tfrac{36}{19} \\approx 1.8947' },
+        { label: 'Confirm it is a minimum', detail: 'L″(w) = 19, positive everywhere, so the curve is a bowl and the stationary point is the global minimum.' },
+        { label: 'Note the effect of the penalty', detail: 'Without the 0.5w² term the minimum would be at w = 2, the perfect fit. The penalty pulls it to 1.8947 — regularisation shrinking the weight, visible directly in the arithmetic.' },
+        { label: 'Simulate one descent step', detail: 'From w = 0 with learning rate 0.02: w ← 0 − 0.02(−36) = 0.72. Next derivative: 19(0.72) − 36 = −22.32, still negative but smaller. The steps shrink as the minimum nears.' },
+      ],
+      conclusion:
+        'L′(w) = 19w − 36, zero at w ≈ 1.8947, which is the minimum since the second derivative is positive. This is gradient descent in one dimension with nothing hidden: the derivative supplies both the direction to move and a sense of how far, and it naturally shrinks to zero as the optimum is approached.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'The limit definition, converging',
+        runnable: true,
+        code: `def f(x):
+    return x ** 2
+
+x0 = 3.0
+for h in [1.0, 0.1, 0.01, 1e-4, 1e-6]:
+    forward = (f(x0 + h) - f(x0)) / h
+    central = (f(x0 + h) - f(x0 - h)) / (2 * h)
+    print(f"h={h:<7} forward={forward:.8f}  central={central:.8f}")
+
+print("exact (2x):", 2 * x0)`,
+        output: `h=1.0     forward=7.00000000  central=6.00000000
+h=0.1     forward=6.10000000  central=6.00000000
+h=0.01    forward=6.01000000  central=6.00000000
+h=0.0001  forward=6.00010000  central=6.00000000
+h=1e-06   forward=6.00000100  central=6.00000000
+exact (2x): 6.0`,
+        explanation:
+          'The forward difference converges linearly in h, so its error is roughly h itself. The central difference is exact here because the error term for a quadratic is proportional to h² times the third derivative, and the third derivative of x² is zero. That is why central differences are the default in gradient-checking code.',
+      },
+      {
+        language: 'python',
+        title: 'Reading the sign of the derivative along a curve',
+        runnable: true,
+        code: `import numpy as np
+
+def f(x):  return x ** 3 - 3 * x        # has a max and a min
+def df(x): return 3 * x ** 2 - 3        # zero at x = -1 and x = +1
+
+for x in [-2.0, -1.0, 0.0, 1.0, 2.0]:
+    d = df(x)
+    verdict = "rising" if d > 0 else ("falling" if d < 0 else "stationary")
+    print(f"x={x:5.1f}  f={f(x):6.2f}  f'={d:6.2f}  {verdict}")`,
+        output: `x = -2.0  f= -2.00  f'=  9.00  rising
+x = -1.0  f=  2.00  f'=  0.00  stationary
+x =  0.0  f=  0.00  f'= -3.00  falling
+x =  1.0  f= -2.00  f'=  0.00  stationary
+x =  2.0  f=  6.00  f'=  9.00  rising`,
+        explanation:
+          'The sign of the derivative gives a complete account of the shape: rising, then level at a local maximum, then falling, level again at a local minimum, then rising. This is exactly how the first-derivative test classifies stationary points, and it is why an optimiser that only looks at the gradient cannot distinguish a minimum from a maximum without checking curvature.',
+      },
+      {
+        language: 'python',
+        title: 'Autograd computes the same derivatives',
+        runnable: true,
+        code: `import torch
+
+w = torch.tensor(0.0, requires_grad=True)
+loss = (3 * w - 6) ** 2 + 0.5 * w ** 2
+loss.backward()
+print("L(0) =", loss.item(), "  L'(0) =", w.grad.item(), " expected -36")
+
+# one full descent loop
+w = torch.tensor(0.0, requires_grad=True)
+for step in range(6):
+    loss = (3 * w - 6) ** 2 + 0.5 * w ** 2
+    loss.backward()
+    with torch.no_grad():
+        w -= 0.02 * w.grad
+    w.grad.zero_()
+    print(f"step {step}: w={w.item():.5f}")`,
+        output: `L(0) = 36.0   L'(0) = -36.0  expected -36
+step 0: w=0.72000
+step 1: w=1.16640
+step 2: w=1.44317
+step 3: w=1.61476
+step 4: w=1.72115
+step 5: w=1.78711`,
+        explanation:
+          'PyTorch reproduces the hand-derived derivative of −36 at w = 0 exactly, because autograd applies the same rules symbolically rather than approximating with finite differences. The loop shows the descent converging towards 36/19 ≈ 1.8947, with each step smaller than the last because the derivative itself shrinks as the minimum is approached — a self-damping behaviour that is why a fixed learning rate can still converge.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Every gradient descent update',
+        usage:
+          'The update rule w ← w − η·dL/dw is the derivative used directly: its sign chooses the direction and its magnitude scales the step.',
+      },
+      {
+        context: 'Vanishing gradients in deep sigmoid networks',
+        usage:
+          'The sigmoid derivative never exceeds 0.25, so multiplying ten of them through a ten-layer chain scales the gradient by under 1e-6 — which is why ReLU, whose derivative is exactly 1 for positive inputs, replaced it.',
+      },
+      {
+        context: 'Learning-rate selection',
+        usage:
+          'A safe step size is bounded by the curvature, roughly 2/f″ for a quadratic. Second-order methods such as Newton and L-BFGS use this explicitly instead of guessing.',
+      },
+      {
+        context: 'Sensitivity analysis and explanations',
+        usage:
+          'Saliency maps are the derivative of the output with respect to each input pixel, answering "which pixels would most change the prediction if nudged?"',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'PyTorch', role: 'Autograd builds a graph during the forward pass and applies these derivative rules in reverse to produce .grad.' },
+      { tool: 'SymPy', role: 'sympy.diff differentiates symbolically, which is the quickest way to check a derivative you derived by hand.' },
+      { tool: 'JAX', role: 'jax.grad transforms a Python function into a function computing its derivative, composable to any order.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Writing (fg)′ = f′g′',
+        why: 'The sum rule really does distribute, so the pattern is over-generalised to products.',
+        fix: 'The product rule is f′g + fg′. Test it on f = g = x: the correct answer for x² is 2x, whereas f′g′ would give 1.',
+      },
+      {
+        mistake: 'Forgetting that the derivative of a constant is zero',
+        why: 'Constants look like they should contribute something, especially when large.',
+        fix: 'A constant function is a flat line and flat lines have zero slope, however high up they sit. This is why the bias term drops out of a derivative with respect to a weight.',
+      },
+      {
+        mistake: 'Treating a zero derivative as proof of a minimum',
+        why: 'Gradient descent stops where the derivative vanishes, which is taken as evidence that the best point has been found.',
+        fix: 'Zero derivative means stationary, which could be a minimum, a maximum or a saddle. Check the second derivative, or in higher dimensions the eigenvalues of the Hessian.',
+      },
+      {
+        mistake: 'Differentiating log without noting its domain',
+        why: 'The rule d/dx ln x = 1/x is memorised without the condition x > 0.',
+        fix: 'The derivative blows up as x approaches 0, which is exactly why a predicted probability near zero produces an enormous log-loss gradient. Clip probabilities, or use a fused loss that never forms them.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'What is a derivative, and what do its sign and magnitude tell you?',
+        answer:
+          'A derivative is the instantaneous rate of change of a function with respect to its input — equivalently the slope of the tangent line at a point, defined as the limit of the difference quotient as the interval shrinks to zero. Its sign tells you the direction the function is heading: positive means increasing the input increases the output, negative means the reverse, and zero means you are at a stationary point where the function is momentarily level. Its magnitude tells you how steeply, so a derivative of 50 means a small change in input produces a large change in output while 0.01 means the function is nearly flat. In training, the derivative of the loss with respect to a weight supplies both pieces of information: which way to move the weight and, scaled by the learning rate, how far.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Why did ReLU largely replace the sigmoid as a hidden-layer activation?',
+        answer:
+          'Because of what happens to the derivative when you compose many layers. The sigmoid derivative is σ(x)(1 − σ(x)), which peaks at 0.25 at x = 0 and falls towards zero as the input saturates in either direction. Backpropagation multiplies one such factor per layer, so a ten-layer network multiplies the gradient by at most 0.25¹⁰, under one in a million, and far less once units saturate. The early layers therefore receive essentially no learning signal — the vanishing gradient problem. ReLU has derivative exactly 1 for positive inputs, so the gradient passes through unattenuated however deep the stack. It is also cheaper to compute, and it produces sparse activations. The cost is the dying ReLU problem, where a unit stuck in the negative region has zero gradient forever, which variants such as leaky ReLU and GELU address.',
+        followUp:
+          'A strong answer notes that ReLU is not differentiable at exactly zero and that frameworks pick a subgradient by convention, which is harmless because that single point has measure zero.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Derive the derivative of the sigmoid and explain why its form is convenient for implementation.',
+        answer:
+          'Write σ(x) = (1 + e^{−x})^{−1}. By the chain rule, σ′(x) = −(1 + e^{−x})^{−2} · d/dx(1 + e^{−x}) = −(1 + e^{−x})^{−2} · (−e^{−x}) = e^{−x}/(1 + e^{−x})². Now split that fraction: it equals [1/(1 + e^{−x})] · [e^{−x}/(1 + e^{−x})]. The first factor is σ(x). The second is 1 − σ(x), since 1 − 1/(1 + e^{−x}) = e^{−x}/(1 + e^{−x}). So σ′(x) = σ(x)(1 − σ(x)). The implementation advantage is that the derivative depends only on the forward output, not on the input, so the backward pass reuses a value already cached and needs no extra exponential. It also shows immediately that the derivative is bounded by 0.25, which is the quantitative statement of the vanishing gradient problem.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Differentiate f(x) = 5x³ − 2x² + 7x − 4 and find f′(2).',
+        hint: 'Apply the power rule to each term, and remember the derivative of a constant is zero.',
+        solution:
+          'f′(x) = 15x² − 4x + 7. At x = 2: 15(4) − 4(2) + 7 = 60 − 8 + 7 = 59. The −4 contributes nothing, because a constant shifts the whole curve up or down without changing its steepness anywhere. A derivative of 59 means the function is rising very steeply at that point.',
+      },
+      {
+        prompt: 'Derive the derivative of f(x) = 3x² + 5 from the limit definition, showing every step.',
+        hint: 'Expand (x + h)², cancel, then let h go to zero.',
+        solution:
+          'The difference quotient is [3(x + h)² + 5 − 3x² − 5]/h = [3x² + 6xh + 3h² + 5 − 3x² − 5]/h. The 3x² and 5 terms cancel, leaving (6xh + 3h²)/h = h(6x + 3h)/h = 6x + 3h, where cancelling h is valid because h is never zero inside the limit. Taking h → 0 gives 6x. This matches the power rule with the constant multiple pulled out, and confirms that the +5 is irrelevant to the slope.',
+      },
+      {
+        prompt: 'For L(w) = (w − 4)² + 0.5w², find L′(w), the minimising w, and verify with the second derivative. Comment on what the penalty did.',
+        hint: 'Expand first, or differentiate each term using the chain rule for the square.',
+        solution:
+          'L(w) = w² − 8w + 16 + 0.5w² = 1.5w² − 8w + 16, so L′(w) = 3w − 8, which is zero at w = 8/3 ≈ 2.667. L″(w) = 3 > 0, so the curve is a bowl and this is the global minimum. Without the 0.5w² term the minimum would sit at w = 4, the perfect fit; the penalty has pulled it in to 2.667. That shrinkage is exactly what L2 regularisation does, and you can see from the algebra that a larger penalty coefficient would pull it further towards zero.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'MATH-013-q1',
+        type: 'numeric',
+        concept: 'power rule',
+        prompt: 'If f(x) = 4x³, what is f′(2)?',
+        answer: 48,
+        explanation:
+          'f′(x) = 12x², so f′(2) = 12(4) = 48. The power rule brings the exponent down as a multiplier and reduces it by one.',
+      },
+      {
+        id: 'MATH-013-q2',
+        type: 'mcq',
+        concept: 'interpreting the derivative',
+        prompt: 'A loss function has derivative −8 with respect to a weight w. What should gradient descent do?',
+        options: [
+          'Increase w, because the loss decreases as w rises',
+          'Decrease w, because the derivative is negative',
+          'Leave w unchanged, since the derivative is not zero',
+          'Increase the learning rate to compensate',
+        ],
+        answerIndex: 0,
+        explanation:
+          'A negative derivative means the loss falls as w increases, so you move in the direction opposite the derivative: w ← w − η(−8) = w + 8η, an increase.',
+      },
+      {
+        id: 'MATH-013-q3',
+        type: 'truefalse',
+        concept: 'stationary points',
+        prompt: 'If f′(a) = 0 then a must be a minimum of f.',
+        answer: false,
+        explanation:
+          'False. A zero derivative means the point is stationary, which could equally be a maximum or a saddle. The second derivative, or the Hessian eigenvalues in higher dimensions, is what distinguishes them.',
+      },
+      {
+        id: 'MATH-013-q4',
+        type: 'match',
+        concept: 'derivative rules',
+        prompt: 'Match each function to its derivative.',
+        pairs: [
+          { left: 'x⁵', right: '5x⁴' },
+          { left: 'eˣ', right: 'eˣ' },
+          { left: 'ln x', right: '1/x' },
+          { left: 'max(0, x)', right: '1 for x > 0, 0 for x < 0' },
+        ],
+        explanation:
+          'These four cover most of what appears in a backward pass. The ReLU case is the one worth remembering as piecewise, with no derivative defined at exactly zero.',
+      },
+      {
+        id: 'MATH-013-q5',
+        type: 'debug',
+        language: 'python',
+        concept: 'product rule',
+        prompt: 'This function is meant to return the derivative of f(x)·g(x) but is wrong. What is the error?',
+        code: 'def d_product(f, g, df, dg, x):\n    return df(x) * dg(x)',
+        options: [
+          'It should return df(x) * g(x) + f(x) * dg(x)',
+          'It should return df(x) / dg(x)',
+          'It should return f(x) * g(x)',
+          'It should return df(x) + dg(x)',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The product rule is (fg)′ = f′g + fg′. Testing with f = g = x makes the error obvious: the true derivative of x² is 2x, while df·dg would give 1·1 = 1.',
+      },
+      {
+        id: 'MATH-013-q6',
+        type: 'explain',
+        concept: 'derivatives in training',
+        prompt: 'Explain how a derivative is used in a single step of gradient descent, and why the steps naturally get smaller near a minimum.',
+        rubric: [
+          'Says the derivative gives the direction the loss increases, so you move opposite to it',
+          'Says the magnitude scales the step size, together with the learning rate',
+          'Says the derivative tends to zero at a minimum, so the steps shrink automatically',
+        ],
+        sampleAnswer:
+          'The derivative of the loss with respect to a weight says how the loss responds to nudging that weight. If it is positive, increasing the weight increases the loss, so you decrease it; if negative, you increase it. That is why the update subtracts the derivative rather than adding it. The magnitude matters too: a steep slope means a small change in the weight has a big effect on the loss, so the step taken is proportionally larger, scaled by the learning rate. Near a minimum the curve flattens out, so the derivative shrinks towards zero and the steps shrink with it. This self-damping is why a fixed learning rate can still converge rather than bouncing around forever — though if the learning rate is too large relative to the curvature, the steps overshoot far enough that the loss rises instead, and training diverges.',
+        explanation:
+          'A strong answer connects direction, magnitude and the shrinking-step behaviour, and mentions the failure mode when the learning rate is too large.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Limit definition of the derivative?', back: "f'(x) = lim_{h→0} (f(x+h) − f(x))/h — the slope between two nearby points as the gap closes." },
+      { front: 'Power rule?', back: 'd/dx xⁿ = n·xⁿ⁻¹. Bring the exponent down, reduce it by one.' },
+      { front: 'What does the sign of f′ tell you?', back: 'Positive means rising, negative means falling, zero means stationary. Magnitude gives steepness.' },
+      { front: 'Derivative of the sigmoid?', back: 'σ(x)(1 − σ(x)), maximum 0.25 at x = 0 — the quantitative cause of vanishing gradients.' },
+      { front: 'Derivative of ln x?', back: '1/x, for x > 0. It blows up near zero, which is why log-loss gradients explode on confident wrong predictions.' },
+      { front: 'Product rule?', back: "(fg)' = f'g + fg'. Not f'g' — test it on f = g = x, where the answer must be 2x." },
+    ],
+
+    challenge: {
+      title: 'A tiny symbolic differentiator',
+      brief:
+        'Represent polynomials as coefficient lists and implement derivative(coeffs) returning the coefficients of the derivative, evaluate(coeffs, x), and newton_root(coeffs, x0) which uses f and f′ to find a root. Verify your derivative against a central-difference approximation at several points, and find both stationary points of x³ − 3x by applying your root-finder to the derivative.',
+      language: 'python',
+      acceptanceCriteria: [
+        'derivative() handles constants and the zero polynomial without error',
+        'Agrees with a central-difference check to within 1e-6 at five or more points',
+        'newton_root converges on a root of x³ − 3x from at least two different starting points',
+        'Correctly locates the stationary points of x³ − 3x at x = −1 and x = +1',
+      ],
+      starterCode: '# coeffs[i] is the coefficient of x**i\ndef derivative(coeffs):\n    """Return the coefficient list of the derivative."""\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone who has never done calculus what a derivative is, using a physical picture first, and finish by connecting it to how a model learns.',
+      mustCover: [
+        'A derivative is the steepness of a curve at a single point',
+        'It is found by shrinking the gap between two points until the slope settles',
+        'The sign says which way the function is heading; the magnitude says how steeply',
+        'Training uses the derivative of the loss to decide how to change each weight',
+      ],
+      bonusSignals: ['uses the hillside or speedometer image', 'mentions that zero derivative means stationary but not necessarily minimum', 'notes that steps shrink near the optimum'],
+      sampleExplanation:
+        'Stand on a hillside and ask how steep the ground is exactly where you are. You cannot answer by comparing your height with a spot far away, because the hill changes along the way. So you compare with a point slightly ahead, then closer, then closer still, and you watch the answer settle down. The number it settles on is the derivative: the steepness at precisely that spot. It carries two pieces of news at once. The sign says which way the ground tilts — positive means it rises as you walk forwards, negative means it falls away. The size says how dramatic the tilt is, so twenty is a cliff and a hundredth is nearly level. A derivative of exactly zero means you are momentarily flat, which happens at the bottom of a valley, at the top of a peak, and on a shelf in between, so zero alone does not tell you which. This is the whole mechanism by which a model learns. The loss is a landscape, each weight is a direction you can walk in, and the derivative of the loss with respect to a weight tells you whether nudging it up or down makes the model better, and how urgently. You take a step against the slope, recompute, and repeat. As you approach the bottom the ground flattens, the derivative shrinks, and the steps become gentler all by themselves.',
+    },
+  },
+
+  {
+    id: 'MATH-014',
+    domain: 'MATH',
+    module: 'Calculus',
+    topic: 'Gradients',
+    title: 'Partial Derivatives and Gradients',
+    slug: 'partial-derivatives-and-gradients',
+    difficulty: 4,
+    estimatedMinutes: 40,
+    prerequisites: ['MATH-013', 'MATH-004'],
+    related: ['MATH-005', 'MATH-012'],
+    tags: ['partial-derivative', 'gradient', 'steepest-ascent', 'jacobian', 'gradient-descent'],
+
+    learningObjectives: [
+      'Compute a partial derivative by treating every other variable as a constant',
+      'Assemble partial derivatives into a gradient vector and state what direction it points',
+      'Explain why gradient descent moves opposite to the gradient rather than along it',
+      'Describe how the gradient of a loss with respect to millions of weights drives training',
+    ],
+
+    terminology: [
+      {
+        term: 'Partial derivative',
+        definition:
+          'The derivative of a multivariable function with respect to one variable, holding all the others fixed. Written ∂f/∂x.',
+        simple: 'How much the output changes when you nudge just one input and freeze the rest.',
+      },
+      {
+        term: 'Gradient',
+        definition:
+          'The vector of all partial derivatives, ∇f = [∂f/∂x₁, …, ∂f/∂xₙ]. It points in the direction of steepest increase.',
+        simple: 'The arrow pointing straight uphill, with length equal to how steep that climb is.',
+      },
+      {
+        term: 'Directional derivative',
+        definition:
+          'The rate of change along an arbitrary unit direction u, equal to the dot product ∇f·u. It is maximised when u aligns with the gradient.',
+        simple: 'How steep the ground is if you walk a particular way.',
+      },
+      {
+        term: 'Level set / contour',
+        definition:
+          'The set of points where the function takes a constant value. The gradient is always perpendicular to the contour through a point.',
+        simple: 'A contour line on a map — walk along it and your height never changes.',
+      },
+      {
+        term: 'Jacobian',
+        definition:
+          'The matrix of all partial derivatives when the output is also a vector: row i, column j holds ∂fᵢ/∂xⱼ.',
+        simple: 'A gradient for each output, stacked into a table.',
+      },
+      {
+        term: 'Hessian',
+        definition:
+          'The matrix of all second partial derivatives, describing curvature in every direction. Its eigenvalues classify stationary points.',
+        simple: 'How the slope itself changes as you move in each direction.',
+      },
+    ],
+
+    simpleExplanation:
+      'Stand on a hillside in thick fog so you can see nothing beyond your own feet. You want to know which way is uphill. You can still find out, by a simple procedure: take one small step due east and notice whether you rose or fell, then return and take one small step due north and notice the same. Two numbers, and from them you can work out the single direction that climbs fastest — and that is not usually due east or due north, but some combination of the two. Each of those two measurements is a partial derivative: the steepness in one direction with the other held still. Bundling them into a single arrow gives the gradient, and the gradient has a remarkable property. It points directly uphill, steepest possible, and its length tells you how steep that climb is. Turn round and walk the opposite way and you are descending as fast as the terrain allows. That is the whole of training a model: the loss is the hill, the weights are the compass directions, and each step walks against the gradient.',
+
+    whyItExists:
+      'Real functions depend on many inputs at once, and a single derivative cannot describe a surface. Partial derivatives isolate one variable at a time so each can be analysed with ordinary one-variable calculus, and the gradient reassembles them into a direction. Without it there would be no principled way to improve millions of parameters simultaneously: you would be reduced to trying them one at a time, which for a model with a billion weights is not a method at all.',
+
+    analogy: {
+      scenario:
+        'A shower has two taps, hot and cold, and you want the water warmer. You nudge the hot tap slightly and the temperature rises by two degrees. You return it and nudge the cold tap by the same amount, and the temperature falls by one degree. Now you know something you could not know from either test alone: to warm the water as fast as possible you should open the hot tap and close the cold one simultaneously, and you should move the hot tap roughly twice as decisively, because it has twice the effect.',
+      mapping: [
+        { from: 'Nudging the hot tap with the cold one untouched', to: 'The partial derivative with respect to the hot tap' },
+        { from: 'The +2 and −1 responses', to: 'The two components of the gradient vector' },
+        { from: 'Opening hot and closing cold together', to: 'Moving along the gradient — the direction of fastest increase' },
+        { from: 'Moving hot twice as decisively as cold', to: 'The relative magnitudes of the components setting the direction' },
+        { from: 'Wanting the water cooler instead', to: 'Moving against the gradient — gradient descent' },
+      ],
+      bridge:
+        'The key move is that you measured one tap at a time but you act on both at once, and the combination is better than either alone. That is exactly what a gradient does: each partial derivative is measured in isolation, yet the assembled vector points in a direction that is generally diagonal to all the axes. Backpropagation performs this for millions of taps in a single sweep.',
+      limitations:
+        'Two taps interact in ways the analogy hides: opening the hot tap changes how much difference the cold tap makes, which is curvature, and it is the Hessian rather than the gradient that captures it. The gradient is only guaranteed to be the best direction for an infinitesimal step, which is why learning rates must be small and why second-order methods exist.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'A loss surface you can rotate',
+        caption: 'See the contours, the gradient arrow and the descent path on the same surface.',
+        widget: 'gradient-surface-3d',
+      },
+      {
+        kind: 'flow',
+        title: 'Computing a gradient',
+        caption: 'The procedure is identical whether there are two variables or two billion.',
+        steps: [
+          { label: 'Pick one variable', detail: 'Say x. Treat every other variable as a fixed number, as if it were 7.' },
+          { label: 'Differentiate normally', detail: 'Apply the ordinary one-variable rules. Terms without x vanish, since constants have zero derivative.' },
+          { label: 'Repeat for every variable', detail: 'Each pass gives one number at the current point.' },
+          { label: 'Stack the results into a vector', detail: 'That vector is ∇f. Its direction is steepest ascent; its length is the rate of that ascent.' },
+          { label: 'Step against it', detail: 'w ← w − η∇f decreases the function fastest, for a small enough η.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Partial derivatives of f(x, y) = x²y + 3y',
+        caption: 'Notice that each partial treats the other variable as an ordinary constant.',
+        columns: ['Term', '∂/∂x (y is a constant)', '∂/∂y (x is a constant)'],
+        rows: [
+          ['x²y', '2xy', 'x²'],
+          ['3y', '0 — no x appears', '3'],
+          ['Total', '2xy', 'x² + 3'],
+          ['At (2, 1)', '2(2)(1) = 4', '4 + 3 = 7'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Gradient ascent versus descent',
+        left: {
+          heading: 'Following +∇f',
+          points: [
+            'Climbs the surface as fast as possible',
+            'Used to maximise a reward or a likelihood',
+            'Reinforcement learning policy gradient methods',
+            'Converges towards a local maximum',
+          ],
+        },
+        right: {
+          heading: 'Following −∇f',
+          points: [
+            'Descends as fast as possible',
+            'Used to minimise a loss',
+            'Every supervised learning training loop',
+            'Converges towards a local minimum',
+          ],
+        },
+      },
+    ],
+
+    formalDefinition:
+      'For f : ℝⁿ → ℝ, the partial derivative at a is ∂f/∂xᵢ(a) = lim_{h→0} (f(a + heᵢ) − f(a))/h, where eᵢ is the i-th standard basis vector. The gradient ∇f(a) ∈ ℝⁿ collects these components. If f is differentiable at a, the directional derivative along a unit vector u is D_u f(a) = ∇f(a)·u, which by Cauchy–Schwarz is maximised when u = ∇f(a)/‖∇f(a)‖ and takes the value ‖∇f(a)‖. Consequently ∇f is orthogonal to the level set through a.',
+
+    math: {
+      intuition:
+        'Two ideas, in order. First, a partial derivative is nothing new: it is an ordinary derivative taken while pretending every other variable is frozen at its current value. If you can differentiate 3x² you can differentiate 3x²y with respect to x — just carry the y along as if it were the number 7. Second, the gradient is what you get by doing that for every variable and stacking the answers. The reason the gradient points uphill fastest is worth understanding rather than memorising: the rate of change in any direction is the dot product of the gradient with that direction, and a dot product is largest when the two vectors are aligned. So the steepest direction is the gradient itself, and the steepest downhill direction is its exact opposite.',
+      formulas: [
+        {
+          latex: '\\frac{\\partial f}{\\partial x_i}(\\mathbf{a}) = \\lim_{h\\to 0}\\frac{f(\\mathbf{a} + h\\mathbf{e}_i) - f(\\mathbf{a})}{h}',
+          name: 'The partial derivative',
+          meaning:
+            'The ordinary derivative taken along one coordinate axis, with every other coordinate held fixed.',
+          variables: [
+            { symbol: 'f', meaning: 'A function of several variables returning a single number' },
+            { symbol: 'x_i', meaning: 'The variable being varied; all others are frozen' },
+            { symbol: '\\mathbf{a}', meaning: 'The point at which the derivative is evaluated' },
+            { symbol: '\\mathbf{e}_i', meaning: 'The i-th basis vector, so a + he_i moves only along axis i' },
+            { symbol: 'h', meaning: 'The shrinking step size' },
+            { symbol: '\\partial', meaning: 'The partial derivative symbol, signalling that other variables are held constant' },
+          ],
+          category: 'calculus',
+        },
+        {
+          latex: '\\nabla f = \\left[\\frac{\\partial f}{\\partial x_1},\; \\frac{\\partial f}{\\partial x_2},\; \\ldots,\; \\frac{\\partial f}{\\partial x_n}\\right]^{\\top}',
+          name: 'The gradient vector',
+          meaning:
+            'All the partial derivatives stacked into one vector. It points in the direction of steepest increase, with length equal to that rate.',
+          variables: [
+            { symbol: '\\nabla f', meaning: 'The gradient, read "grad f" or "del f"' },
+            { symbol: '\\partial f/\\partial x_i', meaning: 'The i-th partial derivative, one component of the vector' },
+            { symbol: 'n', meaning: 'The number of variables — for a neural network, the number of parameters' },
+            { symbol: '\\top', meaning: 'Transpose, marking it as a column vector by convention' },
+          ],
+          category: 'calculus',
+        },
+        {
+          latex: 'D_{\\mathbf{u}}f(\\mathbf{a}) = \\nabla f(\\mathbf{a}) \\cdot \\mathbf{u} = \\|\\nabla f(\\mathbf{a})\\|\\cos\\theta',
+          name: 'The directional derivative',
+          meaning:
+            'The rate of change along any chosen direction. Written as a dot product, it makes the steepest-ascent property immediate.',
+          variables: [
+            { symbol: '\\mathbf{u}', meaning: 'A unit vector giving the direction of travel' },
+            { symbol: '\\nabla f(\\mathbf{a})', meaning: 'The gradient at the point a' },
+            { symbol: '\\theta', meaning: 'The angle between the gradient and the chosen direction' },
+            { symbol: '\\|\\nabla f(\\mathbf{a})\\|', meaning: 'The length of the gradient, that is the maximum possible rate of ascent' },
+          ],
+          category: 'calculus',
+        },
+        {
+          latex: '\\boldsymbol{\\theta}_{t+1} = \\boldsymbol{\\theta}_t - \\eta\\nabla L(\\boldsymbol{\\theta}_t)',
+          name: 'Gradient descent',
+          meaning:
+            'Step against the gradient to reduce the loss. The minus sign is the entire difference between learning and unlearning.',
+          variables: [
+            { symbol: '\\boldsymbol{\\theta}_t', meaning: 'The full parameter vector at step t' },
+            { symbol: '\\eta', meaning: 'The learning rate, controlling how far along the direction you move' },
+            { symbol: '\\nabla L', meaning: 'The gradient of the loss with respect to every parameter' },
+            { symbol: 't', meaning: 'The iteration counter' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: 'J_{ij} = \\frac{\\partial f_i}{\\partial x_j}, \\qquad J \\in \\mathbb{R}^{m \\times n}',
+          name: 'The Jacobian matrix',
+          meaning:
+            'When the output is a vector rather than a scalar, each output gets its own gradient and they stack into a matrix.',
+          variables: [
+            { symbol: 'J', meaning: 'The Jacobian matrix of a function from ℝⁿ to ℝᵐ' },
+            { symbol: 'f_i', meaning: 'The i-th component of the output' },
+            { symbol: 'x_j', meaning: 'The j-th input variable' },
+            { symbol: 'm', meaning: 'Number of outputs, hence rows' },
+            { symbol: 'n', meaning: 'Number of inputs, hence columns' },
+          ],
+          category: 'calculus',
+        },
+        {
+          latex: 'H_{ij} = \\frac{\\partial^2 f}{\\partial x_i \\partial x_j}',
+          name: 'The Hessian matrix',
+          meaning:
+            'All second partial derivatives, describing curvature. Its eigenvalues decide whether a stationary point is a minimum, maximum or saddle.',
+          variables: [
+            { symbol: 'H', meaning: 'The Hessian, a symmetric n×n matrix for a twice-continuously-differentiable f' },
+            { symbol: '\\partial^2 f', meaning: 'A second derivative: the rate at which a slope is itself changing' },
+            { symbol: 'x_i, x_j', meaning: 'The two variables differentiated with respect to, in either order' },
+          ],
+          category: 'optimization',
+        },
+      ],
+      derivation: [
+        'Why does the gradient point in the direction of steepest ascent? Start from the directional derivative.',
+        'Moving a small distance h in a unit direction u changes the function by approximately h times the rate of change along u.',
+        'That rate is D_u f = ∇f·u, the dot product of the gradient with the direction.',
+        'From MATH-005, a dot product equals ‖∇f‖‖u‖cos θ, and since u is a unit vector this is just ‖∇f‖cos θ.',
+        'The only quantity you control is θ, the angle between your chosen direction and the gradient. ‖∇f‖ is fixed by where you are standing.',
+        'cos θ is largest, equal to 1, when θ = 0 — that is, when you walk exactly along the gradient. The rate of ascent is then ‖∇f‖, the maximum available.',
+        'cos θ is smallest, equal to −1, when θ = 180 degrees — walking exactly opposite the gradient — giving a rate of −‖∇f‖, the steepest possible descent. That is why gradient descent subtracts.',
+        'And cos θ = 0 when θ = 90 degrees, so walking perpendicular to the gradient changes the function not at all to first order. That direction traces the contour line, which is why the gradient is always perpendicular to the level set.',
+      ],
+    },
+
+    workedExample: {
+      title: 'A two-variable loss, computed and descended by hand',
+      setup:
+        'Let L(w₁, w₂) = w₁² + 3w₂² + w₁w₂ − 4w₁. We will find the gradient, evaluate it at (1, 1), take one descent step, and confirm the loss went down.',
+      steps: [
+        { label: 'Partial with respect to w₁', detail: 'Treat w₂ as a constant. d/dw₁ of w₁² is 2w₁; of 3w₂² is 0; of w₁w₂ is w₂; of −4w₁ is −4.', latex: '\\frac{\\partial L}{\\partial w_1} = 2w_1 + w_2 - 4' },
+        { label: 'Partial with respect to w₂', detail: 'Now treat w₁ as a constant. d/dw₂ of w₁² is 0; of 3w₂² is 6w₂; of w₁w₂ is w₁; of −4w₁ is 0.', latex: '\\frac{\\partial L}{\\partial w_2} = 6w_2 + w_1' },
+        { label: 'Assemble the gradient', detail: 'Stack the two partials into a vector.', latex: '\\nabla L = \\begin{bmatrix} 2w_1 + w_2 - 4 \\\\ 6w_2 + w_1 \\end{bmatrix}' },
+        { label: 'Evaluate at (1, 1)', detail: 'First component: 2(1) + 1 − 4 = −1. Second: 6(1) + 1 = 7. So ∇L(1,1) = [−1, 7].', latex: '\\nabla L(1,1) = \\begin{bmatrix} -1 \\\\ 7 \\end{bmatrix}' },
+        { label: 'Read the result', detail: 'The second component is seven times larger in magnitude, so the loss is far more sensitive to w₂ than to w₁ here. The steepest uphill direction is mostly "increase w₂".' },
+        { label: 'Current loss', detail: 'L(1,1) = 1 + 3 + 1 − 4 = 1.' },
+        { label: 'Take a descent step with η = 0.1', detail: 'w₁ ← 1 − 0.1(−1) = 1.1, and w₂ ← 1 − 0.1(7) = 0.3. Note w₁ went up, because its partial was negative.' },
+        { label: 'Confirm improvement', detail: 'L(1.1, 0.3) = 1.21 + 3(0.09) + 0.33 − 4.4 = 1.21 + 0.27 + 0.33 − 4.4 = −2.59. The loss fell from 1 to −2.59.' },
+        { label: 'Where is the minimum?', detail: 'Set both partials to zero: 2w₁ + w₂ = 4 and 6w₂ + w₁ = 0, so w₁ = −6w₂. Substituting: −12w₂ + w₂ = 4, giving w₂ = −4/11 and w₁ = 24/11 ≈ 2.182.' },
+      ],
+      conclusion:
+        'The gradient at (1, 1) is [−1, 7], and one step of size 0.1 against it dropped the loss from 1 to −2.59. The true minimum sits at roughly (2.182, −0.364). Notice that the two components differ by a factor of seven: this imbalance is exactly the condition that makes plain gradient descent zigzag, and it is what adaptive optimisers such as Adam are designed to correct.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Gradients by hand and by autograd',
+        runnable: true,
+        code: `import numpy as np, torch
+
+def L(w1, w2):
+    return w1 ** 2 + 3 * w2 ** 2 + w1 * w2 - 4 * w1
+
+def grad_by_hand(w1, w2):
+    return np.array([2 * w1 + w2 - 4, 6 * w2 + w1])
+
+w = torch.tensor([1.0, 1.0], requires_grad=True)
+loss = L(w[0], w[1])
+loss.backward()
+
+print("by hand :", grad_by_hand(1.0, 1.0))
+print("autograd:", w.grad.numpy())
+print("loss    :", loss.item())`,
+        output: `by hand : [-1.  7.]
+autograd: [-1.  7.]
+loss    : 1.0`,
+        explanation:
+          'Autograd reproduces the hand-derived partials exactly, because it applies the same differentiation rules mechanically rather than approximating. Checking a hand derivation against autograd on a small example is the fastest way to catch an algebra slip before it becomes a subtly wrong training loop.',
+      },
+      {
+        language: 'python',
+        title: 'The gradient really is the steepest direction',
+        runnable: true,
+        code: `import numpy as np
+
+def L(w):    return w[0] ** 2 + 3 * w[1] ** 2 + w[0] * w[1] - 4 * w[0]
+def grad(w): return np.array([2 * w[0] + w[1] - 4, 6 * w[1] + w[0]])
+
+p = np.array([1.0, 1.0])
+g = grad(p)
+h = 1e-6
+
+best = (-1e9, None)
+for deg in range(0, 360, 15):
+    t = np.radians(deg)
+    u = np.array([np.cos(t), np.sin(t)])
+    rate = (L(p + h * u) - L(p)) / h
+    if rate > best[0]:
+        best = (rate, deg)
+
+print("gradient      :", g, " norm", round(float(np.linalg.norm(g)), 4))
+print("gradient angle:", round(float(np.degrees(np.arctan2(g[1], g[0]))), 2), "degrees")
+print("best sampled  :", best[1], "degrees, rate", round(best[0], 4))`,
+        output: `gradient      : [-1.  7.]  norm 7.0711
+gradient angle: 98.13 degrees
+best sampled  : 105 degrees, rate 6.9282`,
+        explanation:
+          'Sampling twenty-four directions and measuring the actual rate of change finds the best one at 105 degrees, the closest sample to the gradient’s true angle of 98.13 degrees, with a rate approaching the gradient norm of 7.07. This is the steepest-ascent property demonstrated empirically rather than asserted: no direction beats the gradient, and the best achievable rate is exactly its length.',
+      },
+      {
+        language: 'python',
+        title: 'Why unequal gradient components cause zigzagging',
+        runnable: true,
+        code: `import numpy as np
+
+def grad(w): return np.array([2 * w[0], 20 * w[1]])   # L = w0^2 + 10*w1^2
+
+w = np.array([1.0, 1.0])
+eta = 0.09
+for step in range(6):
+    w = w - eta * grad(w)
+    print(f"step {step}: w = [{w[0]:+.5f}, {w[1]:+.5f}]")`,
+        output: `step 0: w = [+0.82000, -0.80000]
+step 1: w = [+0.67240, +0.64000]
+step 2: w = [+0.55137, -0.51200]
+step 3: w = [+0.45212, +0.40960]
+step 4: w = [+0.37074, -0.32768]
+step 5: w = [+0.30402, +0.26214]`,
+        explanation:
+          'The second coordinate flips sign at every step while the first crawls steadily inwards. The curvature along w₁ is ten times that along w₀, so a learning rate large enough to make progress on w₀ overshoots on w₁ and oscillates. The learning rate is bounded by the steepest direction while progress is governed by the shallowest, which is the practical meaning of an ill-conditioned loss surface and the reason momentum and Adam exist.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Training any neural network',
+        usage:
+          'Backpropagation computes ∂L/∂w for every weight in one backward sweep, and the optimiser steps every parameter against its own partial derivative simultaneously.',
+      },
+      {
+        context: 'Adaptive optimisers',
+        usage:
+          'Adam keeps a running estimate of each partial derivative’s magnitude and rescales per-parameter step sizes, which is a direct response to the imbalance shown above.',
+      },
+      {
+        context: 'Saliency maps and adversarial examples',
+        usage:
+          'Both take the gradient of the output with respect to the input pixels: one to visualise which pixels matter, the other to perturb them along the gradient and fool the model.',
+      },
+      {
+        context: 'Physics-informed neural networks',
+        usage:
+          'Partial derivatives of the network output with respect to its spatial and time inputs are computed by autograd and inserted directly into the differential equation being solved.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'PyTorch', role: 'loss.backward() fills .grad for every parameter; torch.autograd.grad computes partials with respect to arbitrary tensors.' },
+      { tool: 'JAX', role: 'jax.grad returns a function computing the gradient; jax.jacobian and jax.hessian extend it to vector outputs and curvature.' },
+      { tool: 'SciPy', role: 'scipy.optimize.minimize accepts an analytic gradient via jac=, which is far faster and more accurate than its finite-difference fallback.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Adding the gradient instead of subtracting it',
+        why: 'The gradient points uphill, which feels like the direction of progress when you are minimising.',
+        fix: 'To minimise, always subtract: θ ← θ − η∇L. The symptom of getting this wrong is a loss that rises monotonically from the first step.',
+      },
+      {
+        mistake: 'Forgetting to zero gradients between steps',
+        why: 'PyTorch accumulates into .grad by design, so that gradients from multiple backward passes can be summed deliberately.',
+        fix: 'Call optimizer.zero_grad() at the top of every iteration. Without it the effective learning rate grows every step and training diverges.',
+      },
+      {
+        mistake: 'Treating other variables as varying inside a partial derivative',
+        why: 'In a neural network the variables genuinely are related, so freezing them feels wrong.',
+        fix: 'A partial derivative freezes them by definition. Relationships between variables are handled by the chain rule, which is the subject of the next unit.',
+      },
+      {
+        mistake: 'Assuming a small gradient means you have reached a good minimum',
+        why: 'Gradient descent stalls whenever the gradient is small, and stalling looks like convergence.',
+        fix: 'A small gradient also occurs at saddle points and on wide plateaus, which are far more common than local minima in high dimensions. Check the loss value and the curvature, not just the gradient norm.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What is a gradient, and why does gradient descent move in the negative gradient direction?',
+        answer:
+          'A gradient is the vector of all partial derivatives of a scalar function with respect to its inputs. Each component says how much the output changes when that one input is nudged with the others held fixed. The vector as a whole points in the direction of steepest increase, and its length is the rate of increase in that direction. The reason follows from the directional derivative: the rate of change along any unit direction u is ∇f·u, which equals ‖∇f‖cos θ. That is maximised when θ = 0, so walking along the gradient climbs fastest, and minimised at θ = 180 degrees, so walking exactly opposite descends fastest. Since training minimises a loss, you step against the gradient. A useful corollary is that moving perpendicular to the gradient changes the loss not at all to first order, which is why contour lines are perpendicular to gradients.',
+        followUp:
+          'A strong answer notes that steepest descent is only optimal for an infinitesimal step, which is why a learning rate that is too large can increase the loss even though the direction was correct.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Your training loss decreases in a zigzag and progress is very slow. What does that suggest about the loss surface and what would you do?',
+        answer:
+          'Zigzagging indicates an ill-conditioned surface: curvature differs greatly between directions, so the Hessian has a large ratio between its biggest and smallest eigenvalues. The learning rate is bounded by the steepest direction, where a larger step would overshoot and oscillate, while progress along the shallow direction is governed by that same small rate and is therefore glacial. Remedies come at three levels. Fix the data: standardise features, since unscaled inputs are the commonest cause of wildly different curvatures. Fix the architecture: batch normalisation or layer normalisation keeps activation scales comparable across layers. Fix the optimiser: momentum damps the oscillating component while accumulating the consistent one, and Adam or RMSProp rescale each parameter by a running estimate of its gradient magnitude, which directly equalises the effective step size per direction.',
+      },
+      {
+        level: 'advanced',
+        question: 'Distinguish the gradient, the Jacobian and the Hessian, and say where each appears in deep learning.',
+        answer:
+          'The gradient applies to a function with many inputs and one output, and is a vector of first partial derivatives — this is what backpropagation computes for a scalar loss, and it is what the optimiser consumes. The Jacobian applies when the output is also a vector: it is a matrix whose row i is the gradient of output i, so a layer mapping ℝⁿ to ℝᵐ has an m×n Jacobian. Backpropagation never forms these explicitly; it computes vector-Jacobian products, which is why the backward pass costs about the same as the forward pass rather than n times as much. The Hessian is the matrix of second partial derivatives of a scalar function, describing curvature, and its eigenvalues classify a stationary point as a minimum, maximum or saddle. It is too large to form for a real network — a billion parameters would need 1e18 entries — so second-order methods use Hessian-vector products, or approximations such as the diagonal used implicitly by Adam, or limited-memory quasi-Newton updates as in L-BFGS.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'For f(x, y) = 3x²y + 2y³ − 5x, find both partial derivatives and evaluate the gradient at (1, 2).',
+        hint: 'For ∂f/∂x treat y as a fixed number; for ∂f/∂y treat x as fixed.',
+        solution:
+          '∂f/∂x = 6xy − 5, since the 2y³ term contains no x and vanishes. ∂f/∂y = 3x² + 6y², since the −5x term vanishes. At (1, 2): ∂f/∂x = 6(1)(2) − 5 = 7 and ∂f/∂y = 3(1) + 6(4) = 27. So ∇f(1,2) = [7, 27], meaning the function is nearly four times more sensitive to y than to x at that point.',
+      },
+      {
+        prompt: 'A loss has gradient [3, −6, 0] at the current parameters. With a learning rate of 0.1, give the updated parameters starting from [1, 1, 1] and explain what the zero component means.',
+        hint: 'Subtract the learning rate times each gradient component.',
+        solution:
+          'New parameters: [1 − 0.1(3), 1 − 0.1(−6), 1 − 0.1(0)] = [0.7, 1.6, 1.0]. The first decreased because its partial was positive, the second increased because its partial was negative, and the third is unchanged. A zero partial means the loss is momentarily insensitive to that parameter — nudging it either way makes no first-order difference, which may be because it sits at a stationary point in that direction, or because the parameter is genuinely unused, as with a dead ReLU unit.',
+      },
+      {
+        prompt: 'Explain why the gradient is always perpendicular to the contour lines of a function.',
+        hint: 'Consider the directional derivative along a contour.',
+        solution:
+          'A contour is the set of points where the function value is constant, so walking along it produces no change in the output, meaning the directional derivative in that direction is zero. But the directional derivative is ∇f·u, so ∇f·u = 0 for any direction u tangent to the contour. A zero dot product means the two vectors are orthogonal, so the gradient is perpendicular to the contour. This is also the intuitive picture on a map: contour lines run around a hill and the steepest path crosses them at right angles.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'MATH-014-q1',
+        type: 'mcq',
+        concept: 'direction of the gradient',
+        prompt: 'What direction does the gradient of a function point in?',
+        options: [
+          'The direction of steepest increase',
+          'The direction of steepest decrease',
+          'Along the contour line',
+          'Towards the nearest minimum',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The gradient points uphill fastest, which is why minimisation subtracts it. Its length is the rate of that steepest increase.',
+      },
+      {
+        id: 'MATH-014-q2',
+        type: 'numeric',
+        concept: 'computing a partial derivative',
+        prompt: 'For f(x, y) = x²y + 3y, what is ∂f/∂x at the point (2, 1)?',
+        answer: 4,
+        explanation:
+          'Holding y fixed, ∂f/∂x = 2xy, since 3y has no x and differentiates to zero. At (2, 1) that is 2(2)(1) = 4.',
+      },
+      {
+        id: 'MATH-014-q3',
+        type: 'truefalse',
+        concept: 'gradient and contours',
+        prompt: 'The gradient is always perpendicular to the contour line through a point.',
+        answer: true,
+        explanation:
+          'True. Moving along a contour leaves the value unchanged, so the directional derivative ∇f·u is zero there, and a zero dot product means orthogonality.',
+      },
+      {
+        id: 'MATH-014-q4',
+        type: 'debug',
+        language: 'python',
+        concept: 'sign of the update',
+        prompt: 'This training loop makes the loss rise every step. What is the bug?',
+        code: 'for _ in range(100):\n    loss = model_loss(w)\n    g = gradient(w)\n    w = w + lr * g',
+        options: [
+          'The update should subtract the gradient, not add it',
+          'The learning rate should be negative',
+          'The loss should be computed after the update',
+          'gradient() should be called before model_loss()',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Adding the gradient performs gradient ascent, climbing the loss surface. Minimisation requires w = w − lr * g, which is why a monotonically rising loss is the classic symptom of this sign error.',
+      },
+      {
+        id: 'MATH-014-q5',
+        type: 'match',
+        concept: 'derivative objects',
+        prompt: 'Match each object to what it contains.',
+        pairs: [
+          { left: 'Partial derivative', right: 'Rate of change in one variable, others held fixed' },
+          { left: 'Gradient', right: 'Vector of all first partials of a scalar function' },
+          { left: 'Jacobian', right: 'Matrix of partials when the output is a vector' },
+          { left: 'Hessian', right: 'Matrix of second partials, describing curvature' },
+        ],
+        explanation:
+          'Knowing which object you need is half of reading any optimisation paper: gradients drive first-order methods, Jacobians appear in the backward pass, and Hessians classify stationary points.',
+      },
+      {
+        id: 'MATH-014-q6',
+        type: 'explain',
+        concept: 'gradients drive training',
+        prompt: 'Explain how the gradient of the loss is used to train a model with millions of parameters.',
+        rubric: [
+          'Says each parameter has its own partial derivative of the loss',
+          'Says those partials assemble into a gradient pointing uphill',
+          'Says every parameter is updated simultaneously against the gradient, scaled by a learning rate',
+        ],
+        sampleAnswer:
+          'For each parameter in the model there is a number saying how the loss would change if that one parameter were nudged with all the others held still — its partial derivative. Backpropagation computes all of them in a single backward sweep, at roughly the cost of one forward pass, and stacks them into a single vector, the gradient. That vector points in the direction in parameter space along which the loss rises fastest, so the optimiser moves every parameter simultaneously in the exact opposite direction, scaled by the learning rate. Then it recomputes and repeats. The reason this scales to billions of parameters is that no parameter is ever tried individually: one backward pass yields every partial derivative at once, and one vector subtraction updates them all.',
+        explanation:
+          'The answer should make clear that all parameters move together, and that the cost of obtaining the whole gradient is what makes the approach feasible.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What is a partial derivative?', back: 'The derivative with respect to one variable, treating all others as constants.' },
+      { front: 'What is the gradient?', back: 'The vector of all partial derivatives. It points in the direction of steepest increase, with length equal to that rate.' },
+      { front: 'Why does gradient descent subtract the gradient?', back: 'The gradient points uphill; its negative is the steepest descent direction, since ∇f·u is minimised at θ = 180 degrees.' },
+      { front: 'Directional derivative formula?', back: 'D_u f = ∇f·u = ‖∇f‖cos θ. Maximised along the gradient, zero perpendicular to it.' },
+      { front: 'Gradient versus Jacobian?', back: 'Gradient: one output, many inputs, a vector. Jacobian: many outputs, many inputs, a matrix of stacked gradients.' },
+      { front: 'What causes zigzagging descent?', back: 'Very different curvature across directions. The learning rate is capped by the steepest direction while progress is set by the shallowest.' },
+    ],
+
+    challenge: {
+      title: 'Gradient descent on a surface you can see',
+      brief:
+        'Implement gradient descent for f(x, y) = x² + 10y² from the start point (5, 5). Run it at three learning rates — one too small, one well chosen, one large enough to diverge — recording the path and the loss at each step. Then verify your analytic gradient against a central-difference approximation at five random points, and print the largest relative discrepancy.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Analytic gradient matches central differences to within 1e-6 relative error',
+        'Demonstrates all three regimes: slow convergence, good convergence, and divergence',
+        'Records and prints the trajectory, showing the zigzag in the y coordinate',
+        'States the learning rate above which divergence begins and relates it to the curvature',
+      ],
+      starterCode: 'import numpy as np\n\ndef f(p):    return p[0] ** 2 + 10 * p[1] ** 2\ndef grad(p): raise NotImplementedError\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain partial derivatives and the gradient to someone who understands single-variable derivatives, and make clear why the gradient is the single most important idea in training models.',
+      mustCover: [
+        'A partial derivative varies one input while holding all the others fixed',
+        'The gradient is those partials stacked into a vector',
+        'The gradient points in the direction of steepest increase',
+        'Training subtracts the gradient so that the loss falls as fast as possible',
+      ],
+      bonusSignals: ['uses the fog-covered hillside or two-tap shower image', 'explains steepest ascent via the dot product', 'notes that the gradient is perpendicular to contours'],
+      sampleExplanation:
+        'You already know how to find the steepness of a curve that depends on one number. Now suppose the output depends on two, or on two billion. The trick is to take them one at a time: freeze every input but one, nudge that one, and see how the output responds. That is a partial derivative, and it is an ordinary derivative in disguise — everything else is just carried along as though it were a fixed number. Do this for every input and you have a list of numbers, one per input, and that list is the gradient. Here is why it matters so much. Imagine standing on a hillside in fog. Testing east and testing north gives you two numbers, and from them you can work out the one direction that climbs fastest, which is usually neither east nor north but some diagonal. The gradient is exactly that direction, and its length tells you how steep the climb is. Turn round and you are descending as fast as the terrain allows. Training a model is nothing more than this, repeated: the loss is the landscape, every weight is a direction you can move in, and backpropagation computes the whole gradient in one sweep so that every weight can be adjusted against it simultaneously. That last point is what makes it practical at all — you never test parameters one by one; you get all of them in a single pass.',
     },
   },

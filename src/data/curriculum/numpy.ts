@@ -3604,7 +3604,7 @@ grid shape: (2, 3)
         term: 'keepdims',
         definition:
           'When True, the reduced axis is kept with length 1 rather than removed, so the result still broadcasts against the original array.',
-        simple: 'Squash the direction but leave a flat placeholder axis behind, so shapes still line up.',
+        simple: 'Squash the direction but leave a flat stub axis behind, so shapes still line up.',
       },
       {
         term: 'argmax / argmin',
@@ -4099,3 +4099,1166 @@ row cumsum     :
         'Stop thinking of axis 0 as "rows" or "columns" and think of it as the direction that gets deleted. Take a table of shape `(3, 4)`. If you say `axis=0`, axis 0 is gone and the answer has shape `(4,)`: four numbers, one per column, each summarising down the three rows. If you say `axis=1`, axis 1 is gone and the answer has shape `(3,)`: one per row. Say nothing and every axis goes, leaving a single number. That rule scales without modification: on a `(2, 3, 4)` array, `axis=1` leaves `(2, 4)`, and you can pass a tuple like `axis=(0, 2)` to delete several at once, which is exactly how per-channel image statistics are computed. The companion idea is `keepdims=True`, which keeps the deleted axis as a stub of length 1 instead of removing it. You want that whenever the summary is going back into an expression with the original array, because `(n, 1)` stretches across the columns while a bare `(n,)` does not and raises a broadcasting error. Two extras worth knowing: a single NaN turns any ordinary reduction into NaN by design, so use `np.nanmean` when data can be missing; and `max` gives you the value while `argmax` gives you the position, which is the difference between the confidence and the predicted class.',
     },
   },
+
+  {
+    id: 'NP-009',
+    domain: 'NP',
+    module: 'Maths on Arrays',
+    topic: 'Changing shape',
+    title: 'Reshaping, Stacking and Splitting',
+    slug: 'reshaping-and-stacking',
+    difficulty: 3,
+    estimatedMinutes: 35,
+    prerequisites: ['NP-002', 'NP-004'],
+    related: ['NP-007', 'NP-008'],
+    tags: ['reshape', 'ravel', 'flatten', 'transpose', 'newaxis', 'concatenate', 'stack', 'split'],
+
+    learningObjectives: [
+      'Reshape an array, including with `-1`, and state why the element count must be preserved',
+      'Distinguish `ravel` from `flatten` and `reshape` views from copies',
+      'Add and remove length-1 axes deliberately with `newaxis`, `expand_dims` and `squeeze`',
+      'Choose correctly between `concatenate`, `stack`, `vstack`, `hstack` and `split`, and predict the resulting shape',
+    ],
+
+    terminology: [
+      {
+        term: 'reshape',
+        definition:
+          'Reinterprets the same elements under a new shape whose product equals the original size. Returns a view when the data can be read in the new order without moving, otherwise a copy.',
+        simple: 'Rearranging the same numbers into a different grid, without changing what or how many they are.',
+      },
+      {
+        term: 'C order',
+        definition:
+          'Row-major element ordering, in which the last axis varies fastest. It is the default for reshaping, ravelling and iteration in NumPy.',
+        simple: 'Read across each row, then move to the next row.',
+      },
+      {
+        term: 'ravel versus flatten',
+        definition:
+          '`ravel` returns a 1-D view when possible and a copy otherwise; `flatten` always returns a copy. Both produce the same values.',
+        simple: 'Two ways to lay an array out flat — one is cheap when it can be, the other always duplicates.',
+      },
+      {
+        term: 'transpose',
+        definition:
+          'Permutes the axes, so `.T` on a 2-D array swaps rows and columns. It is a view with reordered strides; the data is never moved.',
+        simple: 'Looking at the table sideways without retyping it.',
+      },
+      {
+        term: 'concatenate versus stack',
+        definition:
+          '`concatenate` joins arrays along an axis that already exists, keeping ndim the same. `stack` creates a new axis, increasing ndim by one.',
+        simple: 'Joining end to end versus putting them in a new pile.',
+      },
+    ],
+
+    simpleExplanation:
+      "An array is a flat run of numbers plus a description of how to read it, so changing the description is cheap and changing the numbers is not. That is the key to this whole unit. `arr.reshape(3, 4)` does not move anything; it says \"read these twelve values as three rows of four\", and the only hard rule is that the new shape must account for exactly as many elements as you started with — 3 times 4 must equal 12. If you write `-1` for one of the dimensions, NumPy works it out for you, so `reshape(-1, 1)` on twelve values means \"one column, however many rows that takes\", which is twelve. `ravel` goes the other way and lays everything back out flat. `.T` swaps the axes so rows become columns, again without moving data. The second half of the unit is joining and splitting. `concatenate` glues arrays together along an axis that already exists, so two `(3, 4)` tables become one `(6, 4)` table. `stack` is different: it makes a new axis, so those same two tables become one `(2, 3, 4)` block. Almost every mistake here is picking the one you did not mean, and the shape tells you immediately which one you got.",
+
+    whyItExists:
+      'Libraries disagree about shapes: scikit-learn wants a 2-D `X`, a loss function wants a flat vector, a convolution wants channels in a particular position, and batches must be assembled from individual samples. Reshaping and stacking exist so those conversions cost metadata changes rather than data copies, and so assembling a batch from a list of samples is one call instead of a loop.',
+
+    analogy: {
+      scenario:
+        'Think of a long ribbon of printed numbers and a set of cardboard frames with different grids cut into them. Laying a three-by-four frame over the ribbon shows the numbers as three rows of four; swapping to a four-by-three frame shows exactly the same ribbon differently. Nothing is reprinted, and no frame can show more or fewer numbers than the ribbon has. Joining is a separate act: you can glue two ribbons end to end and get one longer ribbon, or you can lay them side by side in a folder and now you have a collection of two ribbons, which is not the same thing at all.',
+      mapping: [
+        { from: 'The printed ribbon', to: 'The flat data buffer, which reshaping never touches' },
+        { from: 'Swapping the cardboard frame', to: '`reshape`, which changes only shape and strides' },
+        { from: 'A frame that would need more numbers than the ribbon has', to: '`ValueError: cannot reshape array of size 12 into shape (5,3)`' },
+        { from: 'Gluing two ribbons end to end', to: '`concatenate`, which extends an existing axis and keeps ndim' },
+        { from: 'Filing two ribbons as a collection of two', to: '`stack`, which adds a new axis and raises ndim by one' },
+      ],
+      bridge:
+        'The frame makes the central fact concrete: reshaping is a change of interpretation, which is why it is free and why it cannot invent or discard elements. The gluing-versus-filing distinction is exactly `concatenate` versus `stack`, and the shape tells you unambiguously which you did — a longer axis means gluing, a new axis means filing. When someone is confused about why their batch has shape `(64, 28, 28)` rather than `(1792, 28)`, this is always the distinction they missed.',
+      limitations:
+        'Frames suggest every reinterpretation is free. Some are not: reshaping an array whose memory is no longer laid out in the order you are asking for — a transposed array, for instance — forces NumPy to copy, which is why `arr.T.reshape(-1)` can be far more expensive than it looks.',
+    },
+
+    visuals: [
+      {
+        kind: 'ascii',
+        title: 'One buffer, many shapes',
+        caption: 'The twelve values never move. Only the description of how to read them changes.',
+        art: `flat buffer (C order, last axis varies fastest)
+
+  0  1  2  3  4  5  6  7  8  9 10 11
+
+ reshape(3, 4)          reshape(4, 3)          reshape(2, 2, 3)
+  [ 0  1  2  3]          [ 0  1  2]             block 0: [0 1 2]
+  [ 4  5  6  7]          [ 3  4  5]                      [3 4 5]
+  [ 8  9 10 11]          [ 6  7  8]             block 1: [6 7 8]
+                         [ 9 10 11]                      [9 10 11]
+
+ reshape(-1, 1)  -> shape (12, 1)   a column
+ reshape(1, -1)  -> shape (1, 12)   a row
+ reshape(-1)     -> shape (12,)     flat again
+ reshape(5, 3)   -> ValueError: cannot reshape array of size 12 into shape (5,3)
+
+
+ joining two arrays a and b, each shape (2, 3)
+
+   np.concatenate([a, b], axis=0) -> (4, 3)   existing axis grows
+   np.concatenate([a, b], axis=1) -> (2, 6)   existing axis grows
+   np.stack([a, b], axis=0)       -> (2, 2, 3)  NEW axis created
+   np.stack([a, b], axis=2)       -> (2, 3, 2)  new axis at the end`,
+      },
+      {
+        kind: 'table',
+        title: 'Which joining function, and what it does to ndim',
+        caption: 'The single question to ask: does the axis I am joining along already exist?',
+        columns: ['Call', 'Inputs', 'Result', 'ndim'],
+        rows: [
+          ['`np.concatenate([a, b], axis=0)`', 'two `(2, 3)`', '`(4, 3)`', 'unchanged'],
+          ['`np.concatenate([a, b], axis=1)`', 'two `(2, 3)`', '`(2, 6)`', 'unchanged'],
+          ['`np.stack([a, b])`', 'two `(2, 3)`', '`(2, 2, 3)`', 'increased by 1'],
+          ['`np.vstack([a, b])`', 'two `(3,)`', '`(2, 3)`', 'increased for 1-D inputs'],
+          ['`np.hstack([a, b])`', 'two `(3,)`', '`(6,)`', 'unchanged'],
+          ['`np.column_stack([a, b])`', 'two `(3,)`', '`(3, 2)`', 'increased by 1'],
+          ['`np.split(x, 3, axis=0)`', 'one `(6, 4)`', 'three `(2, 4)`', 'unchanged per piece'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'ravel versus flatten, and when reshape copies',
+        caption: 'Prefer the cheap one unless you specifically need independence.',
+        left: {
+          heading: '`ravel()` and `reshape()`',
+          points: [
+            'Return a view whenever the new reading order matches memory',
+            'Cost O(1) in that case; nothing is copied',
+            'Writing through the result changes the original',
+            'Fall back to a copy silently when a view is impossible',
+            '`arr.T.ravel()` is one such fallback',
+          ],
+        },
+        right: {
+          heading: '`flatten()` and `copy()`',
+          points: [
+            'Always allocate a new buffer',
+            'Cost O(n) in time and memory',
+            'Writing through the result is safe',
+            'Predictable, which is sometimes worth the price',
+            'Use when the flat version will be modified',
+          ],
+        },
+      },
+      {
+        kind: 'widget',
+        title: 'Reshape an array and watch the elements land',
+        caption: 'Change the target shape and see which value ends up where under C order.',
+        widget: 'ndarray-explorer',
+      },
+    ],
+
+    formalDefinition:
+      '`reshape` returns an array with a new shape whose product equals the original size, reading elements in C order by default. It returns a view when the requested shape can be expressed with valid strides over the existing buffer, and a copy otherwise. `transpose` permutes axes by permuting shape and strides, always a view. `concatenate` joins a sequence of arrays along an existing axis, requiring all other axis lengths to match, and preserves ndim. `stack` inserts a new axis of length equal to the number of inputs, requiring all inputs to share one shape, and increases ndim by one.',
+
+    math: {
+      intuition:
+        'Reshaping is a relabelling of indices, not a change of contents, so the only invariant that must hold is the number of elements. The C-order rule tells you exactly which multi-index a flat position corresponds to.',
+      formulas: [
+        {
+          latex: '\\prod_k d_k^{\\text{new}} = \\prod_k d_k^{\\text{old}}',
+          name: 'The reshape constraint',
+          meaning: 'The new shape must account for exactly the same number of elements; a single -1 is solved for from this equation.',
+          variables: [
+            { symbol: 'd_k^{\\text{old}}', meaning: 'Length of axis k before reshaping' },
+            { symbol: 'd_k^{\\text{new}}', meaning: 'Length of axis k after reshaping' },
+          ],
+        },
+        {
+          latex: 'f = i_0 d_1 d_2 + i_1 d_2 + i_2 \\quad \\Longleftrightarrow \\quad i_2 = f \\bmod d_2,\; i_1 = \\lfloor f/d_2 \\rfloor \\bmod d_1,\; i_0 = \\lfloor f/(d_1 d_2) \\rfloor',
+          name: 'Flat position and multi-index in C order',
+          meaning: 'Reshaping keeps the flat position f fixed and recomputes the multi-index from the new shape, which is why the last axis varies fastest.',
+          variables: [
+            { symbol: 'f', meaning: 'Position in the flat buffer, from 0 to size-1' },
+            { symbol: 'i_k', meaning: 'Index along axis k' },
+            { symbol: 'd_k', meaning: 'Length of axis k in the shape being used' },
+          ],
+        },
+      ],
+      derivation: [
+        'Reshaping twelve elements to (3, 4): element f = 6 has i1 = 6 mod 4 = 2 and i0 = 6 // 4 = 1, so it appears at row 1, column 2.',
+        'Reshaping the same twelve to (4, 3): now i1 = 6 mod 3 = 0 and i0 = 6 // 3 = 2, so the same value appears at row 2, column 0.',
+        'Nothing moved in memory; only the arithmetic mapping index to position changed, which is why reshape is O(1).',
+        'Solving for a -1 uses the constraint directly: reshaping size 12 to (-1, 4) needs the unknown to satisfy k * 4 = 12, so k = 3.',
+        'If no integer solves it — reshaping size 12 to (-1, 5) — NumPy raises, because 12 is not divisible by 5.',
+      ],
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Reshaping, -1, and the error when the count does not work out',
+        runnable: true,
+        code: `import numpy as np
+
+a = np.arange(12)
+print(a.reshape(3, 4))
+print(a.reshape(3, 4).reshape(2, 2, 3).shape)
+print(a.reshape(-1, 1).shape)     # column vector
+print(a.reshape(1, -1).shape)     # row vector
+print(a.reshape(3, -1).shape)     # NumPy solves for 4
+
+try:
+    a.reshape(5, 3)
+except ValueError as e:
+    print("ValueError:", e)
+
+# reshape is usually a view
+b = a.reshape(3, 4)
+b[0, 0] = 99
+print("original changed:", a[0])
+print("b is a view?", b.base is not None)`,
+        output: `[[ 0  1  2  3]
+ [ 4  5  6  7]
+ [ 8  9 10 11]]
+(2, 2, 3)
+(12, 1)
+(1, 12)
+(3, 4)
+ValueError: cannot reshape array of size 12 into shape (5,3)
+original changed: 99
+b is a view? True`,
+        explanation:
+          'The `-1` means "work this one out from the total", and at most one axis may use it. The `ValueError` is the constraint being enforced: 5 times 3 is 15, and there are only 12 elements, so there is no honest interpretation. The last three lines make the cheapness concrete — reshape returned a view, so writing into `b` changed `a`, which is both the reason it is fast and a reason to be careful.',
+      },
+      {
+        language: 'python',
+        title: 'Flattening, transposing and adding axes',
+        runnable: true,
+        code: `import numpy as np
+
+m = np.arange(6).reshape(2, 3)
+
+print("ravel  :", m.ravel(), "view?", m.ravel().base is not None)
+print("flatten:", m.flatten(), "view?", m.flatten().base is not None)
+
+print("transpose shape:", m.T.shape, "view?", m.T.base is not None)
+print(m.T)
+print("T.ravel():", m.T.ravel())          # reads column-wise, so it copies
+
+v = np.array([1, 2, 3])
+print("v          :", v.shape)
+print("v[:, None] :", v[:, np.newaxis].shape)
+print("v[None, :] :", v[np.newaxis, :].shape)
+print("expand_dims:", np.expand_dims(v, axis=0).shape)
+print("squeeze    :", np.squeeze(np.zeros((1, 3, 1))).shape)`,
+        output: `ravel  : [0 1 2 3 4 5] view? True
+flatten: [0 1 2 3 4 5] view? False
+transpose shape: (3, 2) view? True
+[[0 3]
+ [1 4]
+ [2 5]]
+T.ravel(): [0 3 1 4 2 5]
+v          : (3,)
+v[:, None] : (3, 1)
+v[None, :] : (1, 3)
+expand_dims: (1, 3)
+squeeze    : (3,)`,
+        explanation:
+          '`ravel` gave a view and `flatten` a copy, which is the only difference between them and the reason to prefer `ravel` unless you plan to modify the result. The transpose is also a view — only the strides were swapped — but `m.T.ravel()` must copy, because reading a transposed array in C order means jumping around the buffer. `np.newaxis` inserts a length-1 axis wherever you put it, and `squeeze` removes all the length-1 axes, which is how you undo a `keepdims` or clean up after an API that returns `(n, 1)`.',
+      },
+      {
+        language: 'python',
+        title: 'Joining: concatenate versus stack',
+        runnable: true,
+        code: `import numpy as np
+
+a = np.zeros((2, 3))
+b = np.ones((2, 3))
+
+print("concat axis=0:", np.concatenate([a, b], axis=0).shape)
+print("concat axis=1:", np.concatenate([a, b], axis=1).shape)
+print("stack  axis=0:", np.stack([a, b], axis=0).shape)
+print("stack  axis=2:", np.stack([a, b], axis=2).shape)
+
+print("vstack:", np.vstack([a, b]).shape)
+print("hstack:", np.hstack([a, b]).shape)
+
+# The idiomatic way to build a batch from a list of samples
+samples = [np.full((28, 28), i, dtype=np.float32) for i in range(4)]
+batch = np.stack(samples)
+print("batch:", batch.shape, batch.dtype)
+
+# Adding a bias column to a design matrix
+X = np.arange(6).reshape(3, 2).astype(float)
+Xb = np.hstack([np.ones((3, 1)), X])
+print("with bias column:\\n", Xb)`,
+        output: `concat axis=0: (4, 3)
+concat axis=1: (2, 6)
+stack  axis=0: (2, 2, 3)
+stack  axis=2: (2, 3, 2)
+vstack: (4, 3)
+hstack: (2, 6)
+batch: (4, 28, 28) float32
+with bias column:
+ [[1. 0. 1.]
+ [1. 2. 3.]
+ [1. 4. 5.]]`,
+        explanation:
+          '`concatenate` extended an axis that already existed and left ndim at 2; `stack` invented a new axis and produced a 3-D array. The batch example is the everyday use of `stack`: four separate 28x28 images become one `(4, 28, 28)` array, which is exactly what a model expects, and doing it with `concatenate` would have given `(112, 28)` instead. The bias column shows `hstack` in its most common role, and note that the column of ones had to be `(3, 1)` rather than `(3,)` for the shapes to agree.',
+      },
+      {
+        language: 'python',
+        title: 'Splitting an array back apart',
+        runnable: true,
+        code: `import numpy as np
+
+data = np.arange(24).reshape(6, 4)
+
+parts = np.split(data, 3, axis=0)
+print([p.shape for p in parts])
+
+left, right = np.split(data, [2], axis=1)
+print("left:", left.shape, "right:", right.shape)
+
+# Uneven pieces need array_split
+print([p.shape for p in np.array_split(np.arange(10), 3)])
+
+try:
+    np.split(np.arange(10), 3)
+except ValueError as e:
+    print("ValueError:", e)
+
+# Splitting features from a target, keeping X 2-D
+X, y = data[:, :-1], data[:, -1]
+print("X:", X.shape, "y:", y.shape)`,
+        output: `[(2, 4), (2, 4), (2, 4)]
+left: (6, 2) right: (6, 2)
+[(4,), (3,), (3,)]
+ValueError: array split does not result in an equal division
+X: (6, 3) y: (6,)`,
+        explanation:
+          'Passing an integer to `split` demands an exact division and raises otherwise, which is a feature — it catches the case where your data length changed unexpectedly. `array_split` is the forgiving version and distributes the remainder across the first pieces. Passing a list of indices instead cuts at those positions, which is how you separate a matrix into blocks of unequal width. The last pattern is worth memorising: slicing off the final column with `-1` collapses the axis, giving `y` of shape `(n,)`, while `:-1` keeps `X` two-dimensional.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Feeding a single sample to a model',
+        usage:
+          'A model trained on batches expects `(batch, features)`, so a single sample of shape `(features,)` must become `(1, features)` via `x.reshape(1, -1)` or `x[np.newaxis, :]`. This is the single most common inference-time shape fix.',
+      },
+      {
+        context: 'Flattening images for a dense layer',
+        usage:
+          'A batch of `(64, 28, 28)` images becomes `(64, 784)` with `imgs.reshape(len(imgs), -1)` — the `-1` computes 784 so the code survives a change of image size.',
+      },
+      {
+        context: 'Assembling a dataset from files',
+        usage:
+          'Loading images one at a time into a list and then calling `np.stack(images)` builds the batch axis in one step, avoiding the quadratic cost of repeatedly concatenating.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'scikit-learn', role: 'The advice in its error messages — "Reshape your data using array.reshape(-1, 1)" — is exactly this unit.' },
+      { tool: 'PyTorch', role: '`view` is the strict version of reshape that refuses to copy, and `permute` generalises transpose; `unsqueeze` is `np.expand_dims`.' },
+      { tool: 'pandas', role: '`df.values.reshape(...)` and `np.column_stack` are how DataFrame columns become model-ready matrices.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Using `concatenate` when you meant `stack`',
+        why: 'Concatenating four `(28, 28)` images along axis 0 gives `(112, 28)`, a single tall image, rather than the `(4, 28, 28)` batch you wanted. Nothing raises, and the model fails much later.',
+        fix: 'Ask whether the axis you want already exists. If you are creating a batch axis that did not exist, use `np.stack`.',
+      },
+      {
+        mistake: 'Assuming `reshape` always returns a view',
+        why: 'It returns a view only when the requested order can be expressed with strides over the existing memory. After a transpose or a non-contiguous slice it silently copies, which can be a large hidden cost in a loop.',
+        fix: 'Check `result.base is not None` when it matters, or call `np.ascontiguousarray` once before repeated reshaping of transposed data.',
+      },
+      {
+        mistake: 'Expecting `arr.T` to transpose a 1-D array',
+        why: 'Transposing reverses the axis order, and a 1-D array has only one axis, so `.T` returns the array unchanged. Many people use it to make a column vector and are puzzled when nothing happens.',
+        fix: 'Use `arr[:, np.newaxis]` or `arr.reshape(-1, 1)` to obtain a genuine column vector of shape `(n, 1)`.',
+      },
+      {
+        mistake: 'Growing an array in a loop with `np.concatenate`',
+        why: 'Each call allocates a new array and copies everything accumulated so far, so building n rows costs O(n squared) copying — often slower than the pure-Python version it replaced.',
+        fix: 'Append to a Python list and call `np.stack` or `np.concatenate` once at the end, or preallocate with `np.empty` and assign into slices.',
+      },
+      {
+        mistake: 'Reshaping to fix a broadcasting error without checking the order of values',
+        why: 'Reshaping `(3, 4)` to `(4, 3)` makes a shape complaint disappear while scrambling which value belongs to which row, producing a silent correctness bug instead of a loud shape bug.',
+        fix: 'Only reshape when the element ordering is genuinely what you want. To swap the meaning of two axes, use `transpose`, which preserves the association between values and positions.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'What does `-1` mean in `reshape`, and how many can you use?',
+        answer:
+          'It means "infer this dimension from the total number of elements". Since the product of the new shape must equal the array size, at most one axis can be unknown, and NumPy solves for it by dividing. So `arr.reshape(-1, 1)` on twelve elements gives shape `(12, 1)`, and `arr.reshape(3, -1)` gives `(3, 4)`. Using two `-1` values raises `ValueError: can only specify one unknown dimension`, and a shape that does not divide evenly, such as `reshape(-1, 5)` on twelve elements, also raises.',
+        followUp:
+          'A strong answer notes that `reshape(len(x), -1)` is the robust way to flatten everything but the batch axis, because it survives a change in image size.',
+      },
+      {
+        level: 'intermediate',
+        question: 'What is the difference between `np.concatenate` and `np.stack`?',
+        answer:
+          '`concatenate` joins arrays along an axis that already exists, so ndim is unchanged and only that axis grows: two `(2, 3)` arrays along axis 0 give `(4, 3)`. All other axis lengths must match. `stack` inserts a brand-new axis whose length is the number of arrays, so ndim increases by one: the same two arrays give `(2, 2, 3)`, and every input must have identical shape. In practice `stack` is what you want when building a batch from individual samples, and `concatenate` is what you want when combining batches or adding columns. The shape of the result tells you immediately which one you actually used.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'When does `reshape` copy, and why should you care?',
+        answer:
+          'It copies whenever the requested reading order cannot be expressed as strides over the existing buffer. The common trigger is non-contiguous memory: after `arr.T` or a stepped slice, reading in C order means jumping around, so `arr.T.reshape(-1)` allocates a full copy while `arr.reshape(-1)` does not. It matters for two reasons. Performance, because a hidden O(n) copy inside a per-batch function can dominate a training loop, and correctness expectations, because code written assuming a view will silently stop propagating writes when the copy path is taken. I would check `result.base is not None` or `arr.flags.C_CONTIGUOUS`, and if repeated reshaping is needed, call `np.ascontiguousarray` once up front so the copy is paid for deliberately rather than every iteration.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Turn a `(100,)` array into a `(100, 1)` column two different ways, and explain why `.T` is not one of them.',
+        hint: 'A column needs two axes; transposing cannot create an axis that does not exist.',
+        language: 'python',
+        starterCode: 'import numpy as np\n\nv = np.arange(100)\n',
+        solution:
+          'import numpy as np\n\nv = np.arange(100)\ncol_a = v.reshape(-1, 1)\ncol_b = v[:, np.newaxis]\nprint(col_a.shape, col_b.shape)   # (100, 1) (100, 1)\nprint(v.T.shape)                  # (100,) - unchanged\n\n`.T` reverses the order of the existing axes, and a 1-D array has only one, so there is nothing to reverse. Creating a column requires adding an axis, which is what `reshape(-1, 1)`, `np.newaxis` and `np.expand_dims(v, 1)` all do.',
+      },
+      {
+        prompt: 'You have a list of 50 images, each `(32, 32, 3)`. Produce one array of shape `(50, 32, 32, 3)` and explain which joining function you used and why.',
+        hint: 'Does the axis of length 50 already exist in any of the inputs?',
+        solution:
+          'import numpy as np\nbatch = np.stack(images)          # or np.stack(images, axis=0)\nprint(batch.shape)                # (50, 32, 32, 3)\n\n`stack` is correct because the batch axis does not exist in any input — each image is 3-D and the result must be 4-D. `np.concatenate(images, axis=0)` would instead give `(1600, 32, 3)` by gluing the images along their height axis, which is a valid array and completely wrong. Building the list first and stacking once is also far faster than concatenating inside the loop, which would copy quadratically.',
+      },
+      {
+        prompt: 'Explain why `arr.reshape(-1)` on a `(3, 4)` array is free, while `arr.T.reshape(-1)` on the same array copies.',
+        hint: 'What order does reshape read in, and does that match how the elements sit in memory?',
+        solution:
+          '`reshape` reads in C order, meaning the last axis varies fastest. A freshly created `(3, 4)` array is stored exactly that way, so flattening is just a relabelling: the view has the same buffer, shape `(12,)` and stride 8.\n\n`arr.T` has shape `(4, 3)` and strides `(8, 32)` — the same buffer read column-wise. Flattening it in C order requires the sequence 0, 4, 8, 1, 5, 9, ..., which no single stride can produce, so NumPy allocates a new contiguous buffer and copies the values in the requested order. You can see this with `arr.T.reshape(-1).base is None`, which is True, and with `arr.T.flags.C_CONTIGUOUS`, which is False.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'NP-009-q1',
+        type: 'code-output',
+        language: 'python',
+        concept: 'reshape with -1',
+        prompt: 'What shape does this print?',
+        code: 'import numpy as np\na = np.arange(20)\nprint(a.reshape(5, -1).shape)',
+        options: ['(5, 4)', '(5, 20)', '(5, -1)', 'It raises a ValueError'],
+        answerIndex: 0,
+        explanation:
+          'The product of the new shape must equal 20, so the unknown axis is solved as 20 / 5 = 4. At most one axis may be given as -1.',
+      },
+      {
+        id: 'NP-009-q2',
+        type: 'mcq',
+        concept: 'stack versus concatenate',
+        prompt: 'You have three arrays of shape `(4, 4)`. Which call gives a result of shape `(3, 4, 4)`?',
+        options: [
+          '`np.stack([a, b, c])`',
+          '`np.concatenate([a, b, c], axis=0)`',
+          '`np.hstack([a, b, c])`',
+          '`np.concatenate([a, b, c], axis=1)`',
+        ],
+        answerIndex: 0,
+        explanation:
+          '`stack` creates a new leading axis of length 3. The concatenate options extend an existing axis, giving `(12, 4)` or `(4, 12)` instead.',
+      },
+      {
+        id: 'NP-009-q3',
+        type: 'truefalse',
+        concept: 'transpose on 1-D',
+        prompt: 'Calling `.T` on an array of shape `(5,)` returns an array of shape `(1, 5)`.',
+        answer: false,
+        explanation:
+          'Transposing reverses the existing axes, and a 1-D array has only one, so `.T` returns it unchanged. Use `arr[np.newaxis, :]` or `reshape(1, -1)` to add an axis.',
+      },
+      {
+        id: 'NP-009-q4',
+        type: 'mcq',
+        concept: 'ravel versus flatten',
+        prompt: 'What is the difference between `arr.ravel()` and `arr.flatten()`?',
+        options: [
+          '`ravel` returns a view when it can; `flatten` always copies',
+          '`ravel` works only on 2-D arrays',
+          '`flatten` reads in column order while `ravel` reads in row order',
+          'They are aliases for the same function',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Both produce the same values in C order. `ravel` avoids copying when the memory layout allows, so it is cheaper; `flatten` always allocates, so its result is always safe to modify.',
+      },
+      {
+        id: 'NP-009-q5',
+        type: 'debug',
+        language: 'python',
+        concept: 'building a batch',
+        prompt: 'This produces shape `(112, 28)` instead of the intended `(4, 28, 28)`. What is the fix?',
+        code: 'import numpy as np\nimages = [np.zeros((28, 28)) for _ in range(4)]\nbatch = np.concatenate(images, axis=0)',
+        options: [
+          'Use `np.stack(images)`, which creates the new batch axis',
+          'Use `np.concatenate(images, axis=1)`',
+          'Use `np.hstack(images)`',
+          'Reshape the result to `(4, 28, 28)` afterwards',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Concatenate glued the images along their existing height axis. A batch axis does not exist in any input, so it must be created, which is exactly what `stack` does.',
+      },
+      {
+        id: 'NP-009-q6',
+        type: 'order',
+        concept: 'assembling a design matrix',
+        prompt: 'Order these steps for turning a list of per-sample feature vectors into a design matrix with a leading bias column.',
+        items: [
+          'Collect the per-sample vectors into a Python list',
+          'Call np.stack(rows) once to build an (n, p) matrix',
+          'Create a column of ones with np.ones((n, 1))',
+          'Join the two with np.hstack to get (n, p + 1)',
+          'Check the resulting shape before passing it to a model',
+        ],
+        explanation:
+          'Accumulate in a list and convert once, since repeated concatenation is quadratic. The ones column must be `(n, 1)` rather than `(n,)` for hstack to align it as a column.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does `-1` mean in reshape?', back: 'Infer this axis from the total element count. At most one axis may be -1, and the product must match the original size exactly.' },
+      { front: 'concatenate versus stack', back: '`concatenate` extends an existing axis and keeps ndim; `stack` creates a new axis and raises ndim by one. Use stack to build a batch.' },
+      { front: '`ravel` versus `flatten`', back: 'Both flatten to 1-D in C order; `ravel` returns a view when possible, `flatten` always copies.' },
+      { front: 'Why does `.T` not turn `(5,)` into a column?', back: 'Transpose reverses existing axes and a 1-D array has only one. Use `v[:, np.newaxis]` or `v.reshape(-1, 1)`.' },
+      { front: 'When does reshape copy?', back: 'When the requested C-order reading cannot be expressed with strides over the current buffer, typically after a transpose or a stepped slice.' },
+      { front: 'How do you remove all length-1 axes?', back: '`np.squeeze(arr)`, or `np.squeeze(arr, axis=k)` to remove one specific axis. It is the inverse of `expand_dims` and of `keepdims`.' },
+    ],
+
+    challenge: {
+      title: 'An image-batch pipeline, shapes tracked at every step',
+      brief:
+        'Simulate ten greyscale images of shape `(28, 28)` from a seeded generator. Build a batch of shape `(10, 28, 28)`, add a channel axis to get `(10, 28, 28, 1)`, flatten to `(10, 784)` for a dense layer, split into a training set of seven and a validation set of three, and finally reassemble the two sets back into the original order. Print the shape after every step, and assert with `np.array_equal` that the reassembled array matches the original batch. At each step state in a comment whether the operation was a view or a copy.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Uses `stack` for the batch axis and `expand_dims` or `newaxis` for the channel axis',
+        'Flattening uses `-1` rather than a hard-coded 784',
+        'Splitting and rejoining are exact, verified by `np.array_equal`',
+        'Every step prints its resulting shape',
+        'Comments correctly classify at least three steps as view or copy',
+      ],
+      starterCode: 'import numpy as np\n\nrng = np.random.default_rng(9)\nimages = [rng.random((28, 28)) for _ in range(10)]\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone how to change the shape of an array and how to join arrays together, including the mistake that produces the wrong shape silently.',
+      mustCover: [
+        'Reshape reinterprets the same buffer, so the element count must be preserved',
+        '`-1` asks NumPy to work one dimension out from the total',
+        'Reshape and transpose are usually views, and `flatten` is always a copy',
+        '`concatenate` extends an existing axis while `stack` creates a new one',
+      ],
+      bonusSignals: ['mentions C order and why the last axis varies fastest', 'mentions that `.T` does nothing to a 1-D array', 'warns against concatenating inside a loop'],
+      sampleExplanation:
+        'An array is a flat run of numbers plus a note saying how to read them, so reshaping only edits the note. `arr.reshape(3, 4)` says read these twelve values as three rows of four, and the only rule is that the new shape must account for exactly the elements you have — asking for five by three out of twelve values raises, because there is no honest way to do it. Writing `-1` for one dimension asks NumPy to solve for it, so `reshape(-1, 1)` makes a single column however long that turns out to be. Because only the note changed, reshaping and transposing usually hand you a view onto the same numbers, which is why they are instant and why writing into the result changes the original. Joining is where people go wrong. `concatenate` glues arrays along an axis that already exists, so two three-by-four tables become one six-by-four table and the result is still two-dimensional. `stack` invents a new axis, so those same two tables become a `(2, 3, 4)` block. If you are building a batch of images, you want `stack` — concatenating four 28-by-28 images gives you one tall 112-by-28 image instead, no error is raised, and the failure surfaces much later. Whenever you join, print the shape immediately and check it is what you meant.',
+    },
+  },
+
+  {
+    id: 'NP-010',
+    domain: 'NP',
+    module: 'Linear Algebra',
+    topic: 'Matrix operations',
+    title: 'Matrix Operations with NumPy',
+    slug: 'matrix-operations-with-numpy',
+    difficulty: 3,
+    estimatedMinutes: 35,
+    prerequisites: ['NP-009'],
+    related: ['NP-006', 'NP-007', 'NP-008'],
+    tags: ['matmul', 'dot-product', 'linalg', 'inverse', 'solve', 'norm', 'eigenvalues'],
+
+    learningObjectives: [
+      'Distinguish element-wise `*` from matrix multiplication `@`, and say when each is correct',
+      'Check whether two matrices can be multiplied and state the result shape before running',
+      'Compute a dot product, a matrix product and a norm, and explain what each measures',
+      'Use `np.linalg.solve` rather than `np.linalg.inv`, and explain why that is the professional default',
+    ],
+
+    terminology: [
+      {
+        term: 'Dot product',
+        definition:
+          'For two vectors of equal length, the sum of their element-wise products. It produces a single number that measures how much the vectors point in the same direction.',
+        simple: 'Multiply matching entries, add them all up, get one number.',
+      },
+      {
+        term: 'Matrix product',
+        definition:
+          'For `A` of shape `(n, k)` and `B` of shape `(k, m)`, the `(n, m)` matrix whose entry (i, j) is the dot product of row i of A with column j of B.',
+        simple: 'Every row of the first meets every column of the second.',
+      },
+      {
+        term: 'Inner dimensions',
+        definition:
+          'The two dimensions that must agree for a matrix product: the columns of the left operand and the rows of the right. They cancel, leaving the outer dimensions as the result shape.',
+        simple: 'The numbers that must match in the middle and then disappear.',
+      },
+      {
+        term: 'Norm',
+        definition:
+          'A measure of the size of a vector or matrix. The default `np.linalg.norm` is the Euclidean (L2) length, the square root of the sum of squares.',
+        simple: 'How long the arrow is.',
+      },
+      {
+        term: 'Singular matrix',
+        definition:
+          'A square matrix with no inverse, because its rows or columns are linearly dependent. Its determinant is zero and `np.linalg.inv` raises `LinAlgError`.',
+        simple: 'A matrix that squashes space flat, so the transformation cannot be undone.',
+      },
+    ],
+
+    simpleExplanation:
+      "Up to now every operation has been element-wise: `A * B` multiplies each entry of A by the entry in the same position of B. Matrix multiplication is a different operation with a different symbol, `@`, and it combines whole rows with whole columns instead. To get the entry in row 2, column 3 of `A @ B`, you take row 2 of A and column 3 of B, multiply them together position by position, and add up the results — that single number is a dot product, and the whole matrix product is a grid of them. This is why the shapes have to fit a certain way: a row of A and a column of B can only be paired up if they are the same length, so A must have as many columns as B has rows. Write the shapes next to each other, `(n, k)` and `(k, m)`, and the two k values must match; they cancel, leaving `(n, m)`. That single check catches almost every linear algebra error before you run anything. The rest of the unit is the small set of tools built on top — lengths with `norm`, solving systems with `solve`, and eigenvalues — which is the vocabulary every model in the curriculum is written in.",
+
+    whyItExists:
+      'Nearly every model is a composition of linear maps: a linear regression prediction, a neural network layer, a PCA projection and a rotation are all matrix products. NumPy provides `@` and `np.linalg` so those operations dispatch to decades-old optimised BLAS and LAPACK libraries, which are far faster and far more numerically careful than anything written by hand, and so that the code looks like the mathematics it implements.',
+
+    analogy: {
+      scenario:
+        'Think of a recipe costing sheet. One table lists, for each of three cakes, how much flour, sugar and butter it needs. Another lists, for each ingredient, the price at two different suppliers. To find what each cake costs at each supplier, you take one cake row of quantities, line it up against one supplier column of prices, multiply each pair and add: one number per cake-supplier combination. The two tables can only be combined this way because the ingredient list is shared — it is the thing that appears in both, and it vanishes from the answer.',
+      mapping: [
+        { from: 'The cakes-by-ingredients table', to: 'Matrix A of shape `(3, 3)`: rows are outputs, columns are the shared dimension' },
+        { from: 'The ingredients-by-suppliers table', to: 'Matrix B of shape `(3, 2)`: rows are the shared dimension, columns are outputs' },
+        { from: 'Lining one row against one column and summing', to: 'A dot product, producing one entry of the result' },
+        { from: 'The ingredient list, shared and then gone', to: 'The inner dimension k, which must match and cancels' },
+        { from: 'The final cakes-by-suppliers table', to: 'The result of shape `(3, 2)`' },
+      ],
+      bridge:
+        'The costing sheet explains the shape rule rather than asking you to memorise it: you can only combine the tables through a column heading of one that matches the row heading of the other, and that shared heading does not appear in the answer. That is exactly why `(n, k) @ (k, m)` gives `(n, m)`, and why swapping the order usually fails or means something entirely different — costing suppliers by cakes is not the same question.',
+      limitations:
+        'The costing analogy makes matrix multiplication feel like bookkeeping. It is also geometry: a matrix is a transformation that rotates, scales and shears space, and `A @ B` is the composition of two transformations. Eigenvalues and the singular case only make sense in that second picture, which is why the linear algebra domain returns to it properly.',
+    },
+
+    visuals: [
+      {
+        kind: 'ascii',
+        title: 'The shape rule, drawn',
+        caption: 'Inner dimensions must match and cancel; outer dimensions survive.',
+        art: `   A            B              A @ B
+ (2 x 3)  @  (3 x 4)   ->    (2 x 4)
+      ^        ^
+      +--------+  these must be equal; they cancel
+
+ row i of A  .  col j of B  =  entry (i, j) of the result
+
+    [ a b c ]     [ p s ]
+    [ d e f ]  @  [ q t ]   =   [ a*p+b*q+c*r   a*s+b*t+c*u ]
+                  [ r u ]       [ d*p+e*q+f*r   d*s+e*t+f*u ]
+
+
+ ELEMENT-WISE is a different operation entirely
+
+    [1 2]     [5 6]      [ 5 12]        [1 2]     [5 6]      [19 22]
+    [3 4]  *  [7 8]  =   [21 32]        [3 4]  @  [7 8]  =   [43 50]
+
+    same position                       rows meet columns`,
+      },
+      {
+        kind: 'table',
+        title: 'Shape arithmetic for products',
+        caption: 'Do this check before every matrix operation you write.',
+        columns: ['Left', 'Right', 'Result', 'Note'],
+        rows: [
+          ['`(2, 3)`', '`(3, 4)`', '`(2, 4)`', 'Inner 3s match and cancel'],
+          ['`(2, 3)`', '`(4, 3)`', 'ValueError', 'Inner 3 and 4 disagree; transpose the right operand'],
+          ['`(3,)`', '`(3,)`', '`()` scalar', 'Two 1-D arrays give the dot product'],
+          ['`(2, 3)`', '`(3,)`', '`(2,)`', 'Matrix times vector; the vector is treated as a column'],
+          ['`(3,)`', '`(3, 4)`', '`(4,)`', 'Vector times matrix; treated as a row'],
+          ['`(10, 2, 3)`', '`(10, 3, 4)`', '`(10, 2, 4)`', 'Batched: leading axes broadcast, last two multiply'],
+          ['`(n, p)`', '`(p, 1)`', '`(n, 1)`', 'The prediction step of linear regression'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'See a matrix as a transformation',
+        caption: 'Apply a matrix to the plane and watch what it does to the unit square.',
+        widget: 'matrix-transform',
+      },
+      {
+        kind: 'widget',
+        title: 'Build a dot product term by term',
+        caption: 'Multiply matching entries and accumulate, and watch the geometric meaning appear.',
+        widget: 'dot-product',
+      },
+      {
+        kind: 'compare',
+        title: 'inv versus solve',
+        caption: 'Both answer Ax = b. Only one of them is the right habit.',
+        left: {
+          heading: '`x = np.linalg.inv(A) @ b`',
+          points: [
+            'Computes the full inverse, then multiplies',
+            'Roughly three times the arithmetic of solve',
+            'Amplifies floating-point error, badly on ill-conditioned A',
+            'Fails loudly on a singular matrix, which is at least honest',
+            'Reasonable only if you genuinely need the inverse itself',
+          ],
+        },
+        right: {
+          heading: '`x = np.linalg.solve(A, b)`',
+          points: [
+            'Factorises A and back-substitutes; never forms the inverse',
+            'Faster, especially as n grows',
+            'More numerically stable for the same problem',
+            'Raises `LinAlgError` on a singular matrix',
+            'The correct default for solving a linear system',
+          ],
+        },
+      },
+    ],
+
+    formalDefinition:
+      'For `A` of shape `(n, k)` and `B` of shape `(k, m)`, the matrix product `A @ B` is the `(n, m)` array with entries given by the sum over the shared index of the products of corresponding entries. The operator `@` invokes `np.matmul`, which for 1-D operands computes the inner product and for stacks of matrices broadcasts the leading axes while multiplying the trailing two. Element-wise `*` is an entirely separate ufunc requiring broadcast-compatible shapes. `np.linalg` wraps LAPACK routines for factorisation, inversion, determinants, eigendecomposition and least squares.',
+
+    math: {
+      intuition:
+        'A dot product asks how much one vector points along another: pair up the coordinates, multiply, and add. A matrix product is a grid of dot products, one for every pairing of a row of the left operand with a column of the right, and a matrix-vector product is the special case that applies a transformation to a point.',
+      formulas: [
+        {
+          latex: '\\mathbf{a} \\cdot \\mathbf{b} = \\sum_{i=1}^{n} a_i b_i = \\|\\mathbf{a}\\|\\,\\|\\mathbf{b}\\|\\cos\\theta',
+          name: 'Dot product',
+          meaning: 'Sum of the products of corresponding entries, which also equals the product of the lengths times the cosine of the angle between the vectors.',
+          variables: [
+            { symbol: 'a_i, b_i', meaning: 'The i-th components of the two vectors' },
+            { symbol: 'n', meaning: 'Their shared length; the operation is undefined if they differ' },
+            { symbol: '\\|\\mathbf{a}\\|', meaning: 'Euclidean length of a, computed by `np.linalg.norm`' },
+            { symbol: '\\theta', meaning: 'Angle between the vectors; the dot product is zero exactly when they are perpendicular' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '(AB)_{ij} = \\sum_{k=1}^{p} A_{ik} B_{kj}',
+          name: 'Matrix product',
+          meaning: 'Entry (i, j) of the product is the dot product of row i of A with column j of B, which is why the inner dimensions must agree.',
+          variables: [
+            { symbol: 'A_{ik}', meaning: 'Entry of A at row i, column k, with A of shape (n, p)' },
+            { symbol: 'B_{kj}', meaning: 'Entry of B at row k, column j, with B of shape (p, m)' },
+            { symbol: 'k', meaning: 'The shared inner index summed over and eliminated' },
+            { symbol: '(AB)_{ij}', meaning: 'Entry of the result, which has shape (n, m)' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\|\\mathbf{x}\\|_2 = \\sqrt{\\sum_i x_i^2}, \\qquad \\|\\mathbf{x}\\|_1 = \\sum_i |x_i|',
+          name: 'L2 and L1 norms',
+          meaning: 'The L2 norm is ordinary Euclidean length and is the default in NumPy; the L1 norm sums absolute values and is what drives sparsity in Lasso regularisation.',
+          variables: [
+            { symbol: 'x_i', meaning: 'Component i of the vector' },
+            { symbol: '\\|\\mathbf{x}\\|_2', meaning: 'Euclidean norm, `np.linalg.norm(x)`' },
+            { symbol: '\\|\\mathbf{x}\\|_1', meaning: 'Manhattan norm, `np.linalg.norm(x, ord=1)`' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: 'A\\mathbf{v} = \\lambda \\mathbf{v}',
+          name: 'Eigenvalue equation',
+          meaning: 'An eigenvector is a direction the matrix does not rotate — applying A only scales it, by the factor lambda.',
+          variables: [
+            { symbol: 'A', meaning: 'A square matrix, the transformation being analysed' },
+            { symbol: '\\mathbf{v}', meaning: 'An eigenvector, a non-zero direction preserved by A' },
+            { symbol: '\\lambda', meaning: 'The corresponding eigenvalue, the scaling factor along that direction' },
+          ],
+          category: 'linear-algebra',
+        },
+      ],
+      derivation: [
+        'Start with the prediction of a linear model for one sample: y = w1*x1 + w2*x2 + ... + wp*xp, which is exactly the dot product of the weight vector with the feature vector.',
+        'Stack n samples as the rows of X, of shape (n, p), and keep w of shape (p,).',
+        'Each row of X must meet w, so the inner dimensions are p and p, which match and cancel, leaving n predictions of shape (n,).',
+        'That single expression `X @ w` therefore computes all n predictions at once, with no loop, and dispatches to BLAS.',
+        'Fitting reverses the question: given X and y, find w. The normal equations give w = inv(X.T @ X) @ X.T @ y, but the numerically sound version is `np.linalg.lstsq(X, y)`, which never forms that inverse.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Fitting a line three ways, and comparing them',
+      setup:
+        'Take five points that lie almost on a straight line. Fit the intercept and slope by solving the normal equations with an explicit inverse, by using `np.linalg.solve`, and by using `np.linalg.lstsq`. The three should agree to many decimal places, and the reasons to prefer the last one become concrete.',
+      steps: [
+        {
+          label: 'Build the design matrix',
+          detail: 'With x of shape `(5,)`, stack a column of ones beside it so the intercept is just another weight: `X = np.column_stack([np.ones(5), x])`, shape `(5, 2)`.',
+          latex: 'X \\in \\mathbb{R}^{5\\times 2}, \\qquad \\mathbf{w} = (w_0, w_1)^\\top',
+        },
+        {
+          label: 'Check the shapes of the normal equations',
+          detail: '`X.T` is `(2, 5)`, so `X.T @ X` is `(2, 2)` and `X.T @ y` is `(2,)`. A 2x2 system in two unknowns, exactly as expected.',
+          latex: 'X^\\top X \\,\\mathbf{w} = X^\\top \\mathbf{y}',
+        },
+        {
+          label: 'Solve it the naive way',
+          detail: '`w = np.linalg.inv(X.T @ X) @ (X.T @ y)` forms the inverse explicitly. It works here because the system is tiny and well conditioned.',
+        },
+        {
+          label: 'Solve it properly',
+          detail: '`w = np.linalg.solve(X.T @ X, X.T @ y)` factorises instead of inverting: fewer operations and better conditioned. The answer matches to about fifteen significant figures.',
+        },
+        {
+          label: 'Skip the normal equations entirely',
+          detail: '`w, *_ = np.linalg.lstsq(X, y, rcond=None)` uses a QR or SVD factorisation of X directly. This avoids squaring the condition number, which is what `X.T @ X` does, and is the method a library would use.',
+          latex: '\\kappa(X^\\top X) = \\kappa(X)^2',
+        },
+        {
+          label: 'Verify the fit',
+          detail: 'Predictions are `X @ w`, residuals are `y - X @ w`, and the residual norm is `np.linalg.norm(y - X @ w)`. A small norm relative to the norm of y means the line explains the data.',
+        },
+      ],
+      conclusion:
+        'All three agree on well-conditioned data, which is why the naive version survives in tutorials. The difference appears when the features are nearly collinear: forming `X.T @ X` squares the condition number, so a matrix that loses six digits of precision becomes one that loses twelve, and the explicit inverse loses more still. The habit to build is `solve` over `inv`, and `lstsq` over the normal equations, because the cost of the good habit is zero and the cost of the bad one is occasionally the whole answer.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Element-wise versus matrix multiplication',
+        runnable: true,
+        code: `import numpy as np
+
+A = np.array([[1, 2], [3, 4]])
+B = np.array([[5, 6], [7, 8]])
+
+print("A * B (element-wise):\\n", A * B)
+print("A @ B (matrix):\\n", A @ B)
+print("np.dot(A, B) is the same:\\n", np.dot(A, B))
+
+print("A @ B == B @ A ?", np.array_equal(A @ B, B @ A))
+
+v = np.array([1, 0])
+print("A @ v:", A @ v, "shape", (A @ v).shape)
+
+u = np.array([3, 4])
+print("dot u.u :", u @ u)
+print("norm u  :", np.linalg.norm(u))
+
+C = np.arange(6).reshape(2, 3)
+try:
+    A @ C.T
+except ValueError as e:
+    print("ValueError:", e)`,
+        output: `A * B (element-wise):
+ [[ 5 12]
+ [21 32]]
+A @ B (matrix):
+ [[19 22]
+ [43 50]]
+np.dot(A, B) is the same:
+ [[19 22]
+ [43 50]]
+A @ B == B @ A ? False
+A @ v: [1 3] shape (2,)
+dot u.u : 25
+norm u  : 5.0
+ValueError: matmul: Input operand 1 has a mismatch in its core dimension 0, with gufunc signature (n?,k),(k,m?)->(n?,m?) (size 3 is not equal to size 2)`,
+        explanation:
+          'The first two results are the whole point: `*` multiplies matching positions while `@` pairs rows with columns, and the numbers are not remotely the same. Matrix multiplication is not commutative, which `A @ B != B @ A` demonstrates in two lines. `u @ u` is the sum of squares, 9 + 16 = 25, and its square root is the norm — that relationship is why the dot product of a vector with itself is its squared length. The final error message is worth reading closely: `(n?,k),(k,m?)` is the shape signature being enforced, and it tells you exactly which dimension disagreed.',
+      },
+      {
+        language: 'python',
+        title: 'Solving a linear system, and why not to use inv',
+        runnable: true,
+        code: `import numpy as np
+
+A = np.array([[3.0, 1.0],
+              [1.0, 2.0]])
+b = np.array([9.0, 8.0])
+
+x_solve = np.linalg.solve(A, b)
+x_inv = np.linalg.inv(A) @ b
+
+print("solve:", x_solve)
+print("inv  :", x_inv)
+print("check A @ x == b?", np.allclose(A @ x_solve, b))
+
+print("det   :", np.linalg.det(A))
+print("inverse:\\n", np.linalg.inv(A).round(4))
+print("A @ inv(A):\\n", (A @ np.linalg.inv(A)).round(10))
+
+singular = np.array([[1.0, 2.0], [2.0, 4.0]])
+print("singular det:", np.linalg.det(singular))
+try:
+    np.linalg.inv(singular)
+except np.linalg.LinAlgError as e:
+    print("LinAlgError:", e)`,
+        output: `solve: [2. 3.]
+inv  : [2. 3.]
+check A @ x == b? True
+det   : 5.000000000000001
+inverse:
+ [[ 0.4 -0.2]
+ [-0.2  0.6]]
+A @ inv(A):
+ [[ 1. -0.]
+ [ 0.  1.]]
+singular det: 0.0
+LinAlgError: Singular matrix`,
+        explanation:
+          'Both routes give the same answer on a tiny well-behaved system, which is why the `inv` habit persists. `solve` is nonetheless the correct default: it factorises and back-substitutes rather than computing an inverse it then throws away, using about a third of the arithmetic and losing less precision. Notice `det` returning 5.000000000000001 rather than 5 — a reminder that these are floating-point computations, which is also why testing `det == 0` for singularity is unreliable and `np.linalg.matrix_rank` or the condition number is the better check. The second matrix has its second row equal to twice the first, so it is singular and has no inverse.',
+      },
+      {
+        language: 'python',
+        title: 'Norms, distances and a linear model end to end',
+        runnable: true,
+        code: `import numpy as np
+
+rng = np.random.default_rng(4)
+n = 50
+x = np.linspace(0, 10, n)
+y = 2.5 * x + 1.0 + rng.normal(0, 1.0, n)
+
+X = np.column_stack([np.ones(n), x])          # (50, 2)
+print("X:", X.shape, "y:", y.shape)
+
+w = np.linalg.lstsq(X, y, rcond=None)[0]
+print("fitted intercept, slope:", w.round(3))
+
+pred = X @ w                                   # (50,)
+resid = y - pred
+print("residual norm:", np.linalg.norm(resid).round(3))
+print("RMSE         :", (np.linalg.norm(resid) / np.sqrt(n)).round(3))
+
+# Norms of different orders
+v = np.array([3.0, -4.0])
+print("L2:", np.linalg.norm(v), "L1:", np.linalg.norm(v, ord=1), "Linf:", np.linalg.norm(v, ord=np.inf))
+
+# Eigenvalues of a symmetric matrix
+S = np.array([[2.0, 1.0], [1.0, 2.0]])
+vals, vecs = np.linalg.eigh(S)
+print("eigenvalues :", vals)
+print("eigenvectors:\\n", vecs.round(3))
+print("check A v = lambda v:", np.allclose(S @ vecs[:, 1], vals[1] * vecs[:, 1]))`,
+        output: `X: (50, 2) y: (50,)
+fitted intercept, slope: [0.888 2.513]
+residual norm: 6.742
+RMSE         : 0.953
+L2: 5.0 L1: 7.0 Linf: 4.0
+eigenvalues : [1. 3.]
+eigenvectors:
+ [[-0.707  0.707]
+ [ 0.707  0.707]]
+check A v = lambda v: True`,
+        explanation:
+          'This is the whole domain arriving at one place. The design matrix is built by stacking, the prediction is a matrix-vector product whose shape you can check by hand — `(50, 2) @ (2,)` gives `(50,)` — and the error is measured with a norm. The fitted values recover the true intercept 1.0 and slope 2.5 to within the noise, which is the sanity check to run on any synthetic fit. The eigen-decomposition uses `eigh` rather than `eig` because the matrix is symmetric: `eigh` is faster and returns real values in ascending order, while `eig` can return complex results even for a matrix you know to be symmetric.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'A neural network layer',
+        usage:
+          '`Z = X @ W + b` with `X` of shape `(batch, in_features)` and `W` of shape `(in_features, out_features)` is the forward pass of a dense layer. Every deep learning framework is built around making this one operation fast.',
+      },
+      {
+        context: 'Recommendation and similarity search',
+        usage:
+          'Cosine similarity between a query embedding and a matrix of item embeddings is one matrix-vector product after normalising, which is how a search over a million items runs in milliseconds.',
+      },
+      {
+        context: 'Principal component analysis',
+        usage:
+          'PCA computes the eigenvectors of the covariance matrix, or equivalently the singular vectors of the centred data, then projects with a matrix product. `np.linalg.eigh` and `np.linalg.svd` are the exact calls involved.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'scikit-learn', role: 'Linear models, PCA and kernel methods are thin layers over these `np.linalg` routines, which are themselves LAPACK.' },
+      { tool: 'PyTorch', role: '`@` works identically on tensors, and `torch.linalg` mirrors this API, so the shape reasoning transfers to GPU code unchanged.' },
+      { tool: 'SciPy', role: '`scipy.linalg` adds specialised factorisations and sparse solvers for systems too large for a dense inverse.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Using `*` where `@` was meant',
+        why: 'For two square matrices of the same size, `*` runs without error and produces the element-wise product, so the bug is silent. The numbers are simply wrong, often in a way that still trains a model badly rather than crashing.',
+        fix: 'Reserve `*` for element-wise scaling and always use `@` for matrix products. If both operands are matrices and the intent is composition, `@` is correct.',
+      },
+      {
+        mistake: 'Getting the operand order wrong: `W @ X` instead of `X @ W`',
+        why: 'Matrix multiplication is not commutative, so the order encodes meaning. With `X` of shape `(batch, features)` and `W` of `(features, units)`, only `X @ W` has matching inner dimensions.',
+        fix: 'Write the shapes down before typing the expression, and let the inner-dimension rule pick the order for you rather than trying alternatives until one runs.',
+      },
+      {
+        mistake: 'Computing `np.linalg.inv(A) @ b` to solve a system',
+        why: 'It performs about three times the arithmetic of a direct solve and amplifies floating-point error, which matters badly when the matrix is ill conditioned — exactly the case where you most need a correct answer.',
+        fix: 'Use `np.linalg.solve(A, b)` for square systems and `np.linalg.lstsq(X, y)` for least squares. Compute an explicit inverse only when the inverse itself is the deliverable.',
+      },
+      {
+        mistake: 'Testing singularity with `det(A) == 0`',
+        why: 'The determinant is computed in floating point and scales with the size of the entries, so a genuinely singular matrix can return 1e-18 and a perfectly invertible one can return a tiny value too.',
+        fix: 'Use `np.linalg.matrix_rank(A)` or check the condition number with `np.linalg.cond(A)`; a condition number near 1/eps means the results cannot be trusted.',
+      },
+      {
+        mistake: 'Confusing `(n,)` with `(n, 1)` in matrix expressions',
+        why: 'NumPy treats a 1-D operand as a row or a column depending on its position, which is convenient until it silently changes the result shape: `X @ w` gives `(n,)` while `X @ w.reshape(-1, 1)` gives `(n, 1)`.',
+        fix: 'Pick one convention for the codebase and check shapes after every product. Keeping targets as `(n,)` and weights as `(p,)` is the scikit-learn convention and causes the fewest surprises.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'What is the difference between `A * B` and `A @ B` in NumPy?',
+        answer:
+          '`*` is element-wise multiplication: entry (i, j) of the result is `A[i, j] * B[i, j]`, and the shapes must be equal or broadcast-compatible. `@` is matrix multiplication: entry (i, j) is the dot product of row i of A with column j of B, so A must have as many columns as B has rows and the result has shape `(rows of A, columns of B)`. The dangerous part is that for two square matrices of the same size both operations run without error and return different answers, so a mistake here is silent. `np.dot` behaves like `@` for 2-D inputs, but `@` is clearer and is the modern idiom.',
+        followUp:
+          'A strong answer adds that `@` is not commutative, so `A @ B` and `B @ A` generally differ even when both are legal.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Why should you prefer `np.linalg.solve(A, b)` over `np.linalg.inv(A) @ b`?',
+        answer:
+          'Both compute x in Ax = b, but forming the inverse is the wrong route. `solve` performs an LU factorisation and two triangular back-substitutions, costing roughly a third of the arithmetic of computing a full inverse and then multiplying. More importantly it is numerically better conditioned: explicitly inverting amplifies rounding error, and for an ill-conditioned matrix that can cost several digits of accuracy in the answer. Forming an inverse is only justified when the inverse itself is the deliverable, for instance when reporting a covariance matrix of parameter estimates, and even then a factorisation-based route is usually better.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'A linear regression fitted through the normal equations gives wildly unstable coefficients. What is happening and what would you do?',
+        answer:
+          'Almost certainly multicollinearity: two or more features are nearly linear combinations of each other, so `X.T @ X` is close to singular. Forming that product squares the condition number of X, so a design matrix that was merely awkward becomes numerically hopeless, and the coefficients swing enormously for tiny changes in the data. Diagnostics: `np.linalg.cond(X)`, the rank from `matrix_rank`, and the singular values from `np.linalg.svd`. Fixes, in order of preference: use `np.linalg.lstsq`, which factorises X directly and never forms the normal equations; add L2 regularisation, which makes the system well posed by adding a positive constant to the diagonal; or remove or combine the redundant features. The coefficients being unstable while the predictions remain fine is a classic signature of this problem.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'For `A` of shape `(3, 5)` and `B` of shape `(5, 2)`, give the shapes of `A @ B`, `B.T @ A.T`, and say what `A @ A` does.',
+        hint: 'Write the shapes side by side and check whether the inner dimensions match.',
+        solution:
+          '`A @ B` is `(3, 2)`: the inner 5s match and cancel.\n`B.T @ A.T` is `(2, 5) @ (5, 3)` giving `(2, 3)`, which is the transpose of the first result — the identity (AB) transposed equals B transposed times A transposed.\n`A @ A` raises: it would be `(3, 5) @ (3, 5)`, and the inner 5 and 3 disagree. Only a square matrix can be multiplied by itself.',
+      },
+      {
+        prompt: 'Solve the system 2a + b = 5, a + 3b = 10 using NumPy, and verify the solution by substituting back.',
+        hint: 'Build the coefficient matrix and the right-hand side, then use the function that avoids forming an inverse.',
+        language: 'python',
+        starterCode: 'import numpy as np\n\nA = np.array([[2.0, 1.0],\n              [1.0, 3.0]])\nb = np.array([5.0, 10.0])\n',
+        solution:
+          'import numpy as np\n\nA = np.array([[2.0, 1.0], [1.0, 3.0]])\nb = np.array([5.0, 10.0])\nx = np.linalg.solve(A, b)\nprint(x)                       # [1. 3.]\nprint(np.allclose(A @ x, b))   # True\n\nSo a = 1 and b = 3, which satisfies both equations: 2 + 3 = 5 and 1 + 9 = 10. Verifying with `np.allclose(A @ x, b)` rather than `==` is the right habit, because the solution is computed in floating point and an exact equality test can fail on a correct answer.',
+      },
+      {
+        prompt: 'Write a function that computes the cosine similarity between a query vector `q` of shape `(d,)` and every row of a matrix `M` of shape `(n, d)`, returning shape `(n,)`, with no Python loop.',
+        hint: 'Cosine similarity is a dot product divided by the product of the norms; `norm` takes an `axis` argument.',
+        solution:
+          'import numpy as np\n\ndef cosine_similarity(q, M):\n    return (M @ q) / (np.linalg.norm(M, axis=1) * np.linalg.norm(q))\n\n`M @ q` is `(n, d) @ (d,)`, giving `(n,)` — one dot product per row. `np.linalg.norm(M, axis=1)` reduces the feature axis, also giving `(n,)`, so the division is element-wise with no broadcasting subtleties. For repeated queries the efficient version normalises `M` once with `M / np.linalg.norm(M, axis=1, keepdims=True)` and then each query is a single matrix-vector product — note the `keepdims` there, for exactly the reason covered in the aggregation unit.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'NP-010-q1',
+        type: 'code-output',
+        language: 'python',
+        concept: 'elementwise versus matmul',
+        prompt: 'What does this print?',
+        code: 'import numpy as np\nA = np.array([[1, 2], [3, 4]])\nB = np.array([[1, 0], [0, 1]])\nprint(A * B)',
+        options: [
+          '[[1 0]\n [0 4]]',
+          '[[1 2]\n [3 4]]',
+          '[[1 2]\n [3 4]]\nwith a warning',
+          'It raises a ValueError',
+        ],
+        answerIndex: 0,
+        explanation:
+          '`*` multiplies matching positions, so the zeros of the identity zero out the off-diagonal entries. `A @ B` with the identity would instead return A unchanged — a neat way to see that the two operators differ.',
+      },
+      {
+        id: 'NP-010-q2',
+        type: 'mcq',
+        concept: 'shape rule',
+        prompt: 'What is the shape of `A @ B` for `A` of shape `(4, 7)` and `B` of shape `(7, 3)`?',
+        options: ['`(4, 3)`', '`(7, 7)`', '`(3, 4)`', 'It raises, because the shapes differ'],
+        answerIndex: 0,
+        explanation:
+          'The inner dimensions are both 7, so they match and cancel, leaving the outer dimensions 4 and 3 as the result shape.',
+      },
+      {
+        id: 'NP-010-q3',
+        type: 'numeric',
+        concept: 'dot product',
+        prompt: 'What is the dot product of `[2, 3, 4]` and `[1, 0, 2]`?',
+        answer: 10,
+        explanation:
+          'Multiply matching entries and add: 2*1 + 3*0 + 4*2 = 2 + 0 + 8 = 10. In NumPy this is `a @ b`, which returns a scalar for two 1-D arrays.',
+      },
+      {
+        id: 'NP-010-q4',
+        type: 'truefalse',
+        concept: 'commutativity',
+        prompt: 'For square matrices A and B of the same size, `A @ B` always equals `B @ A`.',
+        answer: false,
+        explanation:
+          'Matrix multiplication is not commutative. The order encodes which transformation is applied first, so the two products are generally different matrices.',
+      },
+      {
+        id: 'NP-010-q5',
+        type: 'debug',
+        language: 'python',
+        concept: 'solve versus inv',
+        prompt: 'This code works but is not the professional choice. What should replace it?',
+        code: 'import numpy as np\nx = np.linalg.inv(A) @ b',
+        options: [
+          '`x = np.linalg.solve(A, b)`',
+          '`x = np.linalg.det(A) * b`',
+          '`x = A.T @ b`',
+          '`x = np.linalg.norm(A) / b`',
+        ],
+        answerIndex: 0,
+        explanation:
+          '`solve` factorises and back-substitutes instead of forming an inverse, using roughly a third of the arithmetic and losing less precision, especially on ill-conditioned matrices.',
+      },
+      {
+        id: 'NP-010-q6',
+        type: 'match',
+        concept: 'linalg vocabulary',
+        prompt: 'Match each NumPy call to what it computes.',
+        pairs: [
+          { left: '`np.linalg.norm(v)`', right: 'The Euclidean length of a vector' },
+          { left: '`np.linalg.solve(A, b)`', right: 'The x satisfying Ax = b' },
+          { left: '`np.linalg.det(A)`', right: 'The signed volume scaling factor; zero means singular' },
+          { left: '`np.linalg.eigh(S)`', right: 'Eigenvalues and eigenvectors of a symmetric matrix' },
+          { left: '`np.linalg.lstsq(X, y)`', right: 'The least-squares fit without forming the normal equations' },
+        ],
+        explanation:
+          'These five cover most of the linear algebra a data scientist writes directly. Reaching for `solve` and `lstsq` rather than `inv` is the habit worth forming early.',
+      },
+    ],
+
+    flashcards: [
+      { front: '`*` versus `@`', back: '`*` multiplies matching positions element-wise; `@` pairs rows of the left with columns of the right. Both run on same-size square matrices, so the mistake is silent.' },
+      { front: 'The shape rule for `A @ B`', back: '`(n, k) @ (k, m)` gives `(n, m)`. The inner dimensions must match and they cancel; the outer ones survive.' },
+      { front: 'What does a dot product measure?', back: 'The sum of products of matching entries, equal to the product of the lengths times the cosine of the angle. Zero means perpendicular.' },
+      { front: 'Why prefer `solve` to `inv`?', back: 'It factorises and back-substitutes rather than forming an inverse: about a third of the arithmetic and noticeably better numerical stability.' },
+      { front: 'How do you test whether a matrix is singular?', back: 'Not with `det == 0` in floating point. Use `np.linalg.matrix_rank` or check `np.linalg.cond` for a very large condition number.' },
+      { front: 'What does `A v = lambda v` mean?', back: 'v is an eigenvector — a direction the matrix only scales, never rotates — and lambda is the scaling factor. `np.linalg.eigh` computes both for symmetric matrices.' },
+    ],
+
+    challenge: {
+      title: 'Linear regression from first principles',
+      brief:
+        'Generate 200 samples with three features and a known weight vector plus noise, using a seeded generator. Fit the weights three ways: the explicit normal equations with `inv`, `np.linalg.solve` on the normal equations, and `np.linalg.lstsq` on the design matrix directly. Compare all three against the true weights and against each other, report the residual norm and RMSE, and print `np.linalg.cond` for both `X` and `X.T @ X`. Then deliberately make two features nearly collinear and repeat, showing which method degrades first. Every step must state the shapes involved in a comment.',
+      language: 'python',
+      acceptanceCriteria: [
+        'All three fitting methods are implemented and compared numerically',
+        'Condition numbers of both X and the normal-equations matrix are reported',
+        'The collinear case is constructed deliberately and its effect is shown',
+        'Residual norm and RMSE are computed with `np.linalg.norm`',
+        'Comments state the shape of every matrix in each product',
+      ],
+      starterCode: 'import numpy as np\n\nrng = np.random.default_rng(17)\nn, p = 200, 3\nX_raw = rng.normal(size=(n, p))\ntrue_w = np.array([2.0, -1.5, 0.5])\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain the difference between element-wise and matrix multiplication, how to check whether a product is legal, and why `solve` is preferred over `inv`.',
+      mustCover: [
+        '`*` combines matching positions while `@` pairs rows with columns',
+        'Each entry of a matrix product is a dot product of a row and a column',
+        'Inner dimensions must match and cancel: `(n, k) @ (k, m)` gives `(n, m)`',
+        '`np.linalg.solve` is faster and more stable than forming an inverse',
+      ],
+      bonusSignals: ['notes that `@` is not commutative', 'points out that `*` on two square matrices fails silently', 'connects `X @ w` to a model prediction'],
+      sampleExplanation:
+        'There are two multiplications and they are not variations of each other. `A * B` multiplies each entry by the entry in the same position, which is the operation you want for scaling. `A @ B` is matrix multiplication: to get the entry in row i, column j of the answer, you take row i of A and column j of B, multiply them position by position and add the results, which is a dot product. Because a row and a column can only be paired if they have the same length, A must have as many columns as B has rows — write the shapes side by side, `(n, k)` and `(k, m)`, and the two k values must match, cancel, and leave `(n, m)`. Doing that check on paper catches nearly every error before you run anything. The trap is that for two square matrices of the same size, `*` runs happily and gives the wrong answer with no complaint, so the intent has to come from you. Order matters too: `A @ B` is generally not `B @ A`, which is why a model prediction is written `X @ w` and not the reverse. Finally, when you need to solve a system, use `np.linalg.solve(A, b)` rather than `np.linalg.inv(A) @ b`. It factorises the matrix instead of computing an inverse it would immediately discard — about a third of the arithmetic, and noticeably less floating-point damage on matrices that are close to singular.',
+    },
+  },
+];

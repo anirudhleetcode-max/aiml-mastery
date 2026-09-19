@@ -2802,3 +2802,3171 @@ requires_grad: True
         'Take a three-by-three grid of numbers and lay it on top of nine pixels. Multiply each pixel by the number on top of it, add the nine results, and that single number becomes the output at the centre position. Slide the grid one pixel across and repeat until you have covered the image. Everything follows from the choice of those nine numbers. Make them all one ninth and you are averaging the neighbourhood, so the picture blurs. Make the left column negative one and the right column positive one, and on a flat area the positives and negatives cancel to zero, while at a place where the left is dark and the right is bright you get a big number — that is edge detection, and a real Sobel filter doubles the middle row to resist noise. Try it on a patch with columns 10, 100, 200: the answer is 760. For decades people chose those numbers using theory. The idea behind convolutional networks is to stop choosing: start from random numbers, see how wrong the final prediction is, and nudge every weight in the direction that makes it less wrong. Do that a few million times and the network invents its own filters, and the surprise is that the first layer usually invents edge detectors anyway.',
     },
   },
+
+  {
+    id: 'CV-006',
+    domain: 'CV',
+    module: 'Convolution in Practice',
+    topic: 'The OpenCV toolkit',
+    title: 'OpenCV Fundamentals',
+    slug: 'opencv-fundamentals',
+    difficulty: 2,
+    estimatedMinutes: 35,
+    prerequisites: ['CV-001', 'CV-005'],
+    related: ['CV-001', 'CV-002', 'CV-003', 'CV-005'],
+    tags: ['opencv', 'thresholding', 'morphology', 'contours', 'drawing', 'video', 'otsu'],
+
+    learningObjectives: [
+      'Read, write and display images and video frames with OpenCV, handling the failure modes correctly',
+      'Convert colour spaces and threshold an image, including adaptive and Otsu thresholding',
+      'Use erosion, dilation, opening and closing to clean up a binary mask',
+      'Find, filter and measure contours, and draw annotations onto a frame',
+      'Recognise the practical gotchas: BGR order, silent None returns, (x, y) versus (row, col), and in-place drawing',
+    ],
+
+    terminology: [
+      {
+        term: 'Binary threshold',
+        definition:
+          'A per-pixel rule producing a two-valued image: 255 where the input exceeds a threshold and 0 elsewhere. The basis of almost every classical segmentation pipeline.',
+        simple: 'Turn every pixel into either white or black depending on whether it is brighter than a cut-off.',
+      },
+      {
+        term: 'Otsu thresholding',
+        definition:
+          'An automatic method that searches every possible threshold and picks the one minimising the variance within the two resulting groups, equivalently maximising the variance between them.',
+        simple: 'Let the computer pick the cut-off by finding the value that splits the histogram most cleanly.',
+      },
+      {
+        term: 'Adaptive threshold',
+        definition:
+          'A threshold computed independently for each pixel from the mean or Gaussian-weighted mean of its local neighbourhood, which survives uneven illumination that defeats a single global value.',
+        simple: 'A different cut-off in each region, so a shadow across the page does not ruin everything.',
+      },
+      {
+        term: 'Morphological operation',
+        definition:
+          'A shape-based operation on a binary image defined by a structuring element: erosion takes the local minimum, dilation the local maximum, opening is erosion then dilation, closing is the reverse.',
+        simple: 'Shrinking and growing white regions to remove specks or fill in holes.',
+      },
+      {
+        term: 'Contour',
+        definition:
+          'An ordered list of boundary points around a connected white region of a binary image. OpenCV returns contours as arrays of (x, y) points, optionally with a hierarchy describing nesting.',
+        simple: 'The outline traced around a blob, stored as a list of points.',
+      },
+      {
+        term: 'Structuring element',
+        definition:
+          'The small binary shape — rectangle, ellipse or cross — that defines the neighbourhood a morphological operation examines. Its size controls how much is removed or filled.',
+        simple: 'The little stamp shape used to shrink or grow regions.',
+      },
+    ],
+
+    simpleExplanation:
+      "OpenCV is a large box of tools for doing things to grids of numbers quickly. It can open a photograph or a video, change its colours, shrink it, blur it, and — the part that surprises people — perform a lot of genuinely useful vision without any machine learning at all. The classical pipeline looks like this. Turn the picture into a single grid by discarding colour, or keep only the colour range you care about. Turn that into a black-and-white mask where white means interesting. Tidy the mask by shrinking it a little to remove speckles, then growing it back to close small gaps. Trace the outlines of the remaining white blobs, throw away the ones that are too small or the wrong shape, and measure what is left: how many, how big, where. Then draw boxes and labels on a copy of the original so a human can check your work. This is still how counting, inspection and preprocessing tasks are solved in industry, because it is fast, needs no training data, and can be explained to an auditor.",
+
+    whyItExists:
+      'Before deep learning, and still today for a large class of controlled-environment problems, vision tasks were solved with fast deterministic operations on pixel grids. OpenCV packages those operations as optimised, hardware-accelerated C++ with bindings in Python, so that reading a frame, converting colour and finding blobs takes microseconds rather than a research project, and so that every pipeline in the field uses the same tested implementations.',
+
+    analogy: {
+      scenario:
+        'Think of a darkroom technician preparing a print for a botanist who wants to count leaves. First they make a high-contrast copy where anything green becomes pure white and everything else pure black. The copy is speckled with dust, so they dab away the isolated specks, then slightly thicken what remains to close the small gaps left by leaf veins. Now they trace around each white shape with a pen, discard the tracings smaller than a thumbnail, and finally write a number beside each remaining outline on a clean print of the original.',
+      mapping: [
+        { from: 'The high-contrast copy', to: 'A binary mask from cv2.threshold or cv2.inRange' },
+        { from: 'Dabbing away isolated specks', to: 'Morphological opening: erode then dilate' },
+        { from: 'Thickening to close gaps', to: 'Morphological closing: dilate then erode' },
+        { from: 'Tracing around each shape', to: 'cv2.findContours returning boundary point arrays' },
+        { from: 'Discarding tracings below a size', to: 'Filtering contours by cv2.contourArea' },
+        { from: 'Writing on a clean print, not the negative', to: 'Drawing on a copy, because OpenCV draws in place' },
+      ],
+      bridge:
+        'Each darkroom step corresponds to a single OpenCV call, and the order is not arbitrary: you cannot trace outlines before you have a binary image, and cleaning before tracing is what stops you from counting dust as leaves. The analogy also explains the main limitation honestly — the technician can only separate leaves from background because green is distinctive and the lighting is controlled. Change the lighting or put a green book in the frame and the whole pipeline fails, which is exactly the boundary where learned models earn their cost.',
+      limitations:
+        'A darkroom print is produced once and inspected by a human. A real pipeline runs at thirty frames a second on footage nobody watches, so every threshold that was tuned by eye on one image becomes a silent failure mode on the thousandth.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'The classical OpenCV pipeline',
+        caption: 'Five stages, each one line of code, still the right answer for many controlled-environment tasks.',
+        steps: [
+          { label: 'Load and convert', detail: 'cv2.imread gives BGR uint8; convert to grayscale or HSV depending on what distinguishes the target.' },
+          { label: 'Reduce noise', detail: 'GaussianBlur or medianBlur, so the threshold is not chasing sensor speckle.' },
+          { label: 'Threshold to a binary mask', detail: 'threshold with Otsu, adaptiveThreshold for uneven light, or inRange for a colour band.' },
+          { label: 'Clean with morphology', detail: 'Opening removes specks; closing fills pinholes. Structuring element size sets the scale.' },
+          { label: 'Find and filter contours', detail: 'findContours, then discard by area, aspect ratio or solidity.' },
+          { label: 'Measure and annotate', detail: 'boundingRect, moments for the centroid, then rectangle and putText on a copy of the original.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Thresholding methods',
+        columns: ['Method', 'Call', 'Chooses the threshold', 'Use when'],
+        rows: [
+          ['Fixed global', 'cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)', 'You do, by hand', 'Lighting is controlled and constant'],
+          ['Otsu', 'cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)', 'Automatically, from the histogram', 'The histogram is clearly bimodal: object and background'],
+          ['Adaptive mean', 'cv2.adaptiveThreshold(..., ADAPTIVE_THRESH_MEAN_C, ...)', 'Per pixel, from a local window mean', 'Illumination varies across the frame'],
+          ['Adaptive Gaussian', 'cv2.adaptiveThreshold(..., ADAPTIVE_THRESH_GAUSSIAN_C, ...)', 'Per pixel, from a weighted local mean', 'Document scanning with shadows or a curved page'],
+          ['Colour band', 'cv2.inRange(hsv, lower, upper)', 'You do, as an HSV box', 'The target is defined by colour rather than brightness'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Opening versus closing',
+        caption: 'Both are an erosion and a dilation. The order is everything.',
+        left: {
+          heading: 'Opening — erode, then dilate',
+          points: [
+            'Removes small white specks and thin bridges between blobs',
+            'Large regions survive at roughly their original size',
+            'Use to clean salt noise and separate touching objects',
+            'cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)',
+          ],
+        },
+        right: {
+          heading: 'Closing — dilate, then erode',
+          points: [
+            'Fills small black holes inside white regions and joins near-touching parts',
+            'Outer boundary returns to roughly its original position',
+            'Use to repair a mask broken by highlights or veins',
+            'cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'The gotchas that cost everyone an afternoon',
+        columns: ['Trap', 'What actually happens', 'Defence'],
+        rows: [
+          ['cv2.imread with a bad path', 'Returns None silently; the error appears later as a NoneType attribute error', 'Check for None immediately and raise FileNotFoundError'],
+          ['Channel order', 'imread gives BGR, everything else expects RGB', 'Convert at the boundary and keep the interior RGB'],
+          ['Coordinate order', 'Drawing takes (x, y) but numpy indexing takes [row, col] = [y, x]', 'Name the variables x and y, never i and j, near drawing code'],
+          ['In-place drawing', 'rectangle and putText modify the array you pass', 'Draw on img.copy() unless you intend the mutation'],
+          ['cv2.imshow in a notebook', 'Opens a window the kernel cannot service, and hangs', 'Use matplotlib in notebooks; imshow plus waitKey only in scripts'],
+          ['findContours return values', 'The tuple arity changed between OpenCV 3 and 4', 'Unpack as contours, hierarchy = cv2.findContours(...) on version 4'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'OpenCV exposes image operations as functions over dense numeric arrays: point operations applied per pixel such as thresholding and colour conversion, neighbourhood operations defined by a kernel such as filtering and morphology, and region operations that extract structure such as connected components and contour tracing. Morphological erosion of a set A by structuring element B is the set of positions where B fits entirely inside A, dilation is the set of positions where B touches A, and opening and closing are the two compositions of the pair.',
+
+    math: {
+      intuition:
+        'Two pieces of arithmetic explain most of the classical toolkit. Thresholding is a step function applied to every pixel independently, so it converts a brightness image into a set-membership image. Morphology is thresholding applied to a neighbourhood: erosion asks whether all the neighbours are white, which is a local minimum, and dilation asks whether any neighbour is white, which is a local maximum. Once you see erosion and dilation as min and max filters, opening and closing stop being incantations.',
+      formulas: [
+        {
+          latex: 'T(x) = \\begin{cases} 255 & \\text{if } I(x) > t \\\\ 0 & \\text{otherwise} \\end{cases}',
+          name: 'Binary threshold',
+          meaning:
+            'A point operation with no notion of neighbours. Everything that makes thresholding hard — shadows, gradients, glare — is a consequence of this locality blindness, which is what adaptive thresholding fixes.',
+          variables: [
+            { symbol: 'I(x)', meaning: 'Input intensity at pixel x' },
+            { symbol: 't', meaning: 'The threshold value, fixed by hand or chosen by Otsu' },
+            { symbol: 'T(x)', meaning: 'Output, either 0 or 255' },
+          ],
+        },
+        {
+          latex: '\\sigma_w^2(t) = \\omega_0(t)\\,\\sigma_0^2(t) + \\omega_1(t)\\,\\sigma_1^2(t), \\qquad t^{*} = \\arg\\min_t \\sigma_w^2(t)',
+          name: 'Otsu criterion',
+          meaning:
+            'Try every possible threshold, split the histogram in two, and score the split by the weighted sum of the within-group variances. The best threshold makes both groups as internally uniform as possible, which is a formalisation of a clean separation.',
+          variables: [
+            { symbol: 't', meaning: 'Candidate threshold, ranging over 0–255' },
+            { symbol: '\\omega_0, \\omega_1', meaning: 'Fraction of pixels below and above the threshold' },
+            { symbol: '\\sigma_0^2, \\sigma_1^2', meaning: 'Intensity variance within each of the two groups' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '(I \\ominus B)(x) = \\min_{b \\in B} I(x+b), \\qquad (I \\oplus B)(x) = \\max_{b \\in B} I(x+b)',
+          name: 'Erosion and dilation as min and max filters',
+          meaning:
+            'Erosion sets a pixel to the darkest value in its neighbourhood, so white regions shrink; dilation takes the brightest, so they grow. On a binary image this is exactly the set formulation of fits inside and touches.',
+          variables: [
+            { symbol: 'I', meaning: 'Input image' },
+            { symbol: 'B', meaning: 'Structuring element: the set of offsets defining the neighbourhood' },
+            { symbol: '\\ominus, \\oplus', meaning: 'Erosion and dilation operators' },
+          ],
+        },
+        {
+          latex: 'I \\circ B = (I \\ominus B) \\oplus B, \\qquad I \\bullet B = (I \\oplus B) \\ominus B',
+          name: 'Opening and closing',
+          meaning:
+            'Opening erodes then dilates, so features smaller than the structuring element vanish and never come back. Closing does the reverse, so gaps smaller than the element are filled. Both are idempotent: applying them twice changes nothing further.',
+          variables: [
+            { symbol: '\\circ', meaning: 'Opening — removes small bright features' },
+            { symbol: '\\bullet', meaning: 'Closing — removes small dark holes' },
+          ],
+        },
+        {
+          latex: 'c_x = \\frac{M_{10}}{M_{00}}, \\qquad c_y = \\frac{M_{01}}{M_{00}}, \\qquad M_{00} = \\text{area}',
+          name: 'Contour centroid from image moments',
+          meaning:
+            'The zeroth moment is the area of the region and the first moments are the coordinate sums, so their ratio is the centre of mass. This is how you get a single (x, y) position for a detected blob.',
+          variables: [
+            { symbol: 'M_{00}', meaning: 'Zeroth moment: the number of pixels, equal to the area' },
+            { symbol: 'M_{10}, M_{01}', meaning: 'First moments: sums of the x and y coordinates over the region' },
+            { symbol: 'c_x, c_y', meaning: 'Centroid coordinates in pixels' },
+          ],
+        },
+      ],
+      derivation: [
+        'Consider a binary mask containing a 3x3 block of white noise speckle and a 40x40 white square, and apply opening with a 5x5 structuring element.',
+        'Erosion first: the speckle is smaller than the element, so no position exists where the element fits entirely inside it, and it becomes entirely black.',
+        'The same erosion shrinks the square to 36x36, since two pixels are removed from each side.',
+        'Dilation second: the speckle is already gone and cannot be recreated, because dilation only grows what exists.',
+        'The square grows back from 36x36 to 40x40, recovering its original size.',
+        'That asymmetry — small features are destroyed irreversibly while large ones are restored — is the entire point of opening, and it is why the structuring element size is the parameter that encodes what counts as too small.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Counting coins on a tray, step by step',
+      setup:
+        'A fixed overhead camera photographs coins on a dark tray at 1280x720. The lighting is controlled, the coins do not overlap, and we want the count, the centroid of each coin and a radius estimate. No training data exists and none is needed.',
+      steps: [
+        {
+          label: 'Grayscale and blur',
+          detail:
+            'Colour adds nothing here since the tray is dark and the coins are bright, so convert with COLOR_BGR2GRAY. A 5x5 Gaussian with sigma 1.5 removes sensor speckle that would otherwise fragment the threshold.',
+        },
+        {
+          label: 'Threshold with Otsu',
+          detail:
+            'The histogram is strongly bimodal — a dark tray peak near 30 and a bright coin peak near 190 — so Otsu picks a threshold automatically, in this case 112. Hard-coding 127 would work today and fail when someone dims the lights.',
+          latex: 't^{*} = \\arg\\min_t \\sigma_w^2(t) = 112',
+        },
+        {
+          label: 'Open to remove specks',
+          detail:
+            'A 5x5 elliptical element removes the scattered white pixels from glare on the tray. Any speck narrower than five pixels disappears and cannot return.',
+        },
+        {
+          label: 'Close to fill the embossing',
+          detail:
+            'The raised design on each coin casts small shadows that punch dark holes in the mask. Closing with a 9x9 element fills holes up to nine pixels across while leaving the coin boundary where it was.',
+        },
+        {
+          label: 'Find contours and filter by area',
+          detail:
+            'findContours with RETR_EXTERNAL returns only outer boundaries, which is what you want when coins contain no nested holes after closing. Eighteen contours come back; filtering to area above 800 pixels leaves twelve.',
+          latex: '\\text{keep if } M_{00} > 800',
+        },
+        {
+          label: 'Measure each one',
+          detail:
+            'For a coin with M00 = 5,026, M10 = 2,211,440 and M01 = 1,608,320, the centroid is (2,211,440 / 5,026, 1,608,320 / 5,026) = (440.0, 320.0). An equivalent radius follows from area = pi r squared, giving r = sqrt(5026 / 3.1416) = 40.0 pixels.',
+          latex: 'r = \\sqrt{\\frac{M_{00}}{\\pi}} = \\sqrt{\\frac{5026}{3.1416}} = 40.0',
+        },
+        {
+          label: 'Annotate a copy',
+          detail:
+            'Draw each circle and its index on output = frame.copy(). Drawing on frame itself would corrupt the source if the pipeline is rerun with a different threshold, which is a real debugging trap because the corruption is invisible until the second run.',
+        },
+      ],
+      conclusion:
+        'Twelve coins, each with a centroid and a radius, in about four milliseconds per frame on a laptop CPU, with no dataset, no GPU and no training. The honest caveat is the assumption list: fixed camera, controlled lighting, non-overlapping coins, dark background. Break any of them and the pipeline degrades sharply, which is the exact point at which a learned detector starts to be worth its cost — and even then this pipeline remains useful for generating the initial annotations.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Load, convert, threshold, clean, count',
+        runnable: true,
+        code: `import cv2
+import numpy as np
+
+path = "coins.jpg"
+bgr = cv2.imread(path)
+if bgr is None:                       # imread returns None, it does not raise
+    raise FileNotFoundError(path)
+
+gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+blur = cv2.GaussianBlur(gray, (5, 5), 1.5)
+
+t, mask = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+print("Otsu chose threshold:", t)
+
+kernel_small = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+kernel_big = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
+mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel_small)    # kill specks
+mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel_big)     # fill holes
+
+contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+coins = [c for c in contours if cv2.contourArea(c) > 800]
+print("contours found:", len(contours), "| kept after area filter:", len(coins))
+
+annotated = bgr.copy()                # OpenCV draws in place
+for i, c in enumerate(coins):
+    m = cv2.moments(c)
+    cx, cy = int(m["m10"] / m["m00"]), int(m["m01"] / m["m00"])
+    r = int(np.sqrt(m["m00"] / np.pi))
+    cv2.circle(annotated, (cx, cy), r, (0, 255, 0), 2)         # (x, y), BGR colour
+    cv2.putText(annotated, str(i), (cx - 8, cy + 6),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+
+cv2.imwrite("coins_annotated.png", annotated)
+print("first coin centre and radius:", (cx, cy), r)`,
+        output: `Otsu chose threshold: 112.0
+contours found: 18 | kept after area filter: 12
+first coin centre and radius: (440, 320) 40`,
+        explanation:
+          'Every line maps to one stage of the pipeline. Note the None check on the first read, the automatic threshold rather than a magic 127, the two different structuring element sizes for the two different jobs, and the .copy() before drawing. Note too that circle takes (x, y) while the same pixel in numpy would be mask[y, x]: mixing those two conventions is the most common source of annotations that appear mirrored about the diagonal.',
+      },
+      {
+        language: 'python',
+        title: 'Adaptive thresholding for an unevenly lit document',
+        runnable: true,
+        code: `import cv2
+import numpy as np
+
+gray = cv2.imread("scan.jpg", cv2.IMREAD_GRAYSCALE)
+
+# A single global threshold cannot cope with a shadow across the page
+_, global_t = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
+
+adaptive = cv2.adaptiveThreshold(
+    gray, 255,
+    cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+    cv2.THRESH_BINARY,
+    blockSize=31,        # must be odd: the local window
+    C=10,                # subtracted from the local mean, biasing towards white
+)
+
+def ink_fraction(binary):
+    return float((binary == 0).mean())
+
+print("global threshold ink fraction: ", round(ink_fraction(global_t), 4))
+print("adaptive threshold ink fraction:", round(ink_fraction(adaptive), 4))
+
+# Clean the speckle that adaptive thresholding tends to produce
+kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+cleaned = cv2.morphologyEx(adaptive, cv2.MORPH_CLOSE, kernel)
+cv2.imwrite("scan_binarised.png", cleaned)`,
+        output: `global threshold ink fraction:  0.2817
+adaptive threshold ink fraction: 0.0642
+`,
+        explanation:
+          'The global threshold marks 28 per cent of the page as ink, because the shadowed half of the scan falls below 127 in its entirety and is classified as text. The adaptive version computes a separate threshold from each 31x31 neighbourhood, so it compares each pixel with its own local background and reports a plausible 6 per cent. blockSize must be odd and should be comfortably larger than a character stroke; C shifts the decision and is tuned by eye once per document type.',
+      },
+      {
+        language: 'python',
+        title: 'Reading video frame by frame',
+        runnable: true,
+        code: `import cv2
+
+cap = cv2.VideoCapture("traffic.mp4")
+if not cap.isOpened():
+    raise RuntimeError("could not open the video source")
+
+fps = cap.get(cv2.CAP_PROP_FPS)
+w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+print(f"source: {w}x{h} at {fps:.1f} fps")
+
+writer = cv2.VideoWriter("out.mp4", cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
+
+frames, moving = 0, 0
+subtractor = cv2.createBackgroundSubtractorMOG2(detectShadows=False)
+
+while True:
+    ok, frame = cap.read()
+    if not ok:                        # end of stream, or a decode failure
+        break
+    frames += 1
+
+    fg = subtractor.apply(frame)
+    fg = cv2.morphologyEx(fg, cv2.MORPH_OPEN,
+                          cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
+    contours, _ = cv2.findContours(fg, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    for c in contours:
+        if cv2.contourArea(c) < 500:
+            continue
+        x, y, bw, bh = cv2.boundingRect(c)      # note: x, y, width, height
+        cv2.rectangle(frame, (x, y), (x + bw, y + bh), (0, 255, 0), 2)
+        moving += 1
+
+    writer.write(frame)
+
+cap.release()
+writer.release()
+print(f"processed {frames} frames, {moving} moving-object boxes drawn")`,
+        output: `source: 1280x720 at 25.0 fps
+processed 750 frames, 2143 moving-object boxes drawn`,
+        explanation:
+          'The read loop is the shape every video pipeline takes: check isOpened, loop until read returns False, and release both the capture and the writer at the end or the output file stays truncated and unplayable. MOG2 models the background per pixel over time and returns a foreground mask, which after an opening becomes usable contours. The size passed to VideoWriter must match the frames you write exactly, or the file is created and remains empty with no error message.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Manufacturing inspection',
+        usage:
+          'A fixed camera, controlled lighting and a threshold plus contour pipeline count components and check dimensions at hundreds of parts per minute. It is preferred over a learned model because it is deterministic, needs no training data and can be justified line by line during a quality audit.',
+      },
+      {
+        context: 'Preprocessing for OCR',
+        usage:
+          'Tesseract and its successors work far better on a cleanly binarised, deskewed page. Adaptive thresholding, morphological cleanup and contour-based deskewing are standard preparation, and often improve recognition more than changing the OCR engine.',
+      },
+      {
+        context: 'Bootstrapping an annotation set',
+        usage:
+          'Before training a detector, a rough classical pipeline generates candidate boxes on thousands of frames that humans then correct. Correcting a proposal is several times faster than drawing from scratch, which is how many detection datasets are actually built.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'OpenCV (cv2)', role: 'Decoding, colour conversion, filtering, morphology, contours, drawing and video IO — the backbone of any preprocessing service.' },
+      { tool: 'NumPy', role: 'Every OpenCV array is an ndarray, so masks can be combined with logical operators and measured with ordinary array methods.' },
+      { tool: 'Tesseract / PaddleOCR', role: 'Consume the binarised, deskewed output of an OpenCV preprocessing stage.' },
+      { tool: 'FFmpeg', role: 'Often used behind or beside VideoCapture for codecs OpenCV was not built with, and for reliable frame-accurate seeking.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Not checking the result of cv2.imread',
+        why: 'A wrong path, an unsupported codec or a permissions problem all return None rather than raising. The failure surfaces much later as AttributeError: NoneType object has no attribute shape, which points at the wrong line entirely.',
+        fix: 'Check immediately: if img is None: raise FileNotFoundError(path). The same applies to cap.isOpened() for video and to the ok flag from cap.read().',
+      },
+      {
+        mistake: 'Confusing (x, y) with [row, col]',
+        why: 'Drawing functions take points as (x, y) while numpy indexes as [row, column] = [y, x]. The two conventions coexist in the same file, so an annotation appears transposed and the mistake looks like a bug in the detector rather than in the drawing.',
+        fix: 'Name variables x and y explicitly and write the conversion out: cv2.circle(img, (x, y), ...) versus img[y, x]. boundingRect returns x, y, w, h in that order.',
+      },
+      {
+        mistake: 'Drawing on the original array and reusing it',
+        why: 'rectangle, circle and putText modify their argument in place and return it. If the original frame is later reprocessed or saved, it carries the annotations, which corrupts both the output and any subsequent measurement.',
+        fix: 'Draw on frame.copy(). If the copy is a performance concern in a video loop, allocate one output buffer outside the loop and copy into it.',
+      },
+      {
+        mistake: 'Calling cv2.imshow inside a Jupyter notebook',
+        why: 'imshow needs a native GUI event loop that the notebook kernel does not run, so it opens an unresponsive window and frequently hangs the kernel until it is restarted.',
+        fix: 'In notebooks display with matplotlib after converting BGR to RGB. Reserve imshow plus waitKey(1) and destroyAllWindows for standalone scripts.',
+      },
+      {
+        mistake: 'Tuning a fixed threshold on one image',
+        why: 'A value chosen by eye encodes the exposure of that single photograph. On the next batch, a slightly different lighting level moves the whole histogram and the mask becomes either empty or entirely white.',
+        fix: 'Prefer Otsu when the histogram is bimodal and adaptive thresholding when illumination varies spatially. If a fixed value is unavoidable, log the resulting foreground fraction per frame and alert when it leaves an expected band.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'Walk me through a classical pipeline for counting objects in a controlled scene.',
+        answer:
+          'Load the frame and convert to a single channel that separates the objects — grayscale if brightness distinguishes them, HSV plus inRange if colour does. Blur lightly to suppress sensor noise, because thresholding is per pixel and will otherwise chase speckle. Threshold to a binary mask, preferring Otsu when the histogram is bimodal or adaptive thresholding when the lighting is uneven. Clean the mask morphologically: opening to delete specks smaller than the structuring element, closing to fill small holes. Run findContours with RETR_EXTERNAL, then filter the results by area, aspect ratio or solidity to discard whatever is obviously not an object. Finally measure each surviving contour with moments for the centroid and boundingRect for a box, and draw the annotations on a copy for human review. The whole thing runs in a few milliseconds and needs no training data, provided the scene is controlled.',
+        followUp:
+          'A strong answer volunteers the assumptions the pipeline rests on — fixed camera, stable lighting, separated objects — and names the point at which a learned detector becomes the better investment.',
+      },
+      {
+        level: 'intermediate',
+        question: 'What is the difference between opening and closing, and how do you choose the structuring element?',
+        answer:
+          'Opening is erosion followed by dilation, which deletes white features smaller than the structuring element and then restores the survivors to roughly their original size, so it removes specks and breaks thin bridges between touching objects. Closing is dilation followed by erosion, which fills black holes and gaps smaller than the element while leaving the outer boundary where it was, so it repairs a mask broken up by highlights or texture. The element size is the parameter that defines what counts as small, so it is chosen from the physical scale of the artefacts you want removed: if noise specks are about three pixels across, a 5x5 element removes them reliably while a 15x15 one would also eat genuine thin structures. The shape matters too — MORPH_ELLIPSE avoids the squared-off corners a rectangular element leaves on round objects. Both operations are idempotent, so applying them repeatedly achieves nothing beyond the first pass.',
+        followUp:
+          'Mentioning MORPH_TOPHAT for extracting features smaller than the element, and MORPH_GRADIENT for a cheap outline, signals genuine familiarity.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'When would you use classical OpenCV rather than a neural network, and when is that choice a mistake?',
+        answer:
+          'Use it when the environment is controlled and the rule is expressible: a fixed camera, stable lighting, high contrast between object and background, and a task like counting, measuring or barcode reading. The advantages are real — microsecond latency on a CPU, no training data, no GPU, deterministic behaviour that can be explained during a safety or quality audit, and code that a maintenance engineer can reason about. It is the wrong choice as soon as appearance varies in ways you cannot enumerate: outdoor lighting, cluttered backgrounds, deformable or occluded objects, or any category defined by semantics rather than pixels, such as is this person carrying a tool. The failure mode in those cases is a growing pile of tuned thresholds and special cases that each fix one scene and break another. A pragmatic middle path is common: a classical pipeline to bootstrap annotations or to restrict attention to a region of interest, with a learned model doing the judgement.',
+        followUp:
+          'The best answers mention that classical preprocessing also remains inside learned pipelines — decoding, resizing, colour conversion and letterboxing are all OpenCV in most production services.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A binary mask of a printed circuit board has white traces broken by small gaps where solder reflects, plus scattered single-pixel white noise. Which morphological operations, in what order, and why?',
+        hint: 'Deal with each artefact using the operation whose asymmetry matches it, and consider what each does to the other artefact.',
+        solution:
+          'Open first with a small element, around 3x3, to delete the single-pixel noise; closing first would instead merge that noise into the traces and make it permanent. Then close with an element slightly larger than the widest gap, perhaps 7x7, to bridge the breaks. The order matters because opening cannot recreate what closing has already merged, whereas closing after opening only has genuine trace pixels to work from. Verify by counting connected components before and after: a correct sequence should reduce the count towards the number of physical traces rather than towards one.',
+      },
+      {
+        prompt:
+          'Write code that isolates all red objects in a frame, given that red hue wraps around the end of the OpenCV hue scale.',
+        hint: 'Red occupies both the low and high ends of the 0–179 hue range, so one inRange call is not enough.',
+        language: 'python',
+        starterCode: 'import cv2\nimport numpy as np\n\nbgr = cv2.imread("frame.jpg")\nhsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)\n',
+        solution:
+          'lower1 = np.array([0, 120, 70]); upper1 = np.array([10, 255, 255])\nlower2 = np.array([170, 120, 70]); upper2 = np.array([179, 255, 255])\nmask = cv2.bitwise_or(cv2.inRange(hsv, lower1, upper1), cv2.inRange(hsv, lower2, upper2))\nmask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))\n\nHue is an angle, and red sits at the discontinuity where 179 wraps to 0, so it needs two ranges combined with a logical or. The saturation floor of 120 excludes washed-out pinks and greys whose hue is numerically red but perceptually meaningless, and the value floor of 70 excludes near-black pixels whose hue is pure noise.',
+      },
+      {
+        prompt:
+          'Your contour filter keeps returning a single huge contour with an area equal to the whole image. What has gone wrong and how do you confirm it?',
+        hint: 'What does the mask look like if the threshold direction is inverted?',
+        solution:
+          'The mask is almost entirely white, so the outer boundary of the image is itself the contour. That normally means the threshold polarity is inverted — the objects are darker than the background, so THRESH_BINARY_INV is needed rather than THRESH_BINARY — or that a global threshold sits below the entire histogram. Confirm by printing float((mask == 255).mean()): a value above about 0.9 tells you immediately. The fix is the inverse threshold, or Otsu with THRESH_BINARY_INV, plus an assertion that the foreground fraction stays inside a plausible band for your scene.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'CV-006-q1',
+        type: 'mcq',
+        concept: 'imread failure mode',
+        prompt: 'What does cv2.imread return when the path does not exist?',
+        options: [
+          'None, with no exception raised',
+          'An empty array of shape (0, 0, 3)',
+          'It raises FileNotFoundError',
+          'A black image of the default size',
+        ],
+        answerIndex: 0,
+        explanation:
+          'It returns None silently, so the failure surfaces later as an AttributeError about NoneType when something accesses .shape. Checking for None immediately after every read is a one-line habit that saves a great deal of misdirected debugging.',
+      },
+      {
+        id: 'CV-006-q2',
+        type: 'mcq',
+        concept: 'morphology',
+        prompt: 'A binary mask has small white specks of noise. Which operation removes them while preserving the size of large regions?',
+        options: [
+          'Opening (erode then dilate)',
+          'Closing (dilate then erode)',
+          'Dilation alone',
+          'A Gaussian blur on the mask',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Erosion destroys anything smaller than the structuring element, and the following dilation cannot recreate what no longer exists while it does restore the large regions to their original size. Closing would do the opposite job, filling holes rather than removing specks.',
+      },
+      {
+        id: 'CV-006-q3',
+        type: 'truefalse',
+        concept: 'in-place drawing',
+        prompt: 'cv2.rectangle returns a new annotated image and leaves the input array unchanged.',
+        answer: false,
+        explanation:
+          'It draws into the array you pass and returns that same array. Reusing the frame afterwards means reusing an annotated frame, so draw on a .copy() unless the mutation is intended.',
+      },
+      {
+        id: 'CV-006-q4',
+        type: 'code-output',
+        language: 'python',
+        concept: 'coordinate conventions',
+        prompt: 'A blob is centred at row 100, column 250. Which call draws a circle at its centre?',
+        code: 'cv2.circle(img, ???, 20, (0, 255, 0), 2)',
+        options: [
+          'cv2.circle(img, (250, 100), 20, (0, 255, 0), 2)',
+          'cv2.circle(img, (100, 250), 20, (0, 255, 0), 2)',
+          'cv2.circle(img, [100, 250], 20, (0, 255, 0), 2)',
+          'cv2.circle(img, (100, 250, 0), 20, (0, 255, 0), 2)',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Drawing functions take (x, y), where x is the column and y is the row, while numpy indexing is img[row, col] = img[y, x]. Row 100 and column 250 is therefore the point (250, 100).',
+      },
+      {
+        id: 'CV-006-q5',
+        type: 'match',
+        concept: 'choosing a threshold method',
+        prompt: 'Match each situation to the appropriate thresholding approach.',
+        pairs: [
+          { left: 'Even lighting, clearly bimodal histogram', right: 'Otsu' },
+          { left: 'A shadow falls across half the page', right: 'Adaptive Gaussian threshold' },
+          { left: 'The target is defined by its colour, not its brightness', right: 'cv2.inRange on an HSV image' },
+          { left: 'A fixed rig whose exposure never changes', right: 'A fixed global threshold' },
+        ],
+        explanation:
+          'The choice follows from what varies. Otsu adapts to a global exposure shift but not to a spatial gradient; adaptive thresholding handles the gradient; inRange handles colour-defined targets; a fixed value is defensible only when nothing about the illumination moves.',
+      },
+      {
+        id: 'CV-006-q6',
+        type: 'fill',
+        concept: 'contour retrieval',
+        prompt:
+          'Which findContours retrieval mode returns only the outermost contours, ignoring any nested inside them?',
+        answers: ['RETR_EXTERNAL', 'cv2.RETR_EXTERNAL', 'retr_external'],
+        explanation:
+          'RETR_EXTERNAL keeps only the outer boundary of each connected region, which is what you want when counting objects. RETR_TREE instead returns the full nesting hierarchy, useful when holes inside objects carry information.',
+      },
+      {
+        id: 'CV-006-q7',
+        type: 'explain',
+        concept: 'classical versus learned',
+        prompt:
+          'Explain when a classical OpenCV pipeline is the right answer and when reaching for it is a mistake.',
+        rubric: [
+          'Names the conditions under which classical methods work: controlled scene, expressible rule',
+          'Names concrete advantages such as latency, no training data and auditability',
+          'Names the failure mode: appearance variation that cannot be enumerated',
+        ],
+        sampleAnswer:
+          'Classical pipelines win when the environment is controlled and the decision can be written down: a fixed camera over a conveyor, stable lighting, objects that contrast with the background. There you get microsecond latency on a CPU, no dataset to collect, deterministic behaviour you can explain during an audit, and code a maintenance engineer can read. It becomes a mistake as soon as the appearance varies in ways you cannot enumerate — outdoor light, clutter, occlusion, deformation — or when the category is semantic rather than photometric. The symptom is a pipeline that accumulates tuned thresholds, each fixing one scene and quietly breaking another. Even then the classical tools do not disappear; they handle decoding, resizing and colour conversion inside the learned pipeline, and they are an efficient way to bootstrap the first round of annotations.',
+        explanation:
+          'The examinable judgement is matching method to environment, rather than treating classical and learned approaches as rivals.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does cv2.imread return for a missing file?', back: 'None, silently. Check for it immediately or you get a NoneType error much later and in the wrong place.' },
+      { front: 'Opening versus closing', back: 'Opening is erode then dilate, removing small white specks. Closing is dilate then erode, filling small black holes.' },
+      { front: 'What does Otsu thresholding do?', back: 'Searches all thresholds and picks the one minimising within-group variance — automatic, and reliable when the histogram is bimodal.' },
+      { front: 'When do you need adaptive thresholding?', back: 'When illumination varies across the frame, such as a shadow on a scanned page. A single global value cannot serve both regions.' },
+      { front: 'Coordinate conventions in OpenCV', back: 'Drawing takes (x, y); numpy indexes [row, col] = [y, x]. boundingRect returns x, y, w, h.' },
+      { front: 'How do you get a blob centroid from a contour?', back: 'moments: cx = m10/m00, cy = m01/m00, where m00 is the area in pixels.' },
+      { front: 'Why draw on img.copy()?', back: 'OpenCV drawing functions mutate the array in place, so the original frame would carry the annotations into any later processing.' },
+    ],
+
+    challenge: {
+      title: 'A configurable inspection pipeline',
+      brief:
+        'Build a command-line tool that takes an image or a video, a colour range or a thresholding mode, and minimum and maximum area bounds, and reports the count, centroid, area and bounding box of every object it finds, writing an annotated output alongside a CSV of measurements. Include a diagnostics mode that saves the intermediate mask after each stage so a failure can be attributed to thresholding, morphology or contour filtering rather than guessed at.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Handles both a still image and a video source, releasing resources correctly in both cases',
+        'Supports fixed, Otsu and adaptive thresholding, selectable from the command line',
+        'Saves intermediate masks in diagnostics mode, one per pipeline stage',
+        'Filters contours by both minimum and maximum area and reports how many were rejected at each step',
+        'Writes annotations to a copy, never to the source frame, and converts BGR to RGB only where a non-OpenCV consumer needs it',
+      ],
+      starterCode: 'import argparse\nimport csv\n\nimport cv2\nimport numpy as np\n\n\ndef build_mask(gray, mode: str, fixed: int = 127):\n    """Return a binary mask using the requested thresholding mode."""\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach a classmate the classical OpenCV pipeline for finding objects in a scene, and be honest with them about when it stops working.',
+      mustCover: [
+        'The pipeline order: convert, blur, threshold, morphology, contours, measure',
+        'What thresholding does and why Otsu or adaptive beats a hand-picked number',
+        'What opening and closing do, and that the order of erosion and dilation decides which',
+        'The conditions the whole approach depends on, and the point where a learned model is worth the cost',
+      ],
+      bonusSignals: ['mentions the None return from imread', 'mentions the (x, y) versus [row, col] trap', 'mentions using classical output to bootstrap annotations'],
+      sampleExplanation:
+        'The classical pipeline is six steps and each is one line. Convert the frame to whatever single channel separates your object — grayscale if it is a brightness difference, HSV if it is a colour. Blur it slightly, because the next step looks at each pixel in isolation and will otherwise chase sensor noise. Threshold it into a black-and-white mask, and rather than picking a number by eye use Otsu, which finds the cut-off that splits the histogram most cleanly, or adaptive thresholding if the lighting varies across the frame. Clean the mask with morphology: opening erodes then dilates, which deletes specks smaller than your little stamp shape and restores everything bigger; closing does the reverse and fills small holes. Then trace the outlines with findContours, throw away the ones that are the wrong size or shape, and measure the rest with moments for the centre and boundingRect for a box. Finally draw on a copy of the frame, because the drawing functions write into whatever array you hand them. All of this runs in milliseconds with no training data, and it is still the right answer on a factory line. It stops working the moment the lighting, background or object appearance varies in ways you cannot list in advance, and the symptom is a growing collection of thresholds where each fix breaks a different scene.',
+    },
+  },
+
+  {
+    id: 'CV-007',
+    domain: 'CV',
+    module: 'Vision Tasks',
+    topic: 'Classification',
+    title: 'Image Classification',
+    slug: 'image-classification',
+    difficulty: 3,
+    estimatedMinutes: 35,
+    prerequisites: ['CV-003', 'CV-005'],
+    related: ['CV-002', 'CV-003', 'CV-004', 'CV-005'],
+    tags: ['classification', 'softmax', 'cross-entropy', 'top-5', 'imagenet', 'confusion-matrix'],
+
+    learningObjectives: [
+      'Describe the full classification pipeline from pixels to a predicted label with a confidence',
+      'Explain what softmax does to logits and why cross-entropy is the loss that pairs with it',
+      'Distinguish top-1 from top-5 accuracy and say when each is the honest metric',
+      'Diagnose fine-grained confusion with a confusion matrix and decide what to do about it',
+    ],
+
+    terminology: [
+      {
+        term: 'Logit',
+        definition:
+          'One raw output score of the final linear layer, before any normalisation. Logits are unbounded real numbers; only their differences carry meaning, since adding a constant to all of them leaves the softmax unchanged.',
+        simple: 'The raw score the network gives each class before it is turned into a percentage.',
+      },
+      {
+        term: 'Softmax',
+        definition:
+          'The function that exponentiates each logit and divides by the sum, producing a vector of positive numbers summing to one that is interpreted as a probability distribution over the classes.',
+        simple: 'Turns the raw scores into percentages that add up to 100.',
+      },
+      {
+        term: 'Cross-entropy loss',
+        definition:
+          'The negative log of the probability the model assigned to the correct class. It is near zero when the model is confidently right and grows without bound as the correct class probability approaches zero.',
+        simple: 'How surprised the model was by the right answer. Less surprise means less loss.',
+      },
+      {
+        term: 'Top-1 and top-5 accuracy',
+        definition:
+          'Top-1 counts a prediction correct only if the highest-scoring class is the true one. Top-5 counts it correct if the true class appears among the five highest, which is the standard ImageNet headline number.',
+        simple: 'Did the best guess match, or did the right answer at least make the shortlist.',
+      },
+      {
+        term: 'Fine-grained classification',
+        definition:
+          'A task whose classes are visually close, such as 120 dog breeds or 200 bird species, where between-class differences are smaller than within-class variation in pose and lighting.',
+        simple: 'Telling apart things that look almost the same.',
+      },
+      {
+        term: 'Global average pooling',
+        definition:
+          'Averaging each feature map over its spatial extent, collapsing a (C, H, W) tensor to (C,). It is the standard bridge from a convolutional backbone to a linear classifier, and it accepts any input resolution.',
+        simple: 'Take the average of each feature map, turning a grid into a single number per feature.',
+      },
+    ],
+
+    simpleExplanation:
+      "Image classification asks one question: which of these categories is this picture? The machinery is a stack of the convolution filters from the previous unit. Early layers report where edges and colours are, middle layers report where textures and parts are, and by the end the network has boiled a 224 by 224 by 3 grid — about 150,000 numbers — down to a few hundred numbers describing what is present rather than where it is. A final layer turns those into one score per category. Those scores are raw and can be any size, so a function called softmax squeezes them into percentages that add to one hundred. The largest percentage is the prediction, and the percentage itself is the confidence. Training works by showing the network a labelled picture, measuring how much probability it put on the right answer, and nudging every weight so that next time a little more probability lands there. Do that a few million times and the filters organise themselves into something that recognises cats.",
+
+    whyItExists:
+      'Assigning a label to an image is the simplest complete vision task and therefore the one where architectures, losses and training recipes are developed before being transferred elsewhere. It is also directly useful: content moderation, medical triage, quality sorting and retrieval all reduce to putting an image into one of a fixed set of buckets with a calibrated confidence.',
+
+    analogy: {
+      scenario:
+        'A postal sorting office receives a parcel and must place it into one of a thousand pigeonholes. A junior clerk first notes crude features — size, weight, whether it rattles. A second clerk reads the shipping label fragments. A third recognises the sender logo. By the end of the line, the final clerk holds a short summary rather than the parcel itself, and writes a confidence score beside every pigeonhole. The parcel goes into the highest-scoring one, and the office manager audits the mistakes by tallying which pigeonholes get confused with which.',
+      mapping: [
+        { from: 'The line of clerks, each seeing the previous summary', to: 'The stacked convolutional layers of the backbone' },
+        { from: 'Crude features noted first, fine details later', to: 'Edges and colours in early layers, parts and objects in deep layers' },
+        { from: 'A short summary instead of the whole parcel', to: 'The pooled feature vector, typically 512 or 2048 numbers' },
+        { from: 'Scores written beside every pigeonhole', to: 'The logits, one per class' },
+        { from: 'Normalising the scores so they read as percentages', to: 'The softmax' },
+        { from: 'The manager tallying which pairs get confused', to: 'The confusion matrix' },
+      ],
+      bridge:
+        'The critical structural point is the compression: by the time the decision is made, the original pixels are gone and only a summary remains, so anything the summary discards is unavailable to the classifier no matter how good the final layer is. That is why fine-grained tasks fail in a particular way — the summary is adequate for dog versus car and inadequate for Siberian husky versus Alaskan malamute, since the distinguishing evidence is a few dozen pixels of face and ear that the pooling averaged away. The fix is more input resolution or attention to discriminative regions, not a bigger final layer.',
+      limitations:
+        'A sorting office knows the full list of possible destinations. A classifier also assumes a closed set: shown something outside its classes it will still distribute all of its probability among them, often confidently, which is why open-set recognition and out-of-distribution detection are separate problems rather than free by-products.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'From pixels to a label',
+        caption: 'The shape at each stage tells the whole story.',
+        steps: [
+          { label: 'Input (N, 3, 224, 224)', detail: 'Normalised float32. About 150,000 numbers per image.' },
+          { label: 'Convolutional backbone', detail: 'Resolution falls, channels rise: 64x112x112, then 256x56x56, then 2048x7x7.' },
+          { label: 'Global average pooling', detail: 'Each of the 2048 maps is averaged over 7x7, giving a (N, 2048) feature vector.' },
+          { label: 'Linear classifier head', detail: 'A single matrix multiply to (N, num_classes) — the logits.' },
+          { label: 'Softmax', detail: 'Exponentiate and normalise, giving probabilities summing to one.' },
+          { label: 'Argmax and confidence', detail: 'The predicted label plus the probability assigned to it.' },
+        ],
+      },
+      {
+        kind: 'annotated',
+        title: 'Reading one prediction honestly',
+        subject: 'probs = [0.62, 0.21, 0.09, 0.05, 0.03]',
+        annotations: [
+          { part: '0.62', note: 'Top-1 prediction and its confidence. Correct if this index is the true class.' },
+          { part: '0.62 + 0.21 + 0.09 + 0.05 + 0.03', note: 'Sums to 1.0 by construction — softmax always produces a distribution, even for an input from no class at all.' },
+          { part: 'top-5', note: 'All five shown here. If the true class is any of them, top-5 counts it correct.' },
+          { part: 'gap 0.62 vs 0.21', note: 'The margin. A small margin between the top two is the signal to inspect, and to route for human review.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Standard datasets and what they are for',
+        columns: ['Dataset', 'Scale', 'Classes', 'What it teaches you'],
+        rows: [
+          ['MNIST', '70k images, 28x28 grayscale', '10 digits', 'Pipeline mechanics. Solved; never use it to compare architectures'],
+          ['CIFAR-10 / CIFAR-100', '60k images, 32x32 colour', '10 / 100', 'Fast experiments on a single GPU; regularisation matters a lot'],
+          ['ImageNet-1k', '1.28M train, 50k val', '1,000', 'The reference benchmark, and the source of nearly all pretrained weights'],
+          ['Oxford-IIIT Pet', '7.4k images', '37 breeds', 'Fine-grained transfer learning on a realistic small budget'],
+          ['CUB-200', '11.8k images', '200 bird species', 'Genuinely fine-grained: part-level evidence is required'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Where the errors actually are',
+        caption: 'Inspect a confusion matrix and find the class pairs that account for most of the loss.',
+        widget: 'confusion-matrix-lab',
+      },
+    ],
+
+    formalDefinition:
+      'Image classification learns a function f: R^(C x H x W) -> Delta^(K-1) mapping an image to a point on the probability simplex over K mutually exclusive classes. A convolutional or transformer backbone produces a feature vector, a linear head produces K logits, and the softmax maps logits to probabilities. Parameters are fitted by minimising the expected cross-entropy between the predicted distribution and the one-hot target, which is equivalent to maximum likelihood estimation under a categorical model.',
+
+    math: {
+      intuition:
+        'The network emits one raw score per class, and those scores need to become a probability distribution: all positive, summing to one. Exponentiating makes them positive and dividing by the total makes them sum to one, which is softmax. The loss then asks a single question: what probability did you give the correct class? Taking the negative logarithm of that number turns a probability of 1 into a loss of 0 and a probability near 0 into a very large loss, which is why the model is punished far more for confident errors than for uncertain ones.',
+      formulas: [
+        {
+          latex: 'p_i = \\frac{e^{z_i}}{\\sum_{j=1}^{K} e^{z_j}}',
+          name: 'Softmax',
+          meaning:
+            'Converts K logits into K probabilities. Because a constant added to every logit cancels between numerator and denominator, softmax depends only on the differences between logits, which is why logits themselves are not interpretable in isolation.',
+          variables: [
+            { symbol: 'z_i', meaning: 'The logit for class i, an unbounded real number' },
+            { symbol: 'p_i', meaning: 'The predicted probability of class i, in (0, 1)' },
+            { symbol: 'K', meaning: 'Number of classes' },
+          ],
+          category: 'classification',
+        },
+        {
+          latex: '\\mathcal{L} = -\\sum_{i=1}^{K} y_i \\log p_i = -\\log p_{c}',
+          name: 'Cross-entropy loss',
+          meaning:
+            'With a one-hot target the sum collapses to a single term: the negative log probability of the true class c. A probability of 0.62 gives a loss of 0.478; a probability of 0.01 gives 4.605.',
+          variables: [
+            { symbol: 'y_i', meaning: 'Target indicator, 1 for the true class and 0 otherwise' },
+            { symbol: 'p_c', meaning: 'Predicted probability assigned to the true class' },
+            { symbol: '\\mathcal{L}', meaning: 'Loss for one example, in nats' },
+          ],
+          category: 'classification',
+        },
+        {
+          latex: '\\frac{\\partial \\mathcal{L}}{\\partial z_i} = p_i - y_i',
+          name: 'Gradient of cross-entropy with respect to the logits',
+          meaning:
+            'Remarkably simple, and the reason softmax and cross-entropy are always paired. The gradient is just the error in probability space: push down the logits of classes you over-predicted, push up the logit of the true class, in proportion to how wrong you were.',
+          variables: [
+            { symbol: 'p_i', meaning: 'Predicted probability for class i' },
+            { symbol: 'y_i', meaning: 'Target indicator for class i' },
+          ],
+          category: 'classification',
+        },
+        {
+          latex: '\\text{top-}k = \\frac{1}{N}\\sum_{n=1}^{N} \\mathbb{1}\\big[\\, y_n \\in \\text{argsort}(p_n)_{1:k} \\,\\big]',
+          name: 'Top-k accuracy',
+          meaning:
+            'The fraction of examples whose true label appears in the k highest-scoring predictions. Top-5 was adopted for ImageNet because many images genuinely contain several labelled objects, making a strict top-1 criterion partly a test of annotation convention.',
+          variables: [
+            { symbol: 'N', meaning: 'Number of evaluation examples' },
+            { symbol: 'y_n', meaning: 'True class of example n' },
+            { symbol: 'p_n', meaning: 'Predicted probability vector for example n' },
+          ],
+        },
+        {
+          latex: 'y_i^{\\text{LS}} = (1-\\epsilon)\\, y_i + \\frac{\\epsilon}{K}',
+          name: 'Label smoothing',
+          meaning:
+            'Replaces the hard one-hot target with a slightly softened one, so the model is never rewarded for driving a probability all the way to 1. It improves calibration and generalisation at a small cost in top-1 on easy datasets.',
+          variables: [
+            { symbol: '\\epsilon', meaning: 'Smoothing strength, typically 0.1' },
+            { symbol: 'K', meaning: 'Number of classes' },
+          ],
+        },
+      ],
+      derivation: [
+        'Start with three logits from a cat-dog-bird classifier: z = [2.0, 1.0, 0.1].',
+        'Exponentiate: e^2.0 = 7.389, e^1.0 = 2.718, e^0.1 = 1.105.',
+        'Sum: 7.389 + 2.718 + 1.105 = 11.212.',
+        'Divide: p = [0.659, 0.242, 0.099]. These sum to 1 and preserve the ordering of the logits.',
+        'If the true class is cat, the loss is -log(0.659) = 0.417. If it were bird, the loss would be -log(0.099) = 2.313, roughly five and a half times larger.',
+        'Note what happens if you add 10 to every logit: the exponentials all scale by e^10, which cancels in the division, and p is unchanged. Only differences matter, which is why logit values cannot be compared across models.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Softmax, loss and top-k on one prediction',
+      setup:
+        'A five-class classifier for pet breeds outputs the logits z = [3.2, 1.8, 0.7, 0.2, -1.1] for the classes [beagle, basset, dachshund, corgi, tabby]. The true label is basset. We compute the probabilities, the loss, and whether this counts as correct under top-1 and top-3.',
+      steps: [
+        {
+          label: 'Exponentiate each logit',
+          detail: 'e^3.2 = 24.533, e^1.8 = 6.050, e^0.7 = 2.014, e^0.2 = 1.221, e^-1.1 = 0.333.',
+          latex: 'e^{z} = [24.533,\\ 6.050,\\ 2.014,\\ 1.221,\\ 0.333]',
+        },
+        {
+          label: 'Sum them',
+          detail: '24.533 + 6.050 + 2.014 + 1.221 + 0.333 = 34.151.',
+          latex: '\\sum_j e^{z_j} = 34.151',
+        },
+        {
+          label: 'Divide to get probabilities',
+          detail:
+            'p = [0.718, 0.177, 0.059, 0.036, 0.010]. They sum to 1.000, and the ordering matches the logit ordering exactly — softmax is monotonic.',
+          latex: 'p = [0.718,\\ 0.177,\\ 0.059,\\ 0.036,\\ 0.010]',
+        },
+        {
+          label: 'Compute the cross-entropy loss',
+          detail:
+            'The true class is basset at index 1, with probability 0.177. The loss is -ln(0.177) = 1.732 nats. Had the model put 0.718 there instead, the loss would have been 0.331.',
+          latex: '\\mathcal{L} = -\\ln(0.177) = 1.732',
+        },
+        {
+          label: 'Score it under top-1 and top-3',
+          detail:
+            'Top-1 predicts beagle, which is wrong. Top-3 is {beagle, basset, dachshund}, which contains the true class, so it counts as correct. This single example is the whole difference between the two metrics.',
+        },
+        {
+          label: 'Read the gradient',
+          detail:
+            'dL/dz = p - y = [0.718, 0.177 - 1, 0.059, 0.036, 0.010] = [0.718, -0.823, 0.059, 0.036, 0.010]. The true class logit gets pushed up hardest, the wrongly confident beagle logit gets pushed down almost as hard, and the rest barely move.',
+          latex: '\\frac{\\partial \\mathcal{L}}{\\partial z} = p - y',
+        },
+      ],
+      conclusion:
+        'Three things are visible in one example. The confidence 0.718 is not evidence of correctness — it is wrong here. The top-1 and top-3 metrics disagree, which is exactly why a headline number must state which it is. And the gradient p - y explains the learning dynamics in one line: the update is proportional to the probability error, so confident mistakes produce the largest corrections, which is what makes cross-entropy train so much more decisively than squared error on classification.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Inference with a pretrained classifier, read correctly',
+        runnable: true,
+        code: `import torch
+from PIL import Image
+from torchvision.models import resnet50, ResNet50_Weights
+
+weights = ResNet50_Weights.IMAGENET1K_V2
+model = resnet50(weights=weights).eval()
+preprocess = weights.transforms()          # the exact training-time recipe
+categories = weights.meta["categories"]
+
+img = Image.open("dog.jpg").convert("RGB")
+batch = preprocess(img).unsqueeze(0)
+
+with torch.no_grad():                      # no gradients needed for inference
+    logits = model(batch)
+
+print("logits shape:", tuple(logits.shape))
+probs = logits.softmax(dim=1)[0]
+top5 = probs.topk(5)
+
+for score, idx in zip(top5.values, top5.indices):
+    print(f"{categories[idx]:28s} {score.item():.4f}")
+
+print("margin between top two:", round(float(top5.values[0] - top5.values[1]), 4))`,
+        output: `logits shape: (1, 1000)
+golden retriever             0.7241
+Labrador retriever           0.1188
+kuvasz                       0.0322
+tennis ball                  0.0157
+clumber                      0.0119
+margin between top two: 0.6053`,
+        explanation:
+          'Four details worth internalising. The model outputs 1,000 logits, not probabilities, so softmax is applied explicitly. eval() matters because it switches batch norm to its running statistics and disables dropout. no_grad halves the memory and speeds inference by skipping the autograd graph. And the margin between the top two predictions is the most useful single number for deciding whether to trust a prediction or route it to a human.',
+      },
+      {
+        language: 'python',
+        title: 'A training step, and why you pass logits to the loss',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+
+logits = torch.tensor([[3.2, 1.8, 0.7, 0.2, -1.1]])
+target = torch.tensor([1])                      # basset, index 1
+
+loss = criterion(logits, target)
+print("loss with smoothing:", round(float(loss), 4))
+print("loss without smoothing:",
+      round(float(nn.CrossEntropyLoss()(logits, target)), 4))
+
+# The common bug: applying softmax before the loss
+wrong = nn.CrossEntropyLoss()(logits.softmax(dim=1), target)
+print("softmax applied twice:", round(float(wrong), 4), "<- silently wrong")
+
+# Gradient check: dL/dz should equal p - y for the unsmoothed case
+z = logits.clone().requires_grad_(True)
+nn.CrossEntropyLoss()(z, target).backward()
+print("gradient:", [round(g, 4) for g in z.grad[0].tolist()])
+print("p - y:    ", [round(v, 4) for v in
+                     (logits.softmax(dim=1) - torch.eye(5)[target])[0].tolist()])`,
+        output: `loss with smoothing: 1.7189
+loss without smoothing: 1.7324
+softmax applied twice: 1.5433 <- silently wrong
+gradient: [0.7183, -0.8229, 0.059, 0.0358, 0.0098]
+p - y:     [0.7183, -0.8229, 0.059, 0.0358, 0.0098]
+`,
+        explanation:
+          'nn.CrossEntropyLoss expects raw logits, because it fuses log_softmax and negative log likelihood into one numerically stable operation. Passing probabilities instead produces a smaller, meaningless loss with no error raised — the classic silent bug of this unit. The last two lines verify the derivation by hand: the gradient with respect to the logits really is p - y, which is worth seeing once with actual numbers.',
+      },
+      {
+        language: 'python',
+        title: 'Evaluate properly: top-1, top-5 and the worst confusions',
+        runnable: true,
+        code: `import numpy as np
+import torch
+
+
+@torch.no_grad()
+def evaluate(model, loader, num_classes, device="cuda"):
+    model.eval()
+    top1 = top5 = total = 0
+    confusion = np.zeros((num_classes, num_classes), dtype=np.int64)
+
+    for images, targets in loader:
+        images, targets = images.to(device), targets.to(device)
+        logits = model(images)
+        _, pred5 = logits.topk(5, dim=1)
+
+        correct = pred5.eq(targets.view(-1, 1))
+        top1 += int(correct[:, 0].sum())
+        top5 += int(correct.any(dim=1).sum())
+        total += targets.size(0)
+
+        for t, p in zip(targets.tolist(), pred5[:, 0].tolist()):
+            confusion[t, p] += 1
+
+    off_diagonal = confusion.copy()
+    np.fill_diagonal(off_diagonal, 0)
+    worst = np.dstack(np.unravel_index(
+        np.argsort(off_diagonal.ravel())[::-1][:3], off_diagonal.shape))[0]
+
+    print(f"top-1: {top1 / total:.4f}   top-5: {top5 / total:.4f}   n={total}")
+    for true_c, pred_c in worst:
+        print(f"  true {true_c:3d} predicted as {pred_c:3d}: "
+              f"{off_diagonal[true_c, pred_c]} times")
+    return confusion`,
+        output: `top-1: 0.8142   top-5: 0.9573   n=3669
+  true  23 predicted as  24: 41 times
+  true  24 predicted as  23: 38 times
+  true   7 predicted as  31: 29 times`,
+        explanation:
+          'Headline accuracy tells you how much is wrong; the confusion matrix tells you what to do about it. Here two classes account for 79 errors between them in both directions, which is the signature of a genuinely fine-grained pair rather than a general capacity problem — the remedy is higher input resolution or more examples of that pair, not a bigger model. The @torch.no_grad() decorator and model.eval() are both required; forgetting eval leaves batch norm updating its statistics on validation data.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Diabetic retinopathy screening',
+        usage:
+          'Retinal photographs are graded into five severity classes, and the model triages which patients an ophthalmologist sees first. Because the cost of missing severe disease is asymmetric, the operating threshold is set on the probability rather than taking the argmax.',
+      },
+      {
+        context: 'Content moderation at scale',
+        usage:
+          'A classifier assigns each upload to policy categories, with high-confidence cases actioned automatically and low-margin cases queued for human review. The margin between the top two probabilities is the routing signal, which makes calibration as important as accuracy.',
+      },
+      {
+        context: 'Agricultural disease identification',
+        usage:
+          'Phone photographs of leaves are classified into crop diseases. This is fine-grained and heavily affected by lighting and background, so the deployed pipeline combines a pretrained backbone with aggressive augmentation and an explicit out-of-scope class for unrecognisable images.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'torchvision.models', role: 'Pretrained backbones and the weights.transforms() recipe, the usual starting point for any classification task.' },
+      { tool: 'timm', role: 'A far larger catalogue of architectures and pretrained checkpoints, with a consistent interface for replacing the classifier head.' },
+      { tool: 'scikit-learn', role: 'confusion_matrix and classification_report for per-class precision, recall and support after inference.' },
+      { tool: 'Weights & Biases / TensorBoard', role: 'Logging per-class accuracy and a confusion heatmap, which is where the actionable information lives.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Applying softmax before nn.CrossEntropyLoss',
+        why: 'The loss already applies log_softmax internally for numerical stability. Feeding it probabilities squashes the input range, producing a smaller loss that trains badly, and nothing raises an error.',
+        fix: 'Pass raw logits to nn.CrossEntropyLoss, and apply softmax only when you need probabilities for display or thresholding. If you genuinely need log-probabilities as the model output, pair nn.LogSoftmax with nn.NLLLoss instead.',
+      },
+      {
+        mistake: 'Forgetting model.eval() during validation',
+        why: 'Dropout remains active and batch norm keeps updating its running statistics from validation batches, which both lowers the reported score and contaminates the model state with information from the validation set.',
+        fix: 'Wrap evaluation in model.eval() plus torch.no_grad(), and switch back with model.train() at the top of each training epoch.',
+      },
+      {
+        mistake: 'Reading accuracy as the only metric on an imbalanced dataset',
+        why: 'With 95 per cent negatives, a model that always predicts the majority class scores 95 per cent while being useless. The headline number conceals complete failure on the class that matters.',
+        fix: 'Report per-class recall and a confusion matrix, use balanced accuracy or macro F1 as the selection metric, and consider class weighting or resampling during training.',
+      },
+      {
+        mistake: 'Treating softmax confidence as a probability of correctness',
+        why: 'Modern networks are systematically overconfident: a set of predictions at 0.95 confidence is often only 85 per cent correct. Softmax also assigns all of its mass among the known classes even for an input belonging to none of them.',
+        fix: 'Calibrate with temperature scaling on a held-out split, verify with a reliability diagram, and handle out-of-distribution inputs explicitly rather than hoping low confidence will flag them.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Why is cross-entropy used for classification rather than mean squared error?',
+        answer:
+          'Two reasons, one statistical and one about optimisation. Statistically, cross-entropy is the negative log-likelihood of a categorical model, so minimising it is maximum likelihood estimation for the distribution we actually assumed; squared error corresponds to a Gaussian likelihood, which is the wrong model for a discrete label. Practically, the gradient of cross-entropy with respect to the logits is exactly p - y, so a confident mistake produces a large gradient and gets corrected decisively. With squared error applied after a softmax or sigmoid, the gradient is multiplied by the derivative of that saturating function, which is nearly zero exactly when the model is confidently wrong — so the worst errors generate the weakest learning signal and training stalls.',
+        followUp:
+          'A strong answer mentions that frameworks fuse log_softmax with the negative log-likelihood for numerical stability, which is why the loss expects logits rather than probabilities.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Your model reports 94 per cent accuracy but the business says it is useless. How do you investigate?',
+        answer:
+          'Start with the class distribution: if 94 per cent of the data belongs to one class, then constant prediction achieves the same score and accuracy is measuring nothing. Produce a confusion matrix and per-class recall, which will show whether the rare and valuable classes are ever being predicted. Then check the metric against the actual cost structure — in screening, a false negative may cost a hundred times a false positive, in which case recall at a fixed precision, or a cost-weighted metric, is the number to optimise and report. Also verify that the evaluation split is representative: a random split of data with duplicates, or with several images per subject, leaks information and inflates every metric. Finally check calibration, because a downstream system thresholding on confidence behaves very differently with an overconfident model even when the argmax accuracy is unchanged.',
+        followUp:
+          'The best answers ask what decision the model output drives before choosing a metric, rather than defaulting to accuracy or F1.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'What does top-5 accuracy measure that top-1 does not, and when is quoting it dishonest?',
+        answer:
+          'Top-5 counts a prediction correct if the true label appears anywhere in the five highest-scoring classes. It was adopted for ImageNet for a defensible reason: many images contain several labelled objects while the ground truth records only one, so strict top-1 partly measures agreement with an annotation convention rather than recognition. Top-5 is therefore a reasonable research benchmark on a thousand-class problem with ambiguous labels. Quoting it is dishonest when the deployed system acts on a single prediction, which is almost always, and it is meaningless when the class count is small — top-5 on a six-class problem is nearly free. The rule is to report the metric matching how the output is consumed: top-1 for automated single-label decisions, recall at a fixed precision for triage, and top-k only where a shortlist is genuinely shown to a human.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Given logits [1.0, 2.0, 3.0], compute the softmax probabilities and the cross-entropy loss if the true class is index 0.',
+        hint: 'Exponentiate, sum, divide, then take the negative natural log of the probability at the true index.',
+        solution:
+          'Exponentials: e^1 = 2.718, e^2 = 7.389, e^3 = 20.086. Sum = 30.193. Probabilities = [0.0900, 0.2447, 0.6652], which sum to 1. The true class is index 0 with probability 0.0900, so the loss is -ln(0.0900) = 2.408 nats. For reference, random guessing over three classes would give -ln(1/3) = 1.099, so this prediction is worse than chance on this example — the model is confidently wrong.',
+      },
+      {
+        prompt:
+          'A 10-class model has 0.92 top-1 accuracy overall, but class 7 has recall 0.31 with 400 of its 500 validation images predicted as class 8. What is happening and what are your next three actions?',
+        hint: 'Read the number as a directional confusion rather than as general weakness.',
+        solution:
+          'This is a directional fine-grained confusion: class 7 is being absorbed into class 8, while class 8 itself may look healthy because it is receiving extra predictions. Overall accuracy hides it because the other eight classes are fine. Three actions: first, look at fifty images from each class side by side to decide whether the distinction is even visible at the current input resolution, since if it is not, raising resolution or cropping to the discriminative region is the fix; second, check the labels, because a systematic one-directional confusion is often an annotation problem; third, if the distinction is real and labelled correctly, rebalance with class weighting or oversampling and retrain, then re-examine the same cell of the matrix rather than the headline number.',
+      },
+      {
+        prompt:
+          'Write an evaluation function that returns top-1 accuracy, macro-averaged recall and the three most confused class pairs, and explain why macro recall is reported alongside accuracy.',
+        hint: 'Accumulate a confusion matrix; every metric you need is a function of it.',
+        language: 'python',
+        starterCode: 'import numpy as np\nimport torch\n\n\n@torch.no_grad()\ndef report(model, loader, num_classes, device="cuda"):\n    model.eval()\n    confusion = np.zeros((num_classes, num_classes), dtype=np.int64)\n',
+        solution:
+          'Accumulate confusion[true, pred] += 1 over the loader, then: top1 = np.trace(confusion) / confusion.sum(); per_class_recall = np.diag(confusion) / np.maximum(confusion.sum(axis=1), 1); macro_recall = per_class_recall.mean(); and for the pairs, zero the diagonal and take the three largest entries with np.argsort on the flattened array.\n\nMacro recall averages over classes rather than over examples, so every class counts equally regardless of how many samples it has. On an imbalanced set, accuracy is dominated by the majority class while macro recall falls immediately when a rare class is ignored, which is precisely the failure that a single accuracy number conceals.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'CV-007-q1',
+        type: 'mcq',
+        concept: 'softmax',
+        prompt: 'What does softmax do to a vector of logits?',
+        options: [
+          'Exponentiates each and divides by the sum, giving positive values summing to one',
+          'Scales them linearly into the range 0 to 1',
+          'Sets the largest to 1 and all others to 0',
+          'Subtracts the mean and divides by the standard deviation',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Exponentiation makes every value positive and preserves the ordering; dividing by the total makes them sum to one. Because a constant added to all logits cancels, softmax depends only on the differences between them.',
+      },
+      {
+        id: 'CV-007-q2',
+        type: 'numeric',
+        concept: 'cross-entropy arithmetic',
+        prompt:
+          'A model assigns probability 0.25 to the true class. What is the cross-entropy loss in nats? Answer to three decimal places.',
+        answer: 1.386,
+        tolerance: 0.01,
+        explanation:
+          'The loss is -ln(0.25) = 1.386 nats. For comparison, a probability of 0.5 gives 0.693 and 0.9 gives 0.105 — the penalty grows sharply as the probability assigned to the correct class falls.',
+      },
+      {
+        id: 'CV-007-q3',
+        type: 'debug',
+        language: 'python',
+        concept: 'loss input',
+        prompt: 'Why does this training loop converge badly?',
+        code: 'logits = model(images)\nprobs = torch.softmax(logits, dim=1)\nloss = nn.CrossEntropyLoss()(probs, targets)',
+        options: [
+          'CrossEntropyLoss applies log_softmax itself, so softmax is being applied twice',
+          'dim should be 0 rather than 1',
+          'CrossEntropyLoss requires one-hot targets, not class indices',
+          'The model output must be detached before the loss',
+        ],
+        answerIndex: 0,
+        explanation:
+          'nn.CrossEntropyLoss expects raw logits and fuses log_softmax with negative log likelihood for stability. Passing probabilities compresses the input range so the gradients are far too small, and no error is raised — a textbook silent bug.',
+      },
+      {
+        id: 'CV-007-q4',
+        type: 'truefalse',
+        concept: 'confidence and calibration',
+        prompt: 'A softmax probability of 0.99 means the model is correct about 99 per cent of the time on such predictions.',
+        answer: false,
+        explanation:
+          'Modern networks are systematically overconfident, so the accuracy among predictions at 0.99 confidence is usually meaningfully lower. Calibration must be measured on a held-out split and corrected, commonly with temperature scaling.',
+      },
+      {
+        id: 'CV-007-q5',
+        type: 'multi',
+        concept: 'diagnosing errors',
+        prompt: 'Your model reports 95 per cent accuracy on a dataset where 94 per cent of images are class A. What should you do? Select all that apply.',
+        options: [
+          'Report per-class recall rather than overall accuracy',
+          'Inspect the confusion matrix to see whether the minority class is ever predicted',
+          'Use macro F1 or balanced accuracy as the model-selection metric',
+          'Conclude the model is performing well and ship it',
+        ],
+        answerIndices: [0, 1, 2],
+        explanation:
+          'Constant prediction of the majority class would score 94 per cent, so 95 per cent tells you almost nothing. Per-class recall, the confusion matrix and a balanced selection metric all reveal whether the minority class is being learned at all.',
+      },
+      {
+        id: 'CV-007-q6',
+        type: 'order',
+        concept: 'inference pipeline',
+        prompt: 'Order the steps of classifying one image with a pretrained model.',
+        items: [
+          'Apply the checkpoint preprocessing recipe to the loaded image',
+          'Add a batch dimension with unsqueeze(0)',
+          'Run the model under torch.no_grad() in eval mode',
+          'Apply softmax to the logits',
+          'Take the argmax and map the index to a class name',
+        ],
+        explanation:
+          'Preprocessing must match training exactly, the model requires a batch axis, inference runs without gradients and with batch norm in eval mode, and only then are the logits converted to probabilities and to a label.',
+      },
+      {
+        id: 'CV-007-q7',
+        type: 'explain',
+        concept: 'fine-grained failure',
+        prompt:
+          'Explain why a classifier that separates dogs from cars easily can still fail badly at separating two dog breeds, in terms of what the backbone produces.',
+        rubric: [
+          'Notes that the backbone compresses the image to a fixed-length feature vector',
+          'Notes that the distinguishing evidence between breeds is small and localised',
+          'Concludes that resolution or attention to discriminative regions is the fix, not a larger head',
+        ],
+        sampleAnswer:
+          'By the time the decision is made, the image is no longer available: the backbone has compressed roughly 150,000 pixel values into a few thousand pooled features summarising what is present rather than where. Dog versus car is easy because almost every feature differs. Two closely related breeds differ in a small number of localised cues — the shape of an ear, the pattern on a muzzle — that may cover only a few dozen pixels, and global average pooling averages them together with the whole body and background. Enlarging the classifier head cannot recover information that pooling discarded. The effective remedies act earlier: higher input resolution so the cue survives downsampling, cropping or attention that focuses on the discriminative region, and more training examples of exactly that confusable pair, which the confusion matrix identifies precisely.',
+        explanation:
+          'The examinable idea is the information bottleneck: what the backbone discards cannot be recovered by the classifier, so fine-grained failures are resolution and attention problems rather than capacity problems.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What is a logit?', back: 'A raw, unbounded class score before softmax. Only differences between logits matter, so absolute values are not comparable across models.' },
+      { front: 'Cross-entropy loss in one sentence?', back: 'The negative log of the probability assigned to the true class: 0 when confidently right, unbounded when confidently wrong.' },
+      { front: 'What is the gradient of cross-entropy with respect to the logits?', back: 'p - y, the probability error. This is why softmax and cross-entropy are always paired.' },
+      { front: 'Top-1 versus top-5', back: 'Top-1 requires the highest-scoring class to be correct; top-5 requires only that the true class appear in the five highest.' },
+      { front: 'Why pass logits, not probabilities, to nn.CrossEntropyLoss?', back: 'It applies log_softmax internally for numerical stability. Passing probabilities applies softmax twice and trains badly with no error.' },
+      { front: 'What does global average pooling do?', back: 'Averages each feature map over its spatial extent, turning (C, H, W) into (C,) so any input size reaches the linear head.' },
+      { front: 'Why can accuracy be misleading?', back: 'On imbalanced data, always predicting the majority class scores well. Report per-class recall and a confusion matrix instead.' },
+    ],
+
+    challenge: {
+      title: 'Fine-grained classifier with an honest evaluation report',
+      brief:
+        'Train a classifier on a fine-grained dataset such as Oxford-IIIT Pet using a pretrained backbone, then produce an evaluation report rather than a single number. The report must contain top-1 and top-5 accuracy, per-class recall sorted worst first, a confusion heatmap, the ten highest-loss validation images with their predicted and true labels, and a reliability diagram comparing confidence with observed accuracy in ten bins. Conclude with a written paragraph naming the two class pairs responsible for most of the error and what you would do next.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Reports top-1, top-5 and macro recall, not accuracy alone',
+        'Includes a confusion heatmap and identifies the worst class pairs programmatically',
+        'Shows the highest-loss examples, which is where labelling errors surface',
+        'Includes a reliability diagram and comments on whether the model is overconfident',
+        'Evaluation runs under model.eval() and torch.no_grad(), with the deterministic eval transform',
+      ],
+      starterCode: 'import torch\nimport torch.nn as nn\nfrom torchvision import datasets, transforms\nfrom torchvision.models import resnet18, ResNet18_Weights\n\nweights = ResNet18_Weights.IMAGENET1K_V1\nmodel = resnet18(weights=weights)\nmodel.fc = nn.Linear(model.fc.in_features, 37)\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach a classmate how an image classifier turns pixels into a labelled prediction with a confidence, and what the confidence does and does not mean.',
+      mustCover: [
+        'The backbone compresses the image into a feature vector, then a linear head produces one score per class',
+        'Softmax turns those raw scores into probabilities that sum to one',
+        'Cross-entropy measures the negative log probability given to the correct class, and training minimises it',
+        'A high softmax probability is not the same as a high probability of being right',
+      ],
+      bonusSignals: ['works through a softmax calculation', 'distinguishes top-1 from top-5', 'mentions the confusion matrix as the diagnostic tool'],
+      sampleExplanation:
+        'The picture goes through a stack of convolution layers that gradually trade spatial detail for meaning: the resolution shrinks while the number of feature maps grows, so by the end you no longer have 150,000 pixel values but a couple of thousand numbers describing what kinds of structure are present. A single matrix multiply turns those into one raw score per class, called a logit. Logits can be any size, so softmax exponentiates them and divides by the total, giving numbers that are positive and add up to one — which we read as percentages. The largest is the prediction. Training measures the negative logarithm of the probability the model gave to the correct answer, so being right with 0.9 costs almost nothing and being wrong with 0.01 costs a great deal, and every weight is nudged to move probability towards the truth. The caution is that the confidence is not a probability of correctness: these networks are usually overconfident, and shown something belonging to none of their classes they will still hand out all of their probability among them, often decisively. That is why you look at a confusion matrix rather than a single accuracy number, and calibrate before letting a threshold make decisions.',
+    },
+  },
+
+  {
+    id: 'CV-008',
+    domain: 'CV',
+    module: 'Vision Tasks',
+    topic: 'Detection and boxes',
+    title: 'Object Detection and Bounding Boxes',
+    slug: 'object-detection',
+    difficulty: 4,
+    estimatedMinutes: 45,
+    prerequisites: ['CV-003', 'CV-007'],
+    related: ['CV-002', 'CV-003', 'CV-005', 'CV-007'],
+    tags: ['detection', 'bounding-box', 'iou', 'nms', 'map', 'yolo', 'faster-rcnn', 'anchors'],
+
+    learningObjectives: [
+      'State what detection adds to classification, and why the output is a variable-length list',
+      'Convert between xyxy, xywh, cxcywh and normalised box formats without error',
+      'Compute intersection over union by hand and explain what a given value means',
+      'Explain non-maximum suppression step by step and say what its threshold controls',
+      'Contrast one-stage and two-stage detectors, and explain anchors and the anchor-free trend',
+      'Read a mean average precision number and know what it hides',
+    ],
+
+    terminology: [
+      {
+        term: 'Bounding box',
+        definition:
+          'An axis-aligned rectangle localising one object, stored as four numbers. The format must be stated: xyxy gives two corners, xywh gives a corner plus extents, cxcywh gives the centre plus extents.',
+        simple: 'A rectangle drawn around an object, written as four numbers.',
+      },
+      {
+        term: 'Intersection over union (IoU)',
+        definition:
+          'The area of overlap between two boxes divided by the area of their union. It is 1 for identical boxes, 0 for disjoint ones, and is the standard measure of localisation quality.',
+        simple: 'How much two rectangles overlap, as a fraction of the total area they cover between them.',
+      },
+      {
+        term: 'Non-maximum suppression (NMS)',
+        definition:
+          'The post-processing step that removes duplicate detections: sort by confidence, keep the highest, discard every remaining box of the same class whose IoU with it exceeds a threshold, and repeat.',
+        simple: 'Keep the best box and throw away the near-copies of it.',
+      },
+      {
+        term: 'Anchor box',
+        definition:
+          'A predefined reference rectangle of fixed size and aspect ratio tiled across the feature map. The network predicts offsets from anchors rather than absolute coordinates, which stabilises regression.',
+        simple: 'A starting-guess rectangle the network only has to correct, rather than invent from nothing.',
+      },
+      {
+        term: 'Mean average precision (mAP)',
+        definition:
+          'The area under the precision-recall curve averaged over classes, at one or more IoU thresholds. COCO mAP averages over IoU from 0.50 to 0.95 in steps of 0.05, which makes it much stricter than mAP at 0.50.',
+        simple: 'One number summarising how well a detector finds things without crying wolf.',
+      },
+      {
+        term: 'One-stage versus two-stage',
+        definition:
+          'Two-stage detectors first propose candidate regions then classify and refine them; one-stage detectors predict class and box densely in a single pass. The distinction trades accuracy on difficult cases against latency.',
+        simple: 'Either shortlist first and examine carefully, or judge everywhere at once and be fast.',
+      },
+    ],
+
+    simpleExplanation:
+      "Classification answers what is in this picture. Detection answers what is in this picture and where, for every object at once. That change sounds small and is not. A classifier always produces the same shaped answer: one score per category. A detector must produce a list whose length it does not know in advance — no cars in this frame, seventeen in the next — and each entry needs a rectangle, a category and a confidence. The usual approach is to ask the same question at thousands of positions across the image: is there an object centred near here, what is it, and how should the rectangle around it be adjusted. That produces a mess of overlapping guesses, most of them near-duplicates of each other, so a cleanup step keeps the most confident box of each cluster and deletes the rest. To judge whether a predicted rectangle counts as correct, we measure how much it overlaps the true rectangle using a ratio called intersection over union, and require that ratio to exceed a threshold before we call it a hit.",
+
+    whyItExists:
+      'Most useful decisions about an image depend on where things are and how many there are, not merely whether something is present: counting stock, avoiding a pedestrian, reading a form field, tracking a player. A whole-image label cannot express multiplicity or position, so detection exists to produce a variable-length, spatially grounded description that downstream systems can act on.',
+
+    analogy: {
+      scenario:
+        'Picture a stocktake in a warehouse aisle. One person walks past with a clipboard and, standing at each metre mark, writes down whether a pallet seems to start near them, what is on it and roughly where its edges are. Walking the aisle produces dozens of overlapping entries, because the same pallet is noticed from three consecutive positions. A supervisor then merges the duplicates: for each cluster of entries describing the same region, keep the most confident one and strike out the rest. To audit the result, an inspector compares each recorded rectangle against the true pallet footprint and accepts it only if the overlap is good enough.',
+      mapping: [
+        { from: 'Standing at each metre mark and reporting', to: 'Dense prediction at every position of the feature map' },
+        { from: 'Several entries for one pallet', to: 'Multiple raw detections of a single object' },
+        { from: 'The supervisor merging duplicates', to: 'Non-maximum suppression' },
+        { from: 'Keeping the most confident entry of a cluster', to: 'Sorting by score and retaining the maximum' },
+        { from: 'The inspector requiring good enough overlap', to: 'The IoU threshold that defines a true positive' },
+        { from: 'A rough rectangle the clerk corrects rather than invents', to: 'An anchor box, refined by a predicted offset' },
+      ],
+      bridge:
+        'The clipboard walk is exactly the structure of a one-stage detector: a fixed grid of positions, a prediction at each, and a merge step at the end. Two things follow that beginners find surprising. The number of detections is not something the network outputs — it emerges from thresholding and suppression, which is why a confidence threshold changes the count. And the IoU threshold is a policy decision, not a property of the model: raising it from 0.5 to 0.75 will make the same detector look considerably worse without changing a single weight.',
+      limitations:
+        'A warehouse aisle is one-dimensional and pallets do not overlap. Real scenes have objects in front of each other, and NMS handles that badly: two genuinely distinct objects that overlap heavily will suppress one another, which is precisely why crowded-scene detection remains hard and why soft-NMS and set-prediction approaches exist.',
+    },
+
+    visuals: [
+      {
+        kind: 'table',
+        title: 'Box formats, and the conversions that bite',
+        columns: ['Format', 'Four numbers', 'Used by', 'Conversion to xyxy'],
+        rows: [
+          ['xyxy (Pascal VOC)', 'x_min, y_min, x_max, y_max', 'torchvision, Pascal VOC, most losses', 'Already there'],
+          ['xywh (COCO)', 'x_min, y_min, width, height', 'COCO JSON annotations', 'x2 = x1 + w, y2 = y1 + h'],
+          ['cxcywh (YOLO)', 'centre_x, centre_y, width, height', 'YOLO label files, usually normalised', 'x1 = cx - w/2, y1 = cy - h/2'],
+          ['Normalised', 'Any of the above divided by image width and height', 'YOLO text labels, resolution-independent storage', 'Multiply by W and H first'],
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'Non-maximum suppression, step by step',
+        caption: 'Run per class. The threshold decides how much overlap counts as a duplicate.',
+        steps: [
+          { label: 'Discard low scores', detail: 'Drop every box below the confidence threshold, often 0.25 for display or 0.001 for evaluation.' },
+          { label: 'Sort by confidence', detail: 'Highest first. NMS is greedy and never revisits a decision.' },
+          { label: 'Take the top box and keep it', detail: 'It is by definition the most confident remaining detection.' },
+          { label: 'Suppress its near-duplicates', detail: 'Remove every remaining same-class box with IoU above the threshold, commonly 0.45 to 0.7.' },
+          { label: 'Repeat on what remains', detail: 'Continue until the list is empty. The survivors are the final detections.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'One-stage versus two-stage detectors',
+        caption: 'Both are still in production use; the choice is a latency-accuracy decision.',
+        left: {
+          heading: 'One-stage — YOLO, SSD, RetinaNet, FCOS',
+          points: [
+            'Predicts class and box densely in a single forward pass',
+            'Real-time on modest hardware; YOLO variants run at hundreds of frames per second',
+            'Historically weaker on small and heavily overlapping objects',
+            'Focal loss was invented to fix the extreme foreground-background imbalance this creates',
+          ],
+        },
+        right: {
+          heading: 'Two-stage — Faster R-CNN and successors',
+          points: [
+            'A region proposal network shortlists candidates, then a head classifies and refines each',
+            'Typically stronger localisation, especially at high IoU thresholds',
+            'Several times slower, with a more complex training recipe',
+            'Extends naturally to instance segmentation by adding a mask head, as in Mask R-CNN',
+          ],
+        },
+      },
+      {
+        kind: 'timeline',
+        title: 'How detection architectures evolved',
+        events: [
+          { when: '2001', what: 'Viola-Jones: cascaded Haar features make real-time face detection possible on a CPU.' },
+          { when: '2014', what: 'R-CNN: run a CNN on each of 2,000 region proposals. Accurate and about 47 seconds per image.' },
+          { when: '2015', what: 'Faster R-CNN: the region proposal network is learned and shares the backbone, reaching about 5 frames per second.' },
+          { when: '2016', what: 'YOLO and SSD: a single pass over a grid, trading some accuracy for real-time speed.' },
+          { when: '2017', what: 'Focal loss and RetinaNet: one-stage accuracy catches up by fixing class imbalance.' },
+          { when: '2019', what: 'FCOS and CenterNet: anchors are dropped in favour of predicting object centres directly.' },
+          { when: '2020', what: 'DETR: set prediction with bipartite matching removes NMS from the pipeline entirely.' },
+          { when: '2023 onwards', what: 'Anchor-free YOLO variants and real-time DETR converge on high accuracy at video rates.' },
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'Object detection learns a function from an image to a set of tuples (b, c, s), where b is a bounding box in R^4, c is a class label and s a confidence score, with the set cardinality unknown a priori. Training minimises a sum of a classification loss over assigned locations and a localisation loss over positive assignments, where assignment is determined by IoU with ground-truth boxes or by a matching criterion. Evaluation computes precision and recall as functions of the confidence threshold, with a detection counted as a true positive when its IoU with an unmatched ground-truth box of the same class exceeds a stated threshold, and summarises the resulting curve as average precision, averaged over classes to give mAP.',
+
+    math: {
+      intuition:
+        'Everything in detection evaluation rests on one ratio. Two rectangles either overlap or they do not; the overlapping area measures agreement, and dividing by the union normalises it so that large boxes are not flattered. The resulting number is between 0 and 1, is 1 only for identical boxes, and gives a threshold that turns a continuous notion of closeness into the binary decision that precision and recall require.',
+      formulas: [
+        {
+          latex: '\\text{IoU}(A, B) = \\frac{|A \\cap B|}{|A \\cup B|} = \\frac{|A \\cap B|}{|A| + |B| - |A \\cap B|}',
+          name: 'Intersection over union',
+          meaning:
+            'The overlap area divided by the combined area. The right-hand form is the one you compute, since the union is never measured directly — it is the sum of the two areas minus the double-counted intersection.',
+          variables: [
+            { symbol: 'A, B', meaning: 'The two boxes, typically a prediction and a ground-truth box' },
+            { symbol: '|A \\cap B|', meaning: 'Area of the overlapping rectangle, zero if they do not overlap' },
+            { symbol: '|A \\cup B|', meaning: 'Area covered by either box' },
+          ],
+        },
+        {
+          latex: 'w_{\\cap} = \\max\\!\\big(0,\\ \\min(x_2^A, x_2^B) - \\max(x_1^A, x_1^B)\\big)',
+          name: 'Intersection width (and identically, height)',
+          meaning:
+            'The overlap along one axis is the rightmost left edge subtracted from the leftmost right edge, clamped at zero. The clamp is what makes disjoint boxes give zero rather than a spurious negative area.',
+          variables: [
+            { symbol: 'x_1, x_2', meaning: 'Left and right edges of a box in xyxy format' },
+            { symbol: 'w_{\\cap}', meaning: 'Width of the intersection rectangle' },
+          ],
+        },
+        {
+          latex: 'P = \\frac{TP}{TP + FP}, \\qquad R = \\frac{TP}{TP + FN}, \\qquad AP = \\int_0^1 P(R)\\, dR',
+          name: 'Precision, recall and average precision',
+          meaning:
+            'Sweeping the confidence threshold traces a curve of precision against recall; average precision is the area beneath it. A detector can always raise recall by lowering the threshold, so only the curve, not a single operating point, characterises it.',
+          variables: [
+            { symbol: 'TP', meaning: 'Detections matching an unmatched ground-truth box above the IoU threshold' },
+            { symbol: 'FP', meaning: 'Detections with no valid match, including duplicates of an already-matched object' },
+            { symbol: 'FN', meaning: 'Ground-truth objects with no matching detection' },
+          ],
+          category: 'classification',
+        },
+        {
+          latex: '\\text{mAP}@[.5{:}.95] = \\frac{1}{10}\\sum_{t \\in \\{0.50, 0.55, \\ldots, 0.95\\}} \\text{mAP}@t',
+          name: 'COCO mean average precision',
+          meaning:
+            'Averages mAP over ten IoU thresholds, so a detector is rewarded for tight localisation rather than merely hitting the object. This is why COCO mAP values look low: 0.45 is a strong result, whereas mAP at 0.50 alone for the same model might be 0.65.',
+          variables: [
+            { symbol: 't', meaning: 'The IoU threshold defining a true positive' },
+          ],
+        },
+        {
+          latex: 't_x = \\frac{x - x_a}{w_a}, \\quad t_w = \\log\\!\\frac{w}{w_a}',
+          name: 'Anchor box parameterisation',
+          meaning:
+            'The network predicts normalised offsets from an anchor rather than absolute coordinates: a centre shift measured in anchor widths, and a log scale ratio. The log makes the width target symmetric for doubling and halving, and keeps the regression targets near zero.',
+          variables: [
+            { symbol: 'x, w', meaning: 'Ground-truth centre and width' },
+            { symbol: 'x_a, w_a', meaning: 'Anchor centre and width' },
+            { symbol: 't_x, t_w', meaning: 'The regression targets the network actually learns' },
+          ],
+        },
+      ],
+      derivation: [
+        'Why divide by the union rather than by the ground-truth area alone? Consider a prediction that covers the entire image and a ground-truth box of 100x100 pixels.',
+        'Intersection over ground-truth area would be 10,000/10,000 = 1.0: a perfect score for a box that localises nothing.',
+        'Intersection over union is 10,000 divided by the whole image area, which for a 1000x1000 image is 10,000/1,000,000 = 0.01.',
+        'The union term therefore penalises over-large predictions as well as under-large ones, making IoU symmetric in a way that one-sided ratios are not.',
+        'The same argument explains why IoU is scale-invariant: multiplying both boxes by a constant scales intersection and union equally, leaving the ratio unchanged.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Computing IoU by hand, then running NMS on four boxes',
+      setup:
+        'A detector predicts a box A = (50, 50, 150, 150) in xyxy pixel coordinates. The ground-truth box is B = (100, 100, 200, 200). We compute the IoU exactly, decide whether it counts as a true positive, and then run non-maximum suppression over a small set of overlapping predictions.',
+      steps: [
+        {
+          label: 'Compute each area',
+          detail: 'A is 100 wide and 100 tall, so 10,000 square pixels. B is the same size, also 10,000.',
+          latex: '|A| = (150-50)(150-50) = 10{,}000, \\quad |B| = 10{,}000',
+        },
+        {
+          label: 'Find the intersection rectangle',
+          detail:
+            'Left edge: max(50, 100) = 100. Right edge: min(150, 200) = 150. Top edge: max(50, 100) = 100. Bottom edge: min(150, 200) = 150. So the overlap is the square (100, 100, 150, 150).',
+          latex: '\\cap = (\\max(50,100),\\ \\max(50,100),\\ \\min(150,200),\\ \\min(150,200))',
+        },
+        {
+          label: 'Compute the intersection area',
+          detail: 'Width = 150 - 100 = 50, height = 150 - 100 = 50, so the area is 2,500 square pixels. Both dimensions are positive, so the boxes genuinely overlap.',
+          latex: '|A \\cap B| = 50 \\times 50 = 2{,}500',
+        },
+        {
+          label: 'Compute the union',
+          detail: 'Add the areas and subtract the double-counted overlap: 10,000 + 10,000 - 2,500 = 17,500.',
+          latex: '|A \\cup B| = 10{,}000 + 10{,}000 - 2{,}500 = 17{,}500',
+        },
+        {
+          label: 'Divide',
+          detail:
+            'IoU = 2,500 / 17,500 = 0.1429. Against the usual threshold of 0.5 this is a false positive, and the ground-truth object counts as missed. Visually the boxes look as though they overlap substantially, which is worth noticing: IoU is much harsher than intuition.',
+          latex: '\\text{IoU} = \\frac{2{,}500}{17{,}500} = 0.1429',
+        },
+        {
+          label: 'Now a second prediction',
+          detail:
+            'C = (95, 105, 205, 195) against the same B. Intersection: x from max(100,95)=100 to min(200,205)=200, so 100 wide; y from max(100,105)=105 to min(200,195)=195, so 90 tall — area 9,000. Areas: |C| = 110 x 90 = 9,900, |B| = 10,000. Union = 9,900 + 10,000 - 9,000 = 10,900. IoU = 9,000/10,900 = 0.826.',
+          latex: '\\text{IoU}(C, B) = \\frac{9{,}000}{10{,}900} = 0.826',
+        },
+        {
+          label: 'Run NMS over four predictions',
+          detail:
+            'Same class, scores: C (0.92), D = (98, 102, 202, 198) (0.88), A (0.61), E = (400, 400, 500, 500) (0.55). Sort descending. Keep C. IoU(C, D) = 0.889, above the 0.5 threshold, so D is suppressed as a duplicate. IoU(C, A) = 0.142, below the threshold, so A survives this round. Keep A next. IoU(A, E) = 0, so E survives and is kept.',
+        },
+        {
+          label: 'Read the outcome honestly',
+          detail:
+            'NMS returns C, A and E. Matching against the single ground-truth box B: C matches at IoU 0.826 and is the true positive; A is a false positive because B is already matched; E is a false positive with no overlap at all. Precision is 1/3 and recall is 1/1.',
+        },
+      ],
+      conclusion:
+        'Two lessons that repay memorising. First, boxes that look well aligned can score surprisingly low — a half-overlap in each axis gives an IoU of about 0.14, not 0.5 — which is why localisation quality must be measured rather than eyeballed. Second, NMS is greedy and per class: it removed the genuine duplicate D, but it also let through A, which survived only because it overlapped the true object too little to be recognised as a duplicate. Raising the confidence threshold, not the NMS threshold, is the correct lever against that kind of false positive.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'IoU and NMS written out, then checked against torchvision',
+        runnable: true,
+        code: `import torch
+from torchvision.ops import box_iou, nms
+
+
+def iou_pair(a, b):
+    """IoU of two boxes in xyxy format, computed step by step."""
+    ix1, iy1 = max(a[0], b[0]), max(a[1], b[1])
+    ix2, iy2 = min(a[2], b[2]), min(a[3], b[3])
+    iw, ih = max(0.0, ix2 - ix1), max(0.0, iy2 - iy1)   # clamp: no negative overlap
+    inter = iw * ih
+    area_a = (a[2] - a[0]) * (a[3] - a[1])
+    area_b = (b[2] - b[0]) * (b[3] - b[1])
+    return inter / (area_a + area_b - inter)
+
+
+A = [50.0, 50.0, 150.0, 150.0]
+B = [100.0, 100.0, 200.0, 200.0]
+print("IoU(A, B) by hand:", round(iou_pair(A, B), 4))
+
+boxes = torch.tensor([
+    [95.0, 105.0, 205.0, 195.0],     # C
+    [98.0, 102.0, 202.0, 198.0],     # D, a near-duplicate of C
+    [50.0, 50.0, 150.0, 150.0],      # A
+    [400.0, 400.0, 500.0, 500.0],    # E, elsewhere entirely
+])
+scores = torch.tensor([0.92, 0.88, 0.61, 0.55])
+
+print("pairwise IoU:\\n", box_iou(boxes, boxes).round(decimals=3))
+kept = nms(boxes, scores, iou_threshold=0.5)
+print("kept indices:", kept.tolist())
+print("kept scores:", [round(float(s), 2) for s in scores[kept]])`,
+        output: `IoU(A, B) by hand: 0.1429
+pairwise IoU:
+ tensor([[1.000, 0.889, 0.142, 0.000],
+        [0.889, 1.000, 0.143, 0.000],
+        [0.142, 0.143, 1.000, 0.000],
+        [0.000, 0.000, 0.000, 1.000]])
+kept indices: [0, 2, 3]
+kept scores: [0.92, 0.61, 0.55]`,
+        explanation:
+          'The hand-written function reproduces the 0.1429 computed on paper. Two implementation details matter: the clamp at zero, without which disjoint boxes produce a negative intersection and a nonsensical negative IoU; and the fact that torchvision nms is class-agnostic, so you must either call it per class or use batched_nms, which offsets the coordinates by class id to achieve the same effect in one call.',
+      },
+      {
+        language: 'python',
+        title: 'Box format conversions, where most detection bugs live',
+        runnable: true,
+        code: `import torch
+from torchvision.ops import box_convert
+
+xyxy = torch.tensor([[100.0, 150.0, 300.0, 450.0]])
+img_w, img_h = 640.0, 480.0
+
+xywh = box_convert(xyxy, in_fmt="xyxy", out_fmt="xywh")
+cxcywh = box_convert(xyxy, in_fmt="xyxy", out_fmt="cxcywh")
+print("xyxy  :", xyxy.tolist())
+print("xywh  :", xywh.tolist())          # x_min, y_min, w, h
+print("cxcywh:", cxcywh.tolist())        # centre_x, centre_y, w, h
+
+# YOLO label files store cxcywh NORMALISED by image size
+normalised = cxcywh / torch.tensor([img_w, img_h, img_w, img_h])
+print("yolo txt line:", " ".join(f"{v:.6f}" for v in normalised[0].tolist()))
+
+# And back again -- the round trip every dataloader must get right
+back = box_convert(normalised * torch.tensor([img_w, img_h, img_w, img_h]),
+                   in_fmt="cxcywh", out_fmt="xyxy")
+print("round trip matches:", torch.allclose(back, xyxy))`,
+        output: `xyxy  : [[100.0, 150.0, 300.0, 450.0]]
+xywh  : [[100.0, 150.0, 200.0, 300.0]]
+cxcywh: [[200.0, 300.0, 200.0, 300.0]]
+yolo txt line: 0.312500 0.625000 0.312500 0.625000
+round trip matches: True`,
+        explanation:
+          'Notice that xywh and cxcywh share the same last two numbers and differ entirely in the first two, which is exactly why confusing them produces boxes offset by half their size — an error small enough to look like a poorly trained model rather than a bug. Normalisation adds a second trap: a normalised box fed to a function expecting pixels collapses to a few pixels in the top-left corner. Always convert explicitly, and assert that coordinates lie in the range you expect.',
+      },
+      {
+        language: 'python',
+        title: 'Running a pretrained detector and reading its output',
+        runnable: true,
+        code: `import torch
+from torchvision.io import read_image
+from torchvision.models.detection import (
+    fasterrcnn_resnet50_fpn_v2, FasterRCNN_ResNet50_FPN_V2_Weights,
+)
+
+weights = FasterRCNN_ResNet50_FPN_V2_Weights.DEFAULT
+model = fasterrcnn_resnet50_fpn_v2(weights=weights, box_score_thresh=0.5).eval()
+names = weights.meta["categories"]
+
+img = read_image("street.jpg")                    # uint8 CHW tensor
+batch = [weights.transforms()(img)]               # a LIST of images, not a stack
+
+with torch.no_grad():
+    output = model(batch)[0]
+
+print("keys:", sorted(output.keys()))
+print("detections above threshold:", len(output["boxes"]))
+for box, label, score in zip(output["boxes"], output["labels"], output["scores"]):
+    x1, y1, x2, y2 = (round(float(v)) for v in box)
+    print(f"  {names[label]:12s} {score:.3f}  ({x1}, {y1}) -> ({x2}, {y2})"
+          f"  area={((x2 - x1) * (y2 - y1)):,} px")`,
+        output: `keys: ['boxes', 'labels', 'scores']
+detections above threshold: 4
+  person        0.997  (412, 188) -> (498, 421)  area=20,038
+  car           0.991  (12, 240) -> (231, 372)   area=28,908
+  car           0.964  (298, 251) -> (389, 320)  area=6,279
+  bicycle       0.812  (455, 330) -> (540, 430)  area=8,500
+`,
+        explanation:
+          'Three things distinguish a detector API from a classifier. It takes a list of images of arbitrary sizes rather than a stacked batch, because detection handles variable resolution natively. It returns a dictionary of parallel arrays whose length varies per image and depends on box_score_thresh, so the number of detections is a function of your threshold rather than a property of the scene. And the boxes come back in xyxy pixel coordinates of the input image, already through NMS — which is why raising box_score_thresh changes the count while the NMS threshold changes how aggressively near-duplicates were merged.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Driver assistance and autonomous driving',
+        usage:
+          'Pedestrian, vehicle and sign detection run at video rate with a hard latency budget, which is why one-stage anchor-free detectors dominate. Recall on small and distant objects is the metric that matters, and it is reported separately from the headline mAP.',
+      },
+      {
+        context: 'Retail shelf auditing',
+        usage:
+          'Detectors count facings of each product on a shelf from a phone photograph. The scene is dense and repetitive, so NMS tuning is decisive: too aggressive and adjacent identical products merge into one detection, undercounting the shelf.',
+      },
+      {
+        context: 'Medical imaging triage',
+        usage:
+          'Lesion and nodule detection is evaluated with FROC — sensitivity against false positives per scan — rather than mAP, because a radiologist cares about how many spurious marks they must dismiss per case, not about an area under a precision-recall curve.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'torchvision.ops', role: 'box_iou, nms, batched_nms, box_convert and generalized_box_iou_loss — the primitives every detection pipeline needs.' },
+      { tool: 'Ultralytics YOLO', role: 'A complete one-stage training and export pipeline with letterboxing, mosaic augmentation and NMS built in.' },
+      { tool: 'Detectron2 / MMDetection', role: 'Research-grade two-stage and one-stage implementations with reproducible configurations.' },
+      { tool: 'pycocotools', role: 'The reference mAP implementation. Report COCO mAP with this rather than a hand-written evaluator.' },
+      { tool: 'Albumentations', role: 'Augments images and boxes together, with min_visibility to drop boxes cropped out of the frame.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Mixing up xywh and cxcywh',
+        why: 'Both formats end with width and height, so shapes and ranges look plausible. The difference is whether the first two numbers are a corner or the centre, so every box lands offset by half its own size.',
+        fix: 'Convert explicitly with torchvision box_convert and name variables for their format, such as boxes_xyxy. Assert that x_min is less than x_max after every conversion.',
+      },
+      {
+        mistake: 'Forgetting to transform boxes when the image is resized or letterboxed',
+        why: 'The image changes coordinates but the annotations do not, so the model learns a systematic offset. When the transform is letterboxing, the offset also varies with each image aspect ratio, which makes it look like random noise in the labels.',
+        fix: 'Use a library that transforms images and boxes jointly, and keep the letterbox scale and padding so predictions can be mapped back. Render a sample of training images with their boxes drawn before every run.',
+      },
+      {
+        mistake: 'Running class-agnostic NMS across all classes',
+        why: 'A person standing in front of a car legitimately produces two heavily overlapping boxes of different classes. Suppressing across classes deletes one of them, losing a correct detection entirely.',
+        fix: 'Run NMS per class, or use torchvision batched_nms, which offsets coordinates by class index so that different classes can never suppress each other.',
+      },
+      {
+        mistake: 'Comparing mAP numbers from different protocols',
+        why: 'COCO mAP averages over IoU 0.50 to 0.95 while Pascal VOC mAP uses IoU 0.50 alone, and the same model routinely scores twenty points higher under the second. Small-object subsets and maximum-detection limits differ too.',
+        fix: 'State the protocol with every number: mAP@[.5:.95] or mAP@0.5, which dataset, and which detection limit. Use pycocotools so the protocol is not reimplemented informally.',
+      },
+      {
+        mistake: 'Treating the confidence threshold as a model property',
+        why: 'The number of detections, and therefore precision and recall, are entirely determined by the threshold. Two teams reporting different results often have identical models and different thresholds.',
+        fix: 'Evaluate over the whole precision-recall curve with a near-zero threshold, and choose an operating point separately based on the cost of a false positive against a miss.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Explain IoU and non-maximum suppression, and say what each threshold controls.',
+        answer:
+          'IoU is the area of overlap between two boxes divided by the area of their union, giving a scale-invariant number between 0 and 1 that measures localisation agreement. It is used in two distinct places, which is a common source of confusion. In evaluation it defines what counts as a true positive: a prediction matches a ground-truth box only if their IoU exceeds a stated threshold, typically 0.5 for the permissive Pascal VOC protocol and averaged from 0.5 to 0.95 for COCO. In post-processing it drives NMS: sort detections by confidence, keep the highest, remove every remaining same-class box whose IoU with it exceeds the NMS threshold, and repeat. The NMS threshold therefore controls how eager you are to call two boxes duplicates — lower it and crowded scenes lose genuine objects, raise it and every object sprouts several boxes. The evaluation threshold is a measurement policy and changes no weights; the NMS threshold changes the output the model actually produces.',
+        followUp:
+          'A strong answer notes that NMS must be run per class, and mentions soft-NMS or DETR-style set prediction as ways of avoiding the crowded-scene failure altogether.',
+      },
+      {
+        level: 'advanced',
+        question: 'What are anchor boxes, why were they introduced, and why is the field moving away from them?',
+        answer:
+          'An anchor is a predefined reference rectangle of a given scale and aspect ratio, tiled at every position of a feature map. Rather than regressing absolute coordinates, the network predicts small normalised offsets from the anchor — a centre shift in anchor widths and a log scale ratio — which keeps regression targets near zero and well conditioned, and lets one position handle objects of several shapes at once. They were introduced in Faster R-CNN and became universal because direct coordinate regression trained poorly. The costs accumulated, though: anchor scales and ratios are dataset-specific hyperparameters that must be tuned or clustered, the assignment rule between anchors and ground truth adds complexity, and tiling many anchors creates an extreme foreground-background imbalance that needed focal loss to fix. Anchor-free detectors such as FCOS and CenterNet instead predict object centres and distances to the four edges directly, removing those hyperparameters entirely, and DETR goes further by treating detection as set prediction with bipartite matching, which eliminates NMS as well. Modern YOLO releases are anchor-free for the same reasons.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'A detector reports mAP@0.5 of 0.72 but the customer says it misses too much. How do you investigate?',
+        answer:
+          'First establish what miss means operationally, because mAP is an average over classes and thresholds and hides exactly this. Break the number down: per-class average precision will often show that one important class is far below the mean; per-size breakdown, as COCO reports for small, medium and large objects, usually shows small objects collapsing, which points at input resolution or feature-pyramid levels rather than at the model family. Then separate the error types: are the misses complete failures to fire, in which case recall at a low confidence threshold is the diagnostic, or are they detections suppressed by NMS in crowded regions, or boxes that fired but fell below the operating threshold? The fixes differ entirely — raise resolution, adjust the NMS threshold, lower the confidence threshold and accept more false positives, or collect more examples of the failing class. Finally check the evaluation protocol matches the customer expectation: they may care about recall at a fixed false-positive rate, which no mAP number reports.',
+        followUp:
+          'The strongest answers ask to see the actual failure images before touching the model, since a systematic miss on one camera angle or lighting condition is a data problem, not an architecture problem.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Compute the IoU of boxes (0, 0, 100, 100) and (50, 50, 150, 150) in xyxy format, showing every step.',
+        hint: 'Find the intersection rectangle first, then use union = areaA + areaB - intersection.',
+        solution:
+          'Intersection: x from max(0, 50) = 50 to min(100, 150) = 100, so width 50; y identically 50. Intersection area = 2,500. Each box is 100 x 100 = 10,000, so the union is 10,000 + 10,000 - 2,500 = 17,500. IoU = 2,500/17,500 = 0.1429. Against the usual 0.5 threshold this is not a match, which is worth sitting with: two boxes overlapping by half in each axis score only 0.14, so IoU punishes misalignment far harder than the eye does.',
+      },
+      {
+        prompt:
+          'You have five same-class detections with scores [0.9, 0.85, 0.8, 0.4, 0.35]. Box 2 has IoU 0.7 with box 1, box 3 has IoU 0.3 with box 1 and 0.8 with box 2, and boxes 4 and 5 overlap nothing. Which survive NMS at threshold 0.5?',
+        hint: 'NMS is greedy: process in score order, and suppressed boxes never suppress anyone themselves.',
+        solution:
+          'Keep box 1 (0.9). Box 2 has IoU 0.7 with it, above 0.5, so box 2 is suppressed. Box 3 has IoU 0.3 with box 1, below the threshold, so it survives this round — and crucially its IoU of 0.8 with box 2 is irrelevant, because box 2 has already been removed and removed boxes do not suppress. Next kept is box 3 (0.8). Boxes 4 and 5 overlap nothing, so both survive. Final: boxes 1, 3, 4 and 5. This illustrates the greediness of NMS: a different score ordering would have produced a different surviving set from the same geometry.',
+      },
+      {
+        prompt:
+          'Write a function converting a YOLO label line (class cx cy w h, all normalised) into an xyxy pixel box, and explain the two assertions you would add.',
+        hint: 'Denormalise first, then shift from centre to corners.',
+        language: 'python',
+        starterCode: 'def yolo_to_xyxy(line: str, img_w: int, img_h: int):\n    cls, cx, cy, w, h = line.split()\n',
+        solution:
+          'cls = int(cls); cx, cy, w, h = (float(v) for v in (cx, cy, w, h))\nassert all(0.0 <= v <= 1.0 for v in (cx, cy, w, h)), "YOLO labels must be normalised"\ncx, w = cx * img_w, w * img_w\ncy, h = cy * img_h, h * img_h\nx1, y1 = cx - w / 2, cy - h / 2\nx2, y2 = cx + w / 2, cy + h / 2\nassert x1 < x2 and y1 < y2, "degenerate box after conversion"\nreturn cls, [x1, y1, x2, y2]\n\nThe first assertion catches the most common dataset error, a label file already in pixels being read as normalised, which would otherwise produce boxes a few pixels across in the top-left corner. The second catches a corner-versus-centre mix-up, which frequently yields x1 greater than x2 and would silently give a negative area in any IoU computation.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'CV-008-q1',
+        type: 'numeric',
+        concept: 'IoU by hand',
+        prompt:
+          'Boxes A = (50, 50, 150, 150) and B = (100, 100, 200, 200) in xyxy. What is their IoU, to four decimal places?',
+        answer: 0.1429,
+        tolerance: 0.002,
+        explanation:
+          'The intersection is the 50x50 square (100, 100, 150, 150), area 2,500. Each box has area 10,000, so the union is 10,000 + 10,000 - 2,500 = 17,500, and 2,500/17,500 = 0.1429 — below the usual 0.5 threshold despite looking like a substantial overlap.',
+      },
+      {
+        id: 'CV-008-q2',
+        type: 'mcq',
+        concept: 'non-maximum suppression',
+        prompt: 'What problem does non-maximum suppression solve?',
+        options: [
+          'Multiple overlapping detections of the same object, keeping only the most confident',
+          'Class imbalance between foreground and background during training',
+          'Boxes that extend beyond the image boundary',
+          'Objects that are too small for the feature map resolution',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Dense prediction fires at several positions around one object, so the raw output contains clusters of near-duplicates. NMS keeps the highest-scoring box of each cluster and removes the rest. Foreground-background imbalance is what focal loss addresses, which is a different problem entirely.',
+      },
+      {
+        id: 'CV-008-q3',
+        type: 'truefalse',
+        concept: 'evaluation protocols',
+        prompt: 'COCO mAP@[.5:.95] and Pascal VOC mAP@0.5 are directly comparable numbers.',
+        answer: false,
+        explanation:
+          'COCO averages over ten IoU thresholds up to 0.95 and therefore rewards tight localisation, so the same detector typically scores fifteen to twenty points lower under COCO than under VOC. Any reported mAP must state its protocol.',
+      },
+      {
+        id: 'CV-008-q4',
+        type: 'match',
+        concept: 'box formats',
+        prompt: 'Match each box format to what its four numbers mean.',
+        pairs: [
+          { left: 'xyxy', right: 'x_min, y_min, x_max, y_max' },
+          { left: 'xywh', right: 'x_min, y_min, width, height' },
+          { left: 'cxcywh', right: 'centre_x, centre_y, width, height' },
+          { left: 'Normalised cxcywh', right: 'Centre and extents divided by image width and height' },
+        ],
+        explanation:
+          'xywh and cxcywh share their last two entries and differ in whether the first two are a corner or a centre, which is why confusing them offsets every box by half its own size — a bug that looks like poor training rather than a conversion error.',
+      },
+      {
+        id: 'CV-008-q5',
+        type: 'multi',
+        concept: 'one-stage versus two-stage',
+        prompt: 'Which statements about one-stage detectors are true? Select all that apply.',
+        options: [
+          'They predict class and box in a single forward pass without a proposal stage',
+          'They are generally faster, which makes them the default for real-time video',
+          'Extreme foreground-background imbalance motivated the focal loss',
+          'They always outperform two-stage detectors at high IoU thresholds',
+        ],
+        answerIndices: [0, 1, 2],
+        explanation:
+          'The first three are accurate. The last is not: two-stage detectors historically localise more precisely, which shows up specifically at strict IoU thresholds, although modern one-stage detectors have closed most of that gap.',
+      },
+      {
+        id: 'CV-008-q6',
+        type: 'debug',
+        language: 'python',
+        concept: 'NMS across classes',
+        prompt: 'A pedestrian in front of a car produces two boxes, but only one survives. What is wrong?',
+        code: 'keep = nms(all_boxes, all_scores, iou_threshold=0.5)\nfinal = [(all_boxes[i], all_labels[i]) for i in keep]',
+        options: [
+          'nms is class-agnostic here, so a person box and a car box suppress each other; use batched_nms with the labels',
+          'The IoU threshold is too high and should be 0.9',
+          'nms requires boxes sorted by score beforehand',
+          'The boxes must be converted to cxcywh before suppression',
+        ],
+        answerIndex: 0,
+        explanation:
+          'torchvision nms ignores labels, so heavily overlapping detections of different classes suppress one another. batched_nms takes the labels and offsets coordinates per class, so suppression happens only within a class.',
+      },
+      {
+        id: 'CV-008-q7',
+        type: 'explain',
+        concept: 'detection versus classification',
+        prompt:
+          'Explain what makes detection structurally harder than classification, beyond simply being a harder visual task.',
+        rubric: [
+          'Notes that the output is a variable-length set rather than a fixed-size vector',
+          'Notes that training requires assigning predictions to ground-truth objects',
+          'Notes that evaluation needs a matching criterion such as IoU plus a threshold',
+        ],
+        sampleAnswer:
+          'A classifier always emits the same shaped answer: one score per class, so the loss is a simple comparison with a one-hot target. A detector must emit a set whose size it does not know — zero objects in one frame, thirty in the next — and sets have no natural ordering, so there is no direct way to line up predictions with targets. Training therefore needs an assignment rule deciding which predicted location is responsible for which object, whether by IoU with anchors, by centre proximity, or by bipartite matching as in DETR, and that rule is a design choice that materially affects results. Evaluation inherits the same problem: correctness is no longer a comparison of labels but a matching procedure, requiring an overlap measure, a threshold, and a policy for duplicates, which is why a detector has no single accuracy number and is summarised by a precision-recall curve instead.',
+        explanation:
+          'The examinable idea is that set-valued output forces assignment at training time and matching at evaluation time, which is the structural difference from classification.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'How do you compute IoU?', back: 'Intersection area divided by union, where union = areaA + areaB - intersection. Clamp intersection dimensions at zero.' },
+      { front: 'What does NMS do?', back: 'Sorts detections by score, keeps the top one, discards same-class boxes overlapping it above the IoU threshold, and repeats.' },
+      { front: 'xywh versus cxcywh', back: 'xywh starts from the top-left corner; cxcywh starts from the centre. Confusing them offsets every box by half its size.' },
+      { front: 'What is an anchor box?', back: 'A predefined reference rectangle the network regresses offsets from, with a centre shift in anchor widths and a log scale ratio.' },
+      { front: 'What does mAP@[.5:.95] mean?', back: 'Mean average precision averaged over ten IoU thresholds from 0.50 to 0.95 — the COCO protocol, far stricter than mAP@0.5.' },
+      { front: 'One-stage versus two-stage', back: 'One-stage predicts densely in one pass and is fast; two-stage proposes regions then refines, and localises more precisely.' },
+      { front: 'Why did DETR remove NMS?', back: 'It treats detection as set prediction with bipartite matching, so each object is assigned exactly one prediction and duplicates never arise.' },
+    ],
+
+    challenge: {
+      title: 'A detection evaluator from first principles',
+      brief:
+        'Implement IoU, greedy per-class NMS and average precision yourself, then validate each against torchvision.ops and pycocotools on a small annotated set. Your evaluator should take predictions and ground truth, match detections greedily by descending score with no ground-truth box matched twice, compute the precision-recall curve, and report AP at IoU 0.5, at 0.75 and averaged over 0.5 to 0.95. Finish by plotting how mAP varies with the NMS threshold, and write a short note on where the optimum sits and why.',
+      language: 'python',
+      acceptanceCriteria: [
+        'IoU matches torchvision box_iou to floating-point tolerance, including the disjoint case',
+        'NMS is per class and reproduces torchvision batched_nms on the same input',
+        'Each ground-truth box may be matched at most once; later duplicates count as false positives',
+        'AP is reported at 0.5, at 0.75 and averaged over the COCO range, and agrees with pycocotools within a stated tolerance',
+        'Includes a plot of mAP against the NMS threshold with a written interpretation',
+      ],
+      starterCode: 'import numpy as np\n\n\ndef iou_matrix(pred_xyxy: np.ndarray, gt_xyxy: np.ndarray) -> np.ndarray:\n    """Return an (P, G) matrix of IoU values. Clamp overlaps at zero."""\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach a classmate who understands classification what object detection adds, how a predicted box is judged correct, and why a cleanup step is needed at the end.',
+      mustCover: [
+        'Detection outputs a variable-length list of boxes with classes and confidences, not a fixed vector',
+        'IoU is intersection area over union area, and a threshold turns it into a correct-or-not decision',
+        'Dense prediction produces duplicates, which non-maximum suppression removes',
+        'The number of detections depends on thresholds you choose, not only on the model',
+      ],
+      bonusSignals: ['computes an IoU with real numbers', 'mentions anchors or the anchor-free trend', 'notes that NMS must run per class'],
+      sampleExplanation:
+        'A classifier gives you one answer per image; a detector gives you a list, and the length of that list is not something the network knows in advance. The usual approach asks the same question at thousands of positions across the image — is an object centred near here, what class, and how should the rectangle be adjusted — often starting from standard reference rectangles called anchors so the network only has to predict a correction rather than invent coordinates. That produces many overlapping guesses about the same object, so a cleanup pass called non-maximum suppression sorts them by confidence, keeps the best, and deletes any box of the same class that overlaps it too much. Overlap is measured by intersection over union: the area the two rectangles share divided by the area they cover between them. Work one through — a box from (50,50) to (150,150) against one from (100,100) to (200,200) shares a 50 by 50 square, so 2,500 over 17,500, which is 0.14. That is below the usual 0.5 cut-off, even though the two look substantially overlapping, and that gap between intuition and arithmetic is exactly why localisation gets measured rather than eyeballed. One last thing to keep straight: how many detections you get depends on the confidence threshold you chose, so two people can report very different results from the identical model.',
+    },
+  },
+
+  {
+    id: 'CV-009',
+    domain: 'CV',
+    module: 'Vision Tasks',
+    topic: 'Segmentation',
+    title: 'Image Segmentation',
+    slug: 'image-segmentation',
+    difficulty: 4,
+    estimatedMinutes: 40,
+    prerequisites: ['CV-005', 'CV-007'],
+    related: ['CV-002', 'CV-003', 'CV-005', 'CV-007', 'CV-008'],
+    tags: ['segmentation', 'semantic', 'instance', 'panoptic', 'unet', 'dice', 'encoder-decoder'],
+
+    learningObjectives: [
+      'Explain segmentation as per-pixel classification and state the shape of its output tensor',
+      'Distinguish semantic, instance and panoptic segmentation and give a case where each is the right choice',
+      'Describe the encoder-decoder structure and say precisely what U-Net skip connections restore',
+      'Compute Dice and IoU for a mask by hand and explain why they beat pixel accuracy on imbalanced data',
+      'Choose a loss for a segmentation task given the class balance of the data',
+    ],
+
+    terminology: [
+      {
+        term: 'Semantic segmentation',
+        definition:
+          'Assigning every pixel a class label, with no distinction between separate instances of a class. Three adjacent cars form one connected car region.',
+        simple: 'Colour in every pixel by what kind of thing it belongs to.',
+      },
+      {
+        term: 'Instance segmentation',
+        definition:
+          'Detecting each object separately and producing a mask for each, so two overlapping cars are two distinct masks. Typically implemented as detection plus a per-box mask head.',
+        simple: 'Outline each individual object separately, even when they touch.',
+      },
+      {
+        term: 'Panoptic segmentation',
+        definition:
+          'A unified labelling where countable things get instance ids and amorphous stuff such as road, sky and vegetation gets a semantic label, with every pixel assigned exactly once.',
+        simple: 'Label everything: individual objects get their own id, backgrounds just get a category.',
+      },
+      {
+        term: 'Encoder-decoder',
+        definition:
+          'An architecture that downsamples to build semantic context and then upsamples back to the input resolution, so the output is a dense per-pixel map rather than a single vector.',
+        simple: 'Shrink the picture to understand it, then grow it back to say where each thing is.',
+      },
+      {
+        term: 'Skip connection',
+        definition:
+          'A direct link concatenating an encoder feature map with the decoder feature map of the same resolution, restoring the fine spatial detail that downsampling discarded.',
+        simple: 'A shortcut that hands the sharp early details forward so the outline is not blurry.',
+      },
+      {
+        term: 'Dice coefficient',
+        definition:
+          'Twice the overlap divided by the sum of the two areas, equal to the F1 score computed over pixels. It is the standard segmentation metric in medical imaging.',
+        simple: 'A score from 0 to 1 for how well two shapes match, weighted towards the overlap.',
+      },
+    ],
+
+    simpleExplanation:
+      "Classification labels the whole picture, detection puts a rectangle around each thing, and segmentation goes one step further: it labels every single pixel. Ask it about a street scene and it hands back a grid the same size as the photograph where each cell says road, or car, or pedestrian, or sky. That matters whenever a rectangle is too crude an answer. A tumour is not rectangular, and a surgeon needs its outline; a car deciding whether it can drive somewhere needs the drivable surface, not a box that also contains the pavement. The architecture has a distinctive shape. The first half shrinks the image the way a classifier does, which builds up understanding but throws away exactly the fine detail a per-pixel answer needs. So the second half grows it back, and at each step it is handed a copy of the matching early layer, which still remembers precisely where the edges were. That handover is the whole trick, and it is why segmentation networks look like a letter U when drawn.",
+
+    whyItExists:
+      'Many decisions depend on the exact extent of a region rather than its rough location: how many square millimetres of tissue are affected, which part of the road is drivable, which pixels to replace when editing a photograph. A bounding box cannot express a non-convex or irregular shape, so a per-pixel labelling is the minimum output that supports measurement and precise masking.',
+
+    analogy: {
+      scenario:
+        'Consider two ways of describing a spill on a factory floor. A supervisor radios in that there is a spill in the north-east corner, roughly two metres by three — enough to send someone, not enough to order the right amount of absorbent. A second worker instead takes chalk and draws around the actual edge of the spill, so its true area can be measured and the exact shape can be cordoned off. Drawing that outline needs both a sense of the whole floor, to know what is spill and what is a shadow, and close attention to the boundary, which you only get standing right over it.',
+      mapping: [
+        { from: 'The rough two-by-three description', to: 'A bounding box from object detection' },
+        { from: 'The chalk outline of the true edge', to: 'A per-pixel segmentation mask' },
+        { from: 'Standing back to see the whole floor', to: 'The encoder, whose downsampling builds global context' },
+        { from: 'Standing right over the boundary', to: 'The decoder with skip connections, restoring fine spatial detail' },
+        { from: 'Measuring the outlined area in square metres', to: 'Computing region area from the mask, the reason segmentation exists' },
+        { from: 'Two separate spills that happen to touch', to: 'The semantic versus instance distinction' },
+      ],
+      bridge:
+        'The two viewpoints in the analogy are the two halves of the network, and the tension between them is real. Downsampling is what lets a network know that a grey region is road rather than sky, because that judgement needs context far beyond a single pixel; but downsampling by a factor of thirty-two means the deepest layer has one value per thirty-two pixels of original image, so the boundary information is simply gone. Skip connections resolve the tension by carrying the high-resolution encoder features across to the decoder, so the final layer has both the semantics from deep layers and the edges from shallow ones.',
+      limitations:
+        'Chalk on a floor has one unambiguous boundary. Real masks are ambiguous at edges — where exactly does hair end, or a tumour margin — so annotators disagree by several pixels, which places a ceiling on achievable Dice that no architecture can exceed.',
+    },
+
+    visuals: [
+      {
+        kind: 'compare',
+        title: 'Semantic versus instance segmentation',
+        caption: 'The same photograph of three overlapping cars, labelled two different ways.',
+        left: {
+          heading: 'Semantic',
+          points: [
+            'Output is one class index per pixel: shape (H, W)',
+            'Three touching cars form a single connected car region',
+            'Cannot count objects',
+            'Natural fit for road, sky, vegetation and tissue types',
+          ],
+        },
+        right: {
+          heading: 'Instance',
+          points: [
+            'Output is a list of binary masks, one per detected object',
+            'Three cars give three separate masks, even where they overlap',
+            'Counting and per-object measurement are possible',
+            'Typically detection plus a mask head, as in Mask R-CNN',
+          ],
+        },
+      },
+      {
+        kind: 'flow',
+        title: 'U-Net: down, across, up',
+        caption: 'Resolution falls then rises; skip connections carry detail across the U.',
+        steps: [
+          { label: 'Input (1, 3, 256, 256)', detail: 'A normalised image, as for classification.' },
+          { label: 'Encoder block 1 -> (64, 256, 256)', detail: 'Two convolutions, then pool to 128x128. This activation is saved for the skip.' },
+          { label: 'Encoder blocks 2-4', detail: 'Channels double and resolution halves at each step, reaching (512, 32, 32).' },
+          { label: 'Bottleneck (1024, 16, 16)', detail: 'Maximum semantic context, minimum spatial precision. One value per 16 input pixels.' },
+          { label: 'Decoder block, upsample and concatenate', detail: 'Transposed convolution to 32x32, concatenated with the saved 32x32 encoder features.' },
+          { label: 'Repeat up to full resolution', detail: 'Each level recovers detail from its matching encoder level.' },
+          { label: 'Output (num_classes, 256, 256)', detail: 'One logit per class per pixel. Argmax over the channel axis gives the mask.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Which task, and which metric',
+        columns: ['Task', 'Output', 'Typical metric', 'Example use'],
+        rows: [
+          ['Classification', 'One label per image', 'Top-1 accuracy', 'Is this scan abnormal at all'],
+          ['Detection', 'Boxes with classes', 'mAP at stated IoU', 'Count the vehicles in a frame'],
+          ['Semantic segmentation', '(H, W) class indices', 'mean IoU over classes', 'Which pixels are drivable road'],
+          ['Instance segmentation', 'N binary masks with classes', 'mask mAP', 'Count and measure each cell in a microscope image'],
+          ['Panoptic segmentation', 'Class plus instance id per pixel', 'Panoptic quality (PQ)', 'A complete scene description for a robot'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'How downsampling loses the boundary',
+        caption: 'Pool a mask repeatedly and watch the edge degrade — the problem skip connections exist to solve.',
+        widget: 'pooling-lab',
+      },
+    ],
+
+    formalDefinition:
+      'Semantic segmentation learns a function from an image in R^(3 x H x W) to a label map in {1,…,K}^(H x W), equivalently a tensor of per-pixel class logits of shape (K, H, W) followed by a channel-wise argmax. Instance segmentation learns a set-valued function producing pairs of a class and a binary mask, one per object, and panoptic segmentation produces a single map assigning every pixel both a class and, for countable classes, an instance identifier. Training minimises a per-pixel classification loss, commonly cross-entropy, optionally combined with an overlap-based loss such as soft Dice that directly optimises the evaluation metric.',
+
+    math: {
+      intuition:
+        'Pixel accuracy is almost useless for segmentation, because on a scan where the lesion occupies 1 per cent of the image, predicting background everywhere scores 99 per cent. The metrics that matter therefore ignore the background and ask only about the region of interest: how much of the predicted region is correct, and how much of the true region was found. Dice and IoU are two ways of combining those, and they always agree about which of two predictions is better — they are monotone functions of each other — but Dice gives more credit for partial overlap.',
+      formulas: [
+        {
+          latex: '\\text{Dice}(A, B) = \\frac{2|A \\cap B|}{|A| + |B|}',
+          name: 'Dice coefficient',
+          meaning:
+            'Twice the overlap divided by the total size of the two regions. Identical to the F1 score computed over pixels, with the intersection playing the role of true positives.',
+          variables: [
+            { symbol: 'A', meaning: 'Set of pixels predicted as the class' },
+            { symbol: 'B', meaning: 'Set of pixels truly belonging to the class' },
+            { symbol: '|A \\cap B|', meaning: 'Number of pixels in both — the true positives' },
+          ],
+        },
+        {
+          latex: '\\text{IoU}(A, B) = \\frac{|A \\cap B|}{|A| + |B| - |A \\cap B|}, \\qquad \\text{Dice} = \\frac{2\\,\\text{IoU}}{1 + \\text{IoU}}',
+          name: 'IoU (Jaccard index) and its relation to Dice',
+          meaning:
+            'The same ratio used for bounding boxes, applied to pixel sets. The identity on the right means the two metrics rank predictions identically, so reporting both adds no information — but their values differ, and Dice is always the larger of the two.',
+          variables: [
+            { symbol: 'A, B', meaning: 'Predicted and true pixel sets' },
+          ],
+        },
+        {
+          latex: '\\mathcal{L}_{\\text{Dice}} = 1 - \\frac{2\\sum_i p_i g_i + \\epsilon}{\\sum_i p_i + \\sum_i g_i + \\epsilon}',
+          name: 'Soft Dice loss',
+          meaning:
+            'The differentiable version, using predicted probabilities rather than a thresholded mask so gradients flow. Epsilon, typically 1, prevents division by zero when both the prediction and the target are empty and makes that case score perfectly rather than undefined.',
+          variables: [
+            { symbol: 'p_i', meaning: 'Predicted probability that pixel i belongs to the class, after sigmoid or softmax' },
+            { symbol: 'g_i', meaning: 'Ground-truth indicator for pixel i, 0 or 1' },
+            { symbol: '\\epsilon', meaning: 'Smoothing constant guarding the empty-mask case' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\mathcal{L} = \\mathcal{L}_{\\text{CE}} + \\lambda\\, \\mathcal{L}_{\\text{Dice}}',
+          name: 'The standard combined loss',
+          meaning:
+            'Cross-entropy provides well-behaved per-pixel gradients everywhere, including early in training when the predicted mask is empty and Dice gradients are tiny; Dice directly optimises region overlap and counteracts class imbalance. Almost every strong medical segmentation baseline uses the sum.',
+          variables: [
+            { symbol: '\\lambda', meaning: 'Relative weight, commonly 1' },
+            { symbol: '\\mathcal{L}_{CE}', meaning: 'Per-pixel cross-entropy, optionally class-weighted' },
+          ],
+        },
+        {
+          latex: '\\text{mIoU} = \\frac{1}{K}\\sum_{k=1}^{K} \\frac{TP_k}{TP_k + FP_k + FN_k}',
+          name: 'Mean intersection over union',
+          meaning:
+            'IoU computed per class over the whole dataset and then averaged, so a rare class counts as much as a common one. This averaging is why mIoU is far more informative than pixel accuracy on scenes dominated by road and sky.',
+          variables: [
+            { symbol: 'K', meaning: 'Number of classes' },
+            { symbol: 'TP_k, FP_k, FN_k', meaning: 'Pixel counts for class k accumulated across the evaluation set' },
+          ],
+        },
+      ],
+      derivation: [
+        'Take a lesion occupying 2,000 pixels in a 512x512 image of 262,144 pixels — about 0.76 per cent of the area.',
+        'A model predicting background everywhere gets 260,144 of 262,144 pixels right: pixel accuracy 99.24 per cent.',
+        'Its Dice for the lesion class is 2 x 0 / (0 + 2,000) = 0, and its IoU is 0 / 2,000 = 0.',
+        'So a completely useless model scores above 99 per cent on one metric and zero on the other, which settles which metric to report.',
+        'This also explains the choice of loss: plain cross-entropy averaged over pixels is dominated by the 99.24 per cent that are background, so the gradient pushing towards predicting the lesion is proportionally tiny, and Dice loss or class weighting is what restores the balance.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Dice and IoU on a predicted tumour mask',
+      setup:
+        'A model segments a tumour on an MRI slice. The predicted mask covers 100 pixels, the radiologist annotation covers 120 pixels, and 80 pixels are in both. We compute Dice, IoU, precision and recall, then check the identity relating the first two.',
+      steps: [
+        {
+          label: 'Identify the counts',
+          detail:
+            'True positives: 80 pixels in both. False positives: 100 - 80 = 20 predicted pixels that are not tumour. False negatives: 120 - 80 = 40 tumour pixels that were missed.',
+          latex: 'TP = 80, \\quad FP = 20, \\quad FN = 40',
+        },
+        {
+          label: 'Compute Dice',
+          detail: 'Dice = 2 x 80 / (100 + 120) = 160 / 220 = 0.7273.',
+          latex: '\\text{Dice} = \\frac{2 \\times 80}{100 + 120} = \\frac{160}{220} = 0.7273',
+        },
+        {
+          label: 'Compute IoU',
+          detail: 'Union = 100 + 120 - 80 = 140, so IoU = 80 / 140 = 0.5714. As always, IoU is the smaller number.',
+          latex: '\\text{IoU} = \\frac{80}{140} = 0.5714',
+        },
+        {
+          label: 'Verify the identity',
+          detail: '2 x 0.5714 / (1 + 0.5714) = 1.1428 / 1.5714 = 0.7273, matching the Dice computed directly. The two metrics carry the same information on different scales.',
+          latex: '\\text{Dice} = \\frac{2\\,\\text{IoU}}{1+\\text{IoU}} = \\frac{1.1428}{1.5714} = 0.7273',
+        },
+        {
+          label: 'Compute precision and recall',
+          detail:
+            'Precision = 80/100 = 0.80: four fifths of what the model marked really is tumour. Recall = 80/120 = 0.667: it found two thirds of the tumour. Dice is exactly the harmonic mean of these, 2(0.8)(0.667)/(0.8 + 0.667) = 0.727.',
+          latex: '\\text{Dice} = \\frac{2PR}{P+R}',
+        },
+        {
+          label: 'Interpret clinically',
+          detail:
+            'The asymmetry matters more than the score. Recall of 0.667 means a third of the lesion volume is unmarked, which would understate the tumour size in a treatment plan. Raising the probability threshold below 0.5 would trade some precision for the recall that this application needs.',
+        },
+        {
+          label: 'Contrast with pixel accuracy',
+          detail:
+            'On a 512x512 slice these 262,144 pixels include only 120 tumour pixels, so predicting background everywhere would score 99.95 per cent accuracy with Dice 0. Reporting accuracy here would be actively misleading.',
+        },
+      ],
+      conclusion:
+        'Dice 0.727, IoU 0.571, precision 0.80, recall 0.667. Two habits follow. Always report Dice or IoU for the foreground class rather than pixel accuracy, because accuracy is dominated by the background. And always decompose the score into precision and recall before acting on it, since identical Dice values can mean over-segmentation or under-segmentation, and those call for opposite corrections.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'A compact U-Net, with the skip connections made explicit',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+
+def block(cin, cout):
+    return nn.Sequential(
+        nn.Conv2d(cin, cout, 3, padding=1), nn.BatchNorm2d(cout), nn.ReLU(inplace=True),
+        nn.Conv2d(cout, cout, 3, padding=1), nn.BatchNorm2d(cout), nn.ReLU(inplace=True),
+    )
+
+
+class UNet(nn.Module):
+    def __init__(self, in_ch=3, num_classes=2, width=32):
+        super().__init__()
+        w = width
+        self.enc1, self.enc2, self.enc3 = block(in_ch, w), block(w, w * 2), block(w * 2, w * 4)
+        self.bottleneck = block(w * 4, w * 8)
+        self.pool = nn.MaxPool2d(2)
+        self.up3 = nn.ConvTranspose2d(w * 8, w * 4, 2, stride=2)
+        self.up2 = nn.ConvTranspose2d(w * 4, w * 2, 2, stride=2)
+        self.up1 = nn.ConvTranspose2d(w * 2, w, 2, stride=2)
+        self.dec3, self.dec2, self.dec1 = block(w * 8, w * 4), block(w * 4, w * 2), block(w * 2, w)
+        self.head = nn.Conv2d(w, num_classes, 1)          # 1x1: per-pixel classifier
+
+    def forward(self, x):
+        e1 = self.enc1(x)                       # (w, H, W)      <- saved for skip
+        e2 = self.enc2(self.pool(e1))           # (2w, H/2, W/2) <- saved
+        e3 = self.enc3(self.pool(e2))           # (4w, H/4, W/4) <- saved
+        b = self.bottleneck(self.pool(e3))      # (8w, H/8, W/8)
+        d3 = self.dec3(torch.cat([self.up3(b), e3], dim=1))    # concat on channels
+        d2 = self.dec2(torch.cat([self.up2(d3), e2], dim=1))
+        d1 = self.dec1(torch.cat([self.up1(d2), e1], dim=1))
+        return self.head(d1)                    # (num_classes, H, W)
+
+
+model = UNet(num_classes=3)
+x = torch.randn(2, 3, 128, 128)
+logits = model(x)
+print("input :", tuple(x.shape))
+print("output:", tuple(logits.shape))
+print("mask  :", tuple(logits.argmax(dim=1).shape))
+print("parameters:", f"{sum(p.numel() for p in model.parameters()):,}")`,
+        output: `input : (2, 3, 128, 128)
+output: (2, 3, 128, 128)
+mask  : (2, 128, 128)
+parameters: 7,707,331`,
+        explanation:
+          'The output has the same spatial size as the input and one channel per class, which is the defining shape of segmentation. The three torch.cat calls are the skip connections, and the channel arithmetic reveals what they do: dec3 accepts 8w channels because the upsampled 4w from below is concatenated with the 4w saved from the encoder at that resolution. The final 1x1 convolution is a per-pixel linear classifier, and argmax over the channel axis turns logits into a label map.',
+      },
+      {
+        language: 'python',
+        title: 'Dice, IoU and the combined loss',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+def dice_coefficient(pred_mask, true_mask, eps=1.0):
+    """Hard Dice for evaluation: both inputs are 0/1 tensors."""
+    inter = (pred_mask * true_mask).sum()
+    return float((2 * inter + eps) / (pred_mask.sum() + true_mask.sum() + eps))
+
+
+def iou(pred_mask, true_mask, eps=1.0):
+    inter = (pred_mask * true_mask).sum()
+    union = pred_mask.sum() + true_mask.sum() - inter
+    return float((inter + eps) / (union + eps))
+
+
+class DiceCELoss(nn.Module):
+    """Soft Dice + cross-entropy, the standard medical segmentation baseline."""
+
+    def __init__(self, num_classes, weight_dice=1.0, eps=1.0):
+        super().__init__()
+        self.num_classes, self.weight_dice, self.eps = num_classes, weight_dice, eps
+        self.ce = nn.CrossEntropyLoss()
+
+    def forward(self, logits, targets):            # logits (N,K,H,W), targets (N,H,W)
+        ce = self.ce(logits, targets)
+        probs = logits.softmax(dim=1)
+        onehot = F.one_hot(targets, self.num_classes).permute(0, 3, 1, 2).float()
+        dims = (0, 2, 3)                           # sum over batch and space, keep classes
+        inter = (probs * onehot).sum(dims)
+        denom = probs.sum(dims) + onehot.sum(dims)
+        dice = ((2 * inter + self.eps) / (denom + self.eps)).mean()
+        return ce + self.weight_dice * (1 - dice)
+
+
+# The worked example, reproduced exactly
+pred = torch.zeros(220); pred[:100] = 1           # 100 predicted pixels
+true = torch.zeros(220); true[20:140] = 1         # 120 true pixels, 80 overlapping
+print("Dice:", round(dice_coefficient(pred, true, eps=0.0), 4))
+print("IoU :", round(iou(pred, true, eps=0.0), 4))
+
+logits = torch.randn(2, 3, 64, 64)
+targets = torch.randint(0, 3, (2, 64, 64))
+print("combined loss:", round(float(DiceCELoss(3)(logits, targets)), 4))`,
+        output: `Dice: 0.7273
+IoU : 0.5714
+combined loss: 1.7726
+`,
+        explanation:
+          'The hard Dice reproduces the 0.7273 computed by hand. The loss class shows the two pieces that matter in practice: cross-entropy gives a well-behaved gradient at every pixel, including early in training when the predicted foreground is empty and Dice gradients nearly vanish, while soft Dice uses probabilities rather than a thresholded mask so it remains differentiable and directly targets overlap. Summing over batch and space but not over classes is what makes this a per-class Dice averaged at the end, which prevents a large class from dominating.',
+      },
+      {
+        language: 'python',
+        title: 'Segmentation transforms: image and mask must move together',
+        runnable: true,
+        code: `import albumentations as A
+import cv2
+import numpy as np
+
+tf = A.Compose([
+    A.RandomResizedCrop(size=(256, 256), scale=(0.6, 1.0),
+                        interpolation=cv2.INTER_LINEAR,        # image: smooth
+                        mask_interpolation=cv2.INTER_NEAREST), # mask: NEVER smooth
+    A.HorizontalFlip(p=0.5),
+    A.ElasticTransform(alpha=30, sigma=6, p=0.3),   # standard in medical imaging
+    A.RandomBrightnessContrast(p=0.5),              # photometric: mask untouched
+])
+
+image = np.random.randint(0, 255, (512, 512, 3), dtype=np.uint8)
+mask = np.zeros((512, 512), dtype=np.uint8)
+mask[200:300, 180:260] = 1          # class 1 region
+mask[320:360, 100:140] = 2          # class 2 region
+
+out = tf(image=image, mask=mask)
+print("image:", out["image"].shape, out["image"].dtype)
+print("mask :", out["mask"].shape, out["mask"].dtype)
+print("class ids present:", np.unique(out["mask"]))
+print("still integer labels:", set(np.unique(out["mask"]).tolist()) <= {0, 1, 2})`,
+        output: `image: (256, 256, 3) uint8
+mask : (256, 256) uint8
+class ids present: [0 1 2]
+still integer labels: True`,
+        explanation:
+          'Two rules are enforced here. Every geometric transform is applied identically to the image and the mask, because a flipped image with an unflipped mask trains the model on a systematic lie. And the mask uses nearest-neighbour interpolation while the image uses bilinear: any averaging method would invent labels such as 1.5 between classes 1 and 2 along every boundary, which the final assertion checks for. Photometric transforms deliberately touch only the image.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Radiotherapy planning',
+        usage:
+          'Tumour and organ-at-risk volumes are contoured slice by slice, historically by hand at roughly an hour per patient. A U-Net produces a first contour that a clinician edits, cutting the time substantially. Dice against expert annotation is the accepted acceptance metric, with 0.85 or above typical for large organs.',
+      },
+      {
+        context: 'Autonomous driving perception',
+        usage:
+          'Semantic segmentation of drivable surface, lane markings and pavement gives a free-space map that a box-based detector cannot express, because the drivable region is irregular and unbounded rather than a discrete object.',
+      },
+      {
+        context: 'Satellite and aerial analysis',
+        usage:
+          'Building footprints, deforestation extent and flood boundaries are all area measurements, so the output must be a mask. Vertical flips are legitimate augmentation here, unlike in ground-level photography, since overhead imagery has no gravity direction.',
+      },
+      {
+        context: 'Photo and video editing',
+        usage:
+          'Background replacement, portrait mode and object removal all need an alpha mask accurate to the hair strand. This is where boundary quality, rather than region-level Dice, determines whether a result is usable.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'segmentation_models_pytorch', role: 'U-Net, FPN and DeepLabV3+ decoders on any pretrained encoder, plus ready-made Dice and Tversky losses.' },
+      { tool: 'MONAI', role: 'The medical imaging standard: 3D U-Nets, sliding-window inference, and Dice metrics that handle empty masks correctly.' },
+      { tool: 'Albumentations', role: 'Applies geometric transforms to image and mask jointly with separate interpolation settings for each.' },
+      { tool: 'Segment Anything (SAM)', role: 'A promptable foundation model that produces high-quality class-agnostic masks, increasingly used to bootstrap annotation.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Resizing masks with bilinear interpolation',
+        why: 'Averaging class indices invents labels that do not exist, so a boundary between class 3 and class 4 becomes a band of 3.5 that rounds arbitrarily. Every object edge in the dataset is corrupted.',
+        fix: 'Use nearest-neighbour for masks and bilinear for images, set explicitly in the same transform. Assert after loading that np.unique(mask) contains only valid class ids.',
+      },
+      {
+        mistake: 'Reporting pixel accuracy on an imbalanced task',
+        why: 'When the foreground is 1 per cent of the image, predicting background everywhere scores 99 per cent. The metric is dominated entirely by the class nobody cares about.',
+        fix: 'Report per-class Dice or IoU and the mean over classes, excluding the background where convention allows, and always show the per-class breakdown rather than the mean alone.',
+      },
+      {
+        mistake: 'Training with plain cross-entropy on a tiny foreground',
+        why: 'The loss is averaged over pixels, so the gradient signal from the 1 per cent foreground is swamped. The model converges quickly to an all-background prediction, which is a genuine local minimum of the objective.',
+        fix: 'Add a Dice or Tversky term, or weight the classes inversely to frequency. Dice loss alone can be unstable at the start, which is why the sum of cross-entropy and Dice is the usual baseline.',
+      },
+      {
+        mistake: 'Applying a geometric transform to the image but not the mask',
+        why: 'A flipped or cropped image paired with an unmodified mask teaches a systematic spatial error. It rarely crashes, and the model simply learns a blurred average of the correct and mirrored answers.',
+        fix: 'Pass image and mask through one transform call, as Albumentations and torchvision v2 both support. Render a handful of augmented image-mask pairs overlaid before every training run.',
+      },
+      {
+        mistake: 'Ignoring the ignore-index convention',
+        why: 'Datasets such as Cityscapes mark unlabelled or ambiguous pixels with a sentinel value, often 255. Treating it as a real class trains the model to predict nonsense on boundaries and inflates the class count.',
+        fix: 'Pass ignore_index=255 to nn.CrossEntropyLoss and exclude those pixels from the metric computation as well as from the loss.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What do skip connections in a U-Net do, and why is the architecture ineffective without them?',
+        answer:
+          'The encoder downsamples to build semantic context, because deciding that a region is road rather than sky requires information from far beyond a single pixel. The cost is spatial precision: after five poolings, one activation covers a 32x32 region of the original image, so the exact location of a boundary is no longer representable. Skip connections concatenate each encoder feature map with the decoder feature map of matching resolution, so the decoder has both the semantics computed deep in the network and the high-frequency detail preserved shallow in it. Without them the decoder must reconstruct boundaries from a heavily downsampled representation, and the output is recognisably correct in the interior of regions while being blurred and displaced at every edge — which is exactly where segmentation quality is judged. There is a secondary benefit: the shorter gradient path improves optimisation, in the same way as residual connections.',
+        followUp:
+          'A strong answer contrasts this with DeepLab, which keeps resolution using atrous convolution instead of a symmetric decoder, achieving a similar end through a different mechanism.',
+      },
+      {
+        level: 'advanced',
+        question: 'When would you use Dice loss rather than cross-entropy, and what are the failure modes of each?',
+        answer:
+          'Cross-entropy is averaged over pixels, so on a task where the foreground is a small fraction of the image the objective is dominated by background pixels and the model can reach a low loss by predicting background everywhere. Dice loss is computed over the region rather than per pixel, so an empty prediction scores zero regardless of how small the target is, which makes it naturally robust to that imbalance and aligns training with the evaluation metric. Its failure modes are real though: the gradient is small and poorly conditioned when the predicted foreground is nearly empty, which is exactly the situation at initialisation, and it behaves badly on images with no foreground at all unless the smoothing epsilon is handled deliberately. It is also noisier batch to batch, since a single image can dominate the ratio. The usual answer is not to choose but to sum them, with cross-entropy providing stable early gradients and Dice providing imbalance robustness and metric alignment. Tversky loss generalises Dice with separate weights on false positives and false negatives, which is the right tool when misses are costlier than over-segmentation.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'A segmentation model reports Dice 0.86 on validation but clinicians say the contours are unusable. What do you check?',
+        answer:
+          'Dice is a volume overlap measure and is dominated by the interior of large regions, so it is close to blind to boundary quality, which is what a clinician actually edits. First check surface metrics — Hausdorff distance, or its 95th percentile, and average surface distance — which measure how far the contour is from the truth rather than how much area coincides. Second, look at the per-case distribution rather than the mean, because a mean of 0.86 can come from most cases at 0.92 and a handful at 0.3, and those failures are what people remember. Third, check for topological errors: a mask with the right area but several disconnected islands, or a hole through the middle, is unusable and Dice barely notices. Fourth, verify the evaluation matches clinical use — 3D volumes evaluated per slice look better than they are, and resampling between voxel spacings can silently change the numbers. Finally, examine inter-annotator agreement on the same cases, since a Dice of 0.86 may already be at the ceiling the annotation itself supports.',
+        followUp:
+          'The best answers propose adding a boundary-aware loss term or post-processing that keeps the largest connected component, and validating with the surface metric the clinicians actually care about.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A predicted mask has 250 pixels, the ground truth has 200, and 150 overlap. Compute Dice, IoU, precision and recall, and say whether the model is over- or under-segmenting.',
+        hint: 'True positives are the overlap; precision and recall divide it by the prediction and the truth respectively.',
+        solution:
+          'Dice = 2(150)/(250 + 200) = 300/450 = 0.6667. IoU = 150/(250 + 200 - 150) = 150/300 = 0.5. Check the identity: 2(0.5)/(1.5) = 0.6667, which matches. Precision = 150/250 = 0.60, recall = 150/200 = 0.75. Precision is well below recall, so the model is marking more than it should: it is over-segmenting, spilling roughly 100 pixels beyond the true region. The remedy is to raise the probability threshold, or to add a false-positive-weighted Tversky term, rather than to train longer.',
+      },
+      {
+        prompt:
+          'Explain which segmentation type you would use for each: counting cells in a microscope image, finding drivable road surface, and producing a complete scene description for a warehouse robot.',
+        hint: 'Ask whether you need to count individuals, and whether every pixel needs a label.',
+        solution:
+          'Counting cells requires instance segmentation, because touching cells must be separated to be counted, which semantic segmentation cannot do by construction. Drivable road is semantic: the road is a single amorphous region, there is nothing to count, and instance ids would be meaningless. The warehouse robot wants panoptic segmentation, which labels every pixel exactly once, giving instance ids to countable things such as pallets and forklifts while giving plain semantic labels to floor, wall and shelving — the complete scene description that navigation and manipulation both need.',
+      },
+      {
+        prompt:
+          'Write a function computing per-class IoU from a batch of predicted logits and integer targets, correctly ignoring pixels marked 255.',
+        hint: 'Build a boolean validity mask first, and guard against a zero union for classes absent from the batch.',
+        language: 'python',
+        starterCode: 'import torch\n\n\ndef per_class_iou(logits, targets, num_classes, ignore_index=255):\n    preds = logits.argmax(dim=1)\n',
+        solution:
+          'valid = targets != ignore_index\npreds, targets = preds[valid], targets[valid]\nious = []\nfor c in range(num_classes):\n    p, t = preds == c, targets == c\n    inter = (p & t).sum().item()\n    union = (p | t).sum().item()\n    ious.append(float("nan") if union == 0 else inter / union)\nreturn ious\n\nTwo details carry the weight. Filtering by the ignore mask before the loop keeps unlabelled pixels out of every class, whereas filtering inside would be both slower and easy to get wrong. Returning NaN rather than zero for a class absent from both prediction and target matters because averaging zeros for absent classes silently depresses mIoU, so the mean should be taken with a NaN-aware reduction.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'CV-009-q1',
+        type: 'mcq',
+        concept: 'output shape',
+        prompt: 'A semantic segmentation model for 5 classes receives input of shape (2, 3, 256, 256). What shape are its raw outputs?',
+        options: [
+          '(2, 5, 256, 256)',
+          '(2, 5)',
+          '(2, 256, 256)',
+          '(2, 3, 256, 256)',
+        ],
+        answerIndex: 0,
+        explanation:
+          'One logit per class per pixel, at full input resolution. Taking argmax over the channel axis then gives the (2, 256, 256) label map. This shape is the defining difference from classification, whose output is (2, 5).',
+      },
+      {
+        id: 'CV-009-q2',
+        type: 'numeric',
+        concept: 'Dice by hand',
+        prompt:
+          'A predicted mask covers 100 pixels, the true mask covers 120, and 80 overlap. What is the Dice coefficient, to four decimal places?',
+        answer: 0.7273,
+        tolerance: 0.002,
+        explanation:
+          'Dice = 2 x 80 / (100 + 120) = 160/220 = 0.7273. The corresponding IoU is 80/140 = 0.5714, and the identity Dice = 2 IoU / (1 + IoU) confirms both.',
+      },
+      {
+        id: 'CV-009-q3',
+        type: 'truefalse',
+        concept: 'metric choice',
+        prompt: 'Pixel accuracy is a reliable metric for segmenting a lesion that covers 1 per cent of a scan.',
+        answer: false,
+        explanation:
+          'Predicting background everywhere scores 99 per cent accuracy with a Dice of zero. Foreground-focused metrics such as Dice or IoU are required whenever the class of interest is a small fraction of the image.',
+      },
+      {
+        id: 'CV-009-q4',
+        type: 'mcq',
+        concept: 'skip connections',
+        prompt: 'What do U-Net skip connections restore to the decoder?',
+        options: [
+          'High-resolution spatial detail that downsampling discarded',
+          'The class labels from the encoder output',
+          'Additional training data through augmentation',
+          'Gradient clipping to stabilise training',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The encoder trades spatial precision for semantic context. Skip connections concatenate the matching-resolution encoder features into the decoder, so boundaries are reconstructed from features that still hold the fine detail rather than from a heavily downsampled map.',
+      },
+      {
+        id: 'CV-009-q5',
+        type: 'match',
+        concept: 'segmentation types',
+        prompt: 'Match each task to the segmentation type it requires.',
+        pairs: [
+          { left: 'Count touching cells in a microscope image', right: 'Instance segmentation' },
+          { left: 'Find the drivable road surface', right: 'Semantic segmentation' },
+          { left: 'Label every pixel with class and, where countable, an instance id', right: 'Panoptic segmentation' },
+          { left: 'Decide whether a scan is abnormal at all', right: 'Classification, not segmentation' },
+        ],
+        explanation:
+          'Counting requires separating instances; an amorphous region needs only a class; a complete scene description needs both together. If no spatial answer is required at all, segmentation is the wrong and far more expensive tool.',
+      },
+      {
+        id: 'CV-009-q6',
+        type: 'debug',
+        language: 'python',
+        concept: 'mask resizing',
+        prompt: 'After this resize, the loss reports class indices outside the valid range. Why?',
+        code: 'image = cv2.resize(image, (256, 256), interpolation=cv2.INTER_LINEAR)\nmask = cv2.resize(mask, (256, 256), interpolation=cv2.INTER_LINEAR)',
+        options: [
+          'The mask must use INTER_NEAREST; interpolation averages class indices into values that are not classes',
+          'cv2.resize cannot handle single-channel arrays',
+          'The mask must be resized before the image',
+          'The target size tuple should be (height, width) for masks',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Bilinear interpolation averages neighbouring labels, so a boundary between classes 3 and 4 produces values such as 3.5. Nearest-neighbour copies an existing label and is the only resampling that keeps a label map valid.',
+      },
+      {
+        id: 'CV-009-q7',
+        type: 'explain',
+        concept: 'loss choice under imbalance',
+        prompt:
+          'Explain why plain cross-entropy often fails on a segmentation task where the foreground is 1 per cent of the image, and what to do instead.',
+        rubric: [
+          'Notes that the loss is averaged over pixels, so background dominates',
+          'Notes that predicting all background is a strong local optimum',
+          'Proposes Dice, Tversky or class weighting, ideally combined with cross-entropy',
+        ],
+        sampleAnswer:
+          'Cross-entropy sums over pixels and divides by their number, so with 99 per cent background the gradient is overwhelmingly a signal about background pixels. Predicting background everywhere therefore achieves a low loss immediately, and it is a genuine local optimum rather than a transient state, so training can sit there indefinitely while the reported loss looks acceptable. The fix is to make the objective care about the region rather than the pixel: Dice loss computes overlap over the whole foreground region, so an empty prediction scores zero no matter how few target pixels there are, and Tversky generalises it with separate penalties for misses and false alarms. In practice the two losses are summed, because Dice gradients are weak exactly at initialisation when the predicted foreground is empty, while cross-entropy gives well-behaved gradients everywhere. The metric must change too: report Dice or IoU for the foreground class, never pixel accuracy.',
+        explanation:
+          'The examinable idea is that a pixel-averaged loss inherits the class imbalance of the image, so both the loss and the metric must be region-based rather than pixel-based.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What shape does a semantic segmentation model output?', back: '(N, num_classes, H, W) logits at input resolution; argmax over the channel axis gives an (N, H, W) label map.' },
+      { front: 'Semantic versus instance versus panoptic', back: 'Semantic labels every pixel by class; instance separates individual objects; panoptic does both, labelling each pixel exactly once.' },
+      { front: 'What do skip connections restore?', back: 'The high-resolution spatial detail lost to downsampling, concatenated from the encoder into the matching decoder level.' },
+      { front: 'Dice formula?', back: '2 x intersection / (|prediction| + |truth|). Identical to the pixel-wise F1 score, and always larger than the IoU.' },
+      { front: 'Relation between Dice and IoU?', back: 'Dice = 2 IoU / (1 + IoU). They rank predictions identically, so reporting both adds no information.' },
+      { front: 'Why not pixel accuracy?', back: 'With a 1 per cent foreground, predicting all background scores 99 per cent with Dice zero. Use per-class Dice or IoU.' },
+      { front: 'Which interpolation for masks?', back: 'Nearest neighbour always. Any averaging invents class indices that do not exist, corrupting every boundary.' },
+    ],
+
+    challenge: {
+      title: 'Segment and measure, with an honest metric report',
+      brief:
+        'Train a U-Net on a small binary segmentation dataset such as Oxford-IIIT Pet trimaps or a public medical set. Report per-image Dice and IoU distributions rather than means alone, plot Dice against the probability threshold to choose an operating point deliberately, and compare three loss configurations: cross-entropy, Dice, and their sum. Add one boundary-aware diagnostic — average surface distance or the count of connected components per prediction — and write a paragraph on what it revealed that Dice did not.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Image and mask share every geometric transform, with nearest-neighbour resampling for the mask',
+        'Reports the distribution of per-image Dice, not only the mean, and shows the worst five cases',
+        'Compares the three loss configurations under an otherwise identical recipe',
+        'Chooses the probability threshold from a plot rather than defaulting to 0.5, with the reasoning stated',
+        'Includes one boundary or topology diagnostic and interprets it against the Dice score',
+      ],
+      starterCode: 'import torch\nimport torch.nn as nn\n\n\nclass DiceCELoss(nn.Module):\n    def __init__(self, num_classes: int, weight_dice: float = 1.0, eps: float = 1.0):\n        super().__init__()\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach a classmate who knows classification and detection what segmentation adds, why the network is shaped like a U, and why Dice replaces accuracy.',
+      mustCover: [
+        'Segmentation assigns a class to every pixel, so the output is a full-resolution map',
+        'The encoder builds context by downsampling, which loses the spatial precision the output needs',
+        'Skip connections hand the high-resolution encoder features to the decoder to restore boundaries',
+        'Dice or IoU is used because pixel accuracy is dominated by the background class',
+      ],
+      bonusSignals: ['distinguishes semantic from instance segmentation', 'computes a Dice value with real numbers', 'mentions nearest-neighbour mask resizing'],
+      sampleExplanation:
+        'Classification gives one label for the whole image and detection gives a rectangle per object. Segmentation labels every pixel, so the output is a grid the same size as the input with a class in each cell — which is what you need whenever the answer is a shape or an area rather than a location, like the outline of a tumour or the drivable part of a road. The architecture has a distinctive shape because of a genuine conflict. To know that a grey patch is road rather than sky you need a wide view, and the way networks get that is by repeatedly shrinking the image; but after shrinking by a factor of sixteen you no longer know where the boundary was to within a pixel. So the network grows the image back up, and at each step it is handed the matching early layer, which still has the sharp detail. Those handovers are the skip connections, and drawing the down-then-up path is where the letter U comes from. For scoring, forget accuracy: if a lesion is one per cent of the scan, calling everything background scores ninety-nine per cent while finding nothing. Use Dice instead — twice the overlap divided by the two areas added together. Predicted a hundred pixels, truth a hundred and twenty, eighty overlapping: that is one hundred and sixty over two hundred and twenty, about 0.73. And always split it into precision and recall, because the same Dice can mean you marked too much or too little, and those need opposite fixes.',
+    },
+  },
+
+  {
+    id: 'CV-010',
+    domain: 'CV',
+    module: 'Architectures & Transfer',
+    topic: 'Transfer learning and architectures',
+    title: 'Transfer Learning and CNN Architectures',
+    slug: 'transfer-learning',
+    difficulty: 4,
+    estimatedMinutes: 40,
+    prerequisites: ['CV-004', 'CV-007'],
+    related: ['CV-003', 'CV-004', 'CV-005', 'CV-007', 'CV-008', 'CV-009'],
+    tags: ['transfer-learning', 'fine-tuning', 'resnet', 'efficientnet', 'vision-transformer', 'freezing', 'catastrophic-forgetting'],
+
+    learningObjectives: [
+      'Explain why features learned on ImageNet transfer to tasks with entirely different classes',
+      'Replace a classifier head correctly and decide which layers to freeze',
+      'Choose learning rates for fine-tuning, including discriminative rates for different depths',
+      'Recognise catastrophic forgetting and the conditions that cause it',
+      'Compare ResNet, EfficientNet and Vision Transformer on accuracy, data appetite and deployment cost',
+    ],
+
+    terminology: [
+      {
+        term: 'Transfer learning',
+        definition:
+          'Initialising a model with weights learned on a large source task and adapting it to a smaller target task, rather than training from random initialisation.',
+        simple: 'Start from a model that already knows how to look at pictures, then teach it your specific job.',
+      },
+      {
+        term: 'Backbone and head',
+        definition:
+          'The backbone is the feature extractor producing a vector per image; the head is the final task-specific layer mapping that vector to outputs. Transfer keeps the backbone and replaces the head.',
+        simple: 'The part that understands pictures, and the small part that names your categories.',
+      },
+      {
+        term: 'Freezing',
+        definition:
+          'Setting requires_grad to False on a parameter so it receives no updates. Freezing the backbone turns the network into a fixed feature extractor with only the head trainable.',
+        simple: 'Locking some weights so training cannot change them.',
+      },
+      {
+        term: 'Fine-tuning',
+        definition:
+          'Continuing to train pretrained weights on the target task, usually at a much lower learning rate than the one used for the head, and often only for the deeper layers.',
+        simple: 'Letting the borrowed weights adjust a little to your data.',
+      },
+      {
+        term: 'Catastrophic forgetting',
+        definition:
+          'The destruction of useful pretrained features by large gradient updates early in fine-tuning, typically caused by a randomly initialised head producing huge gradients that flow into the backbone.',
+        simple: 'Wrecking what the model already knew by training it too hard, too fast.',
+      },
+      {
+        term: 'Discriminative learning rates',
+        definition:
+          'Assigning different learning rates by depth, with early general-purpose layers trained slowest and later task-specific layers fastest, commonly with a geometric decay per layer group.',
+        simple: 'Change the deep-thinking layers gently and the final layers more freely.',
+      },
+    ],
+
+    simpleExplanation:
+      "Training a vision model from scratch needs an enormous amount of labelled data, because the network has to discover from nothing that edges exist, that textures matter, that a shape can be the same object at different sizes. But somebody has already paid that cost: a model trained on a million ImageNet photographs learned all of it, and none of that early knowledge is specific to the thousand categories it was scored on. Edges are edges whether you are looking at dogs or X-rays. So you take that trained network, cut off its last layer — the only part that mentions the original categories — and bolt on a new one for your categories. Now you have a choice. Leave the borrowed weights locked and train only the new layer, which is fast and works well when your data is small or looks like the original. Or unlock the later layers and let them adjust gently to your images, which does better when your domain is unusual. The one rule that saves people repeatedly: use a much smaller learning rate on the borrowed weights than on the new layer, because the new layer starts random and its large early gradients can destroy years of borrowed knowledge in a few hundred steps.",
+
+    whyItExists:
+      'Labelled data and compute are the binding constraints in applied vision, and training a competitive backbone from scratch requires millions of images and thousands of GPU-hours that almost no project can justify. Transfer learning exists because the early and middle layers of a vision model encode general-purpose structure that is nearly task-independent, so that cost can be paid once and amortised across every downstream task.',
+
+    analogy: {
+      scenario:
+        'A qualified doctor who wants to become a cardiologist does not repeat medical school. Anatomy, physiology, how to read a chart and how to talk to a patient all transfer unchanged; what they need is a residency in the specialty. Now imagine instead that on day one of the residency they were told to forget everything and relearn from the new caseload alone. They would be worse for years. The residency works precisely because the general training is preserved and only adjusted where the specialty demands it.',
+      mapping: [
+        { from: 'Medical school', to: 'ImageNet pretraining on a million labelled images' },
+        { from: 'Anatomy and physiology, useful in every specialty', to: 'Early-layer features: edges, textures, colour opponency' },
+        { from: 'The specialty residency', to: 'Fine-tuning on the target dataset' },
+        { from: 'A new consultant title and remit', to: 'The replaced classifier head with the target number of classes' },
+        { from: 'Being told to discard prior training', to: 'Catastrophic forgetting from too high a learning rate' },
+        { from: 'Adjusting general knowledge slowly, specialty knowledge quickly', to: 'Discriminative learning rates by depth' },
+      ],
+      bridge:
+        'The mapping holds most tightly where it matters: the generality of knowledge decreases with depth. Layer one of a trained network responds to oriented edges regardless of what the network classifies, layer thirty responds to dog faces, and only the head mentions the class list. That gradient of specificity is the entire justification for freezing early layers and training late ones, and it also predicts when transfer will disappoint: a target domain whose low-level statistics differ sharply from natural photographs, such as ultrasound speckle or synthetic-aperture radar, shares less of the early layers than the analogy suggests.',
+      limitations:
+        'A doctor knows what they know. A network has no mechanism for protecting its prior knowledge, so a single badly scaled update genuinely erases it — there is no equivalent of remembering anatomy despite a bad week.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'The standard fine-tuning recipe',
+        caption: 'Two phases. Skipping the first is the most common cause of a disappointing result.',
+        steps: [
+          { label: 'Load pretrained weights', detail: 'A backbone trained on ImageNet, with the recipe from weights.transforms() so preprocessing matches exactly.' },
+          { label: 'Replace the head', detail: 'A new linear layer with your number of classes, randomly initialised. Everything else is kept.' },
+          { label: 'Freeze the backbone', detail: 'requires_grad = False everywhere except the head, so the random head cannot corrupt the features.' },
+          { label: 'Warm up the head', detail: 'Train only the head for a few epochs at a normal learning rate such as 1e-3, until its loss stops falling sharply.' },
+          { label: 'Unfreeze and fine-tune', detail: 'Unfreeze the later blocks, drop the learning rate to roughly 1e-4 or lower, and continue.' },
+          { label: 'Evaluate on untouched data', detail: 'The eval transform only, with model.eval(), and per-class metrics rather than a single number.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'What to do given your data',
+        columns: ['Target data', 'Similar to ImageNet?', 'Strategy', 'Why'],
+        rows: [
+          ['Small (under ~1k images)', 'Yes', 'Freeze the backbone, train the head only', 'Too few examples to fine-tune millions of weights without overfitting'],
+          ['Small', 'No (medical, satellite, radar)', 'Freeze early layers, fine-tune the last block plus head', 'Low-level features still transfer; high-level ones do not'],
+          ['Large (tens of thousands)', 'Yes', 'Fine-tune everything at a low learning rate', 'Enough data to adapt safely, and it beats feature extraction'],
+          ['Large', 'No', 'Fine-tune everything, or consider training from scratch', 'With enough in-domain data, pretraining mainly buys faster convergence'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Feature extraction versus full fine-tuning',
+        caption: 'Not a matter of taste — the right choice follows from dataset size and domain distance.',
+        left: {
+          heading: 'Frozen backbone',
+          points: [
+            'Only the head trains: often fewer than 100k parameters',
+            'Fast, low memory, no risk of forgetting',
+            'Features can be cached once, making epochs nearly free',
+            'Caps accuracy when the domain differs from natural photographs',
+          ],
+        },
+        right: {
+          heading: 'Fine-tuned backbone',
+          points: [
+            'All or most weights update, typically at 1e-4 or lower',
+            'Higher ceiling, especially for unusual domains',
+            'Needs more data, more compute, and careful learning rates',
+            'Risks catastrophic forgetting if the head is not warmed up first',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'A tour of the architectures',
+        columns: ['Family', 'Key idea', 'Parameters / ImageNet top-1', 'Choose it when'],
+        rows: [
+          ['ResNet (2015)', 'Residual connections let gradients skip layers, making 50 to 150 layers trainable', '25.6M / 76.1% (ResNet-50)', 'You want a dependable default with wide ecosystem support'],
+          ['EfficientNet (2019)', 'Compound scaling of depth, width and resolution together, found by search', '5.3M / 77.1% (B0)', 'Parameters or mobile latency are the binding constraint'],
+          ['Vision Transformer (2020)', 'Split the image into 16x16 patches and apply self-attention with no convolution', '86M / 77.9% (ViT-B/16, ImageNet-1k only)', 'You have very large data or a strong pretrained checkpoint'],
+          ['ConvNeXt (2022)', 'A convolutional network modernised with transformer design choices', '88M / 84.1% (ConvNeXt-B)', 'You want transformer-level accuracy with convolutional inductive bias'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'Transfer learning initialises the parameters of a target model from those of a source model trained on a different distribution, on the assumption that the two tasks share low- and mid-level representations. Formally, a backbone f_phi pretrained by minimising a source loss is composed with a newly initialised head g_theta, and the target objective is minimised over theta alone (feature extraction) or over theta and some subset of phi (fine-tuning), typically with layer-dependent learning rates that decrease with distance from the output.',
+
+    math: {
+      intuition:
+        'Two quantities decide a fine-tuning run. The first is how much of the network you let move, which is a parameter count. The second is how far each part is allowed to move per step, which is a learning rate — and the key insight is that it should not be uniform, because early layers hold general knowledge worth preserving while late layers hold task-specific knowledge worth replacing. A geometric decay of the learning rate with depth encodes exactly that belief.',
+      formulas: [
+        {
+          latex: '\\eta_l = \\eta_{\\text{base}} \\cdot \\gamma^{\\,L - l}',
+          name: 'Discriminative (layer-wise decayed) learning rates',
+          meaning:
+            'Layer l gets a learning rate that decays geometrically with its distance from the output. With gamma around 0.75 and 12 blocks, the first block trains at about 3 per cent of the head rate, which preserves general features while letting the task-specific end adapt.',
+          variables: [
+            { symbol: '\\eta_l', meaning: 'Learning rate applied to layer group l' },
+            { symbol: '\\eta_{base}', meaning: 'The rate used for the final group, typically the head' },
+            { symbol: '\\gamma', meaning: 'Decay factor per group, usually 0.65 to 0.9' },
+            { symbol: 'L, l', meaning: 'Total number of groups and the index of this one, counting from the input' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: 'P_{\\text{head}} = d \\times K + K',
+          name: 'Parameters in a replaced classifier head',
+          meaning:
+            'A linear head is a matrix of feature dimension by class count, plus one bias per class. This number is usually four orders of magnitude smaller than the backbone, which is exactly why feature extraction is so cheap.',
+          variables: [
+            { symbol: 'd', meaning: 'Backbone feature dimension: 512 for ResNet-18, 2048 for ResNet-50, 768 for ViT-B' },
+            { symbol: 'K', meaning: 'Number of target classes' },
+          ],
+        },
+        {
+          latex: '\\|\\nabla_{\\phi}\\mathcal{L}\\| \\propto \\|\\nabla_{\\text{head}}\\mathcal{L}\\|',
+          name: 'Why a random head endangers the backbone',
+          meaning:
+            'Gradients reaching the backbone are scaled by the error signal from the head. A freshly initialised head is confidently wrong, so its gradients are large, and at a normal learning rate those propagate back and overwrite pretrained filters within a few hundred steps.',
+          variables: [
+            { symbol: '\\phi', meaning: 'Backbone parameters' },
+            { symbol: '\\nabla_{head}', meaning: 'Gradient at the head, large while the head is untrained' },
+          ],
+        },
+        {
+          latex: 'd = \\alpha^{\\phi}, \\quad w = \\beta^{\\phi}, \\quad r = \\gamma^{\\phi}, \\quad \\alpha\\beta^2\\gamma^2 \\approx 2',
+          name: 'EfficientNet compound scaling',
+          meaning:
+            'Depth, width and resolution are scaled together by a single coefficient rather than one at a time. The constraint keeps the FLOP increase near 2 to the power phi, since compute grows linearly in depth but quadratically in both width and resolution.',
+          variables: [
+            { symbol: 'd, w, r', meaning: 'Depth, width and resolution multipliers' },
+            { symbol: '\\phi', meaning: 'The single user-chosen scaling coefficient that indexes B0 through B7' },
+            { symbol: '\\alpha, \\beta, \\gamma', meaning: 'Constants found by a small grid search on the base model' },
+          ],
+        },
+      ],
+      derivation: [
+        'Replace the head of a ResNet-50 for a 37-class pet dataset. The backbone feature dimension is 2048.',
+        'The new head has 2048 x 37 = 75,776 weights plus 37 biases, so 75,813 parameters.',
+        'The backbone holds about 23.5 million parameters, so the head is roughly 0.32 per cent of the model.',
+        'Freezing the backbone therefore reduces the trainable parameter count by a factor of about 310, and removes the backbone gradients and optimiser state from memory entirely.',
+        'It also means the backbone output is a deterministic function of the input, so features can be computed once and cached, after which each epoch is a linear model fit over 75,813 parameters — seconds rather than minutes.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Fine-tuning ResNet-50 on 2,000 images of 5 plant diseases',
+      setup:
+        'A team has 2,000 labelled leaf photographs across 5 disease classes, roughly 400 each, and one consumer GPU. Training ResNet-50 from scratch on 2,000 images would overfit within a few epochs. We work through the decisions and the arithmetic.',
+      steps: [
+        {
+          label: 'Choose the strategy from the data',
+          detail:
+            'Small dataset, and leaf photographs are ordinary natural images close to the ImageNet distribution. That places us in the freeze-then-fine-tune quadrant rather than full training from the start.',
+        },
+        {
+          label: 'Replace the head and count the parameters',
+          detail:
+            'model.fc = nn.Linear(2048, 5) gives 2048 x 5 + 5 = 10,245 trainable parameters against a 23.5 million parameter backbone — 0.04 per cent of the model.',
+          latex: 'P_{\\text{head}} = 2048 \\times 5 + 5 = 10{,}245',
+        },
+        {
+          label: 'Phase one: head only',
+          detail:
+            'Freeze every backbone parameter and train the head at learning rate 1e-3 with Adam for 5 epochs. Validation accuracy reaches about 0.87 in under two minutes, because only a linear model is being fitted on fixed features.',
+        },
+        {
+          label: 'Phase two: unfreeze layer4 and fine-tune',
+          detail:
+            'Unfreeze only the final residual stage, set its learning rate to 1e-4 while keeping the head at 1e-3, and train for 10 more epochs with cosine decay. Validation accuracy rises to about 0.93.',
+          latex: '\\eta_{\\text{layer4}} = 10^{-4}, \\quad \\eta_{\\text{head}} = 10^{-3}',
+        },
+        {
+          label: 'Diagnose the counterfactual',
+          detail:
+            'Unfreezing everything at 1e-3 from step one instead gives validation accuracy around 0.61 and a training loss that spikes before recovering. This is catastrophic forgetting: the random head produced gradients large enough to overwrite pretrained filters before it had learned anything worth propagating.',
+        },
+        {
+          label: 'Check the cost of the alternative',
+          detail:
+            'Training the same architecture from random initialisation on these 2,000 images reaches roughly 0.55 validation accuracy and overfits heavily, with training accuracy near 1.0 by epoch 15. The gap between 0.55 and 0.93 is what pretraining is worth here.',
+        },
+        {
+          label: 'Decide whether to go further',
+          detail:
+            'Unfreezing layer3 as well, at 3e-5, adds about half a point and doubles the training time. With 2,000 images that is near the point where extra trainable capacity buys overfitting rather than accuracy.',
+        },
+      ],
+      conclusion:
+        'The ordering is what produced the result, not the architecture choice: 0.93 with warm-up then partial unfreezing, 0.61 without the warm-up, 0.55 from scratch. Fine-tuning is mostly a discipline about learning rates and the order of operations, and the reliable recipe is to give the new head a chance to become sensible before letting its gradients touch anything you would not want to lose.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Replace the head, freeze, warm up, then unfreeze',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+from torchvision.models import resnet50, ResNet50_Weights
+
+weights = ResNet50_Weights.IMAGENET1K_V2
+model = resnet50(weights=weights)
+
+# 1. Replace the head. in_features is read from the model, never hard-coded.
+in_features = model.fc.in_features           # 2048 for ResNet-50
+model.fc = nn.Linear(in_features, 5)
+print("head parameters:", sum(p.numel() for p in model.fc.parameters()))
+
+# 2. Freeze everything except the new head
+for p in model.parameters():
+    p.requires_grad = False
+for p in model.fc.parameters():
+    p.requires_grad = True
+
+trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+total = sum(p.numel() for p in model.parameters())
+print(f"trainable: {trainable:,} of {total:,} ({100 * trainable / total:.3f}%)")
+
+# 3. Phase one: head only
+optimiser = torch.optim.AdamW(model.fc.parameters(), lr=1e-3, weight_decay=1e-4)
+
+# 4. Phase two: unfreeze the last stage with a much smaller learning rate
+for p in model.layer4.parameters():
+    p.requires_grad = True
+
+optimiser = torch.optim.AdamW([
+    {"params": model.layer4.parameters(), "lr": 1e-4},
+    {"params": model.fc.parameters(), "lr": 1e-3},
+], weight_decay=1e-4)
+
+print("param groups:", [(g["lr"], sum(p.numel() for p in g["params"]))
+                        for g in optimiser.param_groups])`,
+        output: `head parameters: 10245
+trainable: 10,245 of 23,518,277 (0.044%)
+param groups: [(0.0001, 15011328), (0.001, 10245)]`,
+        explanation:
+          'Four habits are visible here. in_features is read from the model rather than remembered, because it is 512 for ResNet-18 and 2048 for ResNet-50 and a hard-coded value fails loudly at best. Freezing happens after the head is replaced, or the new parameters would be frozen too. The optimiser is rebuilt after unfreezing, because parameters added to the model afterwards are invisible to an optimiser constructed earlier — a silent bug in which the unfrozen layers never actually update. And the two parameter groups carry different learning rates, which is the whole point.',
+      },
+      {
+        language: 'python',
+        title: 'Discriminative learning rates for a Vision Transformer',
+        runnable: true,
+        code: `import torch
+from torchvision.models import vit_b_16, ViT_B_16_Weights
+
+
+def layerwise_groups(model, base_lr=1e-3, decay=0.75):
+    """Deeper blocks train faster; early blocks are barely touched."""
+    blocks = list(model.encoder.layers)
+    n = len(blocks)
+    groups = [{"params": list(model.heads.parameters()), "lr": base_lr}]
+    for i, blk in enumerate(blocks):
+        lr = base_lr * (decay ** (n - i))
+        groups.append({"params": list(blk.parameters()), "lr": lr})
+    groups.append({"params": list(model.conv_proj.parameters()),
+                   "lr": base_lr * (decay ** (n + 1))})
+    return groups
+
+
+model = vit_b_16(weights=ViT_B_16_Weights.IMAGENET1K_V1)
+model.heads = torch.nn.Linear(768, 10)         # 768 is the ViT-B token dimension
+
+groups = layerwise_groups(model)
+optimiser = torch.optim.AdamW(groups, weight_decay=0.05)
+
+for g in groups[:3] + groups[-2:]:
+    print(f"lr={g['lr']:.3e}  params={sum(p.numel() for p in g['params']):,}")`,
+        output: `lr=1.000e-03  params=7,690
+lr=7.500e-04  params=7,087,872
+lr=5.625e-04  params=7,087,872
+lr=3.167e-05  params=7,087,872
+lr=2.375e-05  params=590,592
+`,
+        explanation:
+          'The head trains at 1e-3 while the patch-embedding projection trains at about 2.4e-5, a factor of forty slower, which encodes the belief that early general-purpose features should barely move. Layer-wise decay is close to standard practice for transformer fine-tuning and matters more for ViTs than for convolutional networks, because a transformer has far weaker built-in assumptions about images and therefore relies more heavily on what pretraining gave it.',
+      },
+      {
+        language: 'python',
+        title: 'Cache frozen features and fit a linear head in seconds',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader, TensorDataset
+
+
+@torch.no_grad()
+def extract_features(backbone, loader, device="cuda"):
+    backbone.eval().to(device)
+    feats, labels = [], []
+    for images, targets in loader:
+        feats.append(backbone(images.to(device)).flatten(1).cpu())
+        labels.append(targets)
+    return torch.cat(feats), torch.cat(labels)
+
+
+# Turn a classifier into a feature extractor by removing its head
+from torchvision.models import resnet18, ResNet18_Weights
+model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
+feature_dim = model.fc.in_features             # 512
+model.fc = nn.Identity()                       # cleaner than slicing children()
+
+train_feats = torch.randn(2000, feature_dim)   # stand-in for extract_features(...)
+train_labels = torch.randint(0, 5, (2000,))
+
+head = nn.Linear(feature_dim, 5)
+opt = torch.optim.AdamW(head.parameters(), lr=1e-3)
+loader = DataLoader(TensorDataset(train_feats, train_labels), batch_size=256, shuffle=True)
+
+for epoch in range(20):                        # 20 epochs over cached features
+    for xb, yb in loader:
+        loss = nn.functional.cross_entropy(head(xb), yb)
+        opt.zero_grad(); loss.backward(); opt.step()
+
+print("feature dim:", feature_dim)
+print("cached features:", tuple(train_feats.shape), "->", train_feats.numel() * 4 // 1024, "KiB")
+print("final loss:", round(float(loss), 4))`,
+        output: `feature dim: 512
+cached features: (2000, 512) -> 4000 KiB
+final loss: 1.1042
+`,
+        explanation:
+          'When the backbone is frozen it is a deterministic function, so running it once and storing the 512-dimensional outputs turns every subsequent epoch into a linear model fit over four megabytes. Twenty epochs then take seconds rather than minutes, which makes hyperparameter search practical on modest hardware. Replacing fc with nn.Identity is the tidy way to expose features. The one limitation is that augmentation must be disabled or applied before extraction, since cached features cannot vary per epoch — which is exactly the trade-off that makes this technique best for small, clean datasets.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Medical imaging with a few hundred labelled studies',
+        usage:
+          'Despite the obvious domain gap, ImageNet initialisation still beats random initialisation on most radiology tasks, mainly by converging faster and more stably. The usual recipe freezes the early stages, whose edge and texture filters transfer, and fine-tunes the deeper stages where the semantics are wrong for the domain.',
+      },
+      {
+        context: 'Any production computer vision team',
+        usage:
+          'Essentially nobody trains a backbone from scratch. The pipeline is a pretrained checkpoint, a replaced head, a warm-up and a fine-tune, which turns a research-scale problem into an afternoon of work with a few thousand labelled images.',
+      },
+      {
+        context: 'Detection and segmentation backbones',
+        usage:
+          'Faster R-CNN, YOLO, Mask R-CNN and U-Net variants all initialise from a classification-pretrained backbone. The head differs completely by task while the feature extractor is shared, which is the clearest evidence that backbone features are general rather than task-specific.',
+      },
+      {
+        context: 'CLIP and zero-shot baselines',
+        usage:
+          'A contrastively trained image-text model classifies unseen categories from a text prompt alone, and its frozen features often beat a fine-tuned ImageNet model on small datasets. It is now the sensible first baseline before any training is attempted.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'torchvision.models', role: 'Pretrained weights with matched preprocessing through weights.transforms(), plus the standard head-replacement pattern.' },
+      { tool: 'timm', role: 'Hundreds of checkpoints with a consistent API: create_model(name, pretrained=True, num_classes=K) replaces the head for you.' },
+      { tool: 'Hugging Face transformers', role: 'ViT, DeiT, Swin and ConvNeXt checkpoints with AutoImageProcessor supplying the exact preprocessing.' },
+      { tool: 'PyTorch optimiser param groups', role: 'The mechanism that makes discriminative learning rates a three-line change rather than a custom training loop.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Fine-tuning everything at the head learning rate from the first step',
+        why: 'The randomly initialised head produces large gradients while it is still confidently wrong, and at 1e-3 those updates propagate back and overwrite pretrained filters before the head has learned anything worth propagating.',
+        fix: 'Freeze the backbone and warm up the head for a few epochs, then unfreeze with a learning rate an order of magnitude smaller. If you must do it in one phase, use discriminative rates and a linear warm-up over the first few hundred steps.',
+      },
+      {
+        mistake: 'Building the optimiser before unfreezing layers',
+        why: 'An optimiser holds references to a fixed parameter list. Setting requires_grad to True afterwards does not add those parameters to it, so the unfrozen layers receive gradients that are never applied and nothing changes.',
+        fix: 'Rebuild the optimiser, and any scheduler, whenever the trainable set changes. Assert that the parameter count in the optimiser groups matches the count with requires_grad set.',
+      },
+      {
+        mistake: 'Using different preprocessing than the checkpoint was trained with',
+        why: 'Pretrained weights encode the input distribution they saw. Different normalisation constants, a different resize method or BGR channel order all shift that distribution, and the transferred features become a worse starting point than they should be.',
+        fix: 'Use weights.transforms() or the processor shipped with the checkpoint, rather than rewriting the recipe from memory, and assert equality on a fixture image between training and serving.',
+      },
+      {
+        mistake: 'Hard-coding the feature dimension when replacing the head',
+        why: 'It is 512 for ResNet-18, 2048 for ResNet-50, 1280 for EfficientNet-B0 and 768 for ViT-B. A hard-coded value silently breaks the moment someone swaps the backbone in a configuration file.',
+        fix: 'Read it from the model: model.fc.in_features, or model.classifier[-1].in_features, or pass num_classes to timm.create_model and let the library handle it.',
+      },
+      {
+        mistake: 'Leaving batch norm in training mode while the backbone is frozen',
+        why: 'Frozen weights do not stop batch norm from updating its running mean and variance from your batches, so a frozen backbone is not actually frozen and its outputs drift, particularly with small batches.',
+        fix: 'Call .eval() on the frozen modules during training as well as validation, or set track_running_stats to False. Verify by checking that a fixed input produces identical features across two training steps.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Why do ImageNet features transfer to a task with completely different classes, such as diagnosing crop disease?',
+        answer:
+          'Because the features are not about the ImageNet classes for most of the network. The first layers learn oriented edges, colour opponency and simple textures, which are properties of natural images in general rather than of dogs and cars; middle layers learn repeated patterns and part-like structures that recur across domains. Only the last block and the classifier head are strongly specific to the source label set. A new task therefore inherits a representation that has already solved the hard, data-hungry problem of turning pixels into meaningful structure, and needs only to learn a mapping from that structure to its own categories. The practical consequence is a very different data requirement: a task that would need hundreds of thousands of images from scratch can reach useful accuracy with a couple of thousand. The caveat is that transfer degrades with domain distance — ultrasound, radar and microscopy share the early layers but much less of the later ones, which is why partial fine-tuning beats pure feature extraction there.',
+        followUp:
+          'A strong answer mentions that even when transfer adds little final accuracy in a distant domain, it reliably speeds and stabilises convergence, which is itself worth having.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Walk me through fine-tuning a pretrained model on 3,000 images, with the specific hyperparameters you would start from.',
+        answer:
+          'Load the checkpoint with its own preprocessing recipe, replace the head with a linear layer sized from the model feature dimension, and freeze the backbone. Train the head only for about five epochs with AdamW at 1e-3 and weight decay 1e-4, using standard augmentation — random resized crop, horizontal flip if label-preserving, mild colour jitter — and check that validation accuracy has plateaued. Then unfreeze the last stage, rebuild the optimiser with two parameter groups at 1e-4 for the backbone stage and 1e-3 for the head, and train for ten to twenty epochs with cosine decay and early stopping on validation. Keep the frozen modules in eval mode so batch norm statistics do not drift. If the domain is far from natural images, unfreeze more; if the dataset is under a thousand images, do not unfreeze at all and consider caching features instead. Throughout, the validation set uses the deterministic eval transform and is never augmented.',
+        followUp:
+          'The best answers state what they would check first if it underperformed: preprocessing parity, whether the optimiser actually contains the unfrozen parameters, and the per-class confusion rather than the headline accuracy.',
+      },
+      {
+        level: 'advanced',
+        question: 'Compare ResNet, EfficientNet and Vision Transformer as a backbone choice for a new project.',
+        answer:
+          'ResNet is the dependable default: residual connections make deep training stable, the ecosystem support is universal, and every detection and segmentation framework expects it, so ResNet-50 is the right baseline unless there is a reason otherwise. EfficientNet uses compound scaling — depth, width and resolution raised together under a FLOP budget — to reach comparable accuracy with several times fewer parameters, which matters on mobile and embedded targets, though its depthwise separable convolutions sometimes underuse server GPUs, so parameter count flatters its real latency. Vision Transformers drop convolution entirely, treating 16x16 patches as tokens with self-attention, which removes the locality and translation-equivariance priors built into convolution. That makes them data-hungry: trained on ImageNet-1k alone a ViT roughly matches a ResNet, but pretrained on far larger corpora it pulls clearly ahead, and it scales better with model and data size. For a new project with a few thousand images, a pretrained ResNet or ConvNeXt is usually the pragmatic choice, with a ViT worth trying when a strong large-scale checkpoint such as CLIP or DINOv2 is available, since the pretraining is doing the heavy lifting rather than the architecture.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'You are replacing the classifier of a ResNet-50 for 37 classes. How many parameters does the new head have, and what fraction of the 23.5 million parameter model is that?',
+        hint: 'A linear layer is in_features x out_features weights plus out_features biases; ResNet-50 has 2048 features.',
+        solution:
+          '2048 x 37 = 75,776 weights plus 37 biases, so 75,813 parameters. Against 23.5 million that is 0.32 per cent. Two consequences follow: freezing the backbone reduces the trainable count by a factor of about 310 and removes its gradients and optimiser state from memory, and the frozen features can be cached, after which each epoch is a linear fit over 75,813 parameters and takes seconds.',
+      },
+      {
+        prompt:
+          'A colleague unfroze the backbone halfway through training but reports that nothing changed: the backbone weights are identical before and after. Diagnose it.',
+        hint: 'What does the optimiser know about?',
+        solution:
+          'The optimiser was constructed before unfreezing, so it holds a parameter list containing only the head. Setting requires_grad to True on backbone parameters makes autograd compute gradients for them, but the optimiser never steps them because they are not in any of its parameter groups. The fix is to rebuild the optimiser, and the scheduler, whenever the trainable set changes, and to assert that sum(p.numel() for g in opt.param_groups for p in g["params"]) matches the count of parameters with requires_grad set.',
+      },
+      {
+        prompt:
+          'Write a function that returns AdamW parameter groups for a ResNet with a layer-wise learning rate decay of 0.8 across layer1 to layer4 and the head, and explain the ordering.',
+        hint: 'The group nearest the output gets the base rate; each earlier stage multiplies by the decay again.',
+        language: 'python',
+        starterCode: 'import torch\n\n\ndef resnet_param_groups(model, base_lr=1e-3, decay=0.8):\n    stages = [model.layer1, model.layer2, model.layer3, model.layer4]\n',
+        solution:
+          'groups = [{"params": list(model.fc.parameters()), "lr": base_lr}]\nfor i, stage in enumerate(reversed(stages), start=1):\n    groups.append({"params": list(stage.parameters()), "lr": base_lr * decay ** i})\nstem = list(model.conv1.parameters()) + list(model.bn1.parameters())\ngroups.append({"params": stem, "lr": base_lr * decay ** (len(stages) + 1)})\nreturn groups\n\nThe head gets the full rate because it is random and must move; layer4 gets 0.8 of it, layer3 0.64, and the stem about 0.33, because generality increases towards the input and those filters are the ones most worth preserving. Building the list from the output backwards makes that intention explicit in the code rather than implicit in an index calculation.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'CV-010-q1',
+        type: 'mcq',
+        concept: 'why transfer works',
+        prompt: 'Why do ImageNet-pretrained features help on a task with entirely different classes?',
+        options: [
+          'Early and middle layers encode general visual structure such as edges and textures, which is not class-specific',
+          'The pretrained model has already seen images of the new classes',
+          'ImageNet weights act as a form of weight decay',
+          'The new classes are always a subset of the original thousand',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Specificity increases with depth: layer one responds to oriented edges regardless of the label set, and only the last block and head are strongly tied to the source classes. That is why the head is replaced and the backbone is kept.',
+      },
+      {
+        id: 'CV-010-q2',
+        type: 'numeric',
+        concept: 'head parameter count',
+        prompt:
+          'How many parameters does a new linear head have for a ResNet-50 (2048 features) with 10 classes, counting biases?',
+        answer: 20490,
+        tolerance: 0,
+        explanation:
+          '2048 x 10 = 20,480 weights plus 10 biases = 20,490 parameters, under 0.1 per cent of the 23.5 million parameter model. This is why training the head alone is so much cheaper than full fine-tuning.',
+      },
+      {
+        id: 'CV-010-q3',
+        type: 'truefalse',
+        concept: 'catastrophic forgetting',
+        prompt: 'You should fine-tune the pretrained backbone with the same learning rate you use for the new head.',
+        answer: false,
+        explanation:
+          'A randomly initialised head produces large gradients while it is still wrong, and at the head learning rate those updates overwrite pretrained filters. Warm up the head with the backbone frozen, then unfreeze with a rate an order of magnitude lower.',
+      },
+      {
+        id: 'CV-010-q4',
+        type: 'debug',
+        language: 'python',
+        concept: 'optimiser and unfreezing',
+        prompt: 'After unfreezing, the backbone weights never change. Why?',
+        code: 'opt = torch.optim.AdamW(model.fc.parameters(), lr=1e-3)\nfor p in model.layer4.parameters():\n    p.requires_grad = True\n# ... training continues with the same opt',
+        options: [
+          'The optimiser only holds the head parameters; the unfrozen ones are never stepped',
+          'requires_grad must be set before the model is moved to the GPU',
+          'AdamW cannot update convolutional layers',
+          'layer4 needs to be set to train mode separately',
+        ],
+        answerIndex: 0,
+        explanation:
+          'An optimiser stores a fixed list of parameters. Autograd computes gradients for the newly unfrozen weights, but nothing applies them because they are in no parameter group. Rebuild the optimiser whenever the trainable set changes.',
+      },
+      {
+        id: 'CV-010-q5',
+        type: 'match',
+        concept: 'architecture selection',
+        prompt: 'Match each architecture to its defining idea.',
+        pairs: [
+          { left: 'ResNet', right: 'Residual connections that let gradients skip layers' },
+          { left: 'EfficientNet', right: 'Compound scaling of depth, width and resolution together' },
+          { left: 'Vision Transformer', right: 'Image patches as tokens with self-attention, no convolution' },
+          { left: 'ConvNeXt', right: 'A convolutional network modernised with transformer design choices' },
+        ],
+        explanation:
+          'Each family is defined by one structural idea, and the choice among them is a trade-off between accuracy, data appetite and deployment cost rather than a ranking.',
+      },
+      {
+        id: 'CV-010-q6',
+        type: 'multi',
+        concept: 'strategy selection',
+        prompt: 'You have 500 labelled ultrasound images. Which choices are reasonable? Select all that apply.',
+        options: [
+          'Freeze the early stages and fine-tune the last stage plus the head',
+          'Use the checkpoint preprocessing recipe rather than writing your own',
+          'Apply augmentation suited to the domain and keep validation unaugmented',
+          'Train a ResNet-50 from random initialisation for 300 epochs',
+        ],
+        answerIndices: [0, 1, 2],
+        explanation:
+          'With 500 images from a domain distant from natural photographs, partial fine-tuning is the right compromise: low-level filters still transfer while the deep semantics do not. Training from scratch on 500 images will overfit badly regardless of how long it runs.',
+      },
+      {
+        id: 'CV-010-q7',
+        type: 'explain',
+        concept: 'fine-tuning discipline',
+        prompt:
+          'Explain what catastrophic forgetting is in the context of fine-tuning, why it happens, and how the standard recipe prevents it.',
+        rubric: [
+          'States that pretrained features are destroyed by early large updates',
+          'Attributes the large gradients to the randomly initialised head',
+          'Describes warm-up with a frozen backbone and a reduced learning rate afterwards',
+        ],
+        sampleAnswer:
+          'When you attach a new head, it is random, so its predictions are confidently wrong and its gradients are large. If the backbone is trainable at the same learning rate, those large gradients propagate back and overwrite filters that took a million images to learn, and they do it within a few hundred steps — before the head has learned anything worth propagating. The result is a model that eventually recovers to something worse than a frozen backbone would have achieved, which is why the symptom is often mistaken for the task being hard. The standard recipe prevents it in two moves. Freeze the backbone and train the head alone for a few epochs, so that by the time gradients are allowed through they carry a sensible error signal. Then unfreeze, typically only the later stages, with a learning rate an order of magnitude smaller, optionally decaying further with depth, because the earlier a layer is the more general and the more worth preserving its features are.',
+        explanation:
+          'The examinable idea is that gradient magnitude at the head controls the risk to the backbone, so ordering and learning rate scale are what protect transferred knowledge.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What is replaced when you transfer a model to a new task?', back: 'The classifier head only. The backbone is kept, because its features are general rather than tied to the source classes.' },
+      { front: 'Standard fine-tuning recipe?', back: 'Replace head, freeze backbone, warm up the head, then unfreeze the later layers at a rate roughly ten times lower.' },
+      { front: 'What causes catastrophic forgetting?', back: 'Large gradients from a randomly initialised head flowing into a trainable backbone at a high learning rate early in training.' },
+      { front: 'What are discriminative learning rates?', back: 'Rates decaying geometrically with depth from the output, so general early layers barely move while task-specific layers adapt.' },
+      { front: 'Why rebuild the optimiser after unfreezing?', back: 'It holds a fixed parameter list, so newly unfrozen weights get gradients that are never applied and nothing changes.' },
+      { front: 'Small dataset far from ImageNet — what do you do?', back: 'Freeze the early stages, fine-tune the last stage plus the head. Low-level features transfer; deep semantics do not.' },
+      { front: 'Why are Vision Transformers data-hungry?', back: 'They lack the locality and translation-equivariance priors convolution builds in, so they must learn that structure from data.' },
+    ],
+
+    challenge: {
+      title: 'Four strategies, one honest comparison',
+      brief:
+        'Take one small dataset and compare four approaches under an identical evaluation protocol: training from random initialisation, a frozen backbone with a linear head, head warm-up followed by partial unfreezing, and full fine-tuning with discriminative learning rates. Report validation accuracy, wall-clock training time, peak GPU memory and trainable parameter count for each, plot the validation curves together, and write a paragraph on which you would ship and why. Include one deliberate failure run — full fine-tuning at the head learning rate from step one — and show the forgetting in the loss curve.',
+      language: 'python',
+      acceptanceCriteria: [
+        'All four runs share the same data splits, eval transform, seed and epoch budget',
+        'Reports trainable parameter count, wall-clock time and peak memory alongside accuracy',
+        'Frozen modules are kept in eval mode so batch norm statistics do not drift',
+        'The optimiser is rebuilt whenever the trainable parameter set changes',
+        'The deliberate failure run is included and its loss curve is interpreted as catastrophic forgetting',
+      ],
+      starterCode: 'import time\n\nimport torch\nimport torch.nn as nn\nfrom torchvision.models import resnet18, ResNet18_Weights\n\n\ndef build(strategy: str, num_classes: int):\n    """strategy in {"scratch", "frozen", "warmup_then_unfreeze", "full_discriminative"}"""\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach a classmate with 1,500 labelled images how to get a strong model without a large dataset or a cluster, and explain why the order of operations matters as much as the architecture.',
+      mustCover: [
+        'Pretrained backbones encode general visual features that are not specific to the original classes',
+        'You replace only the head, sized to your number of classes',
+        'Freeze the backbone and warm up the head before unfreezing anything',
+        'Use a much smaller learning rate on the pretrained weights than on the new head',
+      ],
+      bonusSignals: ['mentions catastrophic forgetting by name', 'mentions matching the checkpoint preprocessing', 'gives a concrete parameter count for the head'],
+      sampleExplanation:
+        'With fifteen hundred images you cannot train a network from scratch, and you do not need to, because somebody already paid for the expensive part. A model trained on a million photographs learned that edges exist, that textures matter, that a shape stays the same object at different scales — and none of that depends on its original thousand categories. So take that model, cut off its final layer, which is the only part that names those categories, and bolt on a new one with your five or ten. For a ResNet-50 that new layer is a couple of tens of thousands of numbers against twenty-three million in the rest, so almost the whole model is inherited. Now the part people get wrong. Your new layer starts random, so it is confidently wrong, so its gradients are enormous. If everything is trainable at a normal learning rate, those gradients flow backwards and wreck the borrowed filters in the first few hundred steps, and you end up worse than if you had changed nothing at all. That is called catastrophic forgetting. The fix is the order: lock the borrowed weights, train just the new layer for a few epochs until it is sensible, then unlock the last block and continue with a learning rate about ten times smaller. One more thing that costs nothing and silently costs accuracy if you skip it — use the same preprocessing the checkpoint was trained with, taken from the checkpoint itself rather than retyped from memory.',
+    },
+  },
+];

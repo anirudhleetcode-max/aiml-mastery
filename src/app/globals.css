@@ -55,6 +55,28 @@
   --d-GEN: 310 88% 66%;
   --d-OPS: 210 16% 62%;
 
+  /* ---- Data-visualisation tokens -------------------------------
+     Validated with the dataviz colour checks (lightness band, chroma
+     floor, CVD separation under protanopia/deuteranopia, normal-vision
+     floor, contrast) against these exact surfaces. Do not hand-edit a
+     single value: re-run the validator on the whole set.
+     Categorical set passes all-pairs in both modes. -------------- */
+  --viz-series: #8164f7;        /* the one-series hue */
+  --viz-series-soft: #a78bfa;
+  --viz-cat-learning: #3987e5;
+  --viz-cat-review: #d95926;
+  --viz-cat-mastered: #199e70;
+  --viz-cat-none: #4a5265;
+  --viz-grid: hsl(var(--c-border) / 0.75);
+  --viz-axis: hsl(var(--c-text-subtle));
+  /* Sequential ramp for the contribution heatmap: one hue, monotone.
+     In dark mode the anchor is inverted — empty is near-surface. */
+  --viz-seq-0: hsl(222 30% 13%);
+  --viz-seq-1: #2d2168;
+  --viz-seq-2: #4a35a8;
+  --viz-seq-3: #6f52e8;
+  --viz-seq-4: #a78bfa;
+
   --radius: 0.875rem;
   --shadow-soft: 0 1px 2px hsl(222 60% 2% / 0.4), 0 8px 24px -12px hsl(222 60% 2% / 0.6);
   --shadow-lift: 0 2px 4px hsl(222 60% 2% / 0.4), 0 24px 48px -20px hsl(222 60% 2% / 0.75);
@@ -103,6 +125,18 @@
   --d-GEN: 310 70% 50%;
   --d-OPS: 210 12% 42%;
 
+  --viz-series: #5a37e6;
+  --viz-series-soft: #7c3aed;
+  --viz-cat-learning: #2a78d6;
+  --viz-cat-review: #eb6834;
+  --viz-cat-mastered: #1baf7a;
+  --viz-cat-none: #9aa3b2;
+  --viz-seq-0: hsl(220 24% 94%);
+  --viz-seq-1: #ddd6fe;
+  --viz-seq-2: #a78bfa;
+  --viz-seq-3: #7c3aed;
+  --viz-seq-4: #5b21b6;
+
   --shadow-soft: 0 1px 2px hsl(220 40% 40% / 0.08), 0 8px 24px -14px hsl(220 40% 30% / 0.18);
   --shadow-lift: 0 2px 4px hsl(220 40% 40% / 0.08), 0 24px 48px -22px hsl(220 40% 30% / 0.28);
   --glass: hsl(0 0% 100% / 0.78);
@@ -132,6 +166,12 @@
   --color-danger: hsl(var(--c-danger));
   --color-info: hsl(var(--c-info));
   --color-xp: hsl(var(--c-xp));
+
+  --color-viz-series: var(--viz-series);
+  --color-viz-learning: var(--viz-cat-learning);
+  --color-viz-review: var(--viz-cat-review);
+  --color-viz-mastered: var(--viz-cat-mastered);
+  --color-viz-none: var(--viz-cat-none);
 
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: var(--font-mono-stack), ui-monospace, "SF Mono", Menlo, monospace;

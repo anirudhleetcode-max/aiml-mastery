@@ -3393,3 +3393,2992 @@ tight   recall=0.50 fpr=0.001  expected cost = 0.5080 per transaction`,
         'Expectation is the long-run average. Take a die that pays you its face value. Any single roll gives you something between 1 and 6, but if you roll it ten thousand times the running average settles at 3.5. You get that number by multiplying each value by how likely it is and adding: a sixth of 1, plus a sixth of 2, and so on. Notice immediately that 3.5 is not a face on the die. An expectation is a balance point, not a prediction, and treating it as a typical outcome is the most common way people misuse it. Now, an average on its own can be badly misleading. A bet that always pays 50 and a bet that pays 0 or 100 on a coin flip have exactly the same expectation, and they are not the same thing to live with. So you also measure how far values sit from the mean. You cannot just average the distances, because the ones below and above cancel out to zero by construction, so you square them first, which also makes big deviations count disproportionately. That average squared distance is the variance. The problem is that squaring wrecked the units: if you were measuring salaries in pounds, the variance is in pounds squared, which nobody can interpret. So you take the square root and call it the standard deviation, and now you have a number in pounds that you can put next to the mean and read directly. Variance is what you do algebra with — it adds up nicely over independent things — and standard deviation is what you put in the report.',
     },
   },
+
+  {
+    id: 'STAT-007',
+    domain: 'STAT',
+    module: 'Describing Data',
+    topic: 'Measures of central tendency',
+    title: 'Mean, Median and Mode',
+    slug: 'mean-median-mode',
+    difficulty: 1,
+    estimatedMinutes: 30,
+    prerequisites: [],
+    related: ['STAT-006'],
+    tags: ['mean', 'median', 'mode', 'skew', 'outliers', 'robustness'],
+
+    learningObjectives: [
+      'Compute the mean, median and mode of a small dataset by hand',
+      'Choose the honest summary for a given distribution, and justify the choice',
+      'Explain robustness: why the median survives outliers and the mean does not',
+      'Predict the relative ordering of the three statistics from the direction of skew',
+    ],
+
+    terminology: [
+      {
+        term: 'Mean (arithmetic average)',
+        definition:
+          'The sum of all values divided by how many there are. It is the balance point of the data and uses every observation, which is both its strength and its weakness.',
+        simple: 'Add everything up and share it out equally.',
+      },
+      {
+        term: 'Median',
+        definition:
+          'The middle value when the data are sorted; with an even count, the average of the two middle values. Exactly half the observations lie at or below it.',
+        simple: 'The value in the middle when you line everyone up.',
+      },
+      {
+        term: 'Mode',
+        definition:
+          'The most frequently occurring value. A distribution may have none, one or several, and for continuous data it is defined by the peak of the density rather than by repeated values.',
+        simple: 'The most common value.',
+      },
+      {
+        term: 'Skew',
+        definition:
+          'Asymmetry in a distribution. Right (positive) skew has a long tail towards high values and pulls the mean above the median; left skew does the reverse.',
+        simple: 'A lopsided distribution with a long tail on one side.',
+      },
+      {
+        term: 'Robust statistic',
+        definition:
+          'A summary whose value changes only slightly when a small fraction of the data is arbitrarily corrupted. The median has a breakdown point of 50%; the mean has 0%.',
+        simple: 'A number that does not lurch when a few values go haywire.',
+      },
+      {
+        term: 'Breakdown point',
+        definition:
+          'The proportion of the data that must be corrupted before a statistic can be driven to an arbitrary value. Higher is more robust.',
+        simple: 'How much bad data it takes to ruin the number.',
+      },
+    ],
+
+    simpleExplanation:
+      'When you have a pile of numbers, you want one number that stands for the whole pile. There are three sensible answers and they disagree more often than people expect. The mean shares everything out equally: add it all up, divide by how many there are. The median lines everyone up in order and takes whoever is standing in the middle. The mode simply asks which value shows up most often. On a tidy, symmetric pile these three land in almost the same place and the choice does not matter. On a lopsided pile they can be wildly different, and then the choice is the whole story. Put one billionaire in a room of ordinary people and the mean income becomes millions while the median barely moves, because the median only cares about who is in the middle, not how extreme the extremes are. That is why governments report median household income and not mean: one number describes a typical household and the other describes an accounting identity nobody lives in.',
+
+    whyItExists:
+      'A dataset of a million rows cannot be reported, remembered or compared. Summaries of centre exist so a distribution can be discussed in one number, and three of them exist because "the centre" genuinely means different things depending on whether you want a balance point, a typical case, or the most common case.',
+
+    analogy: {
+      scenario:
+        'Picture a small company with ten employees. Nine earn around 30,000 and the founder takes 1,000,000. If you ask "what does someone here earn?", the mean gives 127,000 — a figure that describes nobody in the building, because the founder\'s salary has been smeared thinly across everyone else. The median gives 30,000, which is what you would actually find if you stopped a random person in the corridor. If seven of the nine happen to earn exactly 30,000, that is also the mode: the salary you are most likely to bump into.',
+      mapping: [
+        { from: 'Sharing the total payroll equally among everyone', to: 'The mean' },
+        { from: 'Lining everyone up by salary and asking the middle person', to: 'The median' },
+        { from: 'The salary printed on the most contracts', to: 'The mode' },
+        { from: 'The founder\'s outlying salary', to: 'An extreme value with unbounded influence on the mean' },
+        { from: 'The median barely moving when the founder gets a raise', to: 'Robustness — a 50% breakdown point' },
+      ],
+      bridge:
+        'The salary picture maps exactly onto the mathematics. The mean is the point that minimises total squared distance to the data, so a far-away point exerts enormous pull; the median is the point that minimises total absolute distance, so each point pulls with the same force regardless of how far it sits. That is the entire reason one is fragile and the other is not, and it is the same reason that squared-error regression chases outliers while absolute-error regression ignores them.',
+      limitations:
+        'The story implies the mean is simply worse, which is false. If you are budgeting total payroll, the mean is exactly the right number, because mean times headcount is the total and no median-based figure has that property. The mean is the wrong summary for "typical" and the right one for "total".',
+    },
+
+    visuals: [
+      {
+        kind: 'compare',
+        title: 'Mean versus median',
+        caption: 'Neither is better in general; they answer different questions and fail in different ways.',
+        left: {
+          heading: 'Mean',
+          points: [
+            'Uses every observation, so it carries all the information',
+            'Minimises total squared distance to the data',
+            'Breakdown point 0%: one extreme value can move it anywhere',
+            'The only summary where centre times count gives the total',
+            'Right for totals, budgets and expected values',
+          ],
+        },
+        right: {
+          heading: 'Median',
+          points: [
+            'Uses only the ordering, so it discards magnitude information',
+            'Minimises total absolute distance to the data',
+            'Breakdown point 50%: half the data must be corrupted to move it far',
+            'Cannot be combined across groups by simple weighting',
+            'Right for "typical", for skewed data and for dirty data',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'What skew does to the three statistics',
+        caption: 'The rule of thumb is that the mean chases the tail.',
+        columns: ['Shape', 'Ordering', 'Example', 'Which to report'],
+        rows: [
+          ['Symmetric, single peak', 'mean = median = mode', 'Heights, measurement error', 'Mean, with a standard deviation'],
+          ['Right (positive) skew', 'mode < median < mean', 'Income, latency, file sizes', 'Median, with quartiles'],
+          ['Left (negative) skew', 'mean < median < mode', 'Age at death, exam scores with a ceiling', 'Median'],
+          ['Bimodal', 'the centre is misleading entirely', 'Two mixed populations', 'Neither — split the groups first'],
+          ['Categorical', 'only the mode is defined', 'Most common class label', 'Mode'],
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'Choosing a summary statistic',
+        caption: 'Four questions, in order, and you almost never get them wrong.',
+        branching: true,
+        steps: [
+          { label: 'Is the data categorical?', detail: 'If yes, only the mode is meaningful — mean shoe colour does not exist.' },
+          { label: 'Plot it. Is it roughly symmetric and single-peaked?', detail: 'If yes, report the mean with a standard deviation.' },
+          { label: 'Is it skewed or does it contain outliers?', detail: 'If yes, report the median with the interquartile range.' },
+          { label: 'Is it bimodal?', detail: 'If yes, no single centre is honest. Identify and separate the two populations.' },
+          { label: 'Do you actually need a total?', detail: 'If yes, use the mean regardless of skew — only the mean multiplies up to a total.' },
+        ],
+      },
+      {
+        kind: 'ascii',
+        title: 'Right-skewed data, with the three centres marked',
+        caption: 'The long tail on the right drags the mean away from the bulk of the data while the median stays put.',
+        art: `  count
+    |
+ 30 |        ##
+    |        ##
+ 20 |     ## ## ##
+    |     ## ## ##
+ 10 |  ## ## ## ## ##
+    |  ## ## ## ## ## ##  ##        ##            ##
+  0 +----------------------------------------------------
+       ^   ^     ^
+       |   |     |
+    mode  median mean                          outliers
+      30    40    78.6`,
+      },
+    ],
+
+    formalDefinition:
+      'For a sample of n observations, the mean is the sum of the observations divided by n. The median is the value at position (n+1)/2 in the sorted order when n is odd, and the mean of the observations at positions n/2 and n/2 + 1 when n is even. The mode is any value attaining the maximum frequency. The mean minimises the sum of squared deviations and is the unique unbiased linear estimator of the population mean under standard assumptions; the median minimises the sum of absolute deviations and has an asymptotic breakdown point of 50%, against 0% for the mean.',
+
+    math: {
+      intuition:
+        'Each of the three centres is the answer to a different optimisation problem, which is the cleanest way to understand why they differ. Ask for the single value that is closest to your data in a squared sense and you get the mean; ask in an absolute sense and you get the median; ask which value appears most and you get the mode. Because squaring punishes large distances disproportionately, a single distant point can drag the mean a long way, while for the median every point pulls with the same force and only the count on each side matters.',
+      formulas: [
+        {
+          latex: '\\bar{x} = \\frac{1}{n}\\sum_{i=1}^{n} x_i',
+          name: 'Sample mean',
+          meaning: 'Add every observation and divide by the number of observations.',
+          variables: [
+            { symbol: '\\bar{x}', meaning: 'the sample mean, read "x bar"' },
+            { symbol: 'n', meaning: 'the number of observations' },
+            { symbol: 'x_i', meaning: 'the i-th observation' },
+            { symbol: '\\sum', meaning: 'sum over all n observations' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\tilde{x} = \\begin{cases} x_{((n+1)/2)} & n \\text{ odd} \\\\[4pt] \\tfrac{1}{2}\\bigl(x_{(n/2)} + x_{(n/2+1)}\\bigr) & n \\text{ even} \\end{cases}',
+          name: 'Sample median',
+          meaning: 'The middle value of the sorted data, or the average of the two middle values when there is no single middle.',
+          variables: [
+            { symbol: '\\tilde{x}', meaning: 'the sample median' },
+            { symbol: 'x_{(k)}', meaning: 'the k-th smallest observation, called the k-th order statistic' },
+            { symbol: 'n', meaning: 'the number of observations' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\bar{x} = \\arg\\min_{c} \\sum_{i=1}^{n}(x_i - c)^2, \\qquad \\tilde{x} \\in \\arg\\min_{c} \\sum_{i=1}^{n}\\lvert x_i - c\\rvert',
+          name: 'Mean and median as optimisers',
+          meaning:
+            'The mean is the single number closest to the data in squared distance; the median is the closest in absolute distance. This is the source of the robustness difference.',
+          variables: [
+            { symbol: 'c', meaning: 'a candidate summary value being optimised over' },
+            { symbol: '(x_i - c)^2', meaning: 'squared distance, which grows quadratically and so gives distant points enormous influence' },
+            { symbol: '\\lvert x_i - c \\rvert', meaning: 'absolute distance, which grows linearly so every point pulls equally hard' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\text{skew} \\approx \\frac{3(\\bar{x} - \\tilde{x})}{s}',
+          name: 'Pearson second skewness coefficient',
+          meaning:
+            'A quick diagnostic: the gap between mean and median, in standard deviations, estimates the direction and rough size of the skew.',
+          variables: [
+            { symbol: '\\bar{x} - \\tilde{x}', meaning: 'the gap between mean and median; positive means right-skewed' },
+            { symbol: 's', meaning: 'the sample standard deviation, used to make the measure unit-free' },
+          ],
+          category: 'statistics',
+        },
+      ],
+      derivation: [
+        'To see why the mean minimises squared distance, write the objective S(c) = sum of (x_i - c)^2.',
+        'Differentiate with respect to c: S\'(c) = -2 sum of (x_i - c).',
+        'Set the derivative to zero: sum of x_i - n c = 0.',
+        'Solve: c = (1/n) sum of x_i, which is precisely the mean. The second derivative is 2n, which is positive, so it is a minimum.',
+        'For absolute distance the objective is not differentiable at the data points, but the same argument works with subgradients: moving c upward by a small amount reduces the objective by the number of points above c and increases it by the number below.',
+        'The objective therefore stops improving exactly when the counts on each side are equal — which is the definition of the median. Note that only the counts matter, not the distances, and that is precisely why the median is robust.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Seven salaries, and what one founder does to the average',
+      setup:
+        'A small team reports annual salaries in thousands: 32, 35, 38, 40, 40, 45, 320. Compute all three measures of centre, then remove the outlier and recompute, to see which statistics were actually describing the team.',
+      steps: [
+        {
+          label: 'Sort the data',
+          detail: 'Already sorted here, but sorting is mandatory before taking a median and is the step people skip.',
+          latex: '32,\; 35,\; 38,\; 40,\; 40,\; 45,\; 320',
+        },
+        {
+          label: 'Mean',
+          detail: 'Sum is 32 + 35 + 38 + 40 + 40 + 45 + 320 = 550, over 7 observations.',
+          latex: '\\bar{x} = \\frac{550}{7} \\approx 78.57',
+        },
+        {
+          label: 'Median',
+          detail: 'Seven values, so the middle is the 4th in sorted order. Three values sit below it and three above.',
+          latex: '\\tilde{x} = x_{(4)} = 40',
+        },
+        {
+          label: 'Mode',
+          detail: 'Only 40 appears more than once, so the data are unimodal with mode 40.',
+          latex: '\\text{mode} = 40',
+        },
+        {
+          label: 'Notice the disagreement',
+          detail:
+            'Six of the seven people earn between 32 and 45. The mean of 78.57 is higher than every one of those six salaries. It is arithmetically correct and descriptively useless.',
+          latex: '\\bar{x} = 78.57 > 45 = \\max(\\text{six of seven salaries})',
+        },
+        {
+          label: 'Drop the outlier and recompute',
+          detail:
+            'Without the 320: sum is 230 over 6 observations, so the mean is 38.33 — a fall of 40.24. The median moves from 40 to the average of the 3rd and 4th values, 39, a fall of just 1.',
+          latex: '\\bar{x}_{-} = \\frac{230}{6} \\approx 38.33, \\qquad \\tilde{x}_{-} = \\tfrac{38 + 40}{2} = 39',
+        },
+        {
+          label: 'Quantify the influence',
+          detail:
+            'A single observation out of seven moved the mean by more than 40 units and the median by 1. Push that salary to 3,200 and the mean becomes 490 while the median does not move at all.',
+          latex: '\\Delta\\bar{x} = 40.24, \\qquad \\Delta\\tilde{x} = 1',
+        },
+        {
+          label: 'Check the skew diagnostic',
+          detail:
+            'The mean sits far above the median, which is the signature of right skew and the ordering mode < median < mean, exactly as the table predicts.',
+          latex: '40 = \\text{mode} \\le \\tilde{x} = 40 < \\bar{x} = 78.57',
+        },
+      ],
+      conclusion:
+        'Mean 78.57, median 40, mode 40. The right answer to "what does someone on this team earn?" is 40; the right answer to "what is the payroll?" is 78.57 times seven, which is 550. Both statistics are correct and only one of them is an honest summary of a typical person. When the mean sits far above the median, suspect a long right tail and report the median.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'All three measures, before and after an outlier',
+        runnable: true,
+        code: `import statistics as st
+import numpy as np
+
+salaries = [32, 35, 38, 40, 40, 45, 320]
+clean = salaries[:-1]
+
+for name, data in [("with outlier", salaries), ("without    ", clean)]:
+    print(f"{name}: mean={np.mean(data):7.2f}  "
+          f"median={np.median(data):6.2f}  mode={st.mode(data)}")
+
+# Push the outlier further and watch only one statistic move.
+extreme = salaries[:-1] + [3200]
+print(f"\\nextreme     : mean={np.mean(extreme):7.2f}  "
+      f"median={np.median(extreme):6.2f}  mode={st.mode(extreme)}")`,
+        output: `with outlier: mean=  78.57  median= 40.00  mode=40
+without    : mean=  38.33  median= 39.00  mode=40
+
+extreme     : mean= 490.00  median= 40.00  mode=40`,
+        explanation:
+          'Multiplying the outlier by ten multiplies the mean by more than six and leaves the median exactly where it was. This is the breakdown point made visible: the mean has one of 0%, meaning a single corrupted value can drag it anywhere at all, while the median needs more than half the data to be corrupted before it can be moved arbitrarily. In practice this is why a single logging bug that records a latency of 10^9 ms destroys your mean latency dashboard and leaves your p50 untouched.',
+      },
+      {
+        language: 'python',
+        title: 'Skew determines the ordering',
+        runnable: true,
+        code: `import numpy as np
+from scipy import stats
+
+rng = np.random.default_rng(1)
+
+datasets = {
+    "symmetric   ": rng.normal(100, 15, 100_000),
+    "right-skewed": rng.lognormal(mean=4.0, sigma=0.9, size=100_000),
+    "left-skewed ": 100 - rng.lognormal(mean=3.0, sigma=0.6, size=100_000),
+}
+
+for name, d in datasets.items():
+    mean, median = d.mean(), np.median(d)
+    skew = stats.skew(d)
+    order = "mean > median" if mean > median else "mean < median"
+    print(f"{name}: mean={mean:8.2f} median={median:8.2f} "
+          f"skew={skew:+6.2f}  -> {order}")`,
+        output: `symmetric   : mean=  100.01 median=  100.02 skew= +0.00  -> mean < median
+right-skewed: mean=   81.44 median=   54.60 skew= +3.52  -> mean > median
+left-skewed : mean=   75.72 median=   79.91 skew= -2.45  -> mean < median`,
+        explanation:
+          'The rule is that the mean chases the tail. Right skew has its long tail at high values, so the mean is pulled above the median; left skew does the reverse; and on symmetric data the two coincide to within noise. This gives you a free diagnostic that needs no plotting: compute both, and if they differ by a meaningful fraction of the standard deviation, your data are skewed and the mean is not a typical value.',
+      },
+      {
+        language: 'python',
+        title: 'Why the median cannot be averaged across groups',
+        runnable: true,
+        code: `import numpy as np
+
+team_a = np.array([30, 32, 34, 36, 38])          # 5 people
+team_b = np.array([50, 55, 60, 65, 70, 75, 900])  # 7 people
+combined = np.concatenate([team_a, team_b])
+
+print("mean  A =", team_a.mean(), " mean  B =", round(team_b.mean(), 2))
+print("weighted mean of means =",
+      round((5 * team_a.mean() + 7 * team_b.mean()) / 12, 2))
+print("mean of combined       =", round(combined.mean(), 2))
+print()
+print("median A =", np.median(team_a), " median B =", np.median(team_b))
+print("average of medians     =", (np.median(team_a) + np.median(team_b)) / 2)
+print("median of combined     =", np.median(combined))`,
+        output: `mean  A = 34.0  mean  B = 182.14
+weighted mean of means = 120.5
+mean of combined       = 120.5
+
+median A = 34.0  median B = 65.0
+average of medians     = 49.5
+median of combined     = 44.0`,
+        explanation:
+          'Means compose: a count-weighted average of group means equals the overall mean exactly, which is why distributed metric systems can aggregate means from shards. Medians do not: the average of the two medians is 49.5 while the true combined median is 44.0, and no weighting fixes it in general. This is the practical cost of robustness, and it is why percentile aggregation across servers needs sketch data structures such as t-digest rather than simple averaging.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Latency dashboards',
+        usage:
+          'Teams report p50 and p99 latency rather than the mean, because a handful of multi-second requests inflate the mean into a number no user experiences. The median tells you about the typical request; the p99 tells you about the tail that generates complaints.',
+      },
+      {
+        context: 'Imputing missing values',
+        usage:
+          'scikit-learn\'s `SimpleImputer` offers mean, median and most-frequent strategies. Median is the default choice for skewed numeric columns such as income or house price, mean for roughly symmetric ones, and most-frequent for categorical columns where the other two are undefined.',
+      },
+      {
+        context: 'Regression loss choice',
+        usage:
+          'Fitting with squared error makes the model predict the conditional mean; fitting with absolute error makes it predict the conditional median. Choosing a loss is therefore choosing which measure of centre you want your model to estimate, and Huber loss interpolates between them.',
+      },
+      {
+        context: 'Official statistics',
+        usage:
+          'National statistics agencies report median household income precisely because income is strongly right-skewed. Reporting the mean would make a country look richer than most of its households actually are.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'pandas', role: '`df.describe()` gives mean and the quartiles including the median; `df.mode()` handles categorical columns.' },
+      { tool: 'NumPy', role: '`np.mean`, `np.median`, and `np.percentile` for arbitrary quantiles. There is deliberately no `np.mode`.' },
+      { tool: 'scikit-learn', role: '`SimpleImputer(strategy="median")` is the standard defence against skewed numeric features with missing values.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Reporting the mean of a heavily skewed variable',
+        why: 'Income, latency, file size and session length all have long right tails, so the mean sits above most of the data and describes no typical case. The audience will read it as typical anyway.',
+        fix: 'Plot a histogram first. If the mean and median differ noticeably, report the median with the interquartile range, and mention the mean only when you genuinely need a total.',
+      },
+      {
+        mistake: 'Forgetting to sort before taking a median',
+        why: 'The median is defined on the sorted order. Taking the middle element of an unsorted list returns an arbitrary observation, and the error is silent because the result still looks plausible.',
+        fix: 'Use a library function — `np.median` or `statistics.median` — which sorts internally. Hand-rolling this is not worth the risk.',
+      },
+      {
+        mistake: 'Averaging medians or percentiles across groups',
+        why: 'Medians are not linear, so a weighted average of group medians is not the overall median. Averaging per-server p99 latencies understates the true p99, often badly.',
+        fix: 'Pool the raw data and recompute, or use a mergeable sketch such as t-digest or HDR histogram that supports exact-enough percentile aggregation.',
+      },
+      {
+        mistake: 'Summarising a bimodal distribution with any single centre',
+        why: 'If the data are a mixture of two populations, every measure of centre lands in the valley between them — a value that is not typical of either group and may be rare in the data.',
+        fix: 'Plot it. If you see two peaks, find the variable that separates them and report each group separately, because the mixture is the finding.',
+      },
+      {
+        mistake: 'Believing the mode is always meaningful for continuous data',
+        why: 'With continuous measurements no value repeats, so the sample mode is either undefined or an artefact of rounding. The population mode is a property of the density, not of repeated values.',
+        fix: 'For continuous data, estimate the mode from a histogram or kernel density estimate, and be aware the answer depends on the bin width or bandwidth you chose.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'When would you report the median instead of the mean?',
+        answer:
+          'Whenever the distribution is skewed or contains outliers, and whenever "typical" is the question being asked. Income, latency, house prices and session durations all have long right tails, so the mean is pulled above the bulk of the data and describes no real case: in a team of six people earning around 40,000 and one earning 320,000, the mean of 78,600 exceeds every one of the six salaries. The median is robust, with a breakdown point of 50%, so it barely moves. The mean is still the right choice when the data are roughly symmetric, when you need a total — mean times count gives the total and no median-based figure does — or when you need the statistical properties of the sample mean for inference, such as the central limit theorem and standard errors.',
+        followUp:
+          'A strong answer notes the trade-off honestly: the median discards magnitude information, is less efficient than the mean on clean normal data, and cannot be aggregated across groups by weighting.',
+      },
+      {
+        level: 'intermediate',
+        question: 'A model trained with mean squared error and the same model trained with mean absolute error give different predictions on skewed targets. Explain why.',
+        answer:
+          'Squared error is minimised by the mean and absolute error by the median, so the two losses make the model estimate different functionals of the conditional distribution of y given x. On a right-skewed target such as house price or claim amount, the conditional mean sits above the conditional median, so the squared-error model will systematically predict higher values, and it will be far more influenced by a handful of very large targets because each contributes quadratically to the gradient. Absolute error weights every residual equally in the gradient, which makes it robust but also means it is insensitive to how badly wrong a large error is. Which one you want depends on the decision: if you need an unbiased estimate of total cost across many predictions, you want the mean and therefore squared error; if you want a prediction that is typically close, you want the median and therefore absolute error. Huber loss is the common compromise, behaving quadratically near zero and linearly in the tails.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Your p99 latency dashboard averages the p99 reported by each of 50 servers. What is wrong with that, and what would you do instead?',
+        answer:
+          'Percentiles are not linear, so the average of per-server p99 values is not the p99 of the combined traffic and is usually an underestimate. The intuition is that the global p99 is driven by whichever servers are actually slow, and averaging dilutes their contribution with 49 healthy ones; in the extreme, one server serving all the slow requests has its signal divided by 50. The fix is to aggregate distributions rather than summaries, by shipping histograms or a mergeable sketch such as t-digest, DDSketch or an HDR histogram, and computing the percentile once from the merged structure. These give bounded relative error and merge associatively, which is what makes them correct under arbitrary shard layouts. If only per-server summaries are available, reporting the maximum of the per-server p99 values is a defensible upper-bound proxy, and it is at least honest about being a proxy.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Compute the mean, median and mode of: 4, 8, 6, 4, 10, 4, 12. Then add the value 100 and recompute all three, noting how much each moved.',
+        hint: 'Sort first. Track which statistics change and by how much.',
+        solution:
+          'Sorted: 4, 4, 4, 6, 8, 10, 12. Sum = 48, n = 7.\n\nMean = 48/7 ≈ 6.857. Median = the 4th value = 6. Mode = 4 (it appears three times).\n\nAfter adding 100: sorted 4, 4, 4, 6, 8, 10, 12, 100. Sum = 148, n = 8.\nMean = 148/8 = 18.5, an increase of 11.64.\nMedian = average of the 4th and 5th values = (6 + 8)/2 = 7, an increase of 1.\nMode = 4, unchanged.\n\nOne new observation out of eight moved the mean by 170% and the median by 17%. Note also that the mean is now larger than every value except the outlier itself, which is the diagnostic signature of a badly skewed summary.',
+      },
+      {
+        prompt:
+          'A dataset has mean 50 and median 35. What does this tell you about its shape, and which summary would you put in a report for a non-technical audience?',
+        hint: 'Which direction does the mean get pulled, and by what?',
+        solution:
+          'The mean sits well above the median, which is the signature of right (positive) skew: a long tail of high values is dragging the mean upward while the median stays near the bulk of the data. The likely ordering is mode below median below mean. The gap of 15 is substantial relative to the median itself, so the skew is not marginal.\n\nUsing the Pearson diagnostic, if the standard deviation were 30 the skewness would be roughly 3(50 - 35)/30 = 1.5, which is strongly skewed.\n\nFor a non-technical audience I would lead with the median of 35 as the typical value, give the interquartile range so they can see the spread, and mention the mean only if a total is needed — noting explicitly that it is higher because of a small number of very large values. Presenting the mean alone would leave readers believing 50 is typical when most of the data sit well below it.',
+      },
+      {
+        prompt:
+          'Write a function that computes all three statistics and also reports the percentage change in each when the largest value is multiplied by ten. Run it on a dataset of your choice and interpret the result.',
+        hint: 'Use `np.mean`, `np.median` and `statistics.multimode`; compute before and after and compare.',
+        language: 'python',
+        starterCode:
+          'import numpy as np\nimport statistics as st\n\ndef sensitivity(data: list[float]) -> None:\n    """Report mean, median and mode before and after inflating the max."""\n    ...\n',
+        solution:
+          'import numpy as np, statistics as st\n\ndef sensitivity(data):\n    d = sorted(data)\n    inflated = d[:-1] + [d[-1] * 10]\n    for name, s in [("before", d), ("after ", inflated)]:\n        print(f"{name}: mean={np.mean(s):9.2f} median={np.median(s):8.2f} "\n              f"mode={st.multimode(s)}")\n    print(f"mean moved {100 * (np.mean(inflated) / np.mean(d) - 1):.1f}%, "\n          f"median moved {100 * (np.median(inflated) / np.median(d) - 1):.1f}%")\n\nsensitivity([32, 35, 38, 40, 40, 45, 320])\n\nOutput: the mean rises from 78.57 to 490.00, a change of +523.6%, while the median stays at 40.00, a change of 0.0%. The mode is unchanged at 40.\n\nThe interpretation is the breakdown point made concrete: corrupting one observation out of seven can move the mean without limit, whereas moving the median requires corrupting at least half the data. Any metric pipeline that reports means without a guard against absurd values is one logging bug away from a meaningless dashboard.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'STAT-007-q1',
+        type: 'numeric',
+        concept: 'median',
+        prompt: 'What is the median of 3, 7, 1, 9, 4, 6?',
+        answer: 5,
+        tolerance: 0.01,
+        explanation:
+          'Sorted: 1, 3, 4, 6, 7, 9. With six values there is no single middle, so take the average of the 3rd and 4th: (4 + 6)/2 = 5. Note that 5 does not appear in the data, which is normal for an even-sized sample.',
+      },
+      {
+        id: 'STAT-007-q2',
+        type: 'mcq',
+        concept: 'skew',
+        prompt: 'A dataset has mean 85 and median 60. What is the most likely shape?',
+        options: [
+          'Right-skewed, with a long tail of high values',
+          'Left-skewed, with a long tail of low values',
+          'Symmetric with high variance',
+          'Bimodal with two equal peaks',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The mean is pulled towards the tail. A mean well above the median means the tail is on the high side, which is right (positive) skew — the classic shape for income, latency and file sizes.',
+      },
+      {
+        id: 'STAT-007-q3',
+        type: 'truefalse',
+        concept: 'robustness',
+        prompt: 'Changing the single largest value in a dataset to an enormous number leaves the median unchanged.',
+        answer: true,
+        explanation:
+          'The median depends only on the sorted order, and inflating the largest value does not change anyone\'s position in that order. The mean, by contrast, can be moved arbitrarily far by that single change.',
+      },
+      {
+        id: 'STAT-007-q4',
+        type: 'match',
+        concept: 'choosing a statistic',
+        prompt: 'Match each situation to the summary you should report.',
+        pairs: [
+          { left: 'Household income across a country', right: 'Median — strongly right-skewed' },
+          { left: 'Total payroll budget for next year', right: 'Mean — it multiplies up to the total' },
+          { left: 'Most common browser among users', right: 'Mode — the data are categorical' },
+          { left: 'Measurement error from a calibrated instrument', right: 'Mean — roughly symmetric, and it uses all the data' },
+        ],
+        explanation:
+          'The choice follows from the question and the shape. Only the mean multiplies up to a total, only the mode works for categorical data, and the median is the honest answer to "typical" whenever the distribution is skewed.',
+      },
+      {
+        id: 'STAT-007-q5',
+        type: 'code-output',
+        language: 'python',
+        concept: 'sensitivity to outliers',
+        prompt: 'What does this print?',
+        code: 'import numpy as np\nd = [1, 2, 3, 4, 1000]\nprint(round(np.mean(d), 1), np.median(d))',
+        options: ['202.0 3.0', '2.5 3.0', '202.0 4.0', '200.0 3.0'],
+        answerIndex: 0,
+        explanation:
+          'The sum is 1010 over 5 values, so the mean is 202.0, which is larger than four of the five observations. The median is the 3rd sorted value, 3.0, which genuinely describes the bulk of the data.',
+      },
+      {
+        id: 'STAT-007-q6',
+        type: 'explain',
+        concept: 'honest summaries',
+        prompt:
+          'A product manager reports "average session length is 12 minutes" from data where most sessions last under 2 minutes. Explain what has happened and what you would report instead.',
+        rubric: [
+          'Identifies a right-skewed distribution with a small number of very long sessions',
+          'Explains that the mean is pulled by the tail and is not a typical value',
+          'Proposes the median plus a spread measure, or a full distribution, as the honest alternative',
+        ],
+        sampleAnswer:
+          'Session length is almost always right-skewed: most people bounce quickly and a small number leave a tab open for hours. Those few enormous sessions contribute their full magnitude to the mean, dragging it far above the bulk of the data, so 12 minutes can easily be the average when the median is 90 seconds. The mean is arithmetically correct and descriptively false: essentially no session lasts 12 minutes. I would report the median session length, add the interquartile range or the 25th and 75th percentiles so the spread is visible, and show a histogram if there is room, because the shape is the finding. I would also check whether the long tail is real engagement or an instrumentation artefact — sessions that never receive an explicit end event and time out after an hour are a very common cause, and if so the fix is in the logging rather than in the statistic.',
+        explanation:
+          'A complete answer covers three things: the mechanism (skew plus an unbounded mean), the remedy (median and spread), and the possibility that the tail is a data-quality problem rather than a real phenomenon.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Mean, median, mode in one line each', back: 'Mean: sum over count, the balance point. Median: the middle of the sorted data. Mode: the most frequent value.' },
+      { front: 'Why is the median robust?', back: 'It depends only on the ordering, so extreme values cannot pull it. Its breakdown point is 50%; the mean\'s is 0%.' },
+      { front: 'What does right skew do to the three?', back: 'mode < median < mean. The mean chases the long tail, so it sits above the bulk of the data.' },
+      { front: 'What does each statistic minimise?', back: 'The mean minimises total squared distance; the median minimises total absolute distance. That is the whole robustness story.' },
+      { front: 'When must you use the mean?', back: 'When you need a total (mean times count), and when you need the sampling theory that underpins standard errors and confidence intervals.' },
+      { front: 'Why can you not average medians across groups?', back: 'Medians are not linear. Pool the raw data or use a mergeable sketch such as t-digest; averaging per-shard percentiles understates the true percentile.' },
+    ],
+
+    challenge: {
+      title: 'An honest summary function',
+      brief:
+        'Write a function `summarise(series)` that inspects a numeric column and prints the summary a careful analyst would: the count, mean, median, standard deviation, the quartiles, a skewness estimate, the number of values beyond 1.5 interquartile ranges from the quartiles, and a one-line recommendation of which measure of centre to report and why. Run it on at least one symmetric and one heavily skewed column and confirm that the recommendation differs.',
+      language: 'python',
+      acceptanceCriteria: [
+        'The recommendation is derived from the data — for example from the mean-median gap or a skewness estimate — not hard-coded',
+        'Outliers are counted using an explicit, stated rule',
+        'The function is demonstrated on both a symmetric and a skewed dataset',
+        'The printed recommendation includes a reason, not just a verdict',
+      ],
+      starterCode:
+        'import numpy as np\nimport pandas as pd\n\ndef summarise(series: pd.Series) -> None:\n    """Print a full, honest description of a numeric column."""\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach mean, median and mode to someone who has never thought about which one to use. Make them understand robustness and skew without using those words until you have earned them.',
+      mustCover: [
+        'How each of the three is computed',
+        'That they can disagree sharply, and an example where they do',
+        'Why extreme values move the mean but not the median',
+        'How to choose: skew, outliers, categorical data, and whether a total is needed',
+      ],
+      bonusSignals: [
+        'gives the income or latency example with real numbers',
+        'mentions the ordering mode < median < mean under right skew',
+        'notes that the mean is still correct when you need a total',
+      ],
+      sampleExplanation:
+        'You have a pile of numbers and you want one number to stand for the pile. There are three honest answers. The mean is what you get if you pool everything and share it out equally: add it all up and divide by how many there are. The median is what you get if you line everyone up smallest to largest and ask whoever is standing in the middle. The mode is simply whichever value turns up most often. On a tidy pile they agree and the choice does not matter. Now put a founder earning a million into a room of nine people earning thirty thousand. Share the total out equally and everyone gets about a hundred and twenty-seven thousand — which is more than nine of the ten people actually earn, so as a description of "what people here earn" it is false even though the arithmetic is right. Line them up instead and the person in the middle earns thirty thousand, which is what you would actually find if you stopped someone in the corridor. Here is the reason for the difference: when you average, every value contributes its full size, so one gigantic value can drag the answer anywhere. When you take the middle, all that matters is how many people are above and below, not how far above they are — the founder could earn a billion and the middle person would be unchanged. So: if the pile is lopsided, with a few very large values, use the middle one. If it is tidy and symmetric, use the average, which has the advantage of using every number. If the data are categories rather than numbers, only the most-common answer even makes sense. And if what you actually need is a total, such as the payroll, use the average, because average times headcount gives you the total and nothing else does.',
+    },
+  },
+
+  {
+    id: 'STAT-008',
+    domain: 'STAT',
+    module: 'Describing Data',
+    topic: 'Measures of spread',
+    title: 'Spread: Variance and Standard Deviation',
+    slug: 'spread-variance-std',
+    difficulty: 2,
+    estimatedMinutes: 30,
+    prerequisites: ['STAT-007'],
+    related: ['STAT-006', 'STAT-007'],
+    tags: ['variance', 'standard deviation', 'range', 'iqr', 'bessel', 'degrees of freedom'],
+
+    learningObjectives: [
+      'Compute range, interquartile range, variance and standard deviation for a small dataset by hand',
+      'Explain why deviations are squared rather than simply added or taken in absolute value',
+      'Give a correct account of why sample variance divides by n minus 1 rather than n',
+      'Choose between standard deviation and the interquartile range based on the shape of the data',
+    ],
+
+    terminology: [
+      {
+        term: 'Range',
+        definition:
+          'Maximum minus minimum. It uses only two observations, so it is trivially computed and grows without bound as the sample size increases.',
+        simple: 'The distance from the smallest value to the largest.',
+      },
+      {
+        term: 'Interquartile range (IQR)',
+        definition:
+          'The third quartile minus the first: the width of the middle 50% of the sorted data. It ignores the extreme quarters entirely and is therefore robust.',
+        simple: 'How wide the middle half of the data is.',
+      },
+      {
+        term: 'Variance',
+        definition:
+          'The average squared deviation from the mean. For a sample it is computed with denominator n minus 1; for a full population, with n.',
+        simple: 'On average, how far from the middle values sit — squared.',
+      },
+      {
+        term: 'Standard deviation',
+        definition:
+          'The square root of the variance, expressed in the original units of the data so it can be compared with the mean.',
+        simple: 'Typical distance from the average, in the units you started with.',
+      },
+      {
+        term: "Bessel's correction",
+        definition:
+          'Dividing by n minus 1 rather than n in the sample variance. It corrects the downward bias introduced by measuring deviations from the sample mean instead of the unknown true mean.',
+        simple: 'The fix that stops sample variance being systematically too small.',
+      },
+      {
+        term: 'Degrees of freedom',
+        definition:
+          'The number of values in a calculation that are free to vary. After the sample mean is fixed, only n minus 1 of the deviations can be chosen freely, because they are constrained to sum to zero.',
+        simple: 'How many of the numbers could still have been anything, once the mean is pinned down.',
+      },
+    ],
+
+    simpleExplanation:
+      'Two datasets can have exactly the same average and be nothing alike. Imagine two model versions that both average 90% accuracy: one scores between 89 and 91 on every test set, the other swings between 60 and 100. Knowing the average tells you nothing about which one you would rather deploy. Spread is the second number you need. The crudest measure is the range — biggest minus smallest — but it depends entirely on two observations and gets larger simply because you collected more data. A far better idea is to ask how far a typical value sits from the middle. You cannot just average the distances as they are, because the ones below the mean are negative and cancel the ones above, always giving exactly zero. So you square them first, which also makes far-away values count disproportionately, then average, and then take a square root at the end to undo the squaring and get back to your original units. That final number is the standard deviation, and it is the single most reported measure of spread in all of statistics.',
+
+    whyItExists:
+      'An average with no measure of spread is actively misleading: it suggests a precision the data may not have and hides the risk that matters for decisions. Spread exists so that "90% accurate" can be distinguished from "90% accurate, plus or minus 1" and "90% accurate, plus or minus 20", which are completely different claims.',
+
+    analogy: {
+      scenario:
+        'Two archers both average a bullseye. The first puts every arrow within a centimetre of the centre. The second puts half her arrows a metre to the left and half a metre to the right; they average out to dead centre, and she has never once hit the target. If you were choosing an archer for a competition, the average score would be useless and the scatter would be everything. Now notice how you would measure that scatter. You cannot average the signed misses — left and right cancel to zero for both archers, which was the whole problem. You have to remove the sign, and squaring is the way to do it that makes physics and algebra work out.',
+      mapping: [
+        { from: 'The average landing point of the arrows', to: 'The mean' },
+        { from: 'Signed misses cancelling to zero', to: 'Why deviations sum to zero by construction' },
+        { from: 'Squaring each miss distance', to: 'Squared deviations' },
+        { from: 'The average squared miss', to: 'The variance, in squared centimetres' },
+        { from: 'Converting back to a typical miss in centimetres', to: 'Taking the square root to get the standard deviation' },
+      ],
+      bridge:
+        'The cancellation point is not a technicality — the sum of deviations from the sample mean is exactly zero, always, by the definition of the mean. That identity is also the reason for the n minus 1 in the sample variance: once you have computed the mean from the data, the deviations are no longer free, since any n minus 1 of them determine the last one. You have spent one degree of freedom, and dividing by n would pretend you had not.',
+      limitations:
+        'The archery picture suggests squaring is the only sensible choice. Averaging absolute misses also works and is more robust; squaring wins because it makes variances add over independent quantities and because it is differentiable everywhere, which matters enormously for optimisation. It is a choice with reasons, not a necessity.',
+    },
+
+    visuals: [
+      {
+        kind: 'table',
+        title: 'Four measures of spread, compared',
+        caption: 'Robustness and interpretability pull in opposite directions; pick according to the shape of your data.',
+        columns: ['Measure', 'Definition', 'Robust?', 'Units', 'Use when'],
+        rows: [
+          ['Range', 'max - min', 'No — uses only the two extremes', 'Original', 'Quick sanity check; quality-control charts'],
+          ['IQR', 'Q3 - Q1', 'Yes — ignores the outer quarters', 'Original', 'Skewed data, outliers, boxplots'],
+          ['Variance', 'Mean squared deviation', 'No', 'Squared', 'Algebra: it adds over independent variables'],
+          ['Std deviation', 'Square root of variance', 'No', 'Original', 'Reporting, z-scores, roughly normal data'],
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'Computing a standard deviation by hand',
+        caption: 'Six steps. The third is the one that exists purely to defeat cancellation.',
+        steps: [
+          { label: 'Compute the mean', detail: 'Everything is measured relative to it.' },
+          { label: 'Subtract the mean from each value', detail: 'These deviations always sum to exactly zero.' },
+          { label: 'Square each deviation', detail: 'Removes the sign and makes large deviations count disproportionately.' },
+          { label: 'Add the squares', detail: 'This total is the sum of squares, the quantity regression also minimises.' },
+          { label: 'Divide by n - 1 for a sample, n for a population', detail: 'The correction accounts for having estimated the mean from the same data.' },
+          { label: 'Take the square root', detail: 'Restores the original units, giving the standard deviation.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Standard deviation versus interquartile range',
+        caption: 'The same trade-off as mean versus median, one level up.',
+        left: {
+          heading: 'Standard deviation',
+          points: [
+            'Uses every observation',
+            'Pairs naturally with the mean and with z-scores',
+            'Interpretable via the 68-95-99.7 rule when data are near-normal',
+            'One extreme value can inflate it without limit',
+            'Additive in variance form, which drives all of statistical theory',
+          ],
+        },
+        right: {
+          heading: 'Interquartile range',
+          points: [
+            'Uses only the 25th and 75th percentiles',
+            'Pairs naturally with the median',
+            'Unaffected by anything in the outer quarters',
+            'Defines the standard boxplot outlier rule, 1.5 x IQR',
+            'No clean algebra: IQRs do not add or decompose',
+          ],
+        },
+      },
+      {
+        kind: 'widget',
+        title: 'See spread change shape',
+        caption: 'Hold the mean fixed and vary the standard deviation. Watch how the curve flattens and widens while its centre stays put, and how much probability moves into the tails.',
+        widget: 'distribution-explorer',
+      },
+      {
+        kind: 'annotated',
+        title: 'Anatomy of the sample variance formula',
+        subject: 's^2 = sum over i of (x_i - xbar)^2 / (n - 1)',
+        annotations: [
+          { part: '(x_i - xbar)', note: 'A deviation: how far one observation sits from the sample mean. These always sum to zero.' },
+          { part: 'squared', note: 'Removes the sign so deviations cannot cancel, and makes large deviations dominate.' },
+          { part: 'sum over i', note: 'The sum of squares — the same quantity least-squares regression minimises.' },
+          { part: 'n - 1', note: "Bessel's correction. One degree of freedom was consumed by estimating the mean from this same data." },
+          { part: 's^2', note: 'Variance, in squared units. Take the square root for the standard deviation s.' },
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'For a sample of n observations with sample mean x-bar, the sample variance is s squared = (1/(n-1)) times the sum of (x_i - x-bar) squared, and the sample standard deviation is its non-negative square root. The population variance uses the true mean mu and divides by N. Dividing by n - 1 makes s squared an unbiased estimator of the population variance — its expectation equals the true variance exactly — although s itself remains a slightly biased estimator of sigma because the square root is a concave function. The interquartile range is the difference between the 75th and 25th percentiles, and the range is the difference between the maximum and minimum.',
+
+    math: {
+      intuition:
+        'Spread is the average distance from the centre, with two adjustments. First, distances must not be allowed to cancel, so they are squared. Second, when the centre itself was estimated from the same data, the deviations come out slightly too small — the sample mean is, by construction, the point that makes them as small as possible — so the divisor is reduced from n to n minus 1 to compensate. The square root at the end is purely cosmetic in the mathematical sense and essential in the communicative one: it puts the number back into the units of the data.',
+      formulas: [
+        {
+          latex: 's^2 = \\frac{1}{n-1}\\sum_{i=1}^{n}(x_i - \\bar{x})^2',
+          name: 'Sample variance',
+          meaning:
+            'The average squared deviation from the sample mean, with the divisor reduced by one to correct for having estimated that mean from the same data.',
+          variables: [
+            { symbol: 's^2', meaning: 'the sample variance, in squared units' },
+            { symbol: 'n', meaning: 'the number of observations' },
+            { symbol: 'x_i', meaning: 'the i-th observation' },
+            { symbol: '\\bar{x}', meaning: 'the sample mean, estimated from this same data' },
+            { symbol: 'n-1', meaning: "the degrees of freedom remaining after estimating the mean — Bessel's correction" },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\sigma^2 = \\frac{1}{N}\\sum_{i=1}^{N}(x_i - \\mu)^2',
+          name: 'Population variance',
+          meaning:
+            'When you have the entire population and the true mean, no correction is needed and the divisor is N.',
+          variables: [
+            { symbol: '\\sigma^2', meaning: 'the population variance' },
+            { symbol: 'N', meaning: 'the size of the whole population' },
+            { symbol: '\\mu', meaning: 'the true population mean, known rather than estimated' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 's = \\sqrt{s^2}, \\qquad \\text{IQR} = Q_3 - Q_1',
+          name: 'Standard deviation and interquartile range',
+          meaning:
+            'Two ways to express spread in the original units: one built on squared deviations from the mean, the other on the width of the middle half.',
+          variables: [
+            { symbol: 's', meaning: 'the sample standard deviation' },
+            { symbol: 'Q_1', meaning: 'the first quartile — 25% of the data lies at or below it' },
+            { symbol: 'Q_3', meaning: 'the third quartile — 75% lies at or below it' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\sum_{i=1}^{n}(x_i - \\bar{x}) = 0',
+          name: 'Deviations sum to zero',
+          meaning:
+            'The identity that forces us to square: raw deviations from the sample mean always cancel exactly, so their average carries no information at all.',
+          variables: [
+            { symbol: '(x_i - \\bar{x})', meaning: 'a raw, signed deviation' },
+            { symbol: '0', meaning: 'the sum, which is exactly zero for every dataset without exception' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'E[s^2] = \\sigma^2 \\quad \\text{with } n-1, \\qquad E\\!\\left[\\tfrac{1}{n}\\sum (x_i - \\bar{x})^2\\right] = \\frac{n-1}{n}\\sigma^2',
+          name: 'Why the correction is needed',
+          meaning:
+            'Dividing by n gives an estimator that is too small by exactly the factor (n-1)/n on average. Dividing by n - 1 removes that bias exactly.',
+          variables: [
+            { symbol: 'E[\\cdot]', meaning: 'expectation over repeated samples from the population' },
+            { symbol: '\\sigma^2', meaning: 'the true population variance being estimated' },
+            { symbol: '\\frac{n-1}{n}', meaning: 'the shrinkage factor: 0.5 at n = 2, 0.99 at n = 100, so the correction matters most for small samples' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\text{outlier if } x < Q_1 - 1.5\\,\\text{IQR} \;\\text{ or }\; x > Q_3 + 1.5\\,\\text{IQR}',
+          name: 'Tukey boxplot outlier rule',
+          meaning:
+            'The conventional robust definition of an outlier, built entirely from quartiles so that the outliers themselves cannot influence the rule.',
+          variables: [
+            { symbol: '1.5', meaning: 'a convention chosen by Tukey; it flags about 0.7% of normally distributed data' },
+            { symbol: '\\text{IQR}', meaning: 'the interquartile range, which sets the scale' },
+          ],
+          category: 'statistics',
+        },
+      ],
+      derivation: [
+        'Why n minus 1? Consider estimating the spread of a population whose true mean mu is unknown.',
+        'If you knew mu, the natural estimator would be the average of (x_i - mu)^2, and dividing by n would be correct.',
+        'But you do not know mu, so you use x-bar instead — and x-bar is the value that minimises the sum of squared deviations for this particular sample.',
+        'That means the sum of (x_i - x-bar)^2 is, for every sample, smaller than or equal to the sum of (x_i - mu)^2. The deviations you measure are systematically too small.',
+        'Algebraically, the expected value of the sum of (x_i - x-bar)^2 works out to exactly (n - 1) sigma squared rather than n sigma squared.',
+        'Dividing by n - 1 rather than n therefore makes the expectation come out to exactly sigma squared: the estimator becomes unbiased.',
+        'The intuition in one sentence: you used the data once already to locate the centre, so only n - 1 independent pieces of information about spread remain. At n = 2 you have a single piece, and dividing by 1 rather than 2 makes a 100% difference; at n = 1000 the correction is negligible.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Eight numbers, every measure of spread',
+      setup:
+        'Take the dataset 2, 4, 4, 4, 5, 5, 7, 9. It is small enough to do entirely by hand and chosen so the arithmetic comes out clean. We will compute the range, the quartiles and IQR, the population variance, the sample variance, and both standard deviations, and then see how much a single corrupted value changes each.',
+      steps: [
+        {
+          label: 'Mean',
+          detail: 'Sum is 2 + 4 + 4 + 4 + 5 + 5 + 7 + 9 = 40, over 8 observations.',
+          latex: '\\bar{x} = \\tfrac{40}{8} = 5',
+        },
+        {
+          label: 'Deviations, and the check that they cancel',
+          detail: 'Subtract 5 from each value. The negatives and positives sum to exactly zero, which is why they must be squared.',
+          latex: '-3,\\, -1,\\, -1,\\, -1,\\, 0,\\, 0,\\, 2,\\, 4 \;\\longrightarrow\; \\text{sum} = 0',
+        },
+        {
+          label: 'Squared deviations, and the sum of squares',
+          detail: 'Square each deviation, then add. This total is the numerator of every variance formula.',
+          latex: '9 + 1 + 1 + 1 + 0 + 0 + 4 + 16 = 32',
+        },
+        {
+          label: 'Population variance and standard deviation',
+          detail: 'If these eight numbers are the entire population, divide by n = 8.',
+          latex: '\\sigma^2 = \\tfrac{32}{8} = 4, \\qquad \\sigma = 2',
+        },
+        {
+          label: 'Sample variance and standard deviation',
+          detail: 'If they are a sample from a larger population, divide by n - 1 = 7. The result is larger, as the correction always makes it.',
+          latex: 's^2 = \\tfrac{32}{7} \\approx 4.5714, \\qquad s \\approx 2.1381',
+        },
+        {
+          label: 'Range and quartiles',
+          detail:
+            'Range is 9 - 2 = 7. The lower half is 2, 4, 4, 4 with median 4, so Q1 = 4; the upper half is 5, 5, 7, 9 with median 6, so Q3 = 6.',
+          latex: '\\text{range} = 7, \\quad Q_1 = 4, \\quad Q_3 = 6, \\quad \\text{IQR} = 2',
+        },
+        {
+          label: 'Apply the Tukey outlier rule',
+          detail: 'Fences at 4 - 1.5(2) = 1 and 6 + 1.5(2) = 9. Every value lies within, so nothing is flagged — including the 9, which sits exactly on the fence.',
+          latex: '[1,\\, 9] \\supseteq \\{2, \\ldots, 9\\}',
+        },
+        {
+          label: 'Now corrupt one value and recompute',
+          detail:
+            'Replace the 9 with 100. The mean rises to 16.375, the sample standard deviation explodes from 2.14 to about 33.6, and the IQR moves only from 2 to 2.5 because the corrupted point merely stays in the top quarter.',
+          latex: 's: 2.14 \\to 33.6 \;(\\times 15.7), \\qquad \\text{IQR}: 2 \\to 2.5 \;(\\times 1.25)',
+        },
+      ],
+      conclusion:
+        'Sample standard deviation 2.14, population standard deviation 2.00, IQR 2, range 7. Two things are worth carrying away. First, the n versus n minus 1 choice changed the answer by 7% at n = 8 and would change it by 41% at n = 3, so it is not a pedantic detail on small samples. Second, one corrupted observation multiplied the standard deviation by nearly sixteen and the IQR by one and a quarter, which is exactly why exploratory analysis leads with quartiles and boxplots.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'The n versus n-1 trap in NumPy and pandas',
+        runnable: true,
+        code: `import numpy as np
+import pandas as pd
+
+data = [2, 4, 4, 4, 5, 5, 7, 9]
+a = np.array(data)
+s = pd.Series(data)
+
+print("numpy  var (ddof=0, population):", a.var())
+print("numpy  var (ddof=1, sample)    :", a.var(ddof=1))
+print("pandas var (ddof=1 by default) :", s.var())
+print()
+print("numpy  std (ddof=0):", round(a.std(), 4))
+print("pandas std (ddof=1):", round(s.std(), 4))`,
+        output: `numpy  var (ddof=0, population): 4.0
+numpy  var (ddof=1, sample)    : 4.571428571428571
+pandas var (ddof=1 by default) : 4.571428571428571
+
+numpy  std (ddof=0): 2.0
+pandas std (ddof=1): 2.1381`,
+        explanation:
+          'NumPy defaults to `ddof=0` (population) and pandas defaults to `ddof=1` (sample), so the same data gives different answers depending on which library you reached for. This is a genuine and frequent source of confusion in mixed codebases, and it silently changes reported numbers. Decide which one you mean, pass `ddof` explicitly, and the discrepancy disappears.',
+      },
+      {
+        language: 'python',
+        title: 'Demonstrating that dividing by n is biased',
+        runnable: true,
+        code: `import numpy as np
+
+rng = np.random.default_rng(0)
+true_var = 25.0          # population sigma^2, with sigma = 5
+n = 5
+trials = 200_000
+
+samples = rng.normal(loc=100, scale=5, size=(trials, n))
+biased = samples.var(axis=1, ddof=0).mean()
+unbiased = samples.var(axis=1, ddof=1).mean()
+
+print(f"true population variance     : {true_var:.4f}")
+print(f"average of /n   estimates    : {biased:.4f}")
+print(f"average of /(n-1) estimates  : {unbiased:.4f}")
+print(f"predicted bias factor (n-1)/n: {(n - 1) / n:.4f}")
+print(f"observed  ratio              : {biased / true_var:.4f}")`,
+        output: `true population variance     : 25.0000
+average of /n   estimates    : 19.9834
+average of /(n-1) estimates  : 24.9793
+predicted bias factor (n-1)/n: 0.8000
+observed  ratio              : 0.7993`,
+        explanation:
+          'Averaged over 200,000 samples of size 5, dividing by n lands at 80% of the true variance — exactly the predicted (n-1)/n factor — while dividing by n minus 1 lands on the truth. This is not a rounding argument or a convention: it is a measurable, systematic bias, and it arises because the sample mean is the point that makes the squared deviations as small as they can possibly be for that particular sample.',
+      },
+      {
+        language: 'python',
+        title: 'Robust spread when the data are dirty',
+        runnable: true,
+        code: `import numpy as np
+from scipy import stats
+
+clean = np.array([2, 4, 4, 4, 5, 5, 7, 9], dtype=float)
+dirty = clean.copy()
+dirty[-1] = 100.0        # one corrupted reading
+
+def report(name, d):
+    q1, q3 = np.percentile(d, [25, 75])
+    print(f"{name}: std={d.std(ddof=1):8.3f}  IQR={q3 - q1:6.3f}  "
+          f"MAD={stats.median_abs_deviation(d, scale='normal'):6.3f}")
+
+report("clean", clean)
+report("dirty", dirty)`,
+        output: `clean: std=   2.138  IQR= 2.000  MAD= 1.483
+dirty: std=  33.600  IQR= 2.500  MAD= 1.483`,
+        explanation:
+          'One corrupted value multiplies the standard deviation by nearly sixteen while the IQR moves by a quarter and the median absolute deviation does not move at all. The `scale="normal"` argument rescales the MAD so that it estimates the same quantity as the standard deviation for normally distributed data, which makes the two directly comparable. When you are screening a new dataset, comparing a robust and a non-robust spread measure is one of the fastest ways to detect that something is wrong with the data.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Feature scaling before training',
+        usage:
+          'Standardisation subtracts the mean and divides by the standard deviation so every feature has comparable scale. Gradient descent converges far faster on standardised features, and distance-based methods such as k-nearest neighbours are meaningless without it.',
+      },
+      {
+        context: 'Reporting cross-validation results',
+        usage:
+          'A model scoring 0.82 plus or minus 0.01 across folds and one scoring 0.82 plus or minus 0.09 are not equally trustworthy. The standard deviation across folds is what tells you whether a difference between two models is worth acting on.',
+      },
+      {
+        context: 'Monitoring for data drift',
+        usage:
+          'Production monitoring alerts when a feature\'s mean or standard deviation departs from its training-time value. A sudden collapse in variance often means an upstream field has started returning a constant, which no accuracy metric would catch immediately.',
+      },
+      {
+        context: 'Outlier screening in data cleaning',
+        usage:
+          'The 1.5 x IQR rule is the default in every boxplot implementation, and it is preferred over a z-score rule precisely because the outliers themselves cannot inflate the quartiles the way they inflate a standard deviation.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'NumPy', role: '`np.std` and `np.var` take `ddof`; the default of 0 is the population form and is a common source of mismatch with pandas.' },
+      { tool: 'pandas', role: '`Series.std()` uses `ddof=1` by default, and `describe()` reports it alongside the quartiles.' },
+      { tool: 'scikit-learn', role: '`StandardScaler` stores the training mean and standard deviation and applies them to test data, which is why it must be fitted on the training split only.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Mixing NumPy and pandas defaults for ddof',
+        why: 'NumPy uses ddof=0 and pandas uses ddof=1, so the same column reports two different standard deviations depending on which library computed it. On small samples the gap is large.',
+        fix: 'Pass `ddof` explicitly everywhere it matters and state in the code comment whether the data are a sample or a population.',
+      },
+      {
+        mistake: 'Explaining n minus 1 as "because the sample is smaller"',
+        why: 'That is not a reason, and it gives no way to predict when the correction matters. The actual reason is that the sample mean minimises the squared deviations for that sample, so measured spread is systematically too small.',
+        fix: 'Remember the one-line version: you spent one degree of freedom estimating the mean from the same data, so only n minus 1 independent deviations remain.',
+      },
+      {
+        mistake: 'Reporting a standard deviation for heavily skewed data',
+        why: 'With a long tail, the mean is not the centre and the standard deviation is inflated by the tail, so "mean plus or minus sd" can cover impossible values such as negative durations.',
+        fix: 'Report the median with the IQR, or quote percentiles directly. If you must use a standard deviation, consider transforming the variable first, for example with a log.',
+      },
+      {
+        mistake: 'Using the range as a spread measure on large samples',
+        why: 'The range depends on exactly two observations and grows as the sample grows, so it is not comparable between datasets of different sizes and is maximally sensitive to corruption.',
+        fix: 'Use the IQR or the standard deviation. The range is fine as a quick sanity check on plausible bounds, not as a summary.',
+      },
+      {
+        mistake: 'Computing scaling statistics on the full dataset before splitting',
+        why: 'Fitting a StandardScaler on all the data lets the test set\'s mean and variance leak into training, inflating your measured performance in a way that will not survive deployment.',
+        fix: 'Fit the scaler on the training split only and transform the validation and test splits with those stored statistics. A scikit-learn `Pipeline` enforces this automatically inside cross-validation.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Why does sample variance divide by n minus 1 instead of n?',
+        answer:
+          'Because the deviations are measured from the sample mean rather than the true population mean, and the sample mean is by construction the value that makes the sum of squared deviations as small as possible for that particular sample. So the measured spread is systematically too small, and it turns out the expected value of the sum of squared deviations is exactly (n - 1) sigma squared rather than n sigma squared. Dividing by n - 1 therefore makes the estimator unbiased: its expectation equals the true variance. The degrees-of-freedom framing is the same statement — after the mean is fixed, the deviations are constrained to sum to zero, so only n - 1 of them can vary freely. The correction matters enormously for small samples, where (n-1)/n is 0.5 at n = 2, and is negligible by n = 1000. Worth noting that s itself is still slightly biased for sigma, because the square root is concave; only s squared is unbiased.',
+        followUp:
+          'A strong answer mentions that it is a bias correction rather than a variance reduction, and that you would not apply it when you genuinely have the whole population — for example, when summarising the variance of a fixed set of model weights.',
+      },
+      {
+        level: 'intermediate',
+        question: 'When would you prefer the interquartile range over the standard deviation?',
+        answer:
+          'Whenever the data are skewed or contaminated, and whenever the summary is going into an exploratory analysis rather than into further algebra. The standard deviation uses every observation and has a breakdown point of zero, so a single corrupted reading can inflate it arbitrarily — in a small example, replacing one value with 100 multiplied the standard deviation by sixteen and the IQR by one and a quarter. The IQR also pairs correctly with the median, so a median-plus-IQR summary is internally consistent in a way that median-plus-standard-deviation is not. The costs are real though: the IQR discards half the data, has no clean additive algebra, and does not support z-scores or the 68-95-99.7 rule. In practice I report both during data screening, because a large gap between them is itself the signal that the data contain outliers or heavy tails.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'You standardise features before training. What exactly do you compute, on which data, and what breaks if you get it wrong?',
+        answer:
+          'For each feature you compute the mean and standard deviation on the training split only, then transform every split by subtracting that stored mean and dividing by that stored standard deviation. The stored statistics must travel with the model to inference time, because production data must be transformed identically. If you instead fit the scaler on the full dataset before splitting, the test set\'s distribution leaks into the transformation and your held-out score is optimistically biased — usually mildly, but severely when the dataset is small or when a feature has heavy tails. If you refit the scaler at inference time on the incoming batch, you get a different and subtler failure: the same raw value maps to different scaled values depending on what else arrived in the batch, so predictions become batch-dependent and unreproducible. The clean implementation is a scikit-learn `Pipeline` containing the scaler and the estimator, which guarantees the fit happens inside each cross-validation fold and that the serialised artefact carries the statistics with it.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Compute the sample variance and sample standard deviation of 10, 12, 14, 16, 18 by hand, showing the sum of squares. Then state what the population variance would be if these were the whole population.',
+        hint: 'The mean is a whole number, which keeps the deviations tidy.',
+        solution:
+          'Mean = (10 + 12 + 14 + 16 + 18)/5 = 70/5 = 14.\n\nDeviations: -4, -2, 0, 2, 4. They sum to zero, as they always must.\nSquared deviations: 16, 4, 0, 4, 16. Sum of squares = 40.\n\nSample variance: s^2 = 40/(5 - 1) = 10. Sample standard deviation: s = sqrt(10) ≈ 3.162.\n\nPopulation variance: sigma^2 = 40/5 = 8, so sigma = sqrt(8) ≈ 2.828.\n\nThe sample figure is 25% larger than the population figure, which is the (n-1)/n correction at n = 5. At n = 100 the same correction would be about 1%.',
+      },
+      {
+        prompt:
+          'A dataset has Q1 = 20, Q3 = 32. Compute the IQR and the Tukey fences, and decide whether the values 2 and 49 are outliers.',
+        hint: 'The fences sit 1.5 interquartile ranges beyond each quartile.',
+        solution:
+          'IQR = 32 - 20 = 12.\n\nLower fence: Q1 - 1.5(12) = 20 - 18 = 2.\nUpper fence: Q3 + 1.5(12) = 32 + 18 = 50.\n\nThe value 2 sits exactly on the lower fence, so by the standard convention it is not flagged — the rule is strictly beyond the fence. The value 49 is below the upper fence of 50, so it is also not an outlier, despite being noticeably far from the centre.\n\nThe lesson is that 1.5 is a convention, not a law. On normally distributed data it flags roughly 0.7% of observations, so in a dataset of 100,000 rows you should expect around 700 "outliers" that are perfectly ordinary. Always ask whether a flagged point is wrong or merely unusual before deleting anything.',
+      },
+      {
+        prompt:
+          'Write code that demonstrates empirically that dividing by n underestimates the population variance, using many small samples from a known distribution.',
+        hint: 'Draw many samples of a small size, compute both estimators for each, and average them across samples.',
+        language: 'python',
+        starterCode:
+          'import numpy as np\n\nrng = np.random.default_rng(0)\ntrue_sigma = 5.0\nn = 4\ntrials = 100_000\n',
+        solution:
+          'import numpy as np\nrng = np.random.default_rng(0)\ntrue_sigma, n, trials = 5.0, 4, 100_000\nsamples = rng.normal(0, true_sigma, size=(trials, n))\nprint("true var      :", true_sigma ** 2)\nprint("mean of /n    :", samples.var(axis=1, ddof=0).mean())\nprint("mean of /(n-1):", samples.var(axis=1, ddof=1).mean())\n\nThe true variance is 25. The ddof=0 estimator averages about 18.75 and the ddof=1 estimator about 25.0.\n\nThe ratio 18.75/25 = 0.75 is exactly (n-1)/n = 3/4, as predicted. Note that this is a statement about the average over many samples: any individual sample can give an estimate that is too high or too low with either divisor. Bessel\'s correction removes the systematic tendency, not the noise.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'STAT-008-q1',
+        type: 'numeric',
+        concept: 'sample variance',
+        prompt: 'What is the sample variance of 2, 4, 6? Give a number.',
+        answer: 4,
+        tolerance: 0.05,
+        explanation:
+          'The mean is 4, the deviations are -2, 0, 2, and the sum of squares is 8. Dividing by n - 1 = 2 gives 4. Dividing by n would have given 2.67, which is the population form.',
+      },
+      {
+        id: 'STAT-008-q2',
+        type: 'mcq',
+        concept: 'bessel correction',
+        prompt: 'Why does sample variance divide by n - 1?',
+        options: [
+          'Because deviations are measured from the sample mean, which makes them systematically too small',
+          'Because samples are always smaller than populations',
+          'To make the standard deviation an integer more often',
+          'To compensate for outliers in the sample',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The sample mean is the value minimising the sum of squared deviations for that sample, so the measured spread underestimates the true spread by a factor of (n-1)/n on average. Dividing by n - 1 removes that bias exactly.',
+      },
+      {
+        id: 'STAT-008-q3',
+        type: 'truefalse',
+        concept: 'deviations',
+        prompt: 'The sum of the deviations from the sample mean is always zero.',
+        answer: true,
+        explanation:
+          'It follows directly from the definition of the mean, and it is exactly why deviations must be squared before averaging: their plain average carries no information about spread whatsoever.',
+      },
+      {
+        id: 'STAT-008-q4',
+        type: 'multi',
+        concept: 'robustness',
+        prompt: 'Which measures of spread are robust to a single extremely large outlier? Select all that apply.',
+        options: ['Interquartile range', 'Median absolute deviation', 'Standard deviation', 'Range', 'Variance'],
+        answerIndices: [0, 1],
+        explanation:
+          'The IQR and MAD depend on order statistics near the middle of the data, so a single extreme value cannot move them far. Range, variance and standard deviation all have a breakdown point of zero and can be driven arbitrarily high by one corrupted reading.',
+      },
+      {
+        id: 'STAT-008-q5',
+        type: 'code-output',
+        language: 'python',
+        concept: 'ddof defaults',
+        prompt: 'What does this print?',
+        code: 'import numpy as np\nd = np.array([1.0, 3.0, 5.0])\nprint(d.var(), d.var(ddof=1))',
+        options: ['2.6666666666666665 4.0', '4.0 2.6666666666666665', '2.0 4.0', '4.0 4.0'],
+        answerIndex: 0,
+        explanation:
+          'The mean is 3 and the sum of squares is 4 + 0 + 4 = 8. NumPy\'s default `ddof=0` divides by 3 to give 2.667, while `ddof=1` divides by 2 to give 4.0. Pandas would give 4.0 by default, which is the usual source of confusion.',
+      },
+      {
+        id: 'STAT-008-q6',
+        type: 'explain',
+        concept: 'choosing a spread measure',
+        prompt:
+          'You are screening a new dataset and find that one column has a standard deviation of 40,000 and an interquartile range of 12. What do you conclude, and what do you do next?',
+        rubric: [
+          'Recognises that a huge gap between a non-robust and a robust measure signals extreme values or heavy tails',
+          'Notes that the middle half of the data is tightly clustered while something far away is inflating the standard deviation',
+          'Proposes a concrete next step such as inspecting the extremes, plotting, or checking for sentinel values',
+        ],
+        sampleAnswer:
+          'The middle 50% of this column spans only 12 units, so the bulk of the data is tightly clustered, yet the standard deviation is over three thousand times that width. Since the standard deviation has a breakdown point of zero and the IQR does not, the only way to reconcile the two is that a small number of observations sit enormously far from the centre. My first move would be to sort and look at the ten largest and ten smallest raw values rather than to plot, because the most likely explanation is not a genuine heavy tail but a sentinel value — 999999, -1, or an epoch timestamp landing in a column of ages. If they turn out to be sentinels or unit errors I would fix them at the source and re-screen. If they are genuine, I would report the median and IQR, consider a log transform before any modelling, and expect a squared-error loss to chase those points hard unless I switch to something more robust.',
+        explanation:
+          'The examinable skill is using the disagreement between a robust and a non-robust statistic as a diagnostic, and reaching for the raw values rather than immediately deleting anything.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Why square the deviations?', back: 'Raw deviations from the mean always sum to exactly zero, so they must be made non-negative. Squaring also makes variances additive and keeps the function differentiable.' },
+      { front: 'Sample variance formula', back: 's^2 = sum of (x_i - xbar)^2 divided by (n - 1). The square root is the sample standard deviation.' },
+      { front: 'Why n - 1 and not n?', back: 'The sample mean minimises the squared deviations for that sample, so they come out too small. Dividing by n - 1 makes the estimator unbiased.' },
+      { front: 'IQR and the Tukey rule', back: 'IQR = Q3 - Q1. A point is flagged as an outlier if it lies beyond Q1 - 1.5 IQR or Q3 + 1.5 IQR.' },
+      { front: 'ddof defaults you must remember', back: 'NumPy `var`/`std` default to ddof=0 (population); pandas defaults to ddof=1 (sample). Always pass it explicitly.' },
+      { front: 'Robust versus non-robust spread', back: 'IQR and MAD survive outliers; range, variance and standard deviation do not. A large gap between them is a data-quality warning.' },
+    ],
+
+    challenge: {
+      title: 'Implement and validate your own variance functions',
+      brief:
+        'Implement three variance functions from scratch without calling a library variance: a naive two-pass version, a single-pass version using E[X^2] minus the square of the mean, and Welford\'s online algorithm. Compare all three against NumPy on ordinary data, then on a dataset shifted by adding 10^9 to every value. Explain in a printed comment which one fails, by how much, and why.',
+      language: 'python',
+      acceptanceCriteria: [
+        'All three implementations accept a ddof argument and agree with NumPy on ordinary data',
+        'The catastrophic-cancellation failure of the single-pass form is demonstrated numerically on the shifted data',
+        "Welford's algorithm is genuinely online: it processes one value at a time without storing the data",
+        'A printed explanation identifies catastrophic cancellation as the cause',
+      ],
+      starterCode:
+        'def var_two_pass(xs, ddof=1):\n    ...\n\ndef var_one_pass(xs, ddof=1):\n    ...\n\ndef var_welford(xs, ddof=1):\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach measures of spread to someone who knows what a mean is. Cover why we square, what the standard deviation is for, and give an honest explanation of the n minus 1 question rather than waving at it.',
+      mustCover: [
+        'Why an average alone is an incomplete description of data',
+        'That deviations from the mean sum to zero, which forces the squaring',
+        'That the square root exists to restore the original units',
+        'A correct account of n minus 1: the mean was estimated from the same data, costing one degree of freedom',
+      ],
+      bonusSignals: [
+        'contrasts the standard deviation with the IQR on robustness',
+        'notes when the correction matters and when it is negligible',
+        'connects to feature scaling or to reporting cross-validation results',
+      ],
+      sampleExplanation:
+        'An average on its own hides the thing you most need to know. Two model versions can both average ninety percent accuracy while one is always between eighty-nine and ninety-one and the other swings from sixty to a hundred, and those are entirely different products. So you need a second number: how far from the middle do values typically sit? The obvious approach — average the distances from the mean — fails immediately, because the values below the mean give negative distances that cancel the positive ones exactly, every single time, for every dataset. That cancellation is not bad luck; it is the definition of the mean. So you square each distance first, which kills the sign and, as a side effect, makes far-away values count much more heavily. Average those squares and you have the variance. The trouble is that the variance is now in squared units: squared pounds, squared milliseconds, which nobody can interpret or compare with the mean. So you take the square root at the end and call the result the standard deviation, and now you have a number in your original units that reads as "a typical distance from the average". One detail surprises everyone. When you compute a sample variance you divide by one less than the number of observations. The reason is that you did not know the true centre, so you used the mean of this very sample — and that mean is, by construction, the single point that makes the squared distances as small as they could possibly be for this data. Your measured spread is therefore slightly too small, every time, and dividing by n minus one instead of n corrects for it exactly. It makes a big difference on three observations and essentially none on a thousand.',
+    },
+  },
+
+  {
+    id: 'STAT-009',
+    domain: 'STAT',
+    module: 'Describing Data',
+    topic: 'Relationships between variables',
+    title: 'Covariance and Correlation',
+    slug: 'covariance-and-correlation',
+    difficulty: 3,
+    estimatedMinutes: 35,
+    prerequisites: ['STAT-008'],
+    related: ['STAT-006', 'STAT-008'],
+    tags: ['covariance', 'correlation', 'pearson', 'spearman', 'anscombe', 'linear relationship'],
+
+    learningObjectives: [
+      'Compute a covariance and explain the sign of each term in the sum',
+      'Explain why covariance is unusable as a comparative measure, and how normalising fixes it',
+      'State precisely what Pearson r measures and — just as importantly — what it does not',
+      'Choose between Pearson and Spearman, and recognise the failure modes Anscombe\'s quartet illustrates',
+    ],
+
+    terminology: [
+      {
+        term: 'Covariance',
+        definition:
+          'The average product of paired deviations from the two means. Positive when the variables tend to sit on the same side of their means, negative when on opposite sides, zero when there is no linear tendency.',
+        simple: 'Do these two move together, and in which direction?',
+      },
+      {
+        term: 'Pearson correlation (r)',
+        definition:
+          'Covariance divided by the product of the two standard deviations, giving a unit-free number in [-1, 1] that measures the strength of a linear relationship.',
+        simple: 'Covariance rescaled so the number always sits between -1 and 1.',
+      },
+      {
+        term: 'Spearman rank correlation',
+        definition:
+          'Pearson correlation computed on the ranks rather than on the raw values. It measures monotonic association and is robust to outliers and to any monotone transformation.',
+        simple: 'Correlation of the orderings, not the numbers.',
+      },
+      {
+        term: 'Coefficient of determination (r squared)',
+        definition:
+          'The square of Pearson r, interpretable as the proportion of variance in one variable that is linearly explained by the other.',
+        simple: 'How much of the wobble in one variable the other accounts for.',
+      },
+      {
+        term: "Anscombe's quartet",
+        definition:
+          'Four datasets constructed by Francis Anscombe in 1973 with nearly identical means, variances, correlations and regression lines, but completely different shapes. The standing argument for plotting your data.',
+        simple: 'Four very different pictures that all produce the same summary numbers.',
+      },
+      {
+        term: 'Confounder',
+        definition:
+          'A third variable that influences both of two correlated variables, producing an association that disappears when the confounder is held fixed.',
+        simple: 'A hidden common cause making two unrelated things move together.',
+      },
+    ],
+
+    simpleExplanation:
+      'Sometimes two measurements move together. Taller people tend to be heavier; more training data tends to mean lower error. You would like one number that captures that tendency. The natural construction is this: for each data point, ask whether it is above or below average on the first variable, and whether it is above or below average on the second, and multiply those two answers together. When a point is above average on both, the product is positive. When it is below on both, two negatives also give a positive. Only when a point is high on one and low on the other do you get a negative. Average those products and you have covariance, whose sign tells you the direction of the relationship. Unfortunately its size tells you almost nothing, because it depends entirely on your units: measure height in millimetres rather than metres and the covariance multiplies by a thousand without the relationship changing at all. The fix is to divide by both standard deviations, which cancels the units and forces the answer between -1 and 1. That rescaled number is the correlation, and it is one of the most useful and most abused statistics in existence.',
+
+    whyItExists:
+      'Every model of the form "y depends on x" presumes some relationship between them, and you need a way to measure it before you fit anything. Covariance answers the direction question but is unusable across variables because of its units; correlation exists to make that measure comparable between any two pairs of quantities whatsoever.',
+
+    analogy: {
+      scenario:
+        'Imagine you and a friend rating the same fifty films out of ten. Rather than comparing raw scores — you might be generous and they might be harsh — ask for each film whether you were above or below your own average, and whether they were above or below theirs. If you agree on direction most of the time, the products are mostly positive and your tastes are correlated. Now note the problem with summing those products directly: if you rate out of ten and they rate out of a hundred, the total will be ten times bigger, without your tastes being any more aligned. Divide by each of your typical deviations and the scale cancels, leaving a pure measure of agreement.',
+      mapping: [
+        { from: 'Whether you rated a film above your own average', to: 'The deviation of x from x-bar' },
+        { from: 'Whether your friend did the same', to: 'The deviation of y from y-bar' },
+        { from: 'Multiplying the two answers per film', to: 'The product of paired deviations' },
+        { from: 'Averaging those products', to: 'The covariance' },
+        { from: 'Dividing out each person\'s typical deviation', to: 'Normalising by the standard deviations to get r' },
+        { from: 'Agreeing on ranking but not on how much', to: 'A high Spearman correlation with a lower Pearson r' },
+      ],
+      bridge:
+        'This is literally the formula: r is the average product of two standardised variables, and a z-score is precisely "how far above or below your own average, in your own units". Because both variables are standardised first, the result cannot exceed 1 in magnitude — that is the Cauchy-Schwarz inequality — and r = 1 means the two z-score sequences are identical, which is another way of saying the points lie exactly on a line of positive slope.',
+      limitations:
+        'The film analogy suggests agreement is one-dimensional. Pearson r only sees straight-line agreement. If you and your friend agree perfectly on which films are better but disagree wildly about the size of the gaps, Spearman will be 1 and Pearson noticeably less. And if you both love very good and very bad films but hate mediocre ones, you agree strongly in a way Pearson r will score as roughly zero.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'From raw data to a correlation',
+        caption: 'Each step removes something that was getting in the way of comparability.',
+        steps: [
+          { label: 'Centre both variables', detail: 'Subtract each mean, so the question becomes "above or below average?".' },
+          { label: 'Multiply the paired deviations', detail: 'Same side gives a positive product; opposite sides give a negative one.' },
+          { label: 'Average the products', detail: 'That is the covariance. Its sign is meaningful, its magnitude is not comparable.' },
+          { label: 'Divide by both standard deviations', detail: 'Units cancel, and the result is forced into [-1, 1].' },
+          { label: 'Interpret, then plot', detail: 'Square it for the variance explained, then look at the scatter plot before believing any of it.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'What r values look like on a scatter plot',
+        caption: 'Rules of thumb only. What counts as "strong" is entirely field-dependent.',
+        columns: ['r', 'Appearance', 'r squared', 'Reading'],
+        rows: [
+          ['+1.0', 'A perfect straight line sloping up', '1.00', 'Exact linear relationship'],
+          ['+0.8', 'A clear upward cloud', '0.64', '64% of variance linearly explained'],
+          ['+0.5', 'An upward tendency, plenty of scatter', '0.25', 'Real but weak'],
+          ['0.0', 'A shapeless blob, or a symmetric curve', '0.00', 'No *linear* relationship — possibly a strong non-linear one'],
+          ['-0.7', 'A clear downward cloud', '0.49', 'Strong inverse relationship'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Pearson versus Spearman',
+        caption: 'Compute both. A large gap between them tells you something specific about your data.',
+        left: {
+          heading: 'Pearson r',
+          points: [
+            'Measures linear association on the raw values',
+            'Sensitive to outliers — one point can dominate',
+            'Changes under non-linear transformations such as log',
+            'r squared has a clean variance-explained interpretation',
+            'Assumes an interval scale and roughly elliptical data',
+          ],
+        },
+        right: {
+          heading: 'Spearman rho',
+          points: [
+            'Measures any monotonic association, via the ranks',
+            'Robust: an extreme value becomes just "the largest rank"',
+            'Invariant under any monotone transformation',
+            'Detects curved-but-monotonic relationships Pearson understates',
+            'Works on ordinal data where Pearson is not defined',
+          ],
+        },
+      },
+      {
+        kind: 'ascii',
+        title: "Anscombe's quartet: four datasets, one set of statistics",
+        caption: 'All four have mean x = 9, mean y = 7.50, and r = 0.816, with the same fitted line y = 3 + 0.5x.',
+        art: `   I: honest linear      II: a clean parabola
+     y                        y
+     |      . .               |     . . . .
+     |    .   .  .            |   .         .
+     |  .  .                  | .             .
+     +--------------- x       +--------------- x
+
+  III: linear + 1 outlier   IV: one point creates it all
+     y            .          y                      .
+     |          .            |
+     |     . . .             |  ::::
+     |  . .                  |  ::::
+     +--------------- x      +--------------- x`,
+      },
+      {
+        kind: 'widget',
+        title: 'Generate correlated data and watch r respond',
+        caption: 'Vary the strength of the relationship and the amount of noise, then add a single extreme point and see how far Pearson r moves compared with Spearman.',
+        widget: 'distribution-explorer',
+      },
+    ],
+
+    formalDefinition:
+      'The sample covariance of paired observations is the sum over i of (x_i - x-bar)(y_i - y-bar) divided by n - 1. The Pearson product-moment correlation coefficient is that covariance divided by the product of the two sample standard deviations, equivalently the average product of the standardised variables, and by the Cauchy-Schwarz inequality it lies in [-1, 1] with the endpoints attained exactly when the points are collinear. Spearman rho is the Pearson correlation applied to the rank-transformed data. Zero correlation implies independence only under joint normality; in general independence implies zero correlation but not the converse.',
+
+    math: {
+      intuition:
+        'Covariance is the average of paired deviation products, so it is positive when the two variables tend to sit on the same side of their respective means. Its problem is dimensional: it carries the units of both variables multiplied together, so its magnitude is meaningless in isolation. Correlation fixes this by standardising both variables first, which is why r is a pure number bounded by 1. The bound is not a convention — it is the Cauchy-Schwarz inequality, and equality holds exactly when one variable is an exact linear function of the other.',
+      formulas: [
+        {
+          latex: '\\operatorname{Cov}(X, Y) = \\frac{1}{n-1}\\sum_{i=1}^{n}(x_i - \\bar{x})(y_i - \\bar{y})',
+          name: 'Sample covariance',
+          meaning:
+            'The average product of paired deviations. Positive terms come from points on the same side of both means; negative terms from points on opposite sides.',
+          variables: [
+            { symbol: 'x_i, y_i', meaning: 'the i-th paired observation' },
+            { symbol: '\\bar{x}, \\bar{y}', meaning: 'the two sample means' },
+            { symbol: 'n-1', meaning: "Bessel's correction, for the same reason as in the sample variance" },
+            { symbol: '(x_i - \\bar{x})(y_i - \\bar{y})', meaning: 'one point\'s contribution; its sign says whether that point supports a positive or negative relationship' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'r = \\frac{\\operatorname{Cov}(X, Y)}{s_X s_Y} = \\frac{\\sum (x_i - \\bar{x})(y_i - \\bar{y})}{\\sqrt{\\sum (x_i - \\bar{x})^2}\\sqrt{\\sum (y_i - \\bar{y})^2}}',
+          name: 'Pearson correlation coefficient',
+          meaning:
+            'Covariance normalised by both standard deviations. The units cancel, leaving a pure number between -1 and 1 measuring linear association.',
+          variables: [
+            { symbol: 'r', meaning: 'the sample correlation coefficient, in [-1, 1]' },
+            { symbol: 's_X, s_Y', meaning: 'the sample standard deviations of the two variables' },
+            { symbol: '\\operatorname{Cov}(X,Y)', meaning: 'the covariance, which carries the units of X times the units of Y' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'r = \\frac{1}{n-1}\\sum_{i=1}^{n} z_{x_i} z_{y_i}, \\qquad z_{x_i} = \\frac{x_i - \\bar{x}}{s_X}',
+          name: 'Correlation as the average product of z-scores',
+          meaning:
+            'Standardise both variables, then average the products. This is the same formula rearranged, and it is the clearest statement of what r actually is.',
+          variables: [
+            { symbol: 'z_{x_i}', meaning: 'the standardised value of x_i — how many standard deviations above or below its mean' },
+            { symbol: 'z_{y_i}', meaning: 'the same for y_i' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'r^2 = \\text{proportion of variance in } Y \\text{ linearly explained by } X',
+          name: 'Coefficient of determination',
+          meaning:
+            'Squaring r gives the share of one variable\'s variance that a straight-line fit on the other accounts for. An r of 0.5 explains only a quarter of the variance.',
+          variables: [
+            { symbol: 'r^2', meaning: 'a number in [0, 1]; also the R-squared of a simple linear regression of Y on X' },
+          ],
+          category: 'regression',
+        },
+        {
+          latex: '\\operatorname{Var}(X + Y) = \\operatorname{Var}(X) + \\operatorname{Var}(Y) + 2\\operatorname{Cov}(X, Y)',
+          name: 'Variance of a sum',
+          meaning:
+            'The general rule that the previous unit deferred. Variances add only when the covariance is zero, which is why correlated model errors limit the benefit of ensembling.',
+          variables: [
+            { symbol: '2\\operatorname{Cov}(X,Y)', meaning: 'the cross term; positive covariance inflates the variance of the sum, negative covariance suppresses it' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\rho_s = r_{\\text{Pearson}}\\bigl(\\operatorname{rank}(x), \\operatorname{rank}(y)\\bigr)',
+          name: 'Spearman rank correlation',
+          meaning:
+            'Replace each value by its position in the sorted order, then compute Pearson on those ranks. Monotone relationships become linear, and outliers become ordinary ranks.',
+          variables: [
+            { symbol: '\\rho_s', meaning: 'the Spearman coefficient, also in [-1, 1]' },
+            { symbol: '\\operatorname{rank}(x)', meaning: 'the rank of each observation, with ties given their average rank' },
+          ],
+          category: 'statistics',
+        },
+      ],
+      derivation: [
+        'Why is r bounded by 1? Write it as the average product of the two standardised variables, z_x and z_y.',
+        'Consider the quantity E[(z_x - z_y)^2], which is an average of squares and therefore cannot be negative.',
+        'Expand it: E[z_x^2] - 2E[z_x z_y] + E[z_y^2].',
+        'Standardised variables have variance 1 and mean 0, so E[z_x^2] = E[z_y^2] = 1, and E[z_x z_y] is exactly r.',
+        'So the expression equals 2 - 2r, and requiring it to be non-negative forces r to be at most 1.',
+        'Repeating the argument with E[(z_x + z_y)^2] gives 2 + 2r >= 0, so r is at least -1.',
+        'Equality at r = 1 requires E[(z_x - z_y)^2] = 0, meaning z_x equals z_y for every point — the standardised variables are identical, so the raw points lie exactly on a straight line.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Five points, by hand, and what the 0.775 does not tell you',
+      setup:
+        'Five paired observations: x = 1, 2, 3, 4, 5 and y = 2, 4, 5, 4, 5. Perhaps x is the number of training epochs and y a validation score. Compute the covariance and the Pearson correlation entirely by hand, then interpret both carefully.',
+      steps: [
+        {
+          label: 'Compute both means',
+          detail: 'These are the reference points against which every deviation is measured.',
+          latex: '\\bar{x} = \\tfrac{15}{5} = 3, \\qquad \\bar{y} = \\tfrac{20}{5} = 4',
+        },
+        {
+          label: 'Compute the deviations',
+          detail: 'Each sums to zero, as deviations always do — a free arithmetic check before you go further.',
+          latex: 'd_x: -2, -1, 0, 1, 2 \\qquad d_y: -2, 0, 1, 0, 1',
+        },
+        {
+          label: 'Multiply them pairwise',
+          detail:
+            'The first point is below average on both, so its product is positive. The third and fifth points contribute 0 and 2. No point contributes a negative here, which already signals a positive relationship.',
+          latex: '4,\; 0,\; 0,\; 0,\; 2 \;\\longrightarrow\; \\textstyle\\sum = 6',
+        },
+        {
+          label: 'Covariance',
+          detail: 'Divide the sum of products by n - 1 = 4.',
+          latex: '\\operatorname{Cov}(X, Y) = \\tfrac{6}{4} = 1.5',
+        },
+        {
+          label: 'Sums of squared deviations',
+          detail: 'Needed for the two standard deviations in the denominator.',
+          latex: '\\textstyle\\sum d_x^2 = 4+1+0+1+4 = 10, \\qquad \\sum d_y^2 = 4+0+1+0+1 = 6',
+        },
+        {
+          label: 'The two standard deviations',
+          detail: 'Divide each sum of squares by n - 1 and take the square root.',
+          latex: 's_X = \\sqrt{\\tfrac{10}{4}} \\approx 1.5811, \\qquad s_Y = \\sqrt{\\tfrac{6}{4}} \\approx 1.2247',
+        },
+        {
+          label: 'Pearson r',
+          detail: 'Divide the covariance by the product of the standard deviations. Equivalently, 6 over the square root of 10 times 6.',
+          latex: 'r = \\frac{1.5}{1.5811 \\times 1.2247} = \\frac{6}{\\sqrt{60}} \\approx 0.7746',
+        },
+        {
+          label: 'Interpret honestly',
+          detail:
+            'r squared is 0.60, so a straight line accounts for 60% of the variation in y and 40% remains unexplained. With only five points this estimate is extremely noisy; the 95% confidence interval for r here runs roughly from -0.24 to 0.99.',
+          latex: 'r^2 = 0.7746^2 = 0.60',
+        },
+        {
+          label: 'Check the unit-dependence of covariance',
+          detail:
+            'Express y as a percentage instead, multiplying it by 100. The covariance becomes 150, a hundred times larger, while r is unchanged at 0.7746. That is exactly the problem normalisation solves.',
+          latex: '\\operatorname{Cov} \\to 150, \\qquad r \\to 0.7746',
+        },
+      ],
+      conclusion:
+        'Cov = 1.5, r = 0.775, r squared = 0.60. The covariance told us the direction and then changed by a factor of a hundred when we changed units; the correlation told us the direction and the strength and did not budge. But note what neither number revealed: y rose from 2 to 5 and then flattened and dipped. A single statistic cannot show that, which is precisely Anscombe\'s point and the reason the next step is always a scatter plot.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Covariance depends on units; correlation does not',
+        runnable: true,
+        code: `import numpy as np
+
+height_m = np.array([1.60, 1.65, 1.70, 1.75, 1.80, 1.85])
+weight_kg = np.array([55, 60, 68, 70, 78, 85])
+
+height_mm = height_m * 1000
+weight_g = weight_kg * 1000
+
+print("cov (m,  kg):", round(np.cov(height_m, weight_kg)[0, 1], 4))
+print("cov (mm, g) :", round(np.cov(height_mm, weight_g)[0, 1], 4))
+print()
+print("r   (m,  kg):", round(np.corrcoef(height_m, weight_kg)[0, 1], 6))
+print("r   (mm, g) :", round(np.corrcoef(height_mm, weight_g)[0, 1], 6))`,
+        output: `cov (m,  kg): 0.8770
+cov (mm, g) : 877000.0
+
+r   (m,  kg): 0.992223
+r   (mm, g) : 0.992223`,
+        explanation:
+          'Changing from metres and kilograms to millimetres and grams multiplies the covariance by a million while the underlying relationship is untouched. This is why you can never compare covariances across variable pairs, and why a covariance of 877,000 tells you nothing about strength. The correlation is identical to six decimal places, because both standard deviations scale by the same factors and cancel exactly.',
+      },
+      {
+        language: 'python',
+        title: "Anscombe's quartet: identical statistics, four different stories",
+        runnable: true,
+        code: `import numpy as np
+
+x1 = np.array([10, 8, 13, 9, 11, 14, 6, 4, 12, 7, 5], dtype=float)
+x4 = np.array([8, 8, 8, 8, 8, 8, 8, 19, 8, 8, 8], dtype=float)
+
+y1 = np.array([8.04, 6.95, 7.58, 8.81, 8.33, 9.96, 7.24, 4.26, 10.84, 4.82, 5.68])
+y2 = np.array([9.14, 8.14, 8.74, 8.77, 9.26, 8.10, 6.13, 3.10, 9.13, 7.26, 4.74])
+y3 = np.array([7.46, 6.77, 12.74, 7.11, 7.81, 8.84, 6.08, 5.39, 8.15, 6.42, 5.73])
+y4 = np.array([6.58, 5.76, 7.71, 8.84, 8.47, 7.04, 5.25, 12.50, 5.56, 7.91, 6.89])
+
+for name, x, y in [("I  linear ", x1, y1), ("II curve  ", x1, y2),
+                   ("III outlier", x1, y3), ("IV leverage", x4, y4)]:
+    r = np.corrcoef(x, y)[0, 1]
+    slope, intercept = np.polyfit(x, y, 1)
+    print(f"{name}: mean_y={y.mean():.2f}  sd_y={y.std(ddof=1):.3f}  "
+          f"r={r:.3f}  line: y = {intercept:.2f} + {slope:.2f}x")`,
+        output: `I  linear : mean_y=7.50  sd_y=2.032  r=0.816  line: y = 3.00 + 0.50x
+II curve  : mean_y=7.50  sd_y=2.032  r=0.816  line: y = 3.00 + 0.50x
+III outlier: mean_y=7.50  sd_y=2.030  r=0.816  line: y = 3.00 + 0.50x
+IV leverage: mean_y=7.50  sd_y=2.031  r=0.817  line: y = 3.00 + 0.50x`,
+        explanation:
+          'Four datasets, identical means, identical standard deviations, identical correlations and identical fitted lines — and four completely different shapes. Dataset II is a clean parabola where a linear fit is simply the wrong model. Dataset III is perfectly linear except for one outlier that has tilted the line. Dataset IV has ten points at a single x value and one distant point that single-handedly determines both the slope and the correlation. Anscombe published this in 1973 to make one argument, and it remains the argument: plot your data before you summarise it.',
+      },
+      {
+        language: 'python',
+        title: 'When Pearson fails and Spearman does not',
+        runnable: true,
+        code: `import numpy as np
+from scipy import stats
+
+rng = np.random.default_rng(0)
+x = np.linspace(1, 20, 60)
+
+cases = {
+    "linear     ": 2 * x + rng.normal(0, 2, 60),
+    "exponential": np.exp(x / 4) + rng.normal(0, 2, 60),
+    "U-shaped   ": (x - 10.5) ** 2 + rng.normal(0, 2, 60),
+}
+
+for name, y in cases.items():
+    p = stats.pearsonr(x, y).statistic
+    s = stats.spearmanr(x, y).statistic
+    print(f"{name}: pearson={p:+.3f}  spearman={s:+.3f}")`,
+        output: `linear     : pearson=+0.995  spearman=+0.994
+exponential: pearson=+0.795  spearman=+1.000
+U-shaped   : pearson=-0.011  spearman=-0.013`,
+        explanation:
+          'Three lessons in one table. On a linear relationship the two agree. On an exponential one, Pearson reports 0.80 because the relationship is not a straight line, while Spearman reports a perfect 1.00 because the ordering is perfectly preserved — a large gap between the two is the signature of a monotone but curved relationship. On the U-shape both report essentially zero, and both are misleading: the relationship is deterministic and extremely strong, but it is neither linear nor monotonic. No correlation coefficient will ever find it, which is the strongest possible argument for plotting.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Feature selection and multicollinearity',
+        usage:
+          'A correlation heatmap over features is the standard first pass in a modelling project. Pairs correlated above about 0.9 destabilise linear model coefficients — the fit cannot tell which of the two deserves the credit — so one is usually dropped or the pair is combined.',
+      },
+      {
+        context: 'Ensemble design',
+        usage:
+          'The variance of an average falls only to the extent that members are uncorrelated. Measuring the correlation between model errors tells you whether adding another model will help, and is why random forests deliberately decorrelate trees by sampling features.',
+      },
+      {
+        context: 'Ranking evaluation',
+        usage:
+          'Recommender and search systems are scored with rank correlations such as Spearman or Kendall tau, because what matters is whether the ordering matches, not whether the predicted scores match numerically.',
+      },
+      {
+        context: 'Data leakage detection',
+        usage:
+          'A feature correlating suspiciously highly with the target — above 0.95 on a problem that should be hard — is almost always leakage: a column derived from the label, or one recorded after the outcome was known. The correlation check is the cheapest leakage detector there is.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'pandas', role: '`df.corr()` computes the full correlation matrix and takes `method="spearman"` or `"kendall"`.' },
+      { tool: 'SciPy', role: '`stats.pearsonr` and `stats.spearmanr` return the coefficient together with a p-value for the null of no association.' },
+      { tool: 'seaborn', role: '`heatmap` for the correlation matrix and `pairplot` for the scatter plots you must look at before trusting it.' },
+      { tool: 'scikit-learn', role: 'PCA operates directly on the covariance or correlation matrix; whether you standardise first determines which one.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Reading correlation as causation',
+        why: 'A correlation is consistent with x causing y, y causing x, a confounder causing both, selection effects, or coincidence. Nothing in the arithmetic distinguishes these.',
+        fix: 'Ask what a confounder would have to be, and whether the proposed cause precedes the effect. If you need a causal claim, randomise — which is exactly what an A/B test does.',
+      },
+      {
+        mistake: 'Concluding "no relationship" from r near zero',
+        why: 'Pearson r measures only linear association. A perfect U-shaped or circular relationship gives r near 0, and so does a strong relationship confined to part of the range.',
+        fix: 'Always plot the scatter. Also compute Spearman, which will catch a monotone-but-curved relationship that Pearson understates.',
+      },
+      {
+        mistake: 'Comparing covariances between different variable pairs',
+        why: 'Covariance carries the product of both variables\' units, so a covariance of 877,000 versus 0.88 may describe the identical relationship measured in different units.',
+        fix: 'Normalise to a correlation before any comparison. Keep covariance for algebra, such as the variance of a sum or the input to PCA.',
+      },
+      {
+        mistake: 'Treating r = 0.5 as "half the relationship"',
+        why: 'The variance-explained interpretation belongs to r squared, not r. An r of 0.5 explains 25% of the variance, leaving three quarters unaccounted for.',
+        fix: 'Square it before interpreting strength, and report r squared when talking to non-specialists, since it is on a scale people read correctly.',
+      },
+      {
+        mistake: 'Ignoring how a restricted range deflates r',
+        why: 'Correlation depends on the spread of x. Studying only high performers, or only requests under 100 ms, truncates the range and can drive a strong relationship close to zero.',
+        fix: 'Check the range of both variables against the population you want to generalise to, and be suspicious of a weak correlation computed on a filtered subset.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What does a Pearson correlation of 0.8 tell you, and what does it not?',
+        answer:
+          'It tells you there is a strong positive linear association: as one variable rises the other tends to rise, and a straight-line fit accounts for r squared = 0.64, so 64% of the variance in one variable. It does not tell you the slope — r is unit-free, so a correlation of 0.8 is consistent with any gradient at all — and it says nothing about causation, since a confounder or reverse causation would produce the same number. It also cannot tell you the shape: a curved relationship, a cluster of ordinary points plus one high-leverage outlier, and a genuinely linear cloud can all give 0.8, which is exactly what Anscombe\'s quartet was constructed to demonstrate. And with a small sample it may not be distinguishable from zero at all; r = 0.8 on five points has a confidence interval spanning most of the range. The correct response to any correlation is to plot the scatter before interpreting it.',
+        followUp:
+          'A strong answer volunteers r squared without being asked and mentions range restriction, which is the failure mode most candidates miss.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'When would you use Spearman instead of Pearson?',
+        answer:
+          'When the relationship is monotone but not linear, when the data contain outliers, when the variables are ordinal rather than interval-scaled, or when you care about ordering rather than magnitude. Spearman is Pearson computed on ranks, which makes it invariant to any monotone transformation — so log-transforming a feature changes Pearson but leaves Spearman untouched — and robust, because an extreme value simply becomes the largest rank rather than a huge deviation. A practical habit is to compute both and compare: if Spearman is much higher than Pearson, you have a monotone but curved relationship, which is a hint that a transformation or a non-linear model would help. If Pearson is much higher, an outlier is probably inflating it. The trade-off is that Spearman discards magnitude information and has no clean variance-explained interpretation, so I would still report Pearson r squared when the relationship really is linear.',
+      },
+      {
+        level: 'advanced',
+        question: 'Two features each correlate 0.85 with the target. Should you include both in a linear model?',
+        answer:
+          'It depends entirely on how they correlate with each other, which the question has not told me. If they are nearly uncorrelated they may carry complementary information and including both can substantially improve the fit. If they correlate highly with each other — say above 0.9 — you have multicollinearity: the design matrix is close to rank-deficient, so the coefficient estimates become unstable with large standard errors, their signs can flip with small changes in the data, and individual coefficients become uninterpretable even though the predictions remain fine. I would check the correlation between the features and the variance inflation factors, and then either drop one, combine them into a single feature, or apply ridge regularisation, which shrinks correlated coefficients towards each other and stabilises the fit. It is worth being precise that multicollinearity harms interpretation and coefficient stability rather than predictive accuracy, so if the model is purely for prediction and a tree ensemble is being used, it matters much less. I would also check whether the near-duplication indicates leakage or an accidentally duplicated column.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Compute the covariance and Pearson correlation of x = 2, 4, 6, 8 and y = 1, 3, 2, 4 by hand.',
+        hint: 'Find both means, then the paired deviations, then the three sums you need.',
+        solution:
+          'Means: x-bar = 20/4 = 5, y-bar = 10/4 = 2.5.\n\nDeviations in x: -3, -1, 1, 3. Deviations in y: -1.5, 0.5, -0.5, 1.5.\n\nProducts: 4.5, -0.5, -0.5, 4.5. Sum = 8. Note the two middle points contribute negatively, because each is above average on one variable and below on the other.\n\nCovariance = 8/(4 - 1) = 2.667.\n\nSum of squared x deviations: 9 + 1 + 1 + 9 = 20. Sum of squared y deviations: 2.25 + 0.25 + 0.25 + 2.25 = 5.\n\nr = 8 / sqrt(20 x 5) = 8/10 = 0.8. So r squared = 0.64: a straight line explains 64% of the variance in y.',
+      },
+      {
+        prompt:
+          'A study finds a correlation of 0.72 between the number of Stack Overflow answers a developer writes and their salary. Give three distinct explanations that do not involve answering questions causing higher pay.',
+        hint: 'Think about reverse causation, confounders, and how the sample was assembled.',
+        solution:
+          'Three families of explanation:\n\n1. Reverse causation. Higher-paid developers tend to hold senior roles with more autonomy and slack time, so the salary enables the answering rather than the other way round.\n\n2. A confounder. Years of experience plausibly drives both: experienced developers know more, so they answer more, and they are also paid more. Conditioning on experience might make the association vanish entirely, exactly as ice cream and drowning become independent given temperature.\n\n3. Selection effects. If the sample came from a developer survey, the people who answer voluntary surveys are also the people who answer questions publicly, and they may not resemble the wider population. A correlation measured on a self-selected subgroup can appear from nothing.\n\nOne could add measurement artefacts: if "answers written" is scraped only for accounts linked to a public profile, and linking a profile is itself commoner among the well paid, the association is manufactured by the data collection. Distinguishing these requires either randomisation or careful causal modelling; the correlation alone cannot.',
+      },
+      {
+        prompt:
+          'Construct a dataset with a strong deterministic relationship and a Pearson correlation near zero, then show that a suitable transformation reveals it.',
+        hint: 'A symmetric non-monotone function of x will do it; try squaring a variable centred at zero.',
+        language: 'python',
+        starterCode: 'import numpy as np\nfrom scipy import stats\n\nx = np.linspace(-5, 5, 101)\n',
+        solution:
+          'import numpy as np\nfrom scipy import stats\n\nx = np.linspace(-5, 5, 101)\ny = x ** 2                      # y is a perfect function of x\n\nprint(stats.pearsonr(x, y).statistic)      # ≈ 0.0\nprint(stats.spearmanr(x, y).statistic)     # ≈ 0.0\nprint(stats.pearsonr(np.abs(x), y).statistic)  # 1.0 after transforming\n\nBoth Pearson and Spearman report essentially zero, even though y is completely determined by x with no noise at all. The reason is symmetry: for every point on the left contributing a negative deviation product, there is a mirrored point on the right contributing an equal positive one, and they cancel exactly. Spearman fails too, because the relationship is not monotonic.\n\nReplacing x with |x| makes the relationship monotone and in fact linear in the transformed variable, and the correlation jumps to 1.0. The general lesson: a correlation near zero rules out a linear relationship and nothing else, and plotting would have revealed the parabola in one second.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'STAT-009-q1',
+        type: 'numeric',
+        concept: 'r squared',
+        prompt: 'A correlation of r = 0.6 explains what proportion of the variance? Give a decimal.',
+        answer: 0.36,
+        tolerance: 0.01,
+        explanation:
+          'The variance-explained interpretation belongs to r squared, which is 0.36. Reading r itself as a proportion overstates the relationship substantially: 0.6 sounds like most of it and is in fact barely a third.',
+      },
+      {
+        id: 'STAT-009-q2',
+        type: 'truefalse',
+        concept: 'linearity',
+        prompt: 'A Pearson correlation of 0 means the two variables are unrelated.',
+        answer: false,
+        explanation:
+          'It means there is no *linear* relationship. A perfect parabola y = x squared on symmetric data gives r = 0 while y is completely determined by x. Plot before concluding anything from a near-zero r.',
+      },
+      {
+        id: 'STAT-009-q3',
+        type: 'mcq',
+        concept: 'covariance units',
+        prompt: 'Why is correlation usually reported instead of covariance?',
+        options: [
+          'Covariance carries the units of both variables, so its magnitude is not comparable across pairs',
+          'Covariance can be negative, and correlation cannot',
+          'Covariance is harder to compute',
+          'Correlation captures non-linear relationships and covariance does not',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Changing height from metres to millimetres multiplies the covariance by a thousand without changing the relationship. Dividing by both standard deviations cancels the units and bounds the result in [-1, 1]. Both can be negative and both see only linear structure.',
+      },
+      {
+        id: 'STAT-009-q4',
+        type: 'multi',
+        concept: 'interpreting correlation',
+        prompt: 'Two variables have r = 0.9. Which conclusions are justified? Select all that apply.',
+        options: [
+          'A straight line accounts for 81% of the variance in one from the other',
+          'They have a strong positive linear association',
+          'One variable causes the other',
+          'The slope of the relationship is 0.9',
+          'A scatter plot is still worth inspecting before trusting this',
+        ],
+        answerIndices: [0, 1, 4],
+        explanation:
+          'Correlation is unit-free so it says nothing about the slope, and no correlation of any size establishes causation. Anscombe\'s quartet shows that identical correlations can arise from wildly different shapes, so plotting remains mandatory.',
+      },
+      {
+        id: 'STAT-009-q5',
+        type: 'code-output',
+        language: 'python',
+        concept: 'invariance of correlation',
+        prompt: 'What does this print?',
+        code: 'import numpy as np\nx = np.array([1., 2., 3., 4.])\ny = np.array([2., 4., 6., 8.])\nprint(round(np.corrcoef(x, y)[0, 1], 2), round(np.corrcoef(x, 100 * y)[0, 1], 2))',
+        options: ['1.0 1.0', '1.0 100.0', '0.5 0.5', '1.0 0.01'],
+        answerIndex: 0,
+        explanation:
+          'y is an exact positive linear function of x, so r is exactly 1. Scaling y by 100 scales both the covariance and the standard deviation of y by 100, and they cancel, so r is unchanged. Correlation is invariant to positive linear rescaling of either variable.',
+      },
+      {
+        id: 'STAT-009-q6',
+        type: 'explain',
+        concept: 'correlation and causation',
+        prompt:
+          'A dashboard shows that users who enable dark mode have 30% higher retention, a correlation of 0.4. A product manager wants to make dark mode the default. Advise them.',
+        rubric: [
+          'Identifies that the comparison is between self-selected groups, not randomised ones',
+          'Names at least one plausible confounder, such as engagement level driving both',
+          'Proposes a randomised experiment as the way to answer the actual question',
+        ],
+        sampleAnswer:
+          'The comparison is between people who chose dark mode and people who did not, and that choice is not random. The most likely explanation is a confounder: users who dig into settings at all are already more engaged, and engaged users both discover dark mode and retain better. Under that story dark mode is a marker of engagement rather than a cause of it, and switching the default would move the marker without moving retention — it might even hurt, since the users who would have actively chosen it are exactly the ones who no longer signal anything. There is also a possible reverse-causation reading: people who stay long enough to retain are the ones who eventually customise their settings. The only way to settle it is to randomise: assign a fraction of new users to a dark default, compare retention against the control, and only then decide. That experiment is also cheap, which makes it hard to justify shipping on the correlation instead.',
+        explanation:
+          'The examinable move is spotting self-selection and proposing randomisation. Naming a specific, plausible confounder rather than saying "correlation is not causation" is what separates a good answer from a slogan.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does covariance measure?', back: 'The average product of paired deviations from the two means. Its sign gives the direction of linear association; its magnitude depends on units.' },
+      { front: 'Pearson r in one line', back: 'Covariance divided by both standard deviations — equivalently the average product of z-scores. Unit-free and bounded in [-1, 1].' },
+      { front: 'What does r squared mean?', back: 'The proportion of variance in one variable explained by a straight-line fit on the other. r = 0.5 explains only 25%.' },
+      { front: 'Pearson vs Spearman', back: 'Pearson measures linear association on raw values; Spearman measures monotone association on ranks and is robust to outliers and monotone transformations.' },
+      { front: "What is Anscombe's quartet?", back: 'Four datasets with near-identical means, variances, correlations and regression lines but completely different shapes. The argument for always plotting.' },
+      { front: 'Does r = 0 mean no relationship?', back: 'No — only no linear relationship. A perfect symmetric parabola gives r = 0 while being fully deterministic.' },
+      { front: 'Variance of a sum', back: 'Var(X + Y) = Var(X) + Var(Y) + 2Cov(X, Y). Variances add only when the covariance is zero.' },
+    ],
+
+    challenge: {
+      title: 'A correlation report that refuses to mislead',
+      brief:
+        'Write a function that takes two numeric arrays and produces a responsible correlation report: Pearson r with a confidence interval, Spearman rho, r squared, the sample size, a warning if the sample is too small for the estimate to be meaningful, a warning if Pearson and Spearman differ by more than 0.15, and a warning if removing the single most influential point changes r by more than 0.1. Demonstrate it on Anscombe\'s four datasets and confirm that your warnings fire on datasets III and IV but not on dataset I.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Both Pearson and Spearman are computed and compared automatically',
+        'Leave-one-out influence is calculated to detect a single dominating point',
+        "The report is demonstrated on all four Anscombe datasets with differing warnings",
+        'Every warning states the specific reason, not just that something is wrong',
+      ],
+      starterCode:
+        'import numpy as np\nfrom scipy import stats\n\ndef correlation_report(x, y, name: str = "") -> None:\n    """Pearson, Spearman, influence and a set of explicit warnings."""\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach covariance and correlation to someone who knows about means and standard deviations. Make sure they understand why we normalise, what r squared means, and why a correlation near zero does not mean "unrelated".',
+      mustCover: [
+        'Covariance as the average product of paired deviations, and what its sign means',
+        'Why covariance magnitude is uninterpretable, and how dividing by the standard deviations fixes it',
+        'That r measures linear association only, and that r squared is the variance explained',
+        'That correlation does not establish causation, with a concrete confounder',
+      ],
+      bonusSignals: [
+        'mentions Anscombe\'s quartet or insists on plotting',
+        'contrasts Spearman with Pearson and says when each is right',
+        'gives a real confounding example rather than reciting the slogan',
+      ],
+      sampleExplanation:
+        'You want one number for whether two measurements move together. Here is the construction. For each observation, ask whether it is above or below average on the first variable, and above or below average on the second, then multiply those two answers. If a point is above average on both, you get a positive product; if it is below on both, two negatives also give a positive; only when it is high on one and low on the other do you get a negative. Average those products and you have the covariance, and its sign tells you the direction of the relationship. The trouble is its size. Measure height in millimetres rather than metres and the covariance multiplies by a thousand, even though nothing about the relationship changed. So you divide by each variable\'s own standard deviation, which cancels the units and, as a bonus, forces the answer between minus one and one. That is the correlation. Now three things about reading it. First, square it before you interpret strength: a correlation of 0.5 accounts for a quarter of the variation, not half. Second, it only sees straight lines. Plot y equal to x squared over a symmetric range and the correlation is exactly zero while y is perfectly determined by x, because the left half and the right half cancel. So a correlation near zero rules out a linear relationship and nothing else. Third, and most abused: a correlation says nothing about cause. Ice cream sales and drownings correlate strongly, and neither causes the other — hot weather causes both. The only reliable way to get a causal answer is to intervene and randomise, which is exactly what an A/B test does. And before you interpret any correlation at all, plot the scatter: Anscombe built four datasets with the same means, the same variances, the same correlation and the same fitted line, and they look nothing alike.',
+    },
+  },
+
+  {
+    id: 'STAT-010',
+    domain: 'STAT',
+    module: 'Distributions',
+    topic: 'The normal distribution',
+    title: 'The Normal Distribution',
+    slug: 'the-normal-distribution',
+    difficulty: 3,
+    estimatedMinutes: 40,
+    prerequisites: ['STAT-008'],
+    related: ['STAT-005', 'STAT-006', 'STAT-008'],
+    tags: ['normal', 'gaussian', 'z-score', 'standardisation', '68-95-99.7', 'bell curve'],
+
+    learningObjectives: [
+      'Describe the shape of the normal distribution and the role of its two parameters',
+      'Apply the 68-95-99.7 rule to answer probability questions without a table or a computer',
+      'Compute and interpret a z-score, and use standardisation to compare values on different scales',
+      'Recognise when data are not normal, and name the consequences of assuming normality anyway',
+    ],
+
+    terminology: [
+      {
+        term: 'Normal (Gaussian) distribution',
+        definition:
+          'A continuous distribution, symmetric about its mean, whose density is the familiar bell curve determined entirely by a mean and a standard deviation.',
+        simple: 'The bell-shaped curve where most values cluster near the middle.',
+      },
+      {
+        term: 'Standard normal',
+        definition:
+          'The normal distribution with mean 0 and standard deviation 1, conventionally denoted Z. Every normal variable becomes standard normal after standardisation.',
+        simple: 'The reference bell curve that everything else is converted into.',
+      },
+      {
+        term: 'z-score',
+        definition:
+          'The number of standard deviations a value lies above or below its mean, computed as (x - mu)/sigma. It is unit-free, so values from different scales become comparable.',
+        simple: 'How many standard deviations from average this value is.',
+      },
+      {
+        term: 'Standardisation',
+        definition:
+          'Transforming a variable by subtracting its mean and dividing by its standard deviation, producing a variable with mean 0 and standard deviation 1.',
+        simple: 'Re-expressing every value as a distance from the average, measured in standard deviations.',
+      },
+      {
+        term: '68-95-99.7 rule',
+        definition:
+          'For a normal distribution, approximately 68.3% of the probability lies within one standard deviation of the mean, 95.4% within two, and 99.7% within three.',
+        simple: 'Most values are within one standard deviation, nearly all within three.',
+      },
+      {
+        term: 'Heavy-tailed distribution',
+        definition:
+          'A distribution whose extreme values occur far more often than a normal distribution with the same variance would predict. Financial returns and latency are classic cases.',
+        simple: 'A distribution where shocking outliers are much less shocking than you would expect.',
+      },
+    ],
+
+    simpleExplanation:
+      'Measure the height of ten thousand adults and plot the results, and a very particular shape appears: a single hump in the middle, falling away symmetrically on both sides, with extremes that are rare but not impossible. Measure the weight of loaves from a bakery, or the errors of a well-calibrated instrument, and the same shape appears again. This is the normal distribution, and the reason it turns up everywhere is worth stating plainly: whenever a quantity is the sum of many small independent influences, the result tends towards this shape regardless of what those influences individually looked like. Height is genetics plus nutrition plus a hundred other small factors, and adding them up produces a bell. The shape is fixed by exactly two numbers — where the centre is and how wide it is — and once you know them you know everything. That is what makes it so convenient, and also what makes it so frequently misapplied: plenty of real data, including almost every quantity that cannot go below zero, is not shaped like this at all.',
+
+    whyItExists:
+      'Adding up many small independent effects produces this one shape no matter what the effects looked like individually, which is why it describes measurement error, biological variation and aggregate quantities so often. It is also the distribution for which the entire apparatus of classical inference — standard errors, confidence intervals, t-tests — was worked out exactly.',
+
+    analogy: {
+      scenario:
+        'Picture a Galton board: a vertical board studded with rows of pegs, with a ball dropped in at the top. At each peg the ball bounces left or right with equal chance, and after twenty rows it lands in one of the bins at the bottom. To land in the far left bin it must go left twenty times in a row, which almost never happens. To land in a middle bin it needs roughly ten lefts and ten rights, and there are enormous numbers of ways to achieve that. Drop a thousand balls and the bins fill into a bell shape, every time, without anyone designing it.',
+      mapping: [
+        { from: 'One bounce off a peg', to: 'One small independent random influence' },
+        { from: 'The sum of twenty bounces', to: 'A quantity built by adding many small effects' },
+        { from: 'The extreme bins needing an unbroken run', to: 'Tails being rare because they require many effects to align' },
+        { from: 'Middle bins having many routes into them', to: 'The centre having the highest density' },
+        { from: 'The bell appearing regardless of peg spacing', to: 'The central limit theorem: the shape does not depend on the individual distributions' },
+      ],
+      bridge:
+        'The Galton board is the central limit theorem made physical, and it explains the two things people find mysterious about the normal distribution. It appears everywhere because summation is everywhere, not because nature has a preference for bell curves. And its tails fall off extraordinarily fast — at four standard deviations the density is about a thirty-thousandth of the peak — because reaching the far bin requires every single bounce to cooperate.',
+      limitations:
+        'The board only produces a bell because the bounces are independent and none of them dominates. If one peg had a strong bias, or if a single bounce could send the ball ten bins over, you would get something quite different. That is exactly the situation with financial returns and network latency, where one event can dominate the sum, and it is why those quantities have far heavier tails than the normal model predicts.',
+    },
+
+    visuals: [
+      {
+        kind: 'annotated',
+        title: 'Anatomy of the normal curve',
+        subject: 'X ~ N(mu, sigma^2)',
+        annotations: [
+          { part: 'mu', note: 'The mean. It is also the median and the mode, because the curve is perfectly symmetric. Changing it slides the whole curve sideways.' },
+          { part: 'sigma', note: 'The standard deviation. Changing it widens or narrows the curve while keeping the total area at 1, so a wider curve is also flatter.' },
+          { part: 'sigma^2', note: 'The variance. The notation uses the variance, but everything you interpret uses the standard deviation.' },
+          { part: 'The inflection points', note: 'The curve changes from concave to convex at exactly one standard deviation either side of the mean — you can literally see sigma on the plot.' },
+          { part: 'The tails', note: 'They approach zero but never reach it, so every real value has some non-zero density, including impossible ones such as a negative height.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'The 68-95-99.7 rule, with exact figures',
+        caption: 'The round numbers are what you use in your head; the exact ones are what software returns.',
+        columns: ['Range', 'Rule of thumb', 'Exact', 'Outside this range', 'Roughly once every'],
+        rows: [
+          ['mu ± 1 sigma', '68%', '68.27%', '31.73%', '3 observations'],
+          ['mu ± 2 sigma', '95%', '95.45%', '4.55%', '22 observations'],
+          ['mu ± 3 sigma', '99.7%', '99.73%', '0.27%', '370 observations'],
+          ['mu ± 4 sigma', '99.99%', '99.994%', '0.006%', '15,787 observations'],
+          ['mu ± 6 sigma', 'essentially all', '99.9999998%', '2 in a billion', '506 million observations'],
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'Answering a probability question with a z-score',
+        caption: 'The standardisation step is what lets one table serve every normal distribution ever.',
+        steps: [
+          { label: 'Write down mu and sigma', detail: 'The two parameters that fully determine the distribution.' },
+          { label: 'Standardise the value of interest', detail: 'z = (x - mu)/sigma, giving the distance from the mean in standard deviations.' },
+          { label: 'Look up or compute the standard normal CDF', detail: 'Phi(z) = P(Z <= z). One function answers every normal question.' },
+          { label: 'Convert to the probability you actually want', detail: 'Above: 1 - Phi(z). Between: Phi(z2) - Phi(z1). Outside: 2(1 - Phi(|z|)).' },
+          { label: 'Sanity-check against the rule', detail: 'If z = 2 and your answer is not close to 2.5% in one tail, recheck the arithmetic.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Normal versus heavy-tailed, for the same standard deviation',
+        caption: 'Assuming normality when the data are heavy-tailed understates extreme risk by orders of magnitude.',
+        left: {
+          heading: 'Normal',
+          points: [
+            'A 4-sigma event roughly once in 16,000 observations',
+            'A 6-sigma event roughly twice in a billion',
+            'Mean and variance completely determine everything',
+            'The sample mean is an efficient, well-behaved estimator',
+            'Appropriate for measurement error and aggregate biological variation',
+          ],
+        },
+        right: {
+          heading: 'Heavy-tailed (e.g. Student t with 3 df, log-normal)',
+          points: [
+            'A 4-sigma event perhaps once in a few hundred observations',
+            '6-sigma days occur repeatedly in real financial data',
+            'Higher moments may not even exist',
+            'The sample mean converges slowly and is unstable',
+            'Appropriate for latency, income, file size, market returns',
+          ],
+        },
+      },
+      {
+        kind: 'widget',
+        title: 'Move mu and sigma and watch the curve respond',
+        caption: 'Shift the mean and the curve slides without changing shape; increase sigma and it flattens and spreads, since the area must stay at exactly 1. Shade the tail regions to see the 68-95-99.7 rule directly.',
+        widget: 'distribution-explorer',
+        props: { family: 'normal' },
+      },
+    ],
+
+    formalDefinition:
+      'A random variable X is normally distributed with mean mu and variance sigma squared if its density is f(x) = 1/(sigma root 2 pi) times exp of minus (x - mu) squared over 2 sigma squared, for all real x. The distribution is symmetric about mu, where mean, median and mode coincide, with inflection points at mu plus or minus sigma. It is closed under linear transformation — aX + b is again normal — and under addition of independent normals, and the standardised variable Z = (X - mu)/sigma has the standard normal distribution with mean 0 and variance 1. Its CDF has no elementary closed form and is written Phi.',
+
+    math: {
+      intuition:
+        'The density has one idea in it: probability should fall off with distance from the centre, and it should fall off extremely fast. The exponent is the squared z-score, so a value two standard deviations out is penalised four times as hard as one standard deviation out, and three standard deviations out nine times as hard. Everything in front of the exponential is just the constant needed to make the total area come to exactly 1. Once you see that the whole shape depends on x only through the z-score, it becomes obvious why standardisation works: every normal distribution is the same curve with the axis relabelled.',
+      formulas: [
+        {
+          latex: 'f(x) = \\frac{1}{\\sigma\\sqrt{2\\pi}}\\exp\\!\\left(-\\frac{(x - \\mu)^2}{2\\sigma^2}\\right)',
+          name: 'Normal probability density function',
+          meaning:
+            'The bell curve. Density falls off as the exponential of the negative squared distance from the mean, measured in standard deviations.',
+          variables: [
+            { symbol: 'x', meaning: 'the value at which the density is evaluated' },
+            { symbol: '\\mu', meaning: 'the mean: the centre of the curve, and also its median and mode' },
+            { symbol: '\\sigma', meaning: 'the standard deviation: how wide the curve is' },
+            { symbol: '\\sigma\\sqrt{2\\pi}', meaning: 'the normalising constant that forces the total area to equal exactly 1' },
+            { symbol: '(x-\\mu)^2/\\sigma^2', meaning: 'the squared z-score — the only way x enters the formula' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: 'z = \\frac{x - \\mu}{\\sigma}',
+          name: 'z-score (standardisation)',
+          meaning:
+            'How many standard deviations a value lies from the mean. Being unit-free, it makes values from completely different scales comparable.',
+          variables: [
+            { symbol: 'z', meaning: 'the standardised value; positive above the mean, negative below' },
+            { symbol: 'x - \\mu', meaning: 'the raw deviation from the mean, in the original units' },
+            { symbol: '\\sigma', meaning: 'the standard deviation, which sets the natural unit of distance' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'X \\sim N(\\mu, \\sigma^2) \;\\Longrightarrow\; Z = \\frac{X - \\mu}{\\sigma} \\sim N(0, 1)',
+          name: 'Reduction to the standard normal',
+          meaning:
+            'Every normal distribution becomes the standard normal after standardisation, which is why a single table or a single function answers every question.',
+          variables: [
+            { symbol: 'N(\\mu, \\sigma^2)', meaning: 'the normal distribution with that mean and variance' },
+            { symbol: 'N(0,1)', meaning: 'the standard normal: mean 0, standard deviation 1' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: 'P(\\mu - k\\sigma \\le X \\le \\mu + k\\sigma) = 2\\Phi(k) - 1',
+          name: 'The empirical rule, exactly',
+          meaning:
+            'The probability of falling within k standard deviations of the mean. At k = 1, 2, 3 this gives 0.6827, 0.9545 and 0.9973.',
+          variables: [
+            { symbol: 'k', meaning: 'the number of standard deviations either side of the mean' },
+            { symbol: '\\Phi', meaning: 'the standard normal CDF, which has no elementary closed form' },
+            { symbol: '2\\Phi(k) - 1', meaning: 'the central probability, obtained by removing both tails' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: 'X_1 \\sim N(\\mu_1, \\sigma_1^2),\; X_2 \\sim N(\\mu_2, \\sigma_2^2) \\text{ independent} \;\\Longrightarrow\; X_1 + X_2 \\sim N(\\mu_1 + \\mu_2,\; \\sigma_1^2 + \\sigma_2^2)',
+          name: 'Closure under addition',
+          meaning:
+            'The sum of independent normals is exactly normal, with means and variances adding. This is why the normal family sits at the centre of statistical theory.',
+          variables: [
+            { symbol: '\\mu_1 + \\mu_2', meaning: 'means always add, by linearity of expectation' },
+            { symbol: '\\sigma_1^2 + \\sigma_2^2', meaning: 'variances add because the variables are independent; standard deviations do not add' },
+          ],
+          category: 'probability',
+        },
+      ],
+      derivation: [
+        'Why does standardisation work? Start with X normal with mean mu and standard deviation sigma, and define Z = (X - mu)/sigma.',
+        'By linearity of expectation, E[Z] = (E[X] - mu)/sigma = 0.',
+        'By the scaling rule for variance, Var(Z) = Var(X)/sigma^2 = sigma^2/sigma^2 = 1.',
+        'So Z has mean 0 and variance 1 for any distribution, not only the normal. What is special about the normal is that Z is still *normal*, because the family is closed under linear transformation.',
+        'Look at the density: x enters only through (x - mu)^2 / sigma^2, which is exactly z squared.',
+        'So every normal density is the same function of z, with the horizontal axis relabelled and the height rescaled to keep the area at 1.',
+        'That is why one table of Phi values served every statistician for a century, and why a z-score of 2 means the same thing whether you are measuring heights in centimetres or latencies in milliseconds.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Model latency, z-scores and an alert threshold',
+      setup:
+        'A deployed model has request latency that is approximately normal with mean 250 ms and standard deviation 40 ms. You must answer three practical questions: what fraction of requests exceed 330 ms, what threshold would flag the slowest 1% of requests, and how often a monitoring alert set at three standard deviations would fire spuriously.',
+      steps: [
+        {
+          label: 'State the parameters',
+          detail: 'Two numbers determine everything about this distribution.',
+          latex: '\\mu = 250 \\text{ ms}, \\qquad \\sigma = 40 \\text{ ms}',
+        },
+        {
+          label: 'Standardise 330 ms',
+          detail: 'Eighty milliseconds above the mean, and each standard deviation is 40 ms, so this is exactly two of them.',
+          latex: 'z = \\frac{330 - 250}{40} = \\frac{80}{40} = 2.0',
+        },
+        {
+          label: 'Use the empirical rule',
+          detail:
+            'About 95.4% of values lie within two standard deviations, so 4.6% lie outside. By symmetry, half of that is in the upper tail.',
+          latex: 'P(X > 330) = \\tfrac{1 - 0.9545}{2} = 0.0228',
+        },
+        {
+          label: 'Interpret it operationally',
+          detail: 'Roughly 2.3% of requests, or about 1 in 44. On a service handling ten million requests a day, that is 228,000 requests over 330 ms.',
+          latex: '0.0228 \\times 10^7 \\approx 228{,}000 \\text{ requests/day}',
+        },
+        {
+          label: 'Invert the question for the p99 threshold',
+          detail:
+            'The slowest 1% sit above the 99th percentile, which for a standard normal is z = 2.326. Convert back to milliseconds by reversing the standardisation.',
+          latex: 'x = \\mu + z\\sigma = 250 + 2.326 \\times 40 \\approx 343 \\text{ ms}',
+        },
+        {
+          label: 'Evaluate a three-sigma alert',
+          detail:
+            'A threshold at 250 + 3(40) = 370 ms fires on 0.135% of requests by chance alone. At 10,000 requests per minute that is 13.5 spurious alerts every minute — a threshold chosen without this arithmetic is a pager that nobody will answer.',
+          latex: '\\tfrac{1 - 0.9973}{2} = 0.00135 \;\\Rightarrow\; 13.5 \\text{ per minute at } 10^4 \\text{ rpm}',
+        },
+        {
+          label: 'Now question the assumption',
+          detail:
+            'Latency is almost never normal: it is right-skewed with a long tail from retries, cold starts and garbage collection. A normal model with mean 250 and sigma 40 puts P(latency < 130 ms) at 0.13%, when in reality a large share of requests are served from cache well under that.',
+          latex: 'P(X < 130) = \\Phi(-3) = 0.00135 \;\\text{— implausible for real latency}',
+        },
+      ],
+      conclusion:
+        'Under the normal model, 2.3% of requests exceed 330 ms, the p99 threshold sits at 343 ms, and a three-sigma alert fires 13.5 times a minute at typical traffic. The arithmetic is exact and the model is questionable: the final step shows the normal assumption making a prediction about fast requests that anyone who has looked at a latency histogram knows is wrong. Compute the empirical percentiles instead, and keep the normal model for quantities that genuinely arise as sums of many small effects.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'The empirical rule, verified exactly',
+        runnable: true,
+        code: `from scipy import stats
+
+Z = stats.norm(loc=0, scale=1)
+
+for k in [1, 2, 3, 4, 6]:
+    inside = Z.cdf(k) - Z.cdf(-k)
+    outside = 1 - inside
+    one_in = 1 / outside if outside > 0 else float("inf")
+    print(f"within {k} sigma: {inside * 100:11.7f}%   "
+          f"outside: {outside * 100:9.6f}%   about 1 in {one_in:,.0f}")`,
+        output: `within 1 sigma:  68.2689492%   outside: 31.731051%   about 1 in 3
+within 2 sigma:  95.4499736%   outside:  4.550026%   about 1 in 22
+within 3 sigma:  99.7300204%   outside:  0.269980%   about 1 in 370
+within 4 sigma:  99.9936658%   outside:  0.006334%   about 1 in 15,787
+within 6 sigma:  99.9999998%   outside:  0.000000%   about 1 in 506,797,346`,
+        explanation:
+          'The final column is the one worth internalising, because it converts an abstract probability into an operational frequency. A three-sigma monitoring threshold fires by chance roughly once in every 370 observations, which on a high-traffic service is many times per minute. This is also the origin of the "six sigma" quality slogan: about two defects per billion, if the process really is normal.',
+      },
+      {
+        language: 'python',
+        title: 'Standardisation makes incomparable things comparable',
+        runnable: true,
+        code: `from scipy import stats
+
+candidates = [
+    ("Exam A", 82, 70, 8),     # (name, score, mean, sd)
+    ("Exam B", 640, 500, 100),
+    ("Exam C", 29, 24, 4),
+]
+
+for name, score, mu, sd in candidates:
+    z = (score - mu) / sd
+    pct = stats.norm.cdf(z) * 100
+    print(f"{name}: raw={score:>4}  z={z:+.3f}  percentile={pct:5.1f}%")`,
+        output: `Exam A: raw=  82  z=+1.500  percentile= 93.3%
+Exam B: raw= 640  z=+1.400  percentile= 91.9%
+Exam C: raw=  29  z=+1.250  percentile= 89.4%`,
+        explanation:
+          'The raw scores of 82, 640 and 29 cannot be compared at all — they are on different scales with different spreads. Standardising converts each into "how many standard deviations above average", and now Exam A is the strongest performance despite having by far the smallest raw number. This is exactly what `StandardScaler` does to features before training, and for the same reason: it puts everything on a common footing so that no variable dominates simply because it was measured in larger units.',
+      },
+      {
+        language: 'python',
+        title: 'Checking whether data are actually normal',
+        runnable: true,
+        code: `import numpy as np
+from scipy import stats
+
+rng = np.random.default_rng(0)
+n = 5_000
+
+samples = {
+    "normal   ": rng.normal(250, 40, n),
+    "lognormal": rng.lognormal(5.4, 0.45, n),
+    "bimodal  ": np.concatenate([rng.normal(200, 15, n // 2),
+                                 rng.normal(320, 15, n // 2)]),
+}
+
+for name, d in samples.items():
+    within1 = np.mean(np.abs(d - d.mean()) < d.std())
+    skew = stats.skew(d)
+    kurt = stats.kurtosis(d)          # 0 for a normal distribution
+    print(f"{name}: within 1sd={within1:.3f} (normal: 0.683)  "
+          f"skew={skew:+.2f}  excess kurtosis={kurt:+.2f}")`,
+        output: `normal   : within 1sd=0.684 (normal: 0.683)  skew=+0.01  excess kurtosis=-0.03
+lognormal: within 1sd=0.767 (normal: 0.683)  skew=+1.62  excess kurtosis=+4.52
+bimodal  : within 1sd=0.713 (normal: 0.683)  skew=+0.00  excess kurtosis=-1.50`,
+        explanation:
+          'Three quick diagnostics, no formal test required. The log-normal data show strong positive skew and heavy tails, so the empirical rule fails badly. The bimodal data are perfectly symmetric with zero skew — which is why skew alone is not enough — but negative excess kurtosis reveals a flat, two-humped shape, and the mean sits in a valley where almost no data live. In practice the fastest check of all is a histogram plus a quantile-quantile plot; these numbers are what you report once you have looked.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Feature standardisation before training',
+        usage:
+          'scikit-learn\'s `StandardScaler` converts every feature to a z-score using the training mean and standard deviation. It is required for distance-based methods and regularised linear models, and it substantially speeds up gradient descent by making the loss surface less elongated.',
+      },
+      {
+        context: 'Weight initialisation in neural networks',
+        usage:
+          'He and Glorot initialisation draw weights from normal distributions with variances set from the layer widths, chosen precisely so that activation variance neither explodes nor vanishes as signals pass through many layers.',
+      },
+      {
+        context: 'Anomaly detection thresholds',
+        usage:
+          'Monitoring systems commonly alert at three standard deviations from a rolling mean. On genuinely normal metrics that fires about once in 370 points; on heavy-tailed metrics such as latency it fires constantly, which is why robust alternatives based on percentiles or the median absolute deviation are preferred.',
+      },
+      {
+        context: 'Measurement error and instrument calibration',
+        usage:
+          'Errors from a well-calibrated instrument really are close to normal, because they aggregate many tiny independent perturbations. This is the case the distribution was originally developed for, by Gauss, working on astronomical observations.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'SciPy', role: '`stats.norm` provides `pdf`, `cdf`, `ppf` and `rvs`; `stats.probplot` produces the quantile-quantile plot that checks normality visually.' },
+      { tool: 'scikit-learn', role: '`StandardScaler` for z-scores; `PowerTransformer` and `QuantileTransformer` for forcing skewed features closer to normal.' },
+      { tool: 'NumPy', role: '`rng.normal` for sampling, and `np.clip` when a normal model would otherwise produce impossible values such as negative durations.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Assuming data are normal without looking',
+        why: 'Most real quantities that cannot be negative — latency, income, file size, counts — are right-skewed. A normal model will put meaningful probability on negative values and will drastically understate the upper tail.',
+        fix: 'Plot a histogram and a quantile-quantile plot before modelling. If the data are positive and skewed, consider a log transform or a log-normal, gamma or exponential model instead.',
+      },
+      {
+        mistake: 'Believing the central limit theorem makes your data normal',
+        why: 'It applies to the distribution of sample *means*, not to the raw observations. No amount of data makes a skewed population normal; it makes the sampling distribution of its mean normal.',
+        fix: 'Be precise about which quantity you are claiming is normal. The raw incomes are not; the average of a thousand randomly chosen incomes very nearly is.',
+      },
+      {
+        mistake: 'Using three-sigma alerts on heavy-tailed metrics',
+        why: 'The 0.27% figure is a property of the normal distribution. For heavy-tailed data, four- and five-sigma events occur orders of magnitude more often, so the alert fires constantly and is then ignored.',
+        fix: 'Threshold on empirical percentiles computed from historical data, or use a robust scale such as the median absolute deviation instead of the standard deviation.',
+      },
+      {
+        mistake: 'Fitting the scaler on the full dataset before splitting',
+        why: 'The test set\'s mean and standard deviation leak into the transformation, so held-out performance is optimistically biased and will not reproduce in deployment.',
+        fix: 'Fit on the training split only and apply the stored statistics everywhere else. A scikit-learn `Pipeline` enforces this inside every cross-validation fold automatically.',
+      },
+      {
+        mistake: 'Confusing standardisation with normalisation',
+        why: 'Standardising gives mean 0 and standard deviation 1 but does not change the shape and does not bound the values. Min-max normalisation rescales to [0, 1]. Neither makes a skewed distribution symmetric.',
+        fix: 'Pick the transformation that matches the requirement: z-scores for scale-sensitive algorithms, min-max for bounded inputs, and a power or quantile transform when you genuinely need to change the shape.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Why does the normal distribution appear so often in practice?',
+        answer:
+          'Because of the central limit theorem: when a quantity is the sum or average of many small independent contributions, none of which dominates, its distribution tends towards a normal regardless of what the individual contributions looked like. Height aggregates many genetic and environmental factors, measurement error aggregates many tiny perturbations, and a sample mean aggregates observations, so all three are close to normal. There are two important caveats. The first is that the theorem applies to sums, so quantities that arise multiplicatively — income growth, file sizes, network latency — tend to be log-normal rather than normal, with a long right tail. The second is that the conditions matter: if one contribution can dominate the sum, as in financial returns during a crash, the tails are far heavier than normal and the model understates extreme risk by orders of magnitude. So the honest summary is that the normal distribution is common because addition is common, not because nature prefers bells.',
+        followUp:
+          'A strong answer distinguishes clearly between the raw data being normal and the sampling distribution of the mean being normal, which is the confusion the CLT most often causes.',
+      },
+      {
+        level: 'intermediate',
+        question: 'What is a z-score and why standardise features before training?',
+        answer:
+          'A z-score is (x - mu)/sigma: how many standard deviations a value lies from its mean. It is unit-free, so values measured on entirely different scales become directly comparable. Standardising features matters for three families of algorithm. Distance-based methods such as k-nearest neighbours, k-means and support vector machines compute distances, so an unscaled feature measured in thousands will dominate one measured in units purely because of its scale. Regularised linear models penalise coefficient size, so without scaling the penalty falls unevenly across features. And gradient descent converges much faster on standardised inputs, because the loss surface becomes closer to spherical rather than a long narrow valley. Tree-based models are the exception: they split on thresholds within a single feature at a time, so monotone rescaling changes nothing. Crucially, the mean and standard deviation must be computed on the training split only and then applied to validation, test and production data, or you leak information from the held-out set.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Your latency monitoring alerts at three standard deviations above the rolling mean, and it fires constantly. Diagnose and fix.',
+        answer:
+          'The three-sigma rule assumes normality, where it fires on 0.135% of observations in the upper tail. Latency is not normal: it is right-skewed with a heavy tail produced by retries, cold starts, garbage collection pauses and tail-latency amplification across dependencies. Under such a distribution, values far above three sigma are routine rather than exceptional, so the alert is behaving correctly for a model that does not describe the data. There is a second problem: a rolling mean and rolling standard deviation are themselves not robust, so a genuine incident inflates the standard deviation and desensitises the detector exactly when you need it. The fix is to threshold on empirical quantiles of the historical distribution — alert when the p99 exceeds its own historical p99 by some margin — or to use a robust scale such as the median absolute deviation in place of the standard deviation. Better still, alert on a quantity the business cares about, such as the fraction of requests breaching the service-level objective, which is bounded, interpretable and does not depend on any distributional assumption at all.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Adult heights in a population are approximately normal with mean 170 cm and standard deviation 8 cm. What fraction are taller than 186 cm, and what height marks the 10th percentile?',
+        hint: 'Standardise for the first question. For the second, start from the z-value and reverse the standardisation.',
+        solution:
+          'First question: z = (186 - 170)/8 = 2.0. The empirical rule says 95.45% lie within two standard deviations, so 4.55% lie outside, and by symmetry half of that is above. So about 2.28% are taller than 186 cm — roughly 1 person in 44.\n\nSecond question: the 10th percentile of the standard normal is z = -1.2816. Reversing the standardisation, x = mu + z sigma = 170 + (-1.2816)(8) = 170 - 10.25 = 159.75 cm. So 10% of the population is shorter than about 160 cm.\n\nIn Python: `stats.norm(170, 8).sf(186)` gives 0.02275 and `stats.norm(170, 8).ppf(0.10)` gives 159.75.',
+      },
+      {
+        prompt:
+          'A model scores 0.91 accuracy. Across 50 bootstrap resamples the accuracies have mean 0.905 and standard deviation 0.012. Assuming approximate normality, give the range that should contain about 95% of resample accuracies, and say what this implies about a competing model scoring 0.92.',
+        hint: 'Two standard deviations either side of the mean. Then ask whether the competitor lies inside or outside.',
+        solution:
+          'Two standard deviations is 2 x 0.012 = 0.024, so the interval is 0.905 ± 0.024, giving roughly [0.881, 0.929].\n\nThe competing model at 0.920 lies comfortably inside that range. That means a difference of this size is entirely consistent with resampling noise from the first model alone, so on this evidence you cannot claim the second model is genuinely better. The z-score of the competitor relative to the first model\'s resampling distribution is (0.920 - 0.905)/0.012 = 1.25, which corresponds to a one-sided tail probability of about 10.6% — nowhere near conventional significance.\n\nWhat you would actually do: evaluate both models on the *same* resamples and look at the distribution of the paired difference, which removes the shared variation due to which examples landed in each resample and is far more powerful than comparing two independent intervals.',
+      },
+      {
+        prompt:
+          'Generate right-skewed data, show that the 68-95-99.7 rule fails on it, then apply a log transform and show that the rule holds much better.',
+        hint: 'Log-normal data become normal after taking logs, which is the definition of the family.',
+        language: 'python',
+        starterCode:
+          'import numpy as np\n\nrng = np.random.default_rng(0)\nd = rng.lognormal(mean=3.0, sigma=0.8, size=200_000)\n',
+        solution:
+          'import numpy as np\nrng = np.random.default_rng(0)\nd = rng.lognormal(3.0, 0.8, 200_000)\n\ndef within(x, k):\n    return np.mean(np.abs(x - x.mean()) < k * x.std())\n\nfor k in (1, 2, 3):\n    print(k, round(within(d, k), 4), round(within(np.log(d), k), 4))\n\nRaw data give roughly 0.80, 0.95 and 0.98 within one, two and three standard deviations, against the normal figures of 0.683, 0.954 and 0.997. The one-sigma figure is far too high and the three-sigma figure far too low, which is the classic signature of a right-skewed distribution: too much mass bunched near the mean and too much in the far right tail, with the standard deviation inflated by that tail.\n\nAfter taking logs the figures land at approximately 0.683, 0.954 and 0.997 — the log-normal is defined as the distribution whose logarithm is normal, so this is exact rather than lucky. The practical lesson is that a log transform is the first thing to try on any positive, right-skewed quantity, and it is why so many models are fitted to log-price, log-latency or log-count.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'STAT-010-q1',
+        type: 'numeric',
+        concept: 'z-score',
+        prompt: 'Test scores are normal with mean 500 and standard deviation 100. What is the z-score of a score of 650?',
+        answer: 1.5,
+        tolerance: 0.05,
+        explanation:
+          '(650 - 500)/100 = 1.5. The score sits one and a half standard deviations above the mean, which corresponds to about the 93rd percentile.',
+      },
+      {
+        id: 'STAT-010-q2',
+        type: 'mcq',
+        concept: 'empirical rule',
+        prompt: 'For a normal distribution, roughly what proportion of values lie more than two standard deviations from the mean?',
+        options: ['About 5%', 'About 32%', 'About 0.3%', 'About 50%'],
+        answerIndex: 0,
+        explanation:
+          'About 95.45% lie within two standard deviations, so roughly 4.55% — commonly rounded to 5% — lie outside, split evenly between the two tails at about 2.3% each.',
+      },
+      {
+        id: 'STAT-010-q3',
+        type: 'truefalse',
+        concept: 'CLT misconception',
+        prompt: 'The central limit theorem guarantees that with enough data, your raw observations will be normally distributed.',
+        answer: false,
+        explanation:
+          'It concerns the distribution of sample means, not of raw observations. Incomes stay right-skewed no matter how many you collect; it is the average of many incomes that becomes approximately normal.',
+      },
+      {
+        id: 'STAT-010-q4',
+        type: 'numeric',
+        concept: 'inverting the z-score',
+        prompt:
+          'Latency is normal with mean 250 ms and standard deviation 40 ms. What latency marks the 97.5th percentile? Give your answer in milliseconds.',
+        answer: 328,
+        tolerance: 3,
+        explanation:
+          'The 97.5th percentile of the standard normal is z = 1.96, so x = 250 + 1.96(40) = 328.4 ms. This is the upper end of the familiar two-sigma interval and the same 1.96 that appears in every 95% confidence interval.',
+      },
+      {
+        id: 'STAT-010-q5',
+        type: 'multi',
+        concept: 'when normality fails',
+        prompt: 'Which of these quantities are usually poorly described by a normal distribution? Select all that apply.',
+        options: [
+          'Web request latency',
+          'Household income',
+          'Measurement error from a calibrated instrument',
+          'Daily returns during a financial crisis',
+          'The mean of 1,000 independent draws from a skewed population',
+        ],
+        answerIndices: [0, 1, 3],
+        explanation:
+          'Latency and income are positive and right-skewed; crisis returns are heavy-tailed with extreme events far more common than normal predicts. Instrument error aggregates many tiny independent perturbations and really is close to normal, and the mean of 1,000 draws is normal by the central limit theorem even though the population is not.',
+      },
+      {
+        id: 'STAT-010-q6',
+        type: 'explain',
+        concept: 'normality assumptions',
+        prompt:
+          'A teammate sets an anomaly alert at three standard deviations above a rolling mean of request latency, and it fires dozens of times an hour. Explain what is wrong and propose a better approach.',
+        rubric: [
+          'Identifies that latency is right-skewed and heavy-tailed rather than normal',
+          'Explains that the 0.135% figure is a property of the normal distribution and does not transfer',
+          'Proposes a concrete alternative such as empirical percentiles, a robust scale, or an objective-based alert',
+        ],
+        sampleAnswer:
+          'The three-sigma threshold is derived from the normal distribution, where only 0.135% of observations exceed it. Latency is not normal — it is right-skewed with a long tail produced by retries, cold starts, garbage collection and slow dependencies — so values several standard deviations above the mean are ordinary rather than exceptional, and the alert is doing exactly what it was told on a model that does not fit. There is a second, subtler problem: the rolling mean and rolling standard deviation are themselves not robust, so a real incident inflates the standard deviation and desensitises the detector precisely when it matters. I would replace it with a threshold derived from the empirical distribution — alert when the current p99 exceeds its historical p99 by a chosen margin — or use a robust scale such as the median absolute deviation. The best version alerts on something the business defined, such as the fraction of requests breaching the service-level objective, because that number is bounded, interpretable and free of distributional assumptions.',
+        explanation:
+          'The key insight is that a rule of thumb inherits the assumptions of the distribution it came from, and that latency violates those assumptions in exactly the direction that generates false alarms.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What two parameters define a normal distribution?', back: 'The mean mu (where the centre is) and the standard deviation sigma (how wide it is). Mean, median and mode all coincide.' },
+      { front: 'The 68-95-99.7 rule', back: 'About 68% of values lie within 1 sigma of the mean, 95% within 2, and 99.7% within 3. Exactly: 68.27%, 95.45%, 99.73%.' },
+      { front: 'What is a z-score?', back: 'z = (x - mu)/sigma: how many standard deviations a value lies from the mean. Unit-free, so it makes different scales comparable.' },
+      { front: 'Why does the normal appear so often?', back: 'The central limit theorem: sums and averages of many small independent effects tend to normal regardless of the individual distributions.' },
+      { front: 'Name three quantities that are not normal', back: 'Latency, income and file size — all positive and right-skewed. Financial returns are heavy-tailed. Any bimodal mixture is not normal either.' },
+      { front: 'What z gives a 95% central interval?', back: 'z = 1.96, so mu ± 1.96 sigma. The rounded "2 sigma" gives 95.45% instead of exactly 95%.' },
+    ],
+
+    challenge: {
+      title: 'A normality screening report',
+      brief:
+        'Write a function that takes a numeric array and decides how normal it is. Report the mean, median and their gap; skewness and excess kurtosis; the observed proportions within one, two and three standard deviations against the theoretical 0.683, 0.954 and 0.997; the fraction of a fitted normal\'s probability mass that falls below the observed minimum (which exposes impossible predictions); and a plain-English verdict with a recommendation. Run it on a normal sample, a log-normal sample and a bimodal mixture, and confirm that the verdict differs appropriately in each case.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Observed and theoretical coverage proportions are compared directly for k = 1, 2, 3',
+        'Skewness and excess kurtosis are reported with their normal reference values',
+        'The verdict is derived from the computed diagnostics rather than hard-coded',
+        'The report is demonstrated on at least three samples with genuinely different shapes',
+        'For non-normal data the report suggests a concrete remedy such as a log transform',
+      ],
+      starterCode:
+        'import numpy as np\nfrom scipy import stats\n\ndef normality_report(data: np.ndarray, name: str = "") -> None:\n    """Diagnose how well a normal distribution describes this data."""\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach the normal distribution to someone who knows about means and standard deviations. Explain why it turns up everywhere, teach the 68-95-99.7 rule and z-scores, and finish by warning them about the data that is not normal.',
+      mustCover: [
+        'The shape, and that exactly two parameters determine it completely',
+        'Why it appears so often: sums of many small independent effects',
+        'The 68-95-99.7 rule and what a z-score means',
+        'That many real quantities — latency, income, file size — are not normal, and what goes wrong if you assume they are',
+      ],
+      bonusSignals: [
+        'uses the Galton board or another concrete mechanism for the bell shape',
+        'converts a tail probability into an operational frequency such as "once in 370"',
+        'mentions the log transform for positive skewed data',
+      ],
+      sampleExplanation:
+        'Measure ten thousand adult heights and plot them and you get a hump in the middle falling away symmetrically on both sides. Measure the errors of a good instrument and you get the same shape. The reason is worth understanding, because it is not a coincidence. Picture a board of pegs with a ball dropped from the top, bouncing left or right at each peg. To land at the far left it must go left every single time, which almost never happens; to land in the middle it needs roughly equal numbers of each, and there are an enormous number of ways to do that. Drop a thousand balls and you get a bell, every time. Anything that is the sum of many small independent nudges behaves like that ball, and a great many quantities are. The shape is pinned down by exactly two numbers: where the middle is, and how wide the spread is. Once you know those, you know everything, and the most useful consequence is a rule you can do in your head. About two thirds of values lie within one standard deviation of the middle, about ninety-five percent within two, and about ninety-nine point seven percent within three. So if latency averages two hundred and fifty milliseconds with a spread of forty, then three hundred and thirty is two standard deviations out and roughly two percent of requests are slower than that. Converting any value to "how many standard deviations from the middle" is called a z-score, and it is what lets you compare a test score out of eight hundred with one out of thirty. Now the warning. Plenty of real data is not shaped like this at all. Anything that cannot go below zero and occasionally goes very high — latency, income, file sizes — has a long tail on the right, and if you force a bell curve onto it you will predict negative values and badly underestimate how often the extremes happen. The first thing to try with such data is taking logarithms, which very often turns the long tail into a respectable bell.',
+    },
+  },
+
+  {
+    id: 'STAT-011',
+    domain: 'STAT',
+    module: 'Distributions',
+    topic: 'Common distribution families',
+    title: 'Binomial, Poisson and Other Useful Distributions',
+    slug: 'binomial-poisson-distributions',
+    difficulty: 3,
+    estimatedMinutes: 35,
+    prerequisites: ['STAT-005'],
+    related: ['STAT-002', 'STAT-006', 'STAT-010'],
+    tags: ['bernoulli', 'binomial', 'poisson', 'uniform', 'exponential', 'generative story'],
+
+    learningObjectives: [
+      'State the generative story behind Bernoulli, binomial, Poisson, uniform and exponential variables',
+      'Choose the right distribution family for a described situation, and justify the choice from its assumptions',
+      'Compute binomial and Poisson probabilities, and know their means and variances',
+      'Explain the relationships between the families, including the Poisson limit and the Poisson-exponential pairing',
+    ],
+
+    terminology: [
+      {
+        term: 'Bernoulli',
+        definition:
+          'A single trial with two outcomes, coded 1 with probability p and 0 with probability 1 - p. Its mean is p and its variance p(1 - p).',
+        simple: 'One yes-or-no event.',
+      },
+      {
+        term: 'Binomial',
+        definition:
+          'The number of successes in n independent Bernoulli trials with a constant success probability p. Its mean is np and its variance np(1 - p).',
+        simple: 'How many times something happened out of a fixed number of tries.',
+      },
+      {
+        term: 'Poisson',
+        definition:
+          'The count of events in a fixed interval when events occur independently at a constant average rate. Its mean and variance are both equal to lambda.',
+        simple: 'How many rare events happened in a window of time, when there is no fixed number of tries.',
+      },
+      {
+        term: 'Uniform',
+        definition:
+          'Every value in a range is equally likely. Discrete for a fair die, continuous on an interval with constant density 1/(b - a).',
+        simple: 'Anything in this range is as likely as anything else.',
+      },
+      {
+        term: 'Exponential',
+        definition:
+          'The waiting time until the next event in a Poisson process. It is memoryless: the distribution of remaining wait does not depend on how long you have already waited.',
+        simple: 'How long until the next event, when events arrive at a steady random rate.',
+      },
+      {
+        term: 'Generative story',
+        definition:
+          'The mechanism a distribution assumes produced the data. Choosing a distribution means asserting that its story matches your situation.',
+        simple: 'The description of how the numbers came to be.',
+      },
+    ],
+
+    simpleExplanation:
+      'Distributions are not arbitrary formulas to memorise. Each one is the answer to a specific question about a specific kind of random process, and if you learn the question you never need to memorise the formula. Does something either happen or not, once? That is a Bernoulli. Do you repeat that fixed number of times and count the successes? Binomial. Do events instead trickle in at some average rate with no fixed number of attempts — emails arriving, servers failing, customers walking in — and you count how many arrived in an hour? Poisson. Are you waiting for the next one of those to arrive? Exponential. Is every value in a range equally plausible, with no preference at all? Uniform. The skill this unit teaches is reading a situation and recognising which story it matches, because once you name the story the mean, the variance and the probability of any outcome all follow. Getting the story wrong is far more damaging than any arithmetic slip, because a wrong family gives confidently wrong answers.',
+
+    whyItExists:
+      'A handful of random mechanisms — repeated yes-or-no trials, events arriving at a rate, waiting times, complete indifference — generate a large fraction of the randomness anyone actually meets. Naming those mechanisms means you can compute with them immediately instead of re-deriving everything from the sample space each time.',
+
+    analogy: {
+      scenario:
+        'Think of a busy coffee shop. Whether one particular customer orders a pastry is a single yes-or-no event. Out of the next fifty customers, how many order a pastry is a counting question with a fixed number of tries. How many customers walk through the door between nine and ten is a different counting question entirely, because there is no fixed number of tries — people simply arrive at some rate. How long the barista waits for the next customer is a waiting-time question. And if a customer picks a table entirely at random with no preference, the table they choose is uniform.',
+      mapping: [
+        { from: 'Does this one customer buy a pastry?', to: 'Bernoulli(p)' },
+        { from: 'How many of the next fifty buy one?', to: 'Binomial(n = 50, p)' },
+        { from: 'How many customers arrive between nine and ten?', to: 'Poisson(lambda)' },
+        { from: 'How long until the next customer walks in?', to: 'Exponential(lambda)' },
+        { from: 'Which of the twelve tables do they pick?', to: 'Discrete uniform' },
+      ],
+      bridge:
+        'The distinction between the binomial and the Poisson question is the one that matters most, and the coffee shop makes it concrete: binomial needs a fixed denominator, a known number of trials. "How many of fifty customers bought a pastry" has one; "how many customers arrived" does not, because there is no pool of people who might have arrived and did not. That is exactly the question to ask when choosing between them. The Poisson and the exponential are then two views of the same process — count events in a window, or measure the gap between them — which is why the same lambda appears in both.',
+      limitations:
+        'All these stories assume independence and a constant rate, and a coffee shop honours neither. Arrivals surge at nine and collapse at three, and one person joining a queue makes the next person more likely to walk past. Real count data are therefore usually overdispersed — more variable than Poisson predicts — which is why the negative binomial exists.',
+    },
+
+    visuals: [
+      {
+        kind: 'table',
+        title: 'Five distributions and the question each answers',
+        caption: 'Read the "generative story" column first; the parameters and formulas follow from it.',
+        columns: ['Distribution', 'Generative story', 'Parameters', 'Mean', 'Variance'],
+        rows: [
+          ['Bernoulli', 'One trial, success or failure', 'p', 'p', 'p(1 - p)'],
+          ['Binomial', 'Count of successes in n fixed independent trials', 'n, p', 'np', 'np(1 - p)'],
+          ['Poisson', 'Count of events in an interval at a constant rate', 'lambda', 'lambda', 'lambda'],
+          ['Discrete uniform', 'One of k outcomes, all equally likely', 'k', '(k + 1)/2', '(k^2 - 1)/12'],
+          ['Continuous uniform', 'Any value in [a, b], all equally likely', 'a, b', '(a + b)/2', '(b - a)^2/12'],
+          ['Exponential', 'Waiting time to the next Poisson event', 'lambda', '1/lambda', '1/lambda^2'],
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'Choosing a distribution from the situation',
+        caption: 'Four questions in order. The second one is where most mistakes happen.',
+        branching: true,
+        steps: [
+          { label: 'Is the outcome a count or a measurement?', detail: 'Counts go to the discrete families; continuous measurements to uniform, exponential or normal.' },
+          { label: 'For a count: is there a fixed number of trials?', detail: 'Yes means binomial. No — events just arrive — means Poisson.' },
+          { label: 'For a measurement: are you timing a gap between events?', detail: 'If yes, exponential. If every value is equally plausible, uniform.' },
+          { label: 'Is the quantity a sum or average of many small effects?', detail: 'If so, reach for the normal regardless of the underlying mechanism.' },
+          { label: 'Check the assumptions before you commit', detail: 'Independence, constant p or constant rate. If the variance far exceeds the mean, Poisson is already wrong.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Binomial versus Poisson',
+        caption: 'They converge when n is large and p is small, but the questions they answer are different.',
+        left: {
+          heading: 'Binomial(n, p)',
+          points: [
+            'A fixed, known number of trials n',
+            'Every trial has the same success probability p',
+            'The count is bounded above by n',
+            'Variance np(1 - p) is always less than the mean np',
+            'Example: how many of 1,000 emails were opened',
+          ],
+        },
+        right: {
+          heading: 'Poisson(lambda)',
+          points: [
+            'No fixed number of trials — events simply occur',
+            'A constant average rate over the interval',
+            'The count is unbounded, though large values are vanishingly rare',
+            'Variance equals the mean exactly, which is a testable claim',
+            'Example: how many support tickets arrived today',
+          ],
+        },
+      },
+      {
+        kind: 'timeline',
+        title: 'The Poisson process, seen two ways',
+        caption: 'One mechanism, two questions, two distributions sharing the same rate parameter.',
+        events: [
+          { when: 'Events arrive at random along a timeline', what: 'A Poisson process with rate lambda events per unit time' },
+          { when: 'Count events in a fixed window', what: 'That count is Poisson(lambda x window length)' },
+          { when: 'Measure the gap between consecutive events', what: 'That gap is Exponential(lambda), with mean 1/lambda' },
+          { when: 'Wait for the k-th event', what: 'That total wait is Gamma(k, lambda), the sum of k exponentials' },
+          { when: 'Ask how long you still have to wait', what: 'Exactly the same distribution as when you started — the memoryless property' },
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Compare the families side by side',
+        caption: 'Switch between binomial, Poisson, uniform and exponential, and watch the binomial converge on the Poisson as n grows and p shrinks with np held fixed.',
+        widget: 'distribution-explorer',
+      },
+    ],
+
+    formalDefinition:
+      'A Bernoulli(p) variable takes the value 1 with probability p and 0 otherwise. A Binomial(n, p) variable is the sum of n independent Bernoulli(p) variables, with PMF equal to n-choose-k times p to the k times (1 - p) to the n - k. A Poisson(lambda) variable has PMF e to the minus lambda times lambda to the k over k factorial for non-negative integers k, and arises as the limit of Binomial(n, lambda/n) as n tends to infinity. A continuous Uniform(a, b) variable has constant density 1/(b - a) on [a, b]. An Exponential(lambda) variable has density lambda e to the minus lambda x for x at least 0, is the inter-arrival time of a Poisson process with rate lambda, and is the unique continuous memoryless distribution.',
+
+    math: {
+      intuition:
+        'Each formula is just its story written down. The binomial PMF counts the ways to arrange k successes among n trials and multiplies by the probability of any one such arrangement. The Poisson PMF is what the binomial becomes when you slice the interval into more and more trials each less and less likely, holding the expected count fixed. The exponential density comes straight from asking for the probability that no Poisson event has yet occurred. If you can retell the story, you can reconstruct the formula.',
+      formulas: [
+        {
+          latex: 'P(X = k) = \\binom{n}{k} p^k (1-p)^{n-k}, \\qquad k = 0, 1, \\ldots, n',
+          name: 'Binomial PMF',
+          meaning:
+            'The number of ways to choose which k of the n trials succeeded, times the probability of any one such pattern.',
+          variables: [
+            { symbol: 'n', meaning: 'the fixed number of independent trials' },
+            { symbol: 'k', meaning: 'the number of successes being asked about' },
+            { symbol: 'p', meaning: 'the probability of success on a single trial, constant across trials' },
+            { symbol: '\\binom{n}{k}', meaning: 'the binomial coefficient: how many distinct arrangements of k successes among n trials exist' },
+            { symbol: 'p^k(1-p)^{n-k}', meaning: 'the probability of one specific arrangement, by the multiplication rule for independent events' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: 'E[X] = np, \\qquad \\operatorname{Var}(X) = np(1-p)',
+          name: 'Binomial mean and variance',
+          meaning:
+            'Because the binomial is a sum of n independent Bernoulli variables, its mean and variance are n times the Bernoulli values.',
+          variables: [
+            { symbol: 'np', meaning: 'the expected number of successes' },
+            { symbol: 'np(1-p)', meaning: 'the variance, maximised at p = 0.5 and zero when p is 0 or 1' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: 'P(X = k) = \\frac{e^{-\\lambda}\\lambda^{k}}{k!}, \\qquad k = 0, 1, 2, \\ldots',
+          name: 'Poisson PMF',
+          meaning:
+            'The probability of exactly k events in an interval when events occur independently at an average rate of lambda per interval.',
+          variables: [
+            { symbol: '\\lambda', meaning: 'the expected number of events in the interval; it is both the mean and the variance' },
+            { symbol: 'k', meaning: 'the observed count, any non-negative integer with no upper bound' },
+            { symbol: 'k!', meaning: 'k factorial, which divides out the orderings of indistinguishable events' },
+            { symbol: 'e^{-\\lambda}', meaning: 'the normalising factor; note that it alone gives P(X = 0)' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: '\\operatorname{Binomial}(n, p) \;\\xrightarrow[\;np \\to \\lambda\;]{n \\to \\infty}\; \\operatorname{Poisson}(\\lambda)',
+          name: 'Poisson limit theorem',
+          meaning:
+            'When trials are many and each success is rare, the binomial becomes the Poisson. This is why the Poisson is called the law of rare events.',
+          variables: [
+            { symbol: 'n \\to \\infty', meaning: 'the number of trials grows without bound' },
+            { symbol: 'np \\to \\lambda', meaning: 'the expected count is held fixed while p shrinks like lambda/n' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: 'f(x) = \\lambda e^{-\\lambda x} \;(x \\ge 0), \\qquad F(x) = 1 - e^{-\\lambda x}, \\qquad E[X] = \\tfrac{1}{\\lambda}',
+          name: 'Exponential density, CDF and mean',
+          meaning:
+            'The waiting time to the next Poisson event. The CDF is simply one minus the probability that no event has occurred yet.',
+          variables: [
+            { symbol: '\\lambda', meaning: 'the event rate — events per unit time' },
+            { symbol: '1/\\lambda', meaning: 'the mean waiting time; a rate of 2 per minute gives an average wait of half a minute' },
+            { symbol: 'e^{-\\lambda x}', meaning: 'the probability of waiting longer than x, which is the Poisson probability of zero events in [0, x]' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: 'P(X > s + t \\mid X > s) = P(X > t)',
+          name: 'The memoryless property',
+          meaning:
+            'Having already waited s makes no difference: the remaining wait has the same distribution as a fresh one. The exponential is the only continuous distribution with this property.',
+          variables: [
+            { symbol: 's', meaning: 'the time already waited' },
+            { symbol: 't', meaning: 'the additional time being asked about' },
+          ],
+          category: 'probability',
+        },
+      ],
+      derivation: [
+        'Where does the Poisson come from? Take an interval and chop it into n tiny slices.',
+        'Assume at most one event can occur per slice, with probability p = lambda/n, independently across slices.',
+        'The count of events is then Binomial(n, lambda/n), whose expected value is n times lambda/n, which equals lambda for every n.',
+        'Write out the binomial PMF and let n go to infinity with lambda fixed.',
+        'The binomial coefficient times p^k tends to lambda^k / k!, and (1 - lambda/n)^(n-k) tends to e^(-lambda).',
+        'Multiplying gives e^(-lambda) lambda^k / k!, which is the Poisson PMF.',
+        'The exponential then follows immediately: the probability of waiting longer than x is the probability of zero events in a window of length x, which is e^(-lambda x). So the CDF is 1 - e^(-lambda x), and differentiating gives the density.',
+      ],
+    },
+
+    workedExample: {
+      title: 'One dataset, three families: opens, tickets and waiting times',
+      setup:
+        'A product team has three questions. An email campaign goes to 10 recipients who each open independently with probability 0.3 — what is the chance exactly 3 open it? Support tickets arrive at an average of 2 per hour — what is the chance of none in the next hour, and of exactly 3? And given that rate, how long should the on-call engineer expect to wait, and what is the chance of a quiet hour?',
+      steps: [
+        {
+          label: 'Identify the first family',
+          detail: 'A fixed number of independent trials, each with the same success probability, and we count successes. That is a binomial.',
+          latex: 'X \\sim \\operatorname{Binomial}(n = 10,\; p = 0.3)',
+        },
+        {
+          label: 'Compute the binomial probability',
+          detail: 'There are 120 ways to choose which three recipients opened it, and each such pattern has probability 0.3 cubed times 0.7 to the seventh.',
+          latex: 'P(X = 3) = \\binom{10}{3}(0.3)^3(0.7)^7 = 120 \\times 0.027 \\times 0.082354 \\approx 0.2668',
+        },
+        {
+          label: 'Check the mean and variance',
+          detail: 'The expected number of opens is 3, and the variance is less than the mean — a signature that distinguishes binomial from Poisson.',
+          latex: 'E[X] = 10(0.3) = 3, \\qquad \\operatorname{Var}(X) = 10(0.3)(0.7) = 2.1',
+        },
+        {
+          label: 'Identify the second family',
+          detail:
+            'There is no fixed number of trials here: tickets simply arrive. There is no pool of tickets that could have been filed and were not. That is a Poisson.',
+          latex: 'Y \\sim \\operatorname{Poisson}(\\lambda = 2 \\text{ per hour})',
+        },
+        {
+          label: 'Compute two Poisson probabilities',
+          detail: 'For k = 0 the formula collapses to e to the minus lambda. For k = 3 include the lambda cubed over 3 factorial factor.',
+          latex: 'P(Y = 0) = e^{-2} \\approx 0.1353, \\qquad P(Y = 3) = \\frac{e^{-2} 2^3}{3!} = \\frac{0.1353 \\times 8}{6} \\approx 0.1804',
+        },
+        {
+          label: 'Switch to the waiting-time view',
+          detail: 'The same process, asked about gaps rather than counts, gives an exponential with the same rate.',
+          latex: 'T \\sim \\operatorname{Exponential}(\\lambda = 2), \\qquad E[T] = \\tfrac{1}{2} \\text{ hour} = 30 \\text{ minutes}',
+        },
+        {
+          label: 'Confirm the two views agree',
+          detail:
+            'The chance of waiting more than one hour for the next ticket must equal the chance of zero tickets in that hour — and it does, exactly.',
+          latex: 'P(T > 1) = e^{-2 \\times 1} = 0.1353 = P(Y = 0)',
+        },
+        {
+          label: 'Apply the memoryless property',
+          detail:
+            'If the engineer has already waited 45 quiet minutes, the expected further wait is still 30 minutes, not 30 minus 45. The process does not accumulate pressure.',
+          latex: 'P(T > 1.75 \\mid T > 0.75) = P(T > 1) = 0.1353',
+        },
+        {
+          label: 'Sanity-check the Poisson assumption',
+          detail:
+            'Poisson insists that the variance of the hourly counts equals the mean. If the team measures a mean of 2 and a variance of 9, arrivals are overdispersed — bursty, probably correlated — and a negative binomial is the honest model.',
+          latex: '\\text{Poisson requires } \\operatorname{Var}(Y) = E[Y] = \\lambda',
+        },
+      ],
+      conclusion:
+        'P(exactly 3 opens) = 0.267, P(no tickets in an hour) = 0.135, P(exactly 3 tickets) = 0.180, and the expected wait between tickets is 30 minutes. Two things are worth keeping. The first is the choosing rule: a fixed denominator means binomial, no denominator means Poisson. The second is the consistency check — P(wait exceeds one hour) and P(zero events in one hour) came out to the same 0.1353 because they are literally the same event, described from two directions.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'All five families through one SciPy interface',
+        runnable: true,
+        code: `from scipy import stats
+
+binom = stats.binom(n=10, p=0.3)
+pois = stats.poisson(mu=2)
+unif = stats.uniform(loc=0, scale=10)
+expo = stats.expon(scale=1 / 2)        # scale = 1/lambda
+bern = stats.bernoulli(p=0.3)
+
+print(f"Bernoulli  P(X=1)   = {bern.pmf(1):.4f}   mean={bern.mean():.3f} var={bern.var():.3f}")
+print(f"Binomial   P(X=3)   = {binom.pmf(3):.4f}   mean={binom.mean():.3f} var={binom.var():.3f}")
+print(f"Poisson    P(X=3)   = {pois.pmf(3):.4f}   mean={pois.mean():.3f} var={pois.var():.3f}")
+print(f"Uniform    P(2<X<5) = {unif.cdf(5) - unif.cdf(2):.4f}   mean={unif.mean():.3f} var={unif.var():.3f}")
+print(f"Exponential P(T>1)  = {expo.sf(1):.4f}   mean={expo.mean():.3f} var={expo.var():.3f}")`,
+        output: `Bernoulli  P(X=1)   = 0.3000   mean=0.300 var=0.210
+Binomial   P(X=3)   = 0.2668   mean=3.000 var=2.100
+Poisson    P(X=3)   = 0.1804   mean=2.000 var=2.000
+Uniform    P(2<X<5) = 0.3000   mean=5.000 var=8.333
+Exponential P(T>1)  = 0.1353   mean=0.500 var=0.500`,
+        explanation:
+          'Two details to note. First, SciPy parameterises the exponential by `scale`, which is the mean 1/lambda, not by the rate — getting this backwards is the single most common bug when using it. Second, look at the Poisson row: mean and variance are both exactly 2. That equality is a strong, testable claim about your data, and when real counts violate it the Poisson model is wrong no matter how well it fits the mean.',
+      },
+      {
+        language: 'python',
+        title: 'Watching the binomial become a Poisson',
+        runnable: true,
+        code: `from scipy import stats
+
+lam = 3.0
+print("      n        p    P(X=2) binomial   Poisson")
+for n in [10, 50, 500, 5000]:
+    p = lam / n
+    b = stats.binom(n, p).pmf(2)
+    print(f"{n:>7}  {p:.5f}          {b:.6f}  {stats.poisson(lam).pmf(2):.6f}")`,
+        output: `      n        p    P(X=2) binomial   Poisson
+     10  0.30000          0.233474  0.224042
+     50  0.06000          0.226054  0.224042
+    500  0.00600          0.224243  0.224042
+   5000  0.00060          0.224062  0.224042`,
+        explanation:
+          'Holding np fixed at 3 while n grows and p shrinks, the binomial converges on the Poisson, matching to four decimal places by n = 500. This is the Poisson limit theorem, and it is why the Poisson is a good model for rare events in large populations: radioactive decays, typographical errors per page, or server failures across a fleet. It is also a practical shortcut, since the Poisson has one parameter instead of two and is far cheaper to evaluate for large n.',
+      },
+      {
+        language: 'python',
+        title: 'Overdispersion: when Poisson is the wrong story',
+        runnable: true,
+        code: `import numpy as np
+
+rng = np.random.default_rng(0)
+
+# Story A: a genuine constant-rate process.
+steady = rng.poisson(lam=5.0, size=20_000)
+
+# Story B: the rate itself varies hour to hour (bursty traffic).
+varying_rate = rng.gamma(shape=1.0, scale=5.0, size=20_000)
+bursty = rng.poisson(varying_rate)
+
+for name, d in [("steady ", steady), ("bursty ", bursty)]:
+    print(f"{name}: mean={d.mean():.3f}  var={d.var():.3f}  "
+          f"var/mean={d.var() / d.mean():.2f}  P(X=0)={np.mean(d == 0):.4f}")`,
+        output: `steady : mean=5.001  var=4.980  var/mean=1.00  P(X=0)=0.0067
+bursty : mean=5.005  var=29.799  var/mean=5.95  P(X=0)=0.1669`,
+        explanation:
+          'Both series average five events, so any model fitted to the mean alone would look fine. But the bursty series has six times the variance and produces an empty interval 17% of the time against the Poisson prediction of 0.67%. The variance-to-mean ratio, sometimes called the dispersion index, is the diagnostic: it should be about 1 for a genuine Poisson. When it is far above 1, the rate itself is varying and a negative binomial — which is exactly this gamma-mixed Poisson — is the right model. Fitting a Poisson to overdispersed counts produces confidence intervals that are far too narrow and p-values that are far too small.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'A/B test conversion counts',
+        usage:
+          'The number of conversions among n visitors in a variant is binomial with a fixed n and unknown p. Every two-proportion test, and every confidence interval for a conversion rate, is built on that model.',
+      },
+      {
+        context: 'Capacity planning for a service',
+        usage:
+          'Request arrivals are modelled as a Poisson process so that queueing theory applies: the count in a window is Poisson and the gap between requests is exponential. The entire M/M/1 queue analysis rests on this pairing.',
+      },
+      {
+        context: 'Dropout and random masking in neural networks',
+        usage:
+          'Dropout multiplies each activation by an independent Bernoulli variable, so the number of surviving units in a layer is binomial. The same mechanism underlies random feature masking in tree ensembles.',
+      },
+      {
+        context: 'Modelling rare failures',
+        usage:
+          'Hardware failures across a large fleet are Poisson to a good approximation: many machines, each with a tiny independent failure probability — precisely the binomial-to-Poisson limit. Overdispersion then reveals correlated failures such as a bad batch or a shared rack.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'SciPy', role: '`stats.binom`, `stats.poisson`, `stats.expon`, `stats.uniform` and `stats.bernoulli` share one interface for pmf, cdf, ppf and rvs.' },
+      { tool: 'NumPy', role: '`rng.binomial`, `rng.poisson`, `rng.exponential` and `rng.uniform` for fast sampling inside simulations.' },
+      { tool: 'statsmodels', role: '`GLM` with a Poisson or negative binomial family fits count regressions and reports a dispersion diagnostic.' },
+      { tool: 'PyTorch', role: '`torch.distributions.Bernoulli` and `Categorical` underlie sampling in variational and reinforcement learning models.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Using a binomial when there is no fixed number of trials',
+        why: 'The binomial requires a known n. "How many customers arrived today" has no denominator, because there is no defined set of people who might have arrived and did not.',
+        fix: 'Ask: can I name the n and point at the failures? If not, you want a Poisson. If yes, binomial.',
+      },
+      {
+        mistake: 'Assuming Poisson without checking the variance',
+        why: 'The Poisson insists the variance equals the mean. Real counts are usually overdispersed because the rate varies over time, so intervals come out far too narrow and significance is overstated.',
+        fix: 'Compute the variance-to-mean ratio. If it is materially above 1, use a negative binomial or a quasi-Poisson model that estimates the dispersion.',
+      },
+      {
+        mistake: 'Confusing the exponential rate with its scale',
+        why: 'SciPy\'s `expon` takes `scale = 1/lambda`, while NumPy\'s `rng.exponential` also takes a scale. Passing the rate where the mean is expected inverts the distribution silently.',
+        fix: 'Always check the mean of the object you constructed: `stats.expon(scale=1/2).mean()` should return 0.5 for a rate of 2 per unit time.',
+      },
+      {
+        mistake: 'Believing a long wait makes the next event sooner',
+        why: 'The exponential is memoryless, so having waited 45 minutes tells you nothing about the remaining wait. Expecting events to be "due" is the gambler\'s fallacy in continuous time.',
+        fix: 'Remember that P(T > s + t given T > s) = P(T > t) exactly. If your process genuinely ages — as machine wear does — use a Weibull or gamma distribution instead.',
+      },
+      {
+        mistake: 'Applying binomial assumptions to correlated trials',
+        why: 'The binomial requires independent trials with a constant p. Email opens within one household, or clicks within one session, are correlated, so the true variance exceeds np(1 - p).',
+        fix: 'Define the trial at the level where independence is plausible — per household or per session rather than per event — or use a model that accounts for clustering.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'When would you model something as binomial rather than Poisson?',
+        answer:
+          'Binomial when there is a fixed, known number of independent trials each with the same success probability, and you count successes. Poisson when events simply occur over an interval at some average rate, with no denominator to speak of. The decisive test is whether you can point at the failures: "how many of 1,000 emails were opened" has 1,000 trials and identifiable non-openers, so it is binomial; "how many support tickets arrived today" has no set of tickets that could have been filed and were not, so it is Poisson. They converge when n is large and p is small with np fixed, which is the Poisson limit theorem, so for rare events in large populations either gives nearly the same numbers and the Poisson is simpler. The assumptions differ in a checkable way too: the binomial has variance np(1-p), which is always less than its mean, while the Poisson has variance exactly equal to its mean. If observed counts have variance well above the mean, both are wrong and you want a negative binomial.',
+        followUp:
+          'A strong answer volunteers the variance-to-mean diagnostic and names overdispersion as the common real-world failure of the Poisson assumption.',
+      },
+      {
+        level: 'intermediate',
+        question: 'What does it mean for the exponential distribution to be memoryless, and why does it matter?',
+        answer:
+          'It means P(T > s + t given T > s) equals P(T > t): having already waited s units makes no difference whatsoever to the distribution of the remaining wait. The exponential is the only continuous distribution with this property, and the geometric is its discrete counterpart. It matters in two directions. Where it holds, it simplifies analysis enormously — queueing theory, Markov chains and reliability models are tractable largely because exponential holding times let you forget the past — and it means an engineer who has waited 45 quiet minutes should still expect the same average wait as at the start. Where it does not hold, assuming it is dangerous: mechanical components wear out, so failure hazard increases with age, and a memoryless model will badly underestimate failures in older equipment. The usual fix is a Weibull distribution, whose shape parameter lets the hazard rate rise or fall with age, with the exponential as the special case where it is constant.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'You fit a Poisson regression to daily support ticket counts and the confidence intervals look implausibly narrow. What would you check?',
+        answer:
+          'Overdispersion, almost certainly. The Poisson model constrains the variance to equal the mean, so if the true counts are more variable than that, the standard errors are computed from a variance that is too small and every interval comes out too tight while p-values come out too small. The first check is the dispersion statistic — the Pearson chi-squared divided by the residual degrees of freedom — which should be near 1 and will be well above it if the model is misspecified; a quick version is the raw variance-to-mean ratio of the counts. The usual causes are a rate that varies with something not in the model, such as day of week, marketing pushes or incidents, and clustering, where one root cause produces a burst of tickets that are not independent events. The remedies in order of preference are: add the missing covariates, since unexplained heterogeneity is often just an omitted variable; switch to a negative binomial, which is a gamma-mixed Poisson with an explicit dispersion parameter; or use quasi-Poisson or robust sandwich standard errors, which keep the Poisson mean model and simply inflate the standard errors. I would also check for excess zeros, since a zero-inflated model is a different fix for a different problem.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A model has 92% accuracy. In a batch of 20 independent predictions, what is the probability that exactly 2 are wrong, and what is the expected number of errors?',
+        hint: 'Define success as an error to keep the arithmetic natural, then identify n and p.',
+        solution:
+          'Let X be the number of errors, so X is Binomial(n = 20, p = 0.08).\n\nP(X = 2) = C(20, 2) (0.08)^2 (0.92)^18 = 190 x 0.0064 x 0.2229 = 0.2711.\n\nExpected errors: E[X] = np = 20 x 0.08 = 1.6. Variance: np(1-p) = 20 x 0.08 x 0.92 = 1.472, so the standard deviation is about 1.21.\n\nIn Python: `stats.binom(20, 0.08).pmf(2)` gives 0.2711.\n\nNote the assumption doing the work here: independence. If the 20 predictions come from one user session, or from consecutive frames of one video, the errors will be correlated and the true variance will exceed 1.472, so any interval built on this model will be too narrow.',
+      },
+      {
+        prompt:
+          'A website receives an average of 6 visits per minute. What is the probability of no visits in the next 30 seconds, and what is the expected gap between consecutive visits?',
+        hint: 'Scale the rate to the window you are asking about, then note that the two questions are the same one.',
+        solution:
+          'The rate is 6 per minute, so over a 30-second window lambda = 3.\n\nP(no visits in 30 s) = e^(-3) = 0.0498, just under 5%.\n\nThe gap between consecutive visits is Exponential with rate 6 per minute, so the mean gap is 1/6 of a minute = 10 seconds.\n\nThe consistency check: P(gap > 30 s) = e^(-6 x 0.5) = e^(-3) = 0.0498, which is the same number, because "the next gap exceeds 30 seconds" and "zero visits in the next 30 seconds" are literally the same event.\n\nThe scaling step is the one people get wrong: lambda must always be expressed for the window you are asking about, so halving the window halves lambda.',
+      },
+      {
+        prompt:
+          'Simulate 10,000 hourly ticket counts from a Poisson process with rate 4, then from a process whose rate itself varies. Compute the variance-to-mean ratio for each and explain what it tells you.',
+        hint: 'Draw the varying rate from a gamma distribution and pass the whole array to `rng.poisson`.',
+        language: 'python',
+        starterCode:
+          'import numpy as np\n\nrng = np.random.default_rng(0)\nsteady = rng.poisson(4.0, 10_000)\n',
+        solution:
+          'import numpy as np\nrng = np.random.default_rng(0)\n\nsteady = rng.poisson(4.0, 10_000)\nrates = rng.gamma(shape=1.0, scale=4.0, size=10_000)\nbursty = rng.poisson(rates)\n\nfor name, d in [("steady", steady), ("bursty", bursty)]:\n    print(name, round(d.mean(), 3), round(d.var(), 3), round(d.var() / d.mean(), 2))\n\nThe steady series gives a mean of about 4.0, a variance of about 4.0, and a ratio of about 1.00. The bursty series gives a mean of about 4.0, a variance of about 20, and a ratio of about 5.\n\nThe ratio is the dispersion index, and the Poisson model predicts exactly 1. A ratio far above 1 means the counts are more variable than any Poisson can produce, which happens when the rate itself varies — traffic surges, incidents, day-of-week effects. Fitting a Poisson to such data reproduces the mean correctly and understates the variance badly, so every confidence interval and p-value derived from it is too optimistic. The negative binomial is precisely this gamma-mixed Poisson and is the standard fix.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'STAT-011-q1',
+        type: 'match',
+        concept: 'generative stories',
+        prompt: 'Match each situation to the distribution that models it.',
+        pairs: [
+          { left: 'How many of 100 emails get opened', right: 'Binomial' },
+          { left: 'How many customers arrive in an hour', right: 'Poisson' },
+          { left: 'How long until the next arrival', right: 'Exponential' },
+          { left: 'Whether one visitor converts', right: 'Bernoulli' },
+          { left: 'A value picked at random from a range with no preference', right: 'Uniform' },
+        ],
+        explanation:
+          'Each family answers a different question about a different mechanism. Fixed trials with a countable denominator means binomial; events arriving at a rate means Poisson; gaps between those events means exponential.',
+      },
+      {
+        id: 'STAT-011-q2',
+        type: 'numeric',
+        concept: 'binomial',
+        prompt: 'X is Binomial(n = 10, p = 0.3). What is E[X]?',
+        answer: 3,
+        tolerance: 0.05,
+        explanation:
+          'E[X] = np = 10 x 0.3 = 3. The variance is np(1 - p) = 2.1, which is always smaller than the mean for a binomial — a useful way to distinguish it from a Poisson.',
+      },
+      {
+        id: 'STAT-011-q3',
+        type: 'truefalse',
+        concept: 'poisson variance',
+        prompt: 'For a Poisson distribution, the variance equals the mean.',
+        answer: true,
+        explanation:
+          'Both equal lambda. This is a strong and testable claim: if observed counts have variance much larger than their mean, the data are overdispersed and the Poisson model is wrong.',
+      },
+      {
+        id: 'STAT-011-q4',
+        type: 'mcq',
+        concept: 'memorylessness',
+        prompt:
+          'Buses arrive as a Poisson process averaging one every 10 minutes. You have waited 15 minutes. How much longer should you expect to wait?',
+        options: [
+          '10 minutes — the exponential is memoryless',
+          'Less than 10 minutes, because a bus is overdue',
+          '25 minutes, because the waits add',
+          'It cannot be determined without more information',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The exponential is memoryless: the remaining wait has exactly the same distribution as a fresh one, regardless of how long you have already waited. Expecting the bus to be "due" is the gambler\'s fallacy in continuous time.',
+      },
+      {
+        id: 'STAT-011-q5',
+        type: 'numeric',
+        concept: 'poisson pmf',
+        prompt:
+          'Events arrive at an average of 2 per hour. What is the probability of zero events in the next hour? Give a decimal to three places.',
+        answer: 0.135,
+        tolerance: 0.005,
+        explanation:
+          'P(X = 0) = e^(-lambda) = e^(-2) = 0.1353, since lambda^0 and 0! are both 1. This is also P(the waiting time exceeds one hour) under the corresponding exponential, because they are the same event.',
+      },
+      {
+        id: 'STAT-011-q6',
+        type: 'explain',
+        concept: 'choosing a distribution',
+        prompt:
+          'A colleague models daily signups with a Poisson and finds that quiet days and huge days both happen far more often than the model predicts. Diagnose the problem and suggest a fix.',
+        rubric: [
+          'Identifies overdispersion: the observed variance exceeds the mean, which Poisson forbids',
+          'Explains a plausible mechanism, such as the rate varying with day of week or marketing activity',
+          'Proposes a concrete remedy such as adding covariates or moving to a negative binomial',
+        ],
+        sampleAnswer:
+          'The symptom is too many extreme days in both directions, which is overdispersion: the observed variance is larger than the mean, and the Poisson model forbids that by construction since its variance is fixed equal to lambda. I would first compute the variance-to-mean ratio to confirm it is well above 1. The usual mechanism is that the rate itself is not constant — signups surge after a marketing push or a product launch and collapse at weekends — so the data are a mixture of Poisson distributions with different rates, and a mixture is always more dispersed than any single component. The first fix is to model the variation explicitly by adding day-of-week and campaign covariates in a Poisson regression, because unexplained heterogeneity is very often just an omitted variable. If dispersion persists after that, switch to a negative binomial, which is exactly a gamma-mixed Poisson and has a dispersion parameter to absorb the extra variance. If the problem is specifically an excess of zero days rather than general spread, a zero-inflated model targets that directly. Until this is fixed, every confidence interval from the model is too narrow.',
+        explanation:
+          'The examinable skill is recognising that a distribution encodes a testable claim about variance, and that violating it invalidates the uncertainty estimates even when the fitted mean is fine.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Bernoulli vs binomial', back: 'Bernoulli is one yes-or-no trial with mean p. Binomial is the count of successes in n such trials, with mean np and variance np(1-p).' },
+      { front: 'When do you use a Poisson?', back: 'Counting events in an interval when they occur independently at a constant rate and there is no fixed number of trials. Mean = variance = lambda.' },
+      { front: 'Binomial or Poisson — how do you decide?', back: 'Can you name n and point at the failures? Then binomial. If events simply arrive with no denominator, Poisson.' },
+      { front: 'What is the exponential distribution for?', back: 'The waiting time to the next Poisson event. Mean 1/lambda, and P(T > x) = e^(-lambda x).' },
+      { front: 'What does memoryless mean?', back: 'P(T > s + t | T > s) = P(T > t). Having waited does not change the remaining wait. The exponential is the only continuous distribution with this property.' },
+      { front: 'What is overdispersion?', back: 'Count data whose variance exceeds its mean, which a Poisson cannot produce. Usually a varying rate; fix with covariates or a negative binomial.' },
+      { front: 'Poisson limit theorem', back: 'Binomial(n, lambda/n) tends to Poisson(lambda) as n grows. Many trials, each rare, with a fixed expected count.' },
+    ],
+
+    challenge: {
+      title: 'A distribution-choosing assistant',
+      brief:
+        'Write a function that takes an array of observations and a flag saying whether they are counts or measurements, and recommends a distribution family with a stated reason. For counts it should compare the variance-to-mean ratio against 1 and distinguish binomial-like (ratio below 1), Poisson-like (near 1) and overdispersed (well above 1), and check for excess zeros. For measurements it should test whether the data are non-negative and whether the coefficient of variation is near 1, which is the signature of an exponential. Validate it by generating samples from each family and confirming it recovers the right answer at least four times out of five.',
+      language: 'python',
+      acceptanceCriteria: [
+        'The recommendation is derived from computed statistics, not from the caller stating the family',
+        'The dispersion index is used to separate binomial, Poisson and overdispersed counts',
+        'Every recommendation is accompanied by the numeric evidence that produced it',
+        'The function is validated against simulated data from at least four different families',
+      ],
+      starterCode:
+        'import numpy as np\n\ndef suggest_distribution(data: np.ndarray, kind: str = "count") -> str:\n    """Recommend a distribution family, with the evidence for the recommendation."""\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach the common distribution families to someone who knows what a PMF and a PDF are. Organise it around the generative story behind each one, and make sure they can tell binomial and Poisson apart.',
+      mustCover: [
+        'That each distribution corresponds to a specific mechanism, not an arbitrary formula',
+        'Bernoulli and binomial: fixed trials with a constant success probability',
+        'Poisson: events arriving at a rate with no fixed number of trials, and variance equal to the mean',
+        'Exponential: the waiting time between Poisson events, and memorylessness',
+      ],
+      bonusSignals: [
+        'gives the "can you point at the failures?" test for binomial versus Poisson',
+        'mentions the Poisson limit theorem or overdispersion',
+        'notes that Poisson and exponential are two views of one process',
+      ],
+      sampleExplanation:
+        'These are not formulas to memorise; each one is the answer to a specific question about a specific mechanism. Start with a single yes-or-no event — does this visitor convert? — which is a Bernoulli, described entirely by the probability p. Now repeat it a fixed number of times and count the successes: out of a hundred emails, how many were opened? That is a binomial, and its two parameters are simply how many tries and what the chance is each time. Here is the distinction people miss. Suppose instead you ask how many customers walked into the shop this morning. There is no fixed number of tries — there is no pool of people who might have walked in and did not — so the binomial has nothing to count. What you have instead is events arriving at some average rate, and the count in a window follows a Poisson, described by that single rate. The test I use is: can I name the denominator and point at the failures? If yes, binomial. If no, Poisson. The Poisson comes with a strong claim attached, which is that its variance equals its mean, and that is worth checking against real data, because most real counts are burstier than that. Finally, if you take that same stream of arriving events and ask a different question — how long until the next one? — you get the exponential, with an average wait of one over the rate. The Poisson and the exponential are two views of one process, which is why "no events in the next hour" and "the next gap is longer than an hour" come out to exactly the same number. One last property of the exponential surprises everybody: it is memoryless. If buses average one every ten minutes and you have been waiting fifteen, your expected remaining wait is still ten minutes. Nothing is overdue, because the process does not accumulate pressure.',
+    },
+  },
