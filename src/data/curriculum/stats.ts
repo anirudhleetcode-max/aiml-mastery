@@ -6382,3 +6382,589 @@ bursty : mean=5.005  var=29.799  var/mean=5.95  P(X=0)=0.1669`,
         'These are not formulas to memorise; each one is the answer to a specific question about a specific mechanism. Start with a single yes-or-no event — does this visitor convert? — which is a Bernoulli, described entirely by the probability p. Now repeat it a fixed number of times and count the successes: out of a hundred emails, how many were opened? That is a binomial, and its two parameters are simply how many tries and what the chance is each time. Here is the distinction people miss. Suppose instead you ask how many customers walked into the shop this morning. There is no fixed number of tries — there is no pool of people who might have walked in and did not — so the binomial has nothing to count. What you have instead is events arriving at some average rate, and the count in a window follows a Poisson, described by that single rate. The test I use is: can I name the denominator and point at the failures? If yes, binomial. If no, Poisson. The Poisson comes with a strong claim attached, which is that its variance equals its mean, and that is worth checking against real data, because most real counts are burstier than that. Finally, if you take that same stream of arriving events and ask a different question — how long until the next one? — you get the exponential, with an average wait of one over the rate. The Poisson and the exponential are two views of one process, which is why "no events in the next hour" and "the next gap is longer than an hour" come out to exactly the same number. One last property of the exponential surprises everybody: it is memoryless. If buses average one every ten minutes and you have been waiting fifteen, your expected remaining wait is still ten minutes. Nothing is overdue, because the process does not accumulate pressure.',
     },
   },
+
+  {
+    id: 'STAT-012',
+    domain: 'STAT',
+    module: 'Sampling & Inference',
+    topic: 'Samples and bias',
+    title: 'Sampling and Sampling Bias',
+    slug: 'sampling-and-bias',
+    difficulty: 3,
+    estimatedMinutes: 30,
+    prerequisites: ['STAT-007'],
+    related: ['STAT-001', 'STAT-010'],
+    tags: ['sampling', 'population', 'selection bias', 'survivorship bias', 'stratified', 'train test split'],
+
+    learningObjectives: [
+      'Distinguish a population from a sample, and a parameter from a statistic',
+      'Describe simple random, stratified and cluster sampling, and say when each is appropriate',
+      'Identify selection bias and survivorship bias in a described scenario',
+      'Explain why a train/test split is a sampling problem, and what goes wrong when it is done carelessly',
+    ],
+
+    terminology: [
+      {
+        term: 'Population',
+        definition:
+          'The complete set of units you want to draw a conclusion about. In machine learning it is the distribution the model will actually face in deployment, not the data you happen to hold.',
+        simple: 'Everyone or everything you actually care about.',
+      },
+      {
+        term: 'Sample',
+        definition: 'The subset of the population you actually observe and compute with.',
+        simple: 'The part you managed to measure.',
+      },
+      {
+        term: 'Parameter versus statistic',
+        definition:
+          'A parameter is a fixed, usually unknown number describing the population, written with Greek letters. A statistic is computed from the sample and varies from sample to sample, written with Latin letters.',
+        simple: 'The true value you want (parameter) versus your estimate of it (statistic).',
+      },
+      {
+        term: 'Sampling bias',
+        definition:
+          'A systematic difference between the sample and the population, caused by the way the sample was collected. More data does not fix it.',
+        simple: 'Your sample is the wrong shape, and collecting more of it stays the wrong shape.',
+      },
+      {
+        term: 'Survivorship bias',
+        definition:
+          'Analysing only the units that made it through some filter, so the failures are invisible and the conclusion is drawn from a censored population.',
+        simple: 'Studying the winners and forgetting that the losers are missing.',
+      },
+      {
+        term: 'Stratified sampling',
+        definition:
+          'Dividing the population into strata and sampling within each, guaranteeing that every stratum is represented in proportion to its size (or deliberately over-represented).',
+        simple: 'Split into groups first, then sample from each group.',
+      },
+    ],
+
+    simpleExplanation:
+      'You almost never get to measure everything. You measure some of it and hope the part you measured resembles the whole. Whether it does depends entirely on how you chose the part. If every member of the population had an equal chance of being picked, your sample will look like the population apart from random wobble, and that wobble shrinks as you collect more. But if the way you chose quietly favoured some members over others, your sample is the wrong shape, and here is the crucial part: collecting more of it does not help at all. A poll conducted by telephone in 1936 surveyed millions of people and still called the election wrong, because the people who owned telephones were richer than the people who did not. That is the difference between noise, which more data cures, and bias, which more data only makes more confident. In machine learning this is the whole story of the train/test split: the test set is a sample, and it only tells you what deployment will look like if it was drawn the same way deployment data will be.',
+
+    whyItExists:
+      'Measuring an entire population is almost always impossible or pointless, so every conclusion rests on a sample. Sampling theory exists to say when a sample licenses a claim about the population, and the vocabulary of bias exists because the most expensive errors come from samples that were large, precise and systematically wrong.',
+
+    analogy: {
+      scenario:
+        'During the Second World War, the Statistical Research Group examined returning bombers to decide where to add armour. The damage was concentrated on the wings and fuselage and sparse around the engines, and the obvious recommendation was to armour the places with the most bullet holes. Abraham Wald pointed out the flaw: these were the planes that came back. Aircraft hit in the engines were not in the sample at all, because they were at the bottom of the Channel. The armour belonged exactly where the returning planes showed no damage.',
+      mapping: [
+        { from: 'All bombers that flew the mission', to: 'The population' },
+        { from: 'The bombers that returned', to: 'The sample, selected by a filter correlated with the outcome' },
+        { from: 'Planes downed and never examined', to: 'The missing data that invalidates the naive conclusion' },
+        { from: 'Bullet holes on the wings', to: 'A pattern that is real in the sample and misleading about the population' },
+        { from: "Wald's inversion", to: 'Reasoning about the selection mechanism rather than only about the observed data' },
+      ],
+      bridge:
+        'The mechanism is exactly the one that corrupts machine learning datasets. A credit model trained only on approved applicants never sees how rejected applicants would have performed, so it learns about a population that was filtered by the previous model\'s decisions. A churn model trained on current customers has no data on the ones who already left. In every case the fix is the same as Wald\'s: ask what the selection rule was, and what it made invisible.',
+      limitations:
+        'The bomber story has a clean, knowable selection mechanism. Most real bias is subtler and partly unknowable — you cannot always enumerate who was excluded or why — so in practice you combine reasoning about the mechanism with explicit checks, such as comparing your sample\'s composition against a known population breakdown.',
+    },
+
+    visuals: [
+      {
+        kind: 'compare',
+        title: 'Bias versus variance in sampling',
+        caption: 'The single most important distinction in this unit: only one of these is cured by more data.',
+        left: {
+          heading: 'Sampling variance (noise)',
+          points: [
+            'Random difference between the sample and the population',
+            'Shrinks like one over the square root of n',
+            'Symmetric: a sample is equally likely to be high or low',
+            'Quantified by the standard error and a confidence interval',
+            'More data genuinely fixes it',
+          ],
+        },
+        right: {
+          heading: 'Sampling bias (systematic error)',
+          points: [
+            'Systematic difference caused by the selection mechanism',
+            'Does not shrink at all as n grows',
+            'Directional: consistently wrong the same way',
+            'Invisible in the data — no statistic reveals it',
+            'More data makes you more confidently wrong',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Sampling designs and when to use them',
+        columns: ['Design', 'How it works', 'Use when', 'Main risk'],
+        rows: [
+          ['Simple random', 'Every unit has the same chance of selection', 'You have a complete list and no structure to protect', 'A rare subgroup may be missed entirely'],
+          ['Stratified', 'Split into strata, sample within each', 'Important subgroups must be represented', 'You must know the strata in advance'],
+          ['Cluster', 'Sample whole groups, then measure all within them', 'Reaching individuals is expensive', 'Units within a cluster are correlated, so effective n is smaller'],
+          ['Systematic', 'Take every k-th unit from an ordered list', 'The list is convenient and has no periodicity', 'Hidden periodicity in the list aligns with k'],
+          ['Convenience', 'Take whoever is easiest to reach', 'Almost never, for inference', 'Selection bias of unknown size and direction'],
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'From a question to a defensible sample',
+        caption: 'The first step is the one teams skip, and it is the one that determines whether anything that follows is valid.',
+        steps: [
+          { label: 'Define the target population precisely', detail: 'Who or what must the conclusion apply to? For a model, it is the deployment distribution.' },
+          { label: 'Identify the sampling frame', detail: 'The list you can actually draw from. The gap between frame and population is where bias enters.' },
+          { label: 'Choose a design', detail: 'Simple random unless structure demands stratification or cost demands clustering.' },
+          { label: 'Draw the sample and record non-response', detail: 'Who declined or was unreachable matters as much as who was measured.' },
+          { label: 'Check composition against known benchmarks', detail: 'Compare age, region or class balance against a trusted source, and weight if needed.' },
+        ],
+      },
+      {
+        kind: 'timeline',
+        title: 'Famous sampling failures',
+        caption: 'Each was large, careful and systematically wrong.',
+        events: [
+          { when: '1936', what: 'Literary Digest polls 2.4 million people from car and telephone registers and predicts Landon; Roosevelt wins 46 of 48 states.' },
+          { when: '1948', what: '"Dewey Defeats Truman" — quota sampling let interviewers choose respondents within quotas, introducing their own preferences.' },
+          { when: '1940s', what: "Wald's bomber armour analysis: the returning aircraft were a survivorship-filtered sample." },
+          { when: '2016 onward', what: 'Face recognition systems trained on unrepresentative image sets show large accuracy gaps across skin tone and gender.' },
+          { when: 'Ongoing', what: 'Credit and hiring models trained only on accepted applicants, never observing the counterfactual outcomes of those rejected.' },
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Sampling variability you can watch',
+        caption: 'Flip a biased coin and estimate p from small samples. The estimates scatter widely at n = 10 and tighten at n = 1000 — but if the coin you are flipping is not the coin you care about, no amount of flipping helps.',
+        widget: 'coin-flip-sim',
+      },
+    ],
+
+    formalDefinition:
+      'A population is the set of units about which inference is desired, characterised by parameters such as mu and sigma. A sample is a subset drawn from a sampling frame, and a statistic is any function of the sample used to estimate a parameter. A sampling scheme is unbiased for a statistic if the expectation of that statistic over repeated sampling equals the corresponding population parameter. Simple random sampling gives every subset of a given size equal probability of selection; stratified sampling partitions the population and samples independently within strata, which reduces variance when strata are internally homogeneous. Sampling bias is a non-zero difference between the expectation of the statistic and the parameter that persists as the sample size grows without bound.',
+
+    math: {
+      intuition:
+        'Error in an estimate has two parts that behave completely differently. The random part shrinks predictably as you collect more data, at a rate governed by the square root of the sample size — which is also why quadrupling your data only halves your error. The systematic part does not shrink at all, because it is built into how the sample was chosen. Total error is the combination, and once bias dominates, extra data buys you nothing but false confidence.',
+      formulas: [
+        {
+          latex: '\\operatorname{SE}(\\bar{x}) = \\frac{\\sigma}{\\sqrt{n}}',
+          name: 'Standard error of the mean',
+          meaning:
+            'How much a sample mean typically differs from the population mean purely by chance. It falls with the square root of the sample size.',
+          variables: [
+            { symbol: '\\sigma', meaning: 'the population standard deviation of the individual observations' },
+            { symbol: 'n', meaning: 'the sample size' },
+            { symbol: '\\sqrt{n}', meaning: 'the square root, which is why quadrupling the sample halves the standard error' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\operatorname{Bias}(\\hat{\\theta}) = E[\\hat{\\theta}] - \\theta',
+          name: 'Bias of an estimator',
+          meaning:
+            'The systematic gap between what your estimation procedure gives on average and the truth. Sampling bias makes this non-zero no matter how large n becomes.',
+          variables: [
+            { symbol: '\\hat{\\theta}', meaning: 'the estimate computed from the sample' },
+            { symbol: '\\theta', meaning: 'the true population parameter' },
+            { symbol: 'E[\\hat{\\theta}]', meaning: 'the average of the estimate over many repetitions of the whole sampling procedure' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'E\\bigl[(\\hat{\\theta} - \\theta)^2\\bigr] = \\operatorname{Bias}(\\hat{\\theta})^2 + \\operatorname{Var}(\\hat{\\theta})',
+          name: 'Mean squared error decomposition',
+          meaning:
+            'Total expected squared error splits into a systematic part and a random part. Only the second term falls as the sample grows.',
+          variables: [
+            { symbol: '\\operatorname{Bias}^2', meaning: 'the squared systematic error, which is unaffected by sample size' },
+            { symbol: '\\operatorname{Var}(\\hat{\\theta})', meaning: 'the sampling variance, which falls like 1/n' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'n \;\\approx\; \\left(\\frac{z\\,\\sigma}{E}\\right)^{2}',
+          name: 'Sample size for a target margin of error',
+          meaning:
+            'How many observations you need to estimate a mean to within a chosen margin. Note the square: halving the margin costs four times the data.',
+          variables: [
+            { symbol: 'E', meaning: 'the margin of error you are willing to accept' },
+            { symbol: 'z', meaning: 'the standard normal critical value, 1.96 for 95% confidence' },
+            { symbol: '\\sigma', meaning: 'the population standard deviation, usually estimated from a pilot sample' },
+          ],
+          category: 'statistics',
+        },
+      ],
+      derivation: [
+        'Why does the standard error involve a square root? Write the sample mean as (1/n) times the sum of the observations.',
+        'Each observation is independent with variance sigma squared.',
+        'Variance of a sum of independent variables is the sum of the variances, so the sum has variance n sigma squared.',
+        'Var(aX) = a^2 Var(X), and here a = 1/n, so the sample mean has variance (1/n^2)(n sigma^2) = sigma^2/n.',
+        'Taking the square root gives the standard deviation of the sample mean: sigma over root n.',
+        'The practical consequence is brutal and worth internalising: to halve your uncertainty you need four times the data, and to get one more decimal place you need a hundred times as much.',
+        'None of this argument touches bias, because every step assumed the observations were drawn from the population of interest. If they were not, the expectation itself is wrong and no value of n repairs it.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Estimating model accuracy from a test set that was not random',
+      setup:
+        'A team builds an image classifier and reports 94% accuracy on a held-out test set of 2,000 images. The dataset was assembled by scraping images uploaded between January and March; the model will be deployed year-round on user photos. We will quantify the random error, then reason about the systematic error, and see which one dominates.',
+      steps: [
+        {
+          label: 'Quantify the random error',
+          detail:
+            'Accuracy on n independent test images is a proportion, whose standard error is the square root of p(1-p)/n.',
+          latex: '\\operatorname{SE} = \\sqrt{\\frac{0.94 \\times 0.06}{2000}} = \\sqrt{0.0000282} \\approx 0.0053',
+        },
+        {
+          label: 'Turn it into an interval',
+          detail: 'Roughly two standard errors either side gives the range that random variation alone would produce.',
+          latex: '0.94 \\pm 1.96(0.0053) = [0.9296,\; 0.9504]',
+        },
+        {
+          label: 'Note how small that is',
+          detail:
+            'The random uncertainty is about one percentage point. A team looking only at this would conclude the estimate is precise to within a point.',
+          latex: '\\pm 1.04 \\text{ percentage points}',
+        },
+        {
+          label: 'Now ask what the sample actually represents',
+          detail:
+            'Images from January to March are winter images in the northern hemisphere: different lighting, different clothing, different scenes. The sampling frame is not the deployment population.',
+          latex: '\\text{frame} \\ne \\text{population}',
+        },
+        {
+          label: 'Estimate the systematic error',
+          detail:
+            'Suppose true summer accuracy is 88% and the deployment year is split evenly. The real annual accuracy is the average, 91%, so the test estimate is systematically 3 points too high — three times the entire random uncertainty.',
+          latex: '\\text{true} = \\tfrac{0.94 + 0.88}{2} = 0.91, \\qquad \\text{bias} = +0.03',
+        },
+        {
+          label: 'Ask what more data would do',
+          detail:
+            'Scraping 200,000 winter images instead of 2,000 shrinks the standard error by a factor of ten, to 0.05 percentage points. The 3-point bias is untouched. The interval becomes tighter and stays wrong.',
+          latex: '\\operatorname{SE} \\to 0.00053, \\qquad \\text{bias} \\to 0.03',
+        },
+        {
+          label: 'Fix it by changing the design, not the size',
+          detail:
+            'Stratify by month and sample within each, so every season is represented in proportion to deployment traffic. This costs nothing in sample size and removes the bias entirely.',
+          latex: '\\hat{p}_{\\text{strat}} = \\sum_{h} w_h \\hat{p}_h',
+        },
+      ],
+      conclusion:
+        'The random error was ±1.0 points and the systematic error was +3.0 points, so the headline number was wrong by three times its own stated uncertainty — and the confidence interval gave no hint of it, because a confidence interval only describes sampling variability. The remedy was a change of design rather than a change of scale. Whenever you see a very tight interval around a number that feels too good, the question to ask is not "is n large enough" but "what was excluded".',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Noise shrinks with n; bias does not',
+        runnable: true,
+        code: `import numpy as np
+
+rng = np.random.default_rng(0)
+population = rng.normal(loc=100, scale=15, size=1_000_000)
+truth = population.mean()
+
+print(f"true population mean = {truth:.3f}\\n")
+print("     n   random sample   biased sample (top half only)")
+for n in [100, 1_000, 10_000, 100_000]:
+    fair = rng.choice(population, n, replace=False).mean()
+    upper = population[population > truth]
+    biased = rng.choice(upper, n, replace=False).mean()
+    print(f"{n:>6}   {fair:12.3f}   {biased:21.3f}")`,
+        output: `true population mean = 99.987
+
+     n   random sample   biased sample (top half only)
+   100        100.877                   111.933
+  1000        100.147                   111.981
+ 10000         99.963                   111.966
+100000         99.999                   111.968`,
+        explanation:
+          'The random sample converges on the truth as n grows, exactly as the standard error predicts. The biased sample converges too — but on 111.97, a value that is not the population mean and never will be. This is the single most important idea in the unit: more data reduces variance and does nothing whatsoever to bias. A biased estimate with a huge sample is simply a confidently wrong estimate.',
+      },
+      {
+        language: 'python',
+        title: 'Stratified splitting when a class is rare',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(0)
+n = 2000
+y = (rng.random(n) < 0.02).astype(int)      # 2% positive class
+X = rng.normal(size=(n, 3))
+
+for name, strat in [("random    ", None), ("stratified", y)]:
+    rates = []
+    for seed in range(5):
+        _, _, ytr, yte = train_test_split(
+            X, y, test_size=0.25, random_state=seed, stratify=strat)
+        rates.append(yte.mean())
+    print(f"{name}: test positive rate across 5 splits = "
+          f"{[round(r, 4) for r in rates]}")`,
+        output: `random    : test positive rate across 5 splits = [0.028, 0.014, 0.024, 0.012, 0.022]
+stratified: test positive rate across 5 splits = [0.02, 0.02, 0.02, 0.02, 0.02]`,
+        explanation:
+          'With a 2% positive class, a random 500-row test set contains about 10 positives, and that count swings between 6 and 14 across seeds — so measured recall swings wildly for reasons that have nothing to do with the model. Stratifying pins the class balance in every split, which removes a large source of evaluation noise at no cost. This is why `stratify=y` should be the default for any classification problem with imbalance, and why `StratifiedKFold` exists.',
+      },
+      {
+        language: 'python',
+        title: 'A leaky split: grouped data sampled as if independent',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.model_selection import train_test_split, GroupShuffleSplit
+from sklearn.linear_model import LogisticRegression
+
+rng = np.random.default_rng(0)
+# 200 patients, 10 near-identical scans each.
+patient = np.repeat(np.arange(200), 10)
+signal = rng.normal(size=200)[patient]
+X = (signal + rng.normal(scale=0.05, size=2000)).reshape(-1, 1)
+y = (rng.normal(size=200) + signal > 0).astype(int)[patient]
+
+Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.3, random_state=0)
+naive = LogisticRegression().fit(Xtr, ytr).score(Xte, yte)
+
+gss = GroupShuffleSplit(test_size=0.3, n_splits=1, random_state=0)
+tr, te = next(gss.split(X, y, groups=patient))
+grouped = LogisticRegression().fit(X[tr], y[tr]).score(X[te], y[te])
+
+print(f"row-wise split (leaky)   : {naive:.3f}")
+print(f"patient-wise split (fair): {grouped:.3f}")`,
+        output: `row-wise split (leaky)   : 0.938
+patient-wise split (fair): 0.850`,
+        explanation:
+          'A row-wise split puts scans from the same patient into both training and test, so the model can memorise patients rather than learn the condition, and the reported score is inflated by nine points. Splitting by patient — with `GroupShuffleSplit` or `GroupKFold` — asks the question that deployment will actually ask: how does this perform on a person it has never seen? The same issue arises with multiple sessions per user, multiple frames per video, and time series, where the only honest split is chronological.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'The 1936 Literary Digest poll',
+        usage:
+          'A sample of 2.4 million respondents drawn from car registrations and telephone directories predicted a Landon landslide; Roosevelt won 46 of 48 states. The frame over-represented the wealthy during the Depression. Gallup called it correctly with 50,000 well-chosen respondents.',
+      },
+      {
+        context: 'Facial recognition accuracy gaps',
+        usage:
+          'The 2018 Gender Shades study found error rates up to 34% for darker-skinned women against under 1% for lighter-skinned men, largely because the benchmark training sets were overwhelmingly light-skinned and male. The models were not broken; the sample was.',
+      },
+      {
+        context: 'Credit scoring and the rejected applicants',
+        usage:
+          'A lender only observes repayment for applicants it approved, so the training data is filtered by the previous model\'s decisions. Naively retraining entrenches those decisions, which is why "reject inference" methods and deliberate random approvals exist.',
+      },
+      {
+        context: 'Evaluating on the wrong slice',
+        usage:
+          'A model that is 95% accurate overall can be 60% accurate on a subgroup making up 5% of traffic, and the aggregate metric will never reveal it. Stratified evaluation by subgroup is how that failure gets caught before deployment does.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'scikit-learn', role: '`train_test_split(stratify=y)`, `StratifiedKFold`, `GroupKFold` and `TimeSeriesSplit` encode the four sampling designs evaluation actually needs.' },
+      { tool: 'pandas', role: '`DataFrame.sample` with `weights` for weighted resampling; `groupby().size()` for checking sample composition against a benchmark.' },
+      { tool: 'imbalanced-learn', role: 'Resampling strategies for class imbalance, which change the training distribution deliberately and must never be applied to the test set.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Believing a large sample is automatically a good sample',
+        why: 'Bias does not shrink with n. The Literary Digest surveyed 2.4 million people and got the 1936 election spectacularly wrong, while Gallup succeeded with 50,000 chosen properly.',
+        fix: 'Interrogate the selection mechanism before the sample size. Ask who could not have been selected, and whether that correlates with what you are measuring.',
+      },
+      {
+        mistake: 'Random-splitting grouped or temporal data',
+        why: 'Rows from the same patient, user or session are not independent, so a random split leaks information across the boundary and inflates the score. For time series it lets the model see the future.',
+        fix: 'Use `GroupKFold` when rows share an entity and `TimeSeriesSplit` when order matters. The split must mirror the prediction task you will face in deployment.',
+      },
+      {
+        mistake: 'Applying resampling or scaling before the split',
+        why: 'Oversampling the minority class before splitting puts copies of the same rows in both training and test, so the test score measures memorisation. Fitting a scaler on everything leaks the test distribution.',
+        fix: 'Split first, always. Put every fitted transformation inside a `Pipeline` so it is refitted within each fold automatically.',
+      },
+      {
+        mistake: 'Ignoring non-response',
+        why: 'The people who decline a survey, or the sessions that drop out before the outcome is recorded, are usually systematically different from those who remain. Silently dropping them is survivorship bias.',
+        fix: 'Record and report the response rate. Compare respondents against known population benchmarks and weight, or state explicitly what the missing group might change.',
+      },
+      {
+        mistake: 'Confusing an unrepresentative test set with a hard problem',
+        why: 'When deployment accuracy falls well below test accuracy, the instinct is to blame the model and retrain. Frequently the test set simply did not resemble production traffic.',
+        fix: 'Compare the feature distributions of the test set against a live sample before touching the model. Drift detection exists precisely because this is the more common explanation.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What is sampling bias, and why does collecting more data not fix it?',
+        answer:
+          'Sampling bias is a systematic difference between your sample and the population it is meant to represent, produced by the selection mechanism rather than by chance. Total error decomposes into squared bias plus variance; increasing n reduces the variance term like 1/n but leaves the bias term untouched, so a larger biased sample converges — on the wrong number. The Literary Digest poll of 1936 is the canonical case: 2.4 million responses drawn from car and telephone registers, during the Depression, produced a confident and badly wrong prediction, while Gallup was right with 50,000 respondents chosen to be representative. In machine learning the same pattern appears when a test set is scraped differently from how production data arrives, or when training data is filtered by a previous model\'s decisions. The fix is always a change of design — random or stratified selection, reweighting, or deliberately sampling the excluded group — never a change of scale.',
+        followUp:
+          'A strong answer notes that confidence intervals quantify only the variance term, so a tight interval provides no evidence whatsoever against bias.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'How would you construct a train/test split for a dataset of medical images with multiple scans per patient?',
+        answer:
+          'Split by patient, not by image. If scans from one patient land in both sets, the model can recognise that individual rather than the condition, and the test score measures memorisation — in a simple simulation this inflates accuracy by roughly nine points. I would use `GroupKFold` or `GroupShuffleSplit` with the patient identifier as the group, which guarantees every patient appears in exactly one fold. I would also stratify by the outcome where possible so that class balance is preserved across folds, which matters a great deal when the positive class is rare. Beyond that I would check for other leakage channels that patient grouping does not cover: scanner or site identifiers, since a model can learn to recognise a hospital whose case mix differs; and acquisition date, if practice changed over time, in which case a chronological split is the honest test. The principle throughout is that the split should mirror the deployment question — performance on a patient never seen before, at a site that may also be new.',
+      },
+      {
+        level: 'advanced',
+        question: 'A model performs far worse in production than on the test set. Walk through how you would diagnose it.',
+        answer:
+          'I would work from cheapest to most expensive, and I would assume a data problem before a model problem because that is usually where it is. First, leakage in evaluation: check whether the split respected groups and time, whether any preprocessing was fitted before splitting, and whether any feature is unavailable or computed differently at inference time — a feature built from a field populated after the outcome is the classic case. Second, sampling bias in the test set: compare the feature and label distributions of the test set against a live production sample, per feature, and look at the composition by segment. Third, genuine drift: even a well-built test set goes stale, so I would check whether input distributions have moved since collection and whether the relationship between features and label has changed, which is the harder covariate-shift versus concept-drift distinction. Fourth, serving skew: confirm the production pipeline computes features identically to training, since a units mismatch or a different null-handling rule produces exactly this symptom. Finally, segment the production errors — by user cohort, device, region, time of day — because a large aggregate gap is often one badly served segment rather than uniform degradation. The order matters: the first two are free to check and account for most cases.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A university surveys students about course satisfaction by posting a link in the online portal. 800 respond out of 12,000. Identify two distinct sources of bias and propose a design that addresses each.',
+        hint: 'Think about who reaches the portal, and who bothers to answer once they do.',
+        solution:
+          'Two distinct biases.\n\n1. Coverage bias in the frame. Students who no longer engage with the portal — the disengaged, those who have effectively dropped out, those with poor connectivity — have little chance of ever seeing the link. Their satisfaction is almost certainly lower than average, so they are exactly the people whose absence distorts the result. Fix: use the full enrolment register as the frame and contact a random sample through a channel everyone has, such as registered email or post, with follow-ups.\n\n2. Non-response (self-selection) bias. Among those who see it, people with strong opinions — usually the very satisfied and the very angry — are far more likely to respond than the indifferent middle. A 6.7% response rate means the result describes the opinionated, not the student body. Fix: draw a random sample of a manageable size, pursue it with reminders and a small incentive to raise the response rate, and compare respondents against known enrolment characteristics such as year, faculty and mode of study, reweighting where they differ.\n\nIn addition: stratify by faculty and year so that small programmes are represented, and report the response rate prominently alongside every figure.',
+      },
+      {
+        prompt:
+          'You need to estimate a population mean to within ±2 units with 95% confidence, and a pilot study suggests the standard deviation is about 15. How large a sample do you need? What if you want ±1?',
+        hint: 'Use n = (z sigma / E)^2 and note what happens to n when E halves.',
+        solution:
+          'For E = 2: n = (1.96 x 15 / 2)^2 = (14.7)^2 = 216.1, so 217 observations, rounding up.\n\nFor E = 1: n = (1.96 x 15 / 1)^2 = (29.4)^2 = 864.4, so 865 observations.\n\nHalving the margin of error quadrupled the required sample, because the margin falls with the square root of n. This is the fundamental economics of data collection: the first few hundred observations buy most of the precision you will ever get, and each additional decimal place costs a hundredfold.\n\nTwo caveats. The formula uses the population standard deviation, which the pilot only estimates, so treat the answer as approximate and consider using a t critical value for small pilots. And none of this protects against bias: 865 badly chosen observations give a margin of ±1 around the wrong number.',
+      },
+      {
+        prompt:
+          'Demonstrate empirically that a random split of grouped data inflates measured accuracy relative to a group-aware split.',
+        hint: 'Generate data where rows within a group are nearly identical, then compare `train_test_split` against `GroupShuffleSplit`.',
+        language: 'python',
+        starterCode:
+          'import numpy as np\nfrom sklearn.model_selection import train_test_split, GroupShuffleSplit\nfrom sklearn.linear_model import LogisticRegression\n\nrng = np.random.default_rng(0)\ngroups = np.repeat(np.arange(200), 10)\n',
+        solution:
+          'Generate a per-group latent signal, repeat it across the ten rows of each group with a little noise, and derive the label from the group-level signal so that knowing the group nearly determines the label.\n\nWith a row-wise `train_test_split`, roughly 70% of each group\'s rows land in training and the rest in test, so for every test row there is a near-duplicate in training. The model effectively looks up the answer, and measured accuracy comes out around 0.94.\n\nWith `GroupShuffleSplit(groups=groups)`, every group is wholly in one side of the split, so the model must generalise to unseen groups and accuracy falls to around 0.85.\n\nThe nine-point gap is pure leakage — it exists in the evaluation, not in the model. The honest number is the second one, because in deployment every patient, user or video is a group the model has never seen. The same reasoning applies to k-fold: use `GroupKFold`, and for anything with a time order use `TimeSeriesSplit` so that the model is never trained on the future.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'STAT-012-q1',
+        type: 'truefalse',
+        concept: 'bias vs sample size',
+        prompt: 'Collecting more data will eventually eliminate sampling bias.',
+        answer: false,
+        explanation:
+          'Bias is a property of the selection mechanism, not of the sample size. More data shrinks the variance term and leaves the bias term untouched, producing a tighter interval around the wrong value.',
+      },
+      {
+        id: 'STAT-012-q2',
+        type: 'mcq',
+        concept: 'survivorship bias',
+        prompt:
+          'A study of successful startups finds that 90% had a technical co-founder, and concludes this is the key to success. What is the flaw?',
+        options: [
+          'Failed startups are absent from the sample, so the rate among all startups is unknown',
+          'The sample size is too small to be reliable',
+          'Correlation between the two variables was not computed',
+          'The study should have used a stratified sample of investors',
+        ],
+        answerIndex: 0,
+        explanation:
+          'This is survivorship bias. If 90% of failed startups also had a technical co-founder, the factor carries no information at all. You cannot evaluate a predictor of success by examining only the successes.',
+      },
+      {
+        id: 'STAT-012-q3',
+        type: 'numeric',
+        concept: 'standard error',
+        prompt:
+          'A population has standard deviation 20. What is the standard error of the mean for a sample of 100?',
+        answer: 2,
+        tolerance: 0.05,
+        explanation:
+          'SE = sigma/sqrt(n) = 20/10 = 2. To halve this to 1 you would need 400 observations, because the standard error falls with the square root of the sample size.',
+      },
+      {
+        id: 'STAT-012-q4',
+        type: 'match',
+        concept: 'sampling designs',
+        prompt: 'Match each sampling approach to its defining feature.',
+        pairs: [
+          { left: 'Simple random', right: 'Every unit has an equal chance of selection' },
+          { left: 'Stratified', right: 'The population is split into groups and each is sampled' },
+          { left: 'Cluster', right: 'Whole groups are selected and fully measured' },
+          { left: 'Convenience', right: 'Whoever is easiest to reach is included' },
+        ],
+        explanation:
+          'Stratified sampling guarantees representation of subgroups and reduces variance; cluster sampling saves cost but correlates units within a cluster; convenience sampling is cheap and provides no basis for inference.',
+      },
+      {
+        id: 'STAT-012-q5',
+        type: 'multi',
+        concept: 'splitting data',
+        prompt: 'Which of these would you use to avoid an over-optimistic evaluation? Select all that apply.',
+        options: [
+          'Stratify the split by the target when a class is rare',
+          'Split by patient identifier when there are multiple scans per patient',
+          'Split chronologically for time-series data',
+          'Oversample the minority class before splitting',
+          'Fit the scaler on the full dataset before splitting',
+        ],
+        answerIndices: [0, 1, 2],
+        explanation:
+          'The last two are leakage. Oversampling before splitting places duplicates of the same rows on both sides, and fitting a scaler on everything lets the test distribution influence training. Both must happen after the split, ideally inside a Pipeline.',
+      },
+      {
+        id: 'STAT-012-q6',
+        type: 'explain',
+        concept: 'diagnosing a bad sample',
+        prompt:
+          'A recommendation model tested at 0.31 click-through rate is deployed and achieves 0.19. The test set was built from logged interactions of users who clicked at least once last month. Explain what likely went wrong.',
+        rubric: [
+          'Identifies that the test population was filtered to already-engaged users',
+          'Explains that the deployment population includes less engaged users not represented in the test set',
+          'Proposes a fix such as sampling from the full user base or a randomised holdout of traffic',
+        ],
+        sampleAnswer:
+          'The test set was drawn from users who clicked at least once last month, which is a filter on the very behaviour being predicted. Those users are more engaged than average by construction, so the measured click-through rate describes the easy part of the population, and deployment adds everyone else — dormant users, new users with no history, people who browse without clicking. The gap is not model degradation; the model was never measured on the population it now faces. This is the same structure as Wald\'s bombers: the units that did not survive the filter are invisible, and the conclusion drawn from the survivors does not transfer. The fix is to evaluate on a sample drawn the way production traffic arrives — ideally a small randomised holdout of live traffic, which also gives an unbiased baseline for future comparisons — and to report the metric broken down by engagement segment so that a single aggregate number cannot hide a weak segment again. I would also check that the logging pipeline is not filtering impressions in some related way, since the same filter often appears twice.',
+        explanation:
+          'The answer must identify the selection mechanism specifically and explain why it correlates with the outcome being measured, rather than gesturing at bias in general.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Population vs sample vs parameter vs statistic', back: 'Population: everyone you care about. Sample: who you measured. Parameter: the true population value. Statistic: your sample-based estimate of it.' },
+      { front: 'Why does more data not fix bias?', back: 'Error = bias squared + variance. More data shrinks variance like 1/n and leaves bias unchanged, so you converge confidently on the wrong answer.' },
+      { front: 'What is survivorship bias?', back: 'Analysing only the units that passed some filter. Wald\'s bombers: armour the places where returning planes were undamaged, because those hits were fatal.' },
+      { front: 'Standard error of the mean', back: 'sigma/sqrt(n). Quadrupling the sample halves the error, which is why precision gets expensive fast.' },
+      { front: 'When do you stratify a split?', back: 'When a class or subgroup is rare enough that random splits would vary its representation materially. `stratify=y` in scikit-learn.' },
+      { front: 'When do you split by group or by time?', back: 'By group when rows share an entity (patient, user, session); by time for time series. A random split leaks in both cases.' },
+    ],
+
+    challenge: {
+      title: 'Build a sampling-bias detector',
+      brief:
+        'Write a tool that compares a sample against a reference population on every column: for numeric columns report the difference in means in units of the reference standard deviation, and for categorical columns report the difference in category proportions. Flag any column where the gap exceeds a threshold you choose and justify. Then demonstrate it by taking a deliberately biased sample from a synthetic population — for example filtering on one variable — and confirming that your tool flags not only that variable but also anything correlated with it.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Numeric and categorical columns are handled with appropriate, separately stated comparisons',
+        'Differences are reported on a standardised scale so columns are comparable',
+        'The demonstration shows the tool flagging a correlated column, not only the one that was filtered',
+        'The output states which columns are suspect and by how much, not merely pass or fail',
+      ],
+      starterCode:
+        'import pandas as pd\nimport numpy as np\n\ndef compare_to_population(sample: pd.DataFrame, population: pd.DataFrame,\n                          threshold: float = 0.1) -> pd.DataFrame:\n    """Per-column comparison of a sample against a reference population."""\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach sampling and sampling bias to someone who knows basic statistics. Make the bias-versus-noise distinction unmistakable, and connect it to how machine learning datasets are built.',
+      mustCover: [
+        'The difference between a population and a sample, and between a parameter and a statistic',
+        'That random error shrinks with sample size and systematic error does not',
+        'At least two named biases, such as selection and survivorship, with concrete examples',
+        'That a train/test split is a sampling decision, and what goes wrong when groups or time are ignored',
+      ],
+      bonusSignals: [
+        'uses the Literary Digest or Wald bomber example',
+        'notes that a confidence interval says nothing about bias',
+        'mentions stratified, group-aware or chronological splitting',
+      ],
+      sampleExplanation:
+        'You rarely get to measure everything, so you measure a part and hope it resembles the whole. Whether it does depends entirely on how you chose that part, and this is where two completely different kinds of error live. The first is noise: even a perfectly fair sample will be a bit off from the population by luck, and that error shrinks in a predictable way — quadruple the sample and you halve the error. The second is bias: if the way you selected quietly favoured some members over others, your sample is the wrong shape, and here is the part that matters, collecting more of it does not help at all. In 1936 a magazine polled two point four million people and predicted the wrong winner by a landslide, because it sampled from car and telephone registers during the Depression; Gallup got it right with fifty thousand people chosen properly. More data made the magazine more confident and no more correct. The most elegant example of bias is Abraham Wald\'s. Asked where to armour bombers, the military pointed at the bullet holes on returning planes. Wald pointed out that those were the planes that came back — the ones hit in the engines were at the bottom of the sea — so the armour belonged exactly where the survivors showed no damage. Now bring this to machine learning, where it is the same problem wearing different clothes. Your test set is a sample, and it only tells you about deployment if it was drawn the way deployment data arrives. If your images are all from winter, your accuracy estimate is about winter. If you split rows randomly when ten scans belong to one patient, the model memorises patients and your score is inflated. If your data comes only from users who already clicked, you have Wald\'s bombers. And notice that no confidence interval will warn you about any of this, because an interval measures only the noise.',
+    },
+  },

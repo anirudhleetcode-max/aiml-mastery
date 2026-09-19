@@ -163,6 +163,62 @@ export const UNITS: LearningUnit[] = [
     formalDefinition:
       'Tokenisation is a function T mapping a string s over a Unicode alphabet to a finite sequence of tokens (t1, …, tn) drawn from a fixed vocabulary V, composed with an injective index map V → {0, …, |V| − 1}. A tokeniser is lossless if the original string can be reconstructed exactly from the token sequence; subword schemes such as byte-level BPE are lossless by construction, while rule-based word tokenisers generally are not.',
 
+    workedExample: {
+      title: 'Turning "I love machine learning" into a matrix, by hand',
+      setup:
+        'We will follow one four-word sentence all the way to the tensor a model consumes, using the `bert-base-uncased` vocabulary of 30,522 entries and a 768-dimensional embedding table. Every step is a real transformation, not a simplification.',
+      steps: [
+        {
+          label: 'Start with the raw string',
+          detail:
+            '"I love machine learning" is 23 Unicode characters. At this point it is one contiguous blob with no internal structure a model can address.',
+        },
+        {
+          label: 'Normalise',
+          detail:
+            'Apply Unicode NFKC, then lowercase: "i love machine learning". Nothing else changes here, but this step is what makes "I" and "i" the same token rather than two.',
+        },
+        {
+          label: 'Split into tokens',
+          detail:
+            'WordPiece checks each whitespace-delimited chunk against the vocabulary. All four words are frequent enough to have their own entries, so nothing is fragmented: ["i", "love", "machine", "learning"].',
+        },
+        {
+          label: 'Look up ids',
+          detail:
+            'Each token is replaced by its row index in the vocabulary: i -> 1045, love -> 2293, machine -> 3698, learning -> 4083. These are indices, not magnitudes — 4083 is not "more" than 2293 in any sense.',
+        },
+        {
+          label: 'Add special tokens',
+          detail:
+            'BERT expects sequence boundaries: [CLS] (id 101) prepended and [SEP] (id 102) appended, giving [101, 1045, 2293, 3698, 4083, 102]. Six ids, shape (1, 6) as an integer tensor.',
+        },
+        {
+          label: 'Index the embedding table',
+          detail:
+            'The embedding matrix is (30522, 768). Each id selects one row, so the six ids select six rows and produce a (1, 6, 768) float tensor. Only now does anything numeric exist that a network can multiply.',
+          latex: 'E \\in \\mathbb{R}^{30522 \\times 768}, \\quad X = E[\\text{ids}] \\in \\mathbb{R}^{6 \\times 768}',
+        },
+        {
+          label: 'Name the dimensions',
+          detail:
+            'Rows of X are positions in the sentence — [CLS], i, love, machine, learning, [SEP]. Columns are the 768 learned features of the embedding space; no individual column has a human-readable name, which is the price of density.',
+        },
+        {
+          label: 'Now try a rarer sentence',
+          detail:
+            '"Tokenization is unhappiness" has no vocabulary entry for either content word, so WordPiece decomposes: ["token", "##ization", "is", "un", "##hap", "##pin", "##ess"] -> [19204, 3989, 2003, 4895, 10974, 8091, 4757]. Three words became seven tokens, and the tensor is (1, 9, 768) once the special tokens are added.',
+        },
+        {
+          label: 'Read off the consequence',
+          detail:
+            'The same number of words produced almost twice as many tokens. Since context windows and API pricing are measured in tokens, the cost of a text depends on how well the vocabulary happens to cover it — which is why token counts must be measured with the exact tokeniser, never estimated from word counts.',
+        },
+      ],
+      conclusion:
+        'Four English words became four tokens, six ids and a 6 by 768 matrix of floats; three slightly rarer words became seven tokens and a 9 by 768 matrix. That path — string, tokens, ids, matrix — is the same for every model in this domain, and every representation in the units that follow is a different answer to the question of what those 768 numbers should be.',
+    },
+
     codeExamples: [
       {
         language: 'python',
