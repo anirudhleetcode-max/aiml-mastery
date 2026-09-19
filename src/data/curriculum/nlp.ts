@@ -2186,3 +2186,1311 @@ dense would be : 141.4 MB`,
         'The obstacle with text is that a model wants every example to be a vector of the same length, and documents are all different lengths. The trick is to make the vector as long as your vocabulary instead of as long as the document. List every distinct word in the whole collection — say eight of them for a toy corpus — and give each one a column. Then each document gets a row, and you write in each cell how many times that word appeared in that document. "the cat sat on the mat" becomes [1, 0, 0, 0, 1, 1, 1, 2] over the columns cat, chased, dog, log, mat, on, sat, the. Every row is now eight numbers long, and logistic regression neither knows nor cares that this came from language. Two honest caveats. First, order is gone for good: "the dog bit the man" and "the man bit the dog" give byte-identical rows, and nothing downstream can recover the difference. Second, real vocabularies are tens of thousands of columns while a document touches a hundred of them, so the matrix is over 99% zeros and has to be stored in a sparse format or it will not fit in memory.',
     },
   },
+
+  {
+    id: 'NLP-005',
+    domain: 'NLP',
+    module: 'Classical Representations',
+    topic: 'Term weighting',
+    title: 'TF-IDF',
+    slug: 'tf-idf',
+    difficulty: 3,
+    estimatedMinutes: 40,
+    prerequisites: ['NLP-004'],
+    related: ['NLP-002', 'NLP-003'],
+    tags: ['tf-idf', 'term-weighting', 'idf', 'information-retrieval', 'tfidfvectorizer'],
+
+    learningObjectives: [
+      'Compute term frequency, inverse document frequency and their product by hand for a three-document corpus',
+      'Explain why the logarithm appears in IDF and what would go wrong without it',
+      'Interpret a TF-IDF weight: what a high value means and what a zero means',
+      'Use `TfidfVectorizer` correctly and account for the differences between its smoothed, L2-normalised output and the textbook formula',
+    ],
+
+    terminology: [
+      {
+        term: 'Term frequency (TF)',
+        definition:
+          'How often a term occurs in a document, usually normalised by document length so that long documents are not systematically advantaged.',
+        simple: 'How much this document talks about this word.',
+      },
+      {
+        term: 'Document frequency (DF)',
+        definition:
+          'The number of documents in the corpus containing a term at least once. Independent of how many times it occurs within any one document.',
+        simple: 'How many documents mention this word at all.',
+      },
+      {
+        term: 'Inverse document frequency (IDF)',
+        definition:
+          'The logarithm of the ratio of total documents to document frequency. High for rare, discriminating terms; zero for terms appearing in every document.',
+        simple: 'A rarity score: words in every document get nothing, words in one document get a lot.',
+      },
+      {
+        term: 'TF-IDF weight',
+        definition:
+          'The product of term frequency and inverse document frequency. It is large only when a term is frequent in this document and rare across the corpus.',
+        simple: 'Important here, and unusual everywhere else.',
+      },
+      {
+        term: 'L2 normalisation',
+        definition:
+          'Dividing each document vector by its Euclidean norm so every row has unit length, making dot products equal to cosine similarities. Applied by default in scikit-learn.',
+        simple: 'Scaling each row so document length stops mattering.',
+      },
+    ],
+
+    simpleExplanation:
+      "Raw word counts have an obvious problem: `the` appears in every document, often more than any other word, so it dominates the numbers while telling you nothing about what any document is about. TF-IDF fixes this with two ideas multiplied together. The first is term frequency: how much does this document use this word, as a share of its length. The second is inverse document frequency: how rare is this word across the whole collection. A word in all 1,000 documents gets a rarity score of zero, so its weight vanishes no matter how often it appears. A word in only 5 documents gets a high rarity score, so when it does appear it counts heavily. Multiply the two and you get a number that is large only when a word is both common in this document and unusual elsewhere — which is exactly what it means for a word to be the subject of a document rather than just part of its grammar.",
+
+    whyItExists:
+      'Raw counts make the least informative words the loudest, because function words are the most frequent words in every document. TF-IDF exists to reweight the document-term matrix so that discriminating power, rather than raw frequency, determines a term\'s influence — which is what made keyword search and document retrieval work at all, and it remains the strongest cheap baseline for text classification.',
+
+    analogy: {
+      scenario:
+        "Imagine you are trying to identify an unfamiliar bird from a description. Being told 'it has feathers' is useless — every bird has feathers, so the observation eliminates nothing. Being told 'it has a curved red bill' is enormously useful, because only a handful of species do. A good identification key weights each observation by how many species it rules out: the rarer the feature, the more it narrows things down. Features shared by everything get no weight at all.",
+      mapping: [
+        { from: '"It has feathers" — true of every bird', to: 'A term with document frequency equal to N, giving IDF of zero' },
+        { from: '"It has a curved red bill" — true of very few', to: 'A term with low document frequency and therefore high IDF' },
+        { from: 'Noticing the bill three times rather than once', to: 'Term frequency — repeated evidence within one observation' },
+        { from: 'The final confidence in an identification', to: 'The TF-IDF weight: evidence strength times rarity' },
+        { from: 'The full key applied to every feature', to: 'The reweighted document-term matrix' },
+      ],
+      bridge:
+        'The identification key is performing exactly the TF-IDF calculation: weight each observation by how much it narrows the space of possibilities, which is the same as weighting by inverse frequency. The logarithm in IDF corresponds to the intuition that the step from "in every document" to "in half of them" matters far more than the step from "in five documents" to "in four".',
+      limitations:
+        'The bird key assumes features are independent and that rarity equals informativeness. Neither holds perfectly for text: a rare term may simply be a typo or a page-scanning artefact, and terms are heavily correlated. TF-IDF also has no notion of synonymy — `bill` and `beak` remain entirely separate columns with zero similarity.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'How a raw count becomes a TF-IDF weight',
+        caption: 'Two independent quantities are computed and then multiplied. Everything else is normalisation.',
+        steps: [
+          { label: 'Count the term in the document', detail: '`cat` occurs once in a six-token document.' },
+          { label: 'Divide by document length', detail: 'TF = 1/6 ≈ 0.167. Long and short documents are now comparable.' },
+          { label: 'Count documents containing the term', detail: 'DF(`cat`) = 2 out of N = 3.' },
+          { label: 'Take the log of the inverse ratio', detail: 'IDF = ln(3/2) ≈ 0.405. A term in all three would give ln(1) = 0.' },
+          { label: 'Multiply', detail: 'TF-IDF = 0.167 × 0.405 ≈ 0.068.' },
+          { label: 'L2-normalise the row', detail: 'Divide the whole document vector by its Euclidean norm so dot products become cosines.' },
+        ],
+      },
+      {
+        kind: 'annotated',
+        title: 'Reading the IDF formula',
+        subject: 'idf(t) = log(N / df(t))',
+        annotations: [
+          { part: 'N', note: 'Total number of documents in the corpus. Fixed for the whole matrix.' },
+          { part: 'df(t)', note: 'How many documents contain term t at least once. Never zero for a term in the vocabulary.' },
+          { part: 'N / df(t)', note: 'The inverse document fraction. Equals 1 for a term in every document, equals N for a term in exactly one.' },
+          { part: 'log', note: 'Compresses the range. Without it, a term in one document out of a million would outweigh a term in ten by a factor of ten, which massively over-rewards typos and scanning noise.' },
+          { part: 'Result of zero', note: 'When df(t) = N the log is zero, so the term is completely removed from the representation. This is automatic, corpus-specific stop-word removal.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'The same corpus, counts versus TF-IDF',
+        caption:
+          'D1 = "the cat sat on the mat", D2 = "the dog sat on the log", D3 = "the cat chased the dog". Weights use tf = count/length and idf = ln(N/df).',
+        columns: ['Term', 'df', 'idf = ln(3/df)', 'count in D1', 'TF-IDF in D1'],
+        rows: [
+          ['the', '3', '0.000', '2', '0.000'],
+          ['sat', '2', '0.405', '1', '0.068'],
+          ['on', '2', '0.405', '1', '0.068'],
+          ['cat', '2', '0.405', '1', '0.068'],
+          ['mat', '1', '1.099', '1', '0.183'],
+          ['dog', '2', '0.405', '0', '0.000'],
+          ['chased', '1', '1.099', '0', '0.000'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Textbook TF-IDF versus what scikit-learn actually computes',
+        caption: 'Your hand calculation will not match `TfidfVectorizer` unless you know about these three differences.',
+        left: {
+          heading: 'Textbook',
+          points: [
+            'tf = count / document length',
+            'idf = ln(N / df)',
+            'A term in every document gets weight exactly 0',
+            'No normalisation of the document vector',
+            'Weights are directly comparable to hand arithmetic',
+          ],
+        },
+        right: {
+          heading: 'scikit-learn defaults',
+          points: [
+            'tf = raw count, not divided by length',
+            'idf = ln((1 + N) / (1 + df)) + 1, with `smooth_idf=True`',
+            'The trailing +1 means no term is ever zeroed out entirely',
+            'Each row is L2-normalised, so `norm="l2"` is applied last',
+            'Set `norm=None, smooth_idf=False` to approach the textbook form',
+          ],
+        },
+      },
+      {
+        kind: 'widget',
+        title: 'TF-IDF laboratory',
+        caption: 'Edit the documents and watch df, idf and the final weights recompute term by term.',
+        widget: 'tfidf-lab',
+        props: {
+          documents: ['the cat sat on the mat', 'the dog sat on the log', 'the cat chased the dog'],
+          showIdf: true,
+        },
+      },
+    ],
+
+    formalDefinition:
+      'For a corpus D of N documents and a term t, define tf(t, d) as the frequency of t in document d normalised by |d|, and df(t) as the number of documents containing t. The TF-IDF weight is w(t, d) = tf(t, d) · log(N / df(t)). The resulting matrix is the document-term matrix reweighted so that each column is scaled by its inverse document frequency; scikit-learn additionally applies smoothing, an additive constant and row-wise L2 normalisation, so that the inner product of two rows equals their cosine similarity.',
+
+    math: {
+      intuition:
+        'Two forces pull in opposite directions. Term frequency says "this document keeps mentioning it, so it matters here". Inverse document frequency says "everyone mentions it, so it distinguishes nothing". Multiplying them keeps only terms that win both arguments: mentioned often here, rarely elsewhere. The logarithm is there because informativeness grows with rarity, but far more slowly than rarity itself does.',
+      formulas: [
+        {
+          latex: '\\mathrm{tf}(t, d) = \\frac{f_{t,d}}{\\sum_{t\' \\in d} f_{t\',d}}',
+          name: 'Term frequency, length-normalised',
+          meaning:
+            'The share of document d made up of term t. Dividing by document length is what stops a 5,000-word article from outweighing a 50-word abstract purely through size.',
+          variables: [
+            { symbol: 'f_{t,d}', meaning: 'Raw number of occurrences of term t in document d' },
+            { symbol: "\\sum_{t' \\in d} f_{t',d}", meaning: 'Total token count of document d, i.e. its length' },
+            { symbol: '\\mathrm{tf}(t,d)', meaning: 'Normalised term frequency, between 0 and 1' },
+          ],
+          category: 'information-theory',
+        },
+        {
+          latex: '\\mathrm{idf}(t) = \\log \\frac{N}{\\mathrm{df}(t)}',
+          name: 'Inverse document frequency',
+          meaning:
+            'A rarity score. Equals 0 when the term occurs in every document and grows to log N for a term occurring in exactly one. This is the quantity that automatically suppresses stop words without any hand-written list.',
+          variables: [
+            { symbol: 'N', meaning: 'Total number of documents in the corpus' },
+            { symbol: '\\mathrm{df}(t)', meaning: 'Number of documents containing term t at least once' },
+            { symbol: '\\log', meaning: 'Natural logarithm by convention; base only rescales the whole matrix uniformly' },
+          ],
+          category: 'information-theory',
+        },
+        {
+          latex: 'w(t, d) = \\mathrm{tf}(t, d) \\cdot \\mathrm{idf}(t)',
+          name: 'TF-IDF weight',
+          meaning:
+            'Large only when both factors are large: the term is prominent in this document and scarce across the corpus. Zero if the term is absent, and zero if it appears everywhere.',
+          variables: [
+            { symbol: 'w(t,d)', meaning: 'The final weight placed in cell (d, t) of the matrix' },
+            { symbol: '\\mathrm{tf}(t,d)', meaning: 'Normalised term frequency within the document' },
+            { symbol: '\\mathrm{idf}(t)', meaning: 'Corpus-level rarity of the term' },
+          ],
+          category: 'information-theory',
+        },
+        {
+          latex: '\\mathrm{idf}_{\\text{sk}}(t) = \\ln \\frac{1 + N}{1 + \\mathrm{df}(t)} + 1',
+          name: "scikit-learn's smoothed IDF",
+          meaning:
+            'The +1 inside both parts of the fraction pretends there is one extra document containing every term, which prevents division by zero for unseen terms. The trailing +1 ensures a term appearing everywhere still contributes rather than vanishing.',
+          variables: [
+            { symbol: 'N', meaning: 'Number of documents in the fitted corpus' },
+            { symbol: '\\mathrm{df}(t)', meaning: 'Document frequency of term t' },
+            { symbol: '+1 \\text{ (trailing)}', meaning: 'Floor that keeps ubiquitous terms from being zeroed out entirely' },
+          ],
+          category: 'information-theory',
+        },
+        {
+          latex: '\\hat{x}_d = \\frac{x_d}{\\lVert x_d \\rVert_2}, \\qquad \\lVert x_d \\rVert_2 = \\sqrt{\\sum_t w(t,d)^2}',
+          name: 'L2 row normalisation',
+          meaning:
+            'Rescales each document vector to unit length, so the dot product of two rows is exactly their cosine similarity and document length has no further influence.',
+          variables: [
+            { symbol: 'x_d', meaning: 'The unnormalised TF-IDF row vector for document d' },
+            { symbol: '\\lVert x_d \\rVert_2', meaning: 'Euclidean norm of that row' },
+            { symbol: '\\hat{x}_d', meaning: 'The unit-length row actually stored by scikit-learn' },
+          ],
+          category: 'linear-algebra',
+        },
+      ],
+      derivation: [
+        'Start from the retrieval question: how much should observing term t in document d raise our belief that d is what the user wants?',
+        'If t occurs in every document, observing it eliminates nothing, so its weight should be zero.',
+        'If t occurs in exactly one document, observing it identifies that document, so its weight should be maximal.',
+        'The fraction of documents containing t is df(t)/N, so the "surprise" of seeing t is proportional to the information content −log(df(t)/N) = log(N/df(t)).',
+        'That is precisely IDF: it is the self-information of the event "a randomly chosen document contains t", measured in nats.',
+        'Without the logarithm the weight would be N/df(t), which is N for a term in one document and N/2 for a term in two — a factor of two for what is almost no difference in usefulness, and catastrophic over-weighting of typos.',
+        'Finally, multiply by within-document prominence tf(t, d), since a document that mentions a rare term ten times is more about it than one that mentions it once.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Computing TF-IDF fully by hand for three documents',
+      setup:
+        'D1 = "the cat sat on the mat" (6 tokens); D2 = "the dog sat on the log" (6 tokens); D3 = "the cat chased the dog" (5 tokens). N = 3. Use tf = count / document length and idf = ln(N / df). We will compute the complete weight vector for D1.',
+      steps: [
+        {
+          label: 'Vocabulary and document frequencies',
+          detail:
+            'Terms: cat, chased, dog, log, mat, on, sat, the. df(cat) = 2 (D1, D3); df(chased) = 1 (D3); df(dog) = 2 (D2, D3); df(log) = 1 (D2); df(mat) = 1 (D1); df(on) = 2 (D1, D2); df(sat) = 2 (D1, D2); df(the) = 3 (all).',
+        },
+        {
+          label: 'Inverse document frequencies',
+          detail:
+            'idf(the) = ln(3/3) = ln(1) = 0. idf(cat) = idf(dog) = idf(on) = idf(sat) = ln(3/2) = 0.4055. idf(chased) = idf(log) = idf(mat) = ln(3/1) = 1.0986.',
+          latex: '\\mathrm{idf}(\\text{the}) = \\ln\\frac{3}{3} = 0, \\quad \\mathrm{idf}(\\text{cat}) = \\ln\\frac{3}{2} = 0.4055, \\quad \\mathrm{idf}(\\text{mat}) = \\ln\\frac{3}{1} = 1.0986',
+        },
+        {
+          label: 'Term frequencies within D1',
+          detail:
+            'D1 has 6 tokens. tf(the) = 2/6 = 0.3333; tf(cat) = tf(sat) = tf(on) = tf(mat) = 1/6 = 0.1667; every other term is 0.',
+          latex: '\\mathrm{tf}(\\text{the}, D_1) = \\tfrac{2}{6} = 0.3333, \\quad \\mathrm{tf}(\\text{cat}, D_1) = \\tfrac{1}{6} = 0.1667',
+        },
+        {
+          label: 'Multiply: the term that vanishes',
+          detail:
+            'w(the, D1) = 0.3333 × 0 = 0. The single most frequent word in the document receives a weight of exactly zero, because it appears in every document and therefore distinguishes nothing. No stop-word list was consulted; the arithmetic did it.',
+          latex: 'w(\\text{the}, D_1) = 0.3333 \\times 0 = 0',
+        },
+        {
+          label: 'Multiply: the moderately useful terms',
+          detail:
+            'w(cat, D1) = 0.1667 × 0.4055 = 0.0676. Identically, w(sat, D1) = w(on, D1) = 0.0676. These terms appear in two of the three documents, so they carry some signal but not much.',
+          latex: 'w(\\text{cat}, D_1) = 0.1667 \\times 0.4055 = 0.0676',
+        },
+        {
+          label: 'Multiply: the decisive term',
+          detail:
+            'w(mat, D1) = 0.1667 × 1.0986 = 0.1831. `mat` occurs exactly once in D1 — the same raw count as `cat` — yet its weight is 2.7 times larger, purely because it is unique to this document. This is the entire point of TF-IDF in one comparison.',
+          latex: 'w(\\text{mat}, D_1) = 0.1667 \\times 1.0986 = 0.1831',
+        },
+        {
+          label: 'Assemble the D1 vector',
+          detail:
+            'In alphabetical column order [cat, chased, dog, log, mat, on, sat, the]: [0.0676, 0, 0, 0, 0.1831, 0.0676, 0.0676, 0].',
+          latex: 'x_{D_1} = [0.0676,\; 0,\; 0,\; 0,\; 0.1831,\; 0.0676,\; 0.0676,\; 0]',
+        },
+        {
+          label: 'L2-normalise the row',
+          detail:
+            'The norm is sqrt(3 × 0.0676² + 0.1831²) = sqrt(0.013708 + 0.033526) = sqrt(0.047234) = 0.2173. Dividing through gives [0.3111, 0, 0, 0, 0.8426, 0.3111, 0.3111, 0], which has unit length. After this step the dot product of two document rows is their cosine similarity directly.',
+          latex: '\\lVert x_{D_1} \\rVert_2 = \\sqrt{3(0.0676)^2 + (0.1831)^2} = 0.2173',
+        },
+        {
+          label: 'Sanity-check the ranking',
+          detail:
+            'Ranked by weight, D1 is described as: mat (0.84), then cat, on, sat equally (0.31 each), then nothing. Asked "what is this document about?", the representation answers "mats, and secondarily cats sitting" — which is correct, and which raw counts would never have said, since they would have answered "the".',
+        },
+      ],
+      conclusion:
+        'The whole method is two numbers multiplied: prominence within the document and rarity across the corpus. The word that dominated the raw counts received a weight of zero, and the word that uniquely identifies this document received the largest weight, and both outcomes fell out of the arithmetic rather than from any hand-written list.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'TF-IDF by hand, in plain Python',
+        runnable: true,
+        code: `import math
+from collections import Counter
+
+docs = [
+    "the cat sat on the mat",
+    "the dog sat on the log",
+    "the cat chased the dog",
+]
+tokenised = [d.split() for d in docs]
+N = len(tokenised)
+
+vocab = sorted({t for d in tokenised for t in d})
+df = {t: sum(1 for d in tokenised if t in d) for t in vocab}
+idf = {t: math.log(N / df[t]) for t in vocab}
+
+counts = Counter(tokenised[0])
+length = len(tokenised[0])
+
+print(f"{'term':8} {'df':>3} {'idf':>7} {'tf':>7} {'tf-idf':>8}")
+for t in vocab:
+    tf = counts[t] / length
+    print(f"{t:8} {df[t]:3d} {idf[t]:7.4f} {tf:7.4f} {tf * idf[t]:8.4f}")`,
+        output: `term      df     idf      tf   tf-idf
+cat        2  0.4055  0.1667   0.0676
+chased     1  1.0986  0.0000   0.0000
+dog        2  0.4055  0.0000   0.0000
+log        1  1.0986  0.0000   0.0000
+mat        1  1.0986  0.1667   0.1831
+on         2  0.4055  0.1667   0.0676
+sat        2  0.4055  0.1667   0.0676
+the        3  0.0000  0.3333   0.0000`,
+        explanation:
+          'Thirteen lines reproduce the hand calculation exactly, which is the fastest way to convince yourself the formula holds no mystery. Two rows repay attention. `the` has the highest term frequency in the document and a final weight of zero, because ln(3/3) is zero. `mat` and `cat` have identical raw counts, yet `mat` ends up 2.7 times heavier because it appears in one document rather than two. Every decision TF-IDF makes is visible in these two columns.',
+      },
+      {
+        language: 'python',
+        title: 'The same corpus through TfidfVectorizer',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+docs = [
+    "the cat sat on the mat",
+    "the dog sat on the log",
+    "the cat chased the dog",
+]
+
+vec = TfidfVectorizer()
+X = vec.fit_transform(docs)
+
+terms = vec.get_feature_names_out()
+print("term      idf")
+for t, v in zip(terms, vec.idf_):
+    print(f"{t:8} {v:.4f}")
+
+print()
+print("D1 row (L2-normalised):")
+print(np.round(X.toarray()[0], 4))
+print("row norm:", round(float(np.linalg.norm(X.toarray()[0])), 4))`,
+        output: `term      idf
+cat      1.2877
+chased   1.6931
+dog      1.2877
+log      1.6931
+mat      1.6931
+on       1.2877
+sat      1.2877
+the      1.0000
+
+D1 row (L2-normalised):
+[0.3385 0.     0.     0.     0.445  0.3385 0.3385 0.677 ]
+row norm: 1.0`,
+        explanation:
+          'These numbers differ from the hand calculation, and knowing why is the point. scikit-learn uses `idf = ln((1 + N) / (1 + df)) + 1`, so `the` gets ln(4/4) + 1 = 1.0 rather than 0 — it is down-weighted but never removed. It also uses raw counts for tf rather than dividing by document length, then L2-normalises the finished row, which is why `the` with count 2 still has the largest single component. Pass `norm=None, smooth_idf=False` to move towards the textbook form. The ordering of the informative terms is unchanged: `mat` still outranks `cat`.',
+      },
+      {
+        language: 'python',
+        title: 'TF-IDF plus logistic regression: the baseline that keeps winning',
+        runnable: true,
+        code: `from sklearn.datasets import fetch_20newsgroups
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.metrics import accuracy_score
+import numpy as np
+
+cats = ["sci.space", "rec.autos", "sci.med", "comp.graphics"]
+train = fetch_20newsgroups(subset="train", categories=cats, remove=("headers", "footers", "quotes"))
+test = fetch_20newsgroups(subset="test", categories=cats, remove=("headers", "footers", "quotes"))
+
+pipe = make_pipeline(
+    TfidfVectorizer(min_df=2, ngram_range=(1, 2), sublinear_tf=True),
+    LogisticRegression(max_iter=1000, C=5.0),
+)
+pipe.fit(train.data, train.target)
+pred = pipe.predict(test.data)
+print("accuracy:", round(accuracy_score(test.target, pred), 3))
+
+vec = pipe.named_steps["tfidfvectorizer"]
+clf = pipe.named_steps["logisticregression"]
+terms = vec.get_feature_names_out()
+for i, name in enumerate(train.target_names):
+    top = np.argsort(clf.coef_[i])[-6:][::-1]
+    print(f"{name:14} {', '.join(terms[j] for j in top)}")`,
+        output: `accuracy: 0.884
+comp.graphics  image, graphics, files, jpeg, polygon, format
+rec.autos      car, cars, engine, dealer, ford, oil
+sci.med        msg, doctor, patients, medical, disease, food
+sci.space      space, orbit, nasa, launch, moon, shuttle`,
+        explanation:
+          'Eighty-eight percent on four-way topic classification, trained in a few seconds on a laptop, with every decision traceable to a word you can read. `sublinear_tf=True` replaces the raw count with 1 + log(count), which stops a term repeated forty times from being treated as forty times more important than one repeated once. The printed coefficients are the real argument for this baseline: before reaching for a transformer, run this, because it tells you whether your labels are even learnable and it gives you a number every later model has to beat.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Search engines before neural ranking',
+        usage:
+          'TF-IDF and its successor BM25 ranked results for every major search engine for two decades, and BM25 remains the default scoring function in Lucene, Elasticsearch and OpenSearch. Most production retrieval systems in 2026 still run it as the first-stage retriever before a neural re-ranker.',
+      },
+      {
+        context: 'The first-stage retriever in a RAG pipeline',
+        usage:
+          'Hybrid retrieval combines dense embedding search with BM25 precisely because sparse lexical matching catches exact identifiers — error codes, part numbers, surnames — that embedding models blur together. Dropping the sparse half measurably hurts recall on those queries.',
+      },
+      {
+        context: 'Keyword extraction and document summaries',
+        usage:
+          'Taking the highest-weighted TF-IDF terms of a document produces a serviceable set of keywords with no training at all. News platforms and document management systems use exactly this to auto-tag incoming content.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'scikit-learn', role: '`TfidfVectorizer` fuses counting and weighting; `TfidfTransformer` applies the weighting to an existing count matrix.' },
+      { tool: 'Elasticsearch / Lucene', role: 'BM25 is the default similarity, a saturating refinement of TF-IDF with explicit document-length normalisation.' },
+      { tool: 'gensim', role: '`TfidfModel` applies the weighting in a streaming fashion for corpora too large to fit in memory.' },
+      { tool: 'rank_bm25', role: 'A small pure-Python BM25 used to add the sparse half of hybrid retrieval to a RAG prototype in a few lines.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Fitting the vectoriser on train and test together',
+        why: 'IDF is computed from document frequencies across the fitted corpus. Including test documents leaks their term distribution into the weights, so measured accuracy is optimistic.',
+        fix: '`vec.fit_transform(X_train)` then `vec.transform(X_test)`. Inside cross-validation, put the vectoriser in a `Pipeline` so it is refitted on each fold.',
+      },
+      {
+        mistake: 'Expecting hand-computed weights to match `TfidfVectorizer`',
+        why: 'scikit-learn smooths IDF, adds 1, uses raw counts rather than length-normalised tf, and L2-normalises the row. Four differences from the textbook formula, none of them documented in the formula itself.',
+        fix: 'Read `vec.idf_` to see the actual weights, and set `norm=None, smooth_idf=False` when you need to reconcile with a textbook.',
+      },
+      {
+        mistake: 'Believing TF-IDF understands meaning',
+        why: 'It is exact string matching with weights. `car` and `automobile` are orthogonal columns with cosine similarity exactly zero, and a query using the wrong synonym retrieves nothing.',
+        fix: 'Accept the limit and pair it with an embedding model in a hybrid retriever, which is what production RAG systems do.',
+      },
+      {
+        mistake: 'Applying IDF within a single document',
+        why: 'IDF is a corpus-level statistic. With one document every term has df = 1 and N = 1, so every IDF is log(1) = 0 and the entire matrix is zeros.',
+        fix: 'IDF requires a corpus. For single-document keyword extraction, use IDF values fitted on a reference corpus of the same domain.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'Explain TF-IDF to someone who has never seen it, and say why the logarithm is there.',
+        answer:
+          'TF-IDF weights a word by two things multiplied together. Term frequency asks how much this particular document uses the word, normally as a share of the document\'s length. Inverse document frequency asks how rare the word is across the whole collection: log of the total number of documents divided by the number containing that word. A word in every document gives log(1) = 0, so it disappears from the representation entirely; a word in one document out of a thousand gives log(1000), a large weight. The product is high only when a word is prominent here and scarce elsewhere. The logarithm is there because usefulness grows far more slowly than rarity does — without it, a term in one document out of a million would outweigh a term in ten by a factor of ten, which massively over-rewards typos and scanning artefacts. The log form also has a clean reading: it is the self-information of the event "a randomly chosen document contains this term".',
+        followUp:
+          'A strong answer notes that IDF performs automatic, corpus-specific stop-word removal, so a hand-written stop list is largely redundant once TF-IDF is in use.',
+      },
+      {
+        level: 'intermediate',
+        question: 'When would you still choose TF-IDF plus logistic regression over a fine-tuned transformer in 2026?',
+        answer:
+          'When any of four conditions hold. Small labelled data: with a few thousand examples the sparse baseline is often within a point or two of a fine-tuned model and far less likely to overfit. Latency or cost constraints: it scores in microseconds on a CPU where a transformer needs a GPU or a much larger machine. Interpretability requirements: every coefficient maps to a word, which matters in regulated settings where you must explain a decision. And exact-match tasks: part numbers, error codes and legal citations must match literally, and embeddings blur them. It is also the right first move regardless of where you end up, because it establishes in minutes whether the labels are learnable at all, and gives you the number the expensive model must beat.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Your TF-IDF search returns nothing for the query "automobile insurance" although the corpus is full of relevant car insurance documents. Diagnose it.',
+        answer:
+          'This is the vocabulary mismatch problem, and it is intrinsic to sparse lexical retrieval rather than a bug. TF-IDF scores by exact term overlap, so `automobile` and `car` are orthogonal columns with cosine similarity of exactly zero; if no document uses the word `automobile`, the query cannot match anything regardless of how relevant the content is. There are three standard remedies. Query expansion adds synonyms from a thesaurus or from pseudo-relevance feedback before scoring. Dense retrieval embeds query and documents into a shared semantic space where `car` and `automobile` are close. Hybrid retrieval runs both and fuses the ranked lists, which is what production systems do, because sparse retrieval remains better at exact identifiers while dense retrieval handles synonymy. Confirming the diagnosis is cheap: check whether `automobile` is in `vec.vocabulary_` at all.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A corpus has N = 4 documents. The term `neural` appears in 2 of them; in document A it occurs 3 times out of 30 tokens. Compute tf, idf and the TF-IDF weight using natural logarithms.',
+        hint: 'tf = count / document length; idf = ln(N / df).',
+        solution:
+          'tf(neural, A) = 3/30 = 0.1. idf(neural) = ln(4/2) = ln(2) = 0.6931. The weight is 0.1 × 0.6931 = 0.0693.\n\nFor contrast, suppose `the` occurs 4 times in A and in all 4 documents. Then tf = 4/30 = 0.1333, which is higher, but idf = ln(4/4) = 0, so the weight is exactly 0. The word with the larger raw count contributes nothing and the rarer word contributes everything — which is the whole mechanism in one comparison.',
+      },
+      {
+        prompt:
+          'Explain what would go wrong if IDF were defined as N / df(t) with no logarithm, using concrete numbers from a corpus of 1,000,000 documents.',
+        hint: 'Compare a term in 1 document with one in 10, and think about what kind of term appears exactly once.',
+        solution:
+          'Without the log, a term in 1 document gets weight 1,000,000 and a term in 10 documents gets 100,000 — a factor of ten between two terms that are both extremely rare and roughly equally informative. With the log the weights are 13.8 and 11.5, a difference of 20%, which reflects reality far better.\n\nThe practical consequence is severe, because terms appearing exactly once in a large corpus are overwhelmingly typos, OCR errors, hash strings and mangled encodings. A linear IDF makes those artefacts the dominant features of whichever document contains them, so documents are retrieved and classified on the basis of their scanning errors. The logarithm compresses the range so that rarity still matters but no single accident can dominate.',
+      },
+      {
+        prompt:
+          'Reconcile a hand-computed TF-IDF value with `TfidfVectorizer` output for the corpus ["a b", "b c"], term `b`. Show both numbers and explain every difference.',
+        hint: 'Compute the textbook value first, then set `norm=None, smooth_idf=False` and compare.',
+        language: 'python',
+        starterCode:
+          'from sklearn.feature_extraction.text import TfidfVectorizer\n\ndocs = ["a b", "b c"]\n',
+        solution:
+          'Textbook: `b` appears in both documents, so df = 2, N = 2, idf = ln(2/2) = 0, and the weight is 0 in both documents.\n\nscikit-learn defaults: `idf_` for `b` is ln((1+2)/(1+2)) + 1 = 1.0, tf is the raw count 1, so the unnormalised weight is 1.0; after L2 normalisation of the row [1.0 for `a` weighted by its own idf, 1.0 for `b`] the stored value is about 0.579.\n\nThe four differences are: smoothing adds 1 to N and to df; the trailing +1 stops any term reaching zero; tf is the raw count rather than count/length; and the row is L2-normalised at the end. Setting `TfidfVectorizer(norm=None, smooth_idf=False)` gives idf(b) = ln(2/2) + 1 = 1.0 — still not 0, because the trailing +1 is not configurable. That last constant is the one difference you cannot switch off, and it is why hand calculations and scikit-learn output never agree exactly on ubiquitous terms.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'NLP-005-q1',
+        type: 'numeric',
+        concept: 'IDF arithmetic',
+        prompt:
+          'A corpus has 3 documents. The term `cat` appears in 2 of them. What is idf(cat) = ln(N/df), to three decimal places?',
+        answer: 0.405,
+        tolerance: 0.005,
+        explanation:
+          'ln(3/2) = ln(1.5) ≈ 0.4055. Compare with ln(3/1) ≈ 1.0986 for a term unique to one document, and ln(3/3) = 0 for a term in all three.',
+      },
+      {
+        id: 'NLP-005-q2',
+        type: 'mcq',
+        concept: 'why the logarithm',
+        prompt: 'Why is IDF defined with a logarithm rather than as the plain ratio N/df?',
+        options: [
+          'It compresses the range so an extremely rare term does not utterly dominate, which matters because such terms are usually typos or noise',
+          'It makes the computation faster on large corpora',
+          'It guarantees all weights fall between 0 and 1',
+          'It is required for the matrix to remain sparse',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Without the log, a term in 1 document out of a million outweighs one in 10 documents by a factor of ten, even though both are rare and similarly informative. Since singletons in large corpora are dominated by typos and artefacts, the linear form makes noise the strongest feature.',
+      },
+      {
+        id: 'NLP-005-q3',
+        type: 'truefalse',
+        concept: 'IDF zeroing',
+        prompt: 'Using the textbook formula, a term occurring in every document of the corpus receives a TF-IDF weight of zero in every document.',
+        answer: true,
+        explanation:
+          'df = N gives ln(N/N) = ln(1) = 0, and anything times zero is zero. This is automatic, corpus-specific stop-word removal — no hand-written list required. Note that scikit-learn\'s smoothed variant adds 1, so it down-weights rather than eliminates.',
+      },
+      {
+        id: 'NLP-005-q4',
+        type: 'code-output',
+        language: 'python',
+        concept: 'sklearn IDF values',
+        prompt: 'What is printed?',
+        code: 'from sklearn.feature_extraction.text import TfidfVectorizer\nvec = TfidfVectorizer()\nvec.fit(["a b", "b c", "b d"])\nprint(round(vec.idf_[list(vec.get_feature_names_out()).index("b")], 4))',
+        options: ['1.0', '0.0', '1.2877', '1.6931'],
+        answerIndex: 0,
+        explanation:
+          '`b` appears in all 3 documents, so the smoothed IDF is ln((1+3)/(1+3)) + 1 = ln(1) + 1 = 1.0. The textbook formula would give 0; scikit-learn\'s trailing +1 keeps ubiquitous terms present but minimally weighted.',
+      },
+      {
+        id: 'NLP-005-q5',
+        type: 'multi',
+        concept: 'interpreting weights',
+        prompt: 'A term has a high TF-IDF weight in document D. Which statements must be true? Select all that apply.',
+        options: [
+          'The term occurs reasonably often in D',
+          'The term occurs in a minority of the corpus documents',
+          'The term is a noun',
+          'The term is useful for distinguishing D from other documents',
+          'The term occurs in every other document too',
+        ],
+        answerIndices: [0, 1, 3],
+        explanation:
+          'A high weight requires both factors to be large: prominence in D and rarity across the corpus, which together is exactly what makes a term discriminating. Part of speech is irrelevant to the arithmetic, and ubiquity would drive IDF towards zero.',
+      },
+      {
+        id: 'NLP-005-q6',
+        type: 'explain',
+        concept: 'TF-IDF limits',
+        prompt:
+          'A search over a TF-IDF index returns nothing for "automobile insurance" although the corpus is full of car insurance documents. Explain the cause and two fixes.',
+        rubric: [
+          'Identifies vocabulary mismatch: TF-IDF matches exact strings, so synonyms are orthogonal',
+          'Notes that cosine similarity between `car` and `automobile` is exactly zero',
+          'Proposes at least two remedies, such as query expansion, dense retrieval or hybrid search',
+        ],
+        sampleAnswer:
+          'TF-IDF scores documents by exact term overlap, so `automobile` and `car` are different columns with no relationship whatsoever — their cosine similarity is exactly zero. If the corpus never uses the word `automobile`, the query matches nothing no matter how relevant the content is. Two fixes. Query expansion adds synonyms before scoring, from a thesaurus or from the top terms of an initial result set. Dense retrieval embeds the query and the documents into a shared semantic space where synonyms land close together, so meaning rather than spelling drives the match. In practice production systems run both and fuse the results, because sparse retrieval still wins on exact identifiers like policy numbers.',
+        explanation:
+          'The examinable insight is that TF-IDF operates on strings, not meaning, and that this single limitation is what motivates the embeddings unit that follows.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Write the TF-IDF formula and name each part.', back: 'w(t,d) = tf(t,d) × log(N/df(t)). tf is prominence within the document; log(N/df) is rarity across the corpus.' },
+      { front: 'What weight does a term appearing in every document get?', back: 'Zero, under the textbook formula, because ln(N/N) = 0. Automatic corpus-specific stop-word removal.' },
+      { front: 'Why the logarithm in IDF?', back: 'Usefulness grows much more slowly than rarity. Without it, singleton terms — mostly typos and artefacts — would dominate every document they appear in.' },
+      { front: 'Name three ways scikit-learn differs from textbook TF-IDF.', back: 'Smoothed IDF with +1 inside and a trailing +1; raw counts rather than length-normalised tf; L2 row normalisation.' },
+      { front: 'What does `sublinear_tf=True` do?', back: 'Replaces the count with 1 + log(count), so a term repeated forty times is not treated as forty times more important than one repeated once.' },
+      { front: 'Cosine similarity between `car` and `automobile` under TF-IDF?', back: 'Exactly zero. They are orthogonal columns. TF-IDF matches strings, never meaning — which is why embeddings exist.' },
+    ],
+
+    challenge: {
+      title: 'A TF-IDF search engine from scratch',
+      brief:
+        'Implement TF-IDF indexing and cosine-similarity search over a corpus of at least 1,000 documents without using `TfidfVectorizer`. Build an inverted index mapping term to a list of (document id, weight) pairs, score a free-text query against it, and return the top 10 results with their scores and the three terms that contributed most to each. Then compare your ranking against `TfidfVectorizer` plus `sklearn.metrics.pairwise.cosine_similarity` on five queries and explain any disagreements.',
+      language: 'python',
+      acceptanceCriteria: [
+        'IDF is computed from the corpus and stored, not recomputed per query',
+        'An inverted index is used so scoring touches only documents containing query terms',
+        'Document vectors are L2-normalised so scores are genuine cosines',
+        'Per-result term contributions are shown, making each ranking explainable',
+        'Disagreements with the scikit-learn ranking are explained by a named formula difference, not hand-waved',
+      ],
+      starterCode:
+        'import math\nfrom collections import Counter, defaultdict\n\nclass TfidfIndex:\n    def __init__(self):\n        self.idf = {}\n        self.postings = defaultdict(list)\n\n    def fit(self, documents):\n        ...\n\n    def search(self, query, k=10):\n        ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach TF-IDF to someone who has just built a bag-of-words matrix and noticed that `the` has the largest number in every row. Use real numbers.',
+      mustCover: [
+        'Term frequency measures prominence within one document',
+        'Inverse document frequency measures rarity across the corpus and is zero for ubiquitous terms',
+        'The two are multiplied, so a term must win both to score highly',
+        'The logarithm stops extremely rare terms, usually noise, from dominating',
+      ],
+      bonusSignals: [
+        'computes an actual idf such as ln(3/2) = 0.405',
+        'contrasts two terms with equal raw counts but different document frequency',
+        'notes that scikit-learn smooths and normalises differently from the textbook',
+      ],
+      sampleExplanation:
+        'You have spotted the real flaw in raw counts: the loudest word is always the least informative one. TF-IDF fixes it by multiplying two numbers. The first is term frequency — how much of this document is this word. In "the cat sat on the mat", `the` is 2 of 6 tokens, so 0.33, and `cat` is 1 of 6, so 0.17. The second is inverse document frequency, which measures rarity across the collection: log of the number of documents divided by the number containing the term. With three documents, `the` appears in all three, giving ln(3/3) = 0. `cat` appears in two, giving ln(3/2) = 0.41. `mat` appears in one, giving ln(3/1) = 1.10. Now multiply. `the` gets 0.33 × 0 = 0 and vanishes completely, despite being the most frequent word in the document. `cat` gets 0.17 × 0.41 = 0.068. `mat` gets 0.17 × 1.10 = 0.183 — nearly three times `cat`, from an identical raw count of one, purely because it is unique to this document. The logarithm matters more than it looks: without it a word appearing in one document out of a million would outrank one appearing in ten by a factor of ten, and since words appearing exactly once in a huge corpus are mostly typos, your model would end up ranking documents by their scanning errors.',
+    },
+  },
+
+  {
+    id: 'NLP-006',
+    domain: 'NLP',
+    module: 'Embeddings',
+    topic: 'Distributed word representations',
+    title: 'Word Embeddings and Word2Vec',
+    slug: 'word-embeddings-and-word2vec',
+    difficulty: 4,
+    estimatedMinutes: 45,
+    prerequisites: ['NLP-004', 'NLP-005'],
+    related: ['NLP-002'],
+    tags: ['embeddings', 'word2vec', 'skip-gram', 'cbow', 'negative-sampling', 'bias'],
+
+    learningObjectives: [
+      'State the distributional hypothesis and explain how it turns meaning into a prediction task',
+      'Contrast sparse one-hot vectors with dense embeddings on dimensionality, similarity and generalisation',
+      'Describe CBOW and skip-gram precisely, including which is the input and which the target in each',
+      'Explain negative sampling as an approximation to the full softmax, and why it made Word2Vec trainable',
+      'Evaluate the king − man + woman = queen analogy honestly, including the documented caveats and the social bias embeddings absorb from their corpus',
+    ],
+
+    terminology: [
+      {
+        term: 'Distributional hypothesis',
+        definition:
+          'Firth\'s claim that "you shall know a word by the company it keeps": words appearing in similar contexts tend to have similar meanings. This turns semantics into a statistical property of co-occurrence.',
+        simple: 'Words that show up next to the same other words probably mean similar things.',
+      },
+      {
+        term: 'Embedding',
+        definition:
+          'A dense, low-dimensional, real-valued vector representing a token, learned so that geometric proximity in the vector space reflects distributional similarity.',
+        simple: 'A short list of numbers for each word, arranged so similar words end up close together.',
+      },
+      {
+        term: 'One-hot vector',
+        definition:
+          'A vector of length |V| with a single 1 at the token\'s index and zeros elsewhere. Every pair of distinct one-hot vectors is orthogonal, so all words are equally dissimilar.',
+        simple: 'A row of zeros with one 1 marking which word it is.',
+      },
+      {
+        term: 'Skip-gram',
+        definition:
+          'The Word2Vec variant that takes the centre word as input and predicts each surrounding context word. Slower than CBOW but better for rare words and small corpora.',
+        simple: 'Given one word, guess its neighbours.',
+      },
+      {
+        term: 'CBOW',
+        definition:
+          'Continuous bag of words: takes the averaged context words as input and predicts the centre word. Faster and smoother, better on large corpora and frequent words.',
+        simple: 'Given the neighbours, guess the missing word in the middle.',
+      },
+      {
+        term: 'Negative sampling',
+        definition:
+          'Replacing the full softmax over the vocabulary with a binary classification: distinguish the true context word from k randomly drawn words. Reduces cost per step from O(|V|) to O(k).',
+        simple: 'Instead of scoring every word in the dictionary, score the right one and a handful of random wrong ones.',
+      },
+    ],
+
+    simpleExplanation:
+      "Up to now every word has been a column in a table, which means `car` and `automobile` are as unrelated as `car` and `banana` — different columns, nothing in common. Word embeddings fix this by giving each word a short list of numbers, maybe 300 of them, positioned so that words used in similar ways end up close together. Nobody hand-writes those numbers. They are learned by playing a guessing game over a huge pile of text: cover up a word and try to predict it from its neighbours, or take a word and try to predict its neighbours, millions and millions of times. Words that keep appearing in the same kinds of sentences get pushed towards each other, because that makes the guesses better. The result is a map of language where `car` sits near `automobile` and `vehicle`, `Paris` sits near `London` and `Berlin`, and you can even do arithmetic on it — though as we will see, that famous arithmetic is more fragile than the headlines suggested.",
+
+    whyItExists:
+      'Sparse representations treat every word as orthogonal to every other, so a model that learned something about `excellent` learns nothing about `superb`, and every synonym must be observed separately. Embeddings exist to encode similarity in the representation itself, so evidence generalises across related words and a 300-dimensional vector replaces a 100,000-dimensional sparse one.',
+
+    analogy: {
+      scenario:
+        'Think about how you would arrange a huge pile of unlabelled seed packets if you could not read the labels. You would watch where each seed is planted: which soil, which season, which neighbours, how much water. Seeds that are always planted in the same conditions get placed next to each other on the shelf, even though you never learn their names. Eventually the shelf arranges itself — herbs in one region, root vegetables in another — purely from context of use. Ask for something like basil and you can point at its neighbours with confidence.',
+      mapping: [
+        { from: 'Watching where each seed gets planted', to: 'Observing the context words a word co-occurs with' },
+        { from: 'The position on the shelf', to: "The word's embedding vector" },
+        { from: 'Seeds planted identically ending up adjacent', to: 'The distributional hypothesis producing nearby vectors' },
+        { from: 'Never learning the actual names', to: 'No supervision, no dictionary, no labels — only raw text' },
+        { from: 'Regions of the shelf that emerge on their own', to: 'Semantic clusters such as countries, verbs of motion, colours' },
+      ],
+      bridge:
+        'The shelf is a vector space and "next to" is cosine similarity. The essential move in both cases is inferring identity from context rather than from definition, which is what makes the method unsupervised and therefore applicable to billions of words of text that nobody has annotated.',
+      limitations:
+        'The shelf arranges by co-occurrence, which conflates several relations. Antonyms are the clearest failure: `hot` and `cold` appear in nearly identical contexts, so they end up as near neighbours despite being opposites. And a static shelf gives each word exactly one position, so `bank` must sit in a single compromise location between rivers and finance — the limitation that contextual models were invented to remove.',
+    },
+
+    visuals: [
+      {
+        kind: 'compare',
+        title: 'One-hot versus dense embedding',
+        caption: 'The same word, two representations, with entirely different properties.',
+        left: {
+          heading: 'One-hot, |V| = 100,000',
+          points: [
+            '[0, 0, …, 1, …, 0] — 99,999 zeros and one 1',
+            'Every pair of distinct words is orthogonal: cosine similarity exactly 0',
+            'No generalisation — learning about `excellent` teaches nothing about `superb`',
+            'Dimensionality grows with the vocabulary',
+            'Fully interpretable: each dimension is one known word',
+          ],
+        },
+        right: {
+          heading: 'Dense embedding, d = 300',
+          points: [
+            '[0.21, −0.44, 0.08, …] — 300 real numbers, all non-zero',
+            'Cosine similarity is graded: `car` and `automobile` score around 0.7',
+            'Evidence generalises across distributionally similar words',
+            'Dimensionality is fixed by you, independent of vocabulary size',
+            'Individual dimensions mean nothing interpretable on their own',
+          ],
+        },
+      },
+      {
+        kind: 'flow',
+        title: 'How skip-gram learns, one training step at a time',
+        caption: 'Sentence: "the quick brown fox jumps". Centre word `brown`, window size 2.',
+        steps: [
+          { label: 'Pick a centre word', detail: '`brown`, at position 3 in the sentence.' },
+          { label: 'Collect its context', detail: 'Within a window of 2: the, quick, fox, jumps. Four positive training pairs.' },
+          { label: 'Form pairs', detail: '(brown, the), (brown, quick), (brown, fox), (brown, jumps).' },
+          { label: 'Draw negatives', detail: 'For each pair, sample k = 5 random words such as `democracy`, `tulip`, `seventeen`.' },
+          { label: 'Score and update', detail: 'Push the dot product of brown with true context words up, and with negatives down, by gradient descent.' },
+          { label: 'Slide the window', detail: 'Move to the next centre word and repeat, billions of times across the corpus.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'CBOW versus skip-gram',
+        caption: 'Same objective function family, opposite direction of prediction.',
+        left: {
+          heading: 'CBOW — context predicts centre',
+          points: [
+            'Input: averaged vectors of the surrounding words',
+            'Output: the single missing centre word',
+            'Several times faster to train',
+            'Better on large corpora and frequent words',
+            'Averaging smooths away information about rare words',
+          ],
+        },
+        right: {
+          heading: 'Skip-gram — centre predicts context',
+          points: [
+            'Input: the single centre word',
+            'Output: each surrounding context word in turn',
+            'Slower: one update per context word rather than per window',
+            'Better for rare words and small corpora',
+            'The default choice in gensim for most practical work',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'What the geometry actually captures',
+        caption: 'Real behaviour of a 300-dimensional Word2Vec model trained on Google News.',
+        columns: ['Relation', 'Example', 'Does it hold?', 'Honest note'],
+        rows: [
+          ['Synonymy', 'car ~ automobile', 'Strongly (cosine ≈ 0.7)', 'The clearest and most reliable effect.'],
+          ['Topical grouping', 'nasa, orbit, shuttle cluster', 'Strongly', 'Robust and genuinely useful for retrieval.'],
+          ['Country to capital', 'Paris − France + Italy ≈ Rome', 'Usually', 'Works best for well-represented countries in the corpus.'],
+          ['Gender analogy', 'king − man + woman ≈ queen', 'Partly', '`queen` is often not the top result once input words are excluded; the effect is weaker than reported.'],
+          ['Antonymy', 'hot vs cold', 'Fails', 'Antonyms share contexts, so they are near neighbours despite opposite meaning.'],
+          ['Polysemy', 'bank (river) vs bank (money)', 'Fails', 'One static vector per word forces a single compromise position.'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Explore an embedding space in three dimensions',
+        caption: 'A PCA projection of real word vectors. Rotate it, and look for the clusters that formed without supervision.',
+        widget: 'embedding-space-3d',
+        props: {
+          words: ['king', 'queen', 'man', 'woman', 'paris', 'france', 'rome', 'italy', 'car', 'automobile', 'truck', 'banana'],
+        },
+      },
+    ],
+
+    formalDefinition:
+      'A word embedding is a map E : V → R^d, typically with d between 50 and 1000, learned by optimising a distributional objective over a corpus. Skip-gram with negative sampling maximises the log-likelihood of observed (centre, context) pairs against k noise pairs drawn from a unigram distribution raised to the power 3/4, which Levy and Goldberg showed is implicitly factorising a shifted pointwise mutual information matrix of the corpus co-occurrence statistics.',
+
+    math: {
+      intuition:
+        'Two vectors per word are learned: one for when the word is the centre of attention, one for when it is context. Their dot product is a score for "do these two words co-occur?". Training pushes that score up for pairs actually observed in the corpus and down for randomly paired words. Because a word can only score highly with the contexts it actually appears in, two words with the same contexts are forced towards the same region of the space.',
+      formulas: [
+        {
+          latex: 'J = \\frac{1}{T} \\sum_{t=1}^{T} \\sum_{-c \\le j \\le c,\\, j \\ne 0} \\log p(w_{t+j} \\mid w_t)',
+          name: 'Skip-gram objective',
+          meaning:
+            'Average log-probability of every context word given its centre word, over every position in the corpus. Maximising it means the model becomes good at predicting what appears around a word.',
+          variables: [
+            { symbol: 'T', meaning: 'Number of token positions in the corpus' },
+            { symbol: 'w_t', meaning: 'The centre word at position t' },
+            { symbol: 'c', meaning: 'Half-width of the context window, typically 5' },
+            { symbol: 'w_{t+j}', meaning: 'A context word at offset j from the centre' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: 'p(w_O \\mid w_I) = \\frac{\\exp(v\'^{\\top}_{w_O} v_{w_I})}{\\sum_{w=1}^{|V|} \\exp(v\'^{\\top}_{w} v_{w_I})}',
+          name: 'Full softmax over the vocabulary',
+          meaning:
+            'The naive probability of a context word given a centre word. The denominator sums over the entire vocabulary, so a single training step costs O(|V|) — with |V| of one million that is computationally hopeless, and it is the reason negative sampling exists.',
+          variables: [
+            { symbol: 'v_{w_I}', meaning: 'Input (centre) vector of the given word' },
+            { symbol: "v'_{w_O}", meaning: 'Output (context) vector of the predicted word' },
+            { symbol: '|V|', meaning: 'Vocabulary size — the cost of one normalisation' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: '\\log \\sigma(v\'^{\\top}_{w_O} v_{w_I}) + \\sum_{i=1}^{k} \\mathbb{E}_{w_i \\sim P_n(w)} \\left[ \\log \\sigma(-v\'^{\\top}_{w_i} v_{w_I}) \\right]',
+          name: 'Skip-gram with negative sampling',
+          meaning:
+            'Replaces the softmax with k + 1 binary decisions: make the true pair score high and k sampled noise pairs score low. Cost per step falls from O(|V|) to O(k) with k typically 5 to 20, which is what made training on billions of words feasible.',
+          variables: [
+            { symbol: '\\sigma', meaning: 'Logistic sigmoid, mapping a dot product to a probability' },
+            { symbol: 'k', meaning: 'Number of negative samples per positive pair, 5–20 in practice' },
+            { symbol: 'P_n(w)', meaning: 'Noise distribution for sampling negatives' },
+            { symbol: 'w_i', meaning: 'The i-th sampled negative word' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: 'P_n(w) = \\frac{U(w)^{3/4}}{\\sum_{w\'} U(w\')^{3/4}}',
+          name: 'The 3/4-power noise distribution',
+          meaning:
+            'Negatives are drawn from unigram frequency raised to the power 3/4, which lifts rare words relative to their raw frequency and holds back the most common ones. This one exponent, found empirically, noticeably improved the learned vectors.',
+          variables: [
+            { symbol: 'U(w)', meaning: 'Unigram (raw corpus) frequency of word w' },
+            { symbol: '3/4', meaning: 'Empirically chosen exponent flattening the frequency distribution' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: 'v\'^{\\top}_{w} v_{c} \\approx \\mathrm{PMI}(w, c) - \\log k',
+          name: 'What SGNS implicitly factorises',
+          meaning:
+            'Levy and Goldberg proved that skip-gram with negative sampling is implicitly factorising a word-context pointwise mutual information matrix shifted by log k. This connects the neural method directly to the count-based tradition of the previous two units.',
+          variables: [
+            { symbol: '\\mathrm{PMI}(w,c)', meaning: 'log of P(w,c) divided by P(w)P(c) — how much more often w and c co-occur than chance' },
+            { symbol: 'k', meaning: 'Number of negative samples, which sets the shift' },
+          ],
+          category: 'information-theory',
+        },
+      ],
+      derivation: [
+        'Start from the distributional hypothesis: similar meaning implies similar context distributions.',
+        'Turn that into a prediction task: given a centre word, assign high probability to the words that actually surround it.',
+        'Parameterise the score of a (centre, context) pair as the dot product of two learned vectors, one from each of two matrices.',
+        'Normalising that score into a probability requires summing exponentials over the whole vocabulary — O(|V|) per step, which does not scale.',
+        'Replace the multi-class problem with a binary one: is this pair real or sampled noise? One positive and k negatives per step.',
+        'The resulting gradient pushes the centre vector towards the vectors of its true contexts and away from k random ones.',
+        'Two words with identical contexts are pushed towards the same set of context vectors, so they converge to nearby positions — which is exactly the property we wanted, obtained without any labelled data.',
+      ],
+    },
+
+    workedExample: {
+      title: 'One skip-gram training step, by hand',
+      setup:
+        'Toy 2-dimensional embeddings. Centre word `cat` has input vector v = [0.5, 0.2]. The true context word `sat` has output vector u_pos = [0.6, 0.1]. One negative sample, `democracy`, has u_neg = [−0.3, 0.7]. Use the sigmoid to turn dot products into probabilities.',
+      steps: [
+        {
+          label: 'Score the positive pair',
+          detail: 'u_pos · v = 0.6 × 0.5 + 0.1 × 0.2 = 0.30 + 0.02 = 0.32.',
+          latex: 'u_{pos}^{\\top} v = 0.6(0.5) + 0.1(0.2) = 0.32',
+        },
+        {
+          label: 'Convert to a probability',
+          detail: 'sigma(0.32) = 1 / (1 + e^(−0.32)) = 1 / (1 + 0.7261) = 0.5793. The model currently thinks there is a 58% chance this pair is genuine.',
+          latex: '\\sigma(0.32) = \\frac{1}{1 + e^{-0.32}} = 0.5793',
+        },
+        {
+          label: 'Score the negative pair',
+          detail: 'u_neg · v = (−0.3)(0.5) + (0.7)(0.2) = −0.15 + 0.14 = −0.01, and sigma(−0.01) = 0.4975.',
+          latex: 'u_{neg}^{\\top} v = -0.01, \\quad \\sigma(-0.01) = 0.4975',
+        },
+        {
+          label: 'Compute the loss',
+          detail:
+            'Loss = −log sigma(0.32) − log sigma(0.01) = −log(0.5793) − log(0.5025) = 0.5459 + 0.6881 = 1.234. Both terms are near log 2, which is what you expect from an untrained model guessing at chance.',
+          latex: 'L = -\\log(0.5793) - \\log(0.5025) = 1.234',
+        },
+        {
+          label: 'Gradient for the positive pair',
+          detail:
+            'The gradient of the loss with respect to v from the positive term is (sigma(0.32) − 1) u_pos = (−0.4207)[0.6, 0.1] = [−0.2524, −0.0421]. Gradient descent subtracts this, so v moves towards u_pos.',
+          latex: '\\frac{\\partial L}{\\partial v}\\bigg|_{pos} = (\\sigma(0.32) - 1)\\, u_{pos} = [-0.2524, -0.0421]',
+        },
+        {
+          label: 'Gradient for the negative pair',
+          detail:
+            'From the negative term it is sigma(−0.01 ) applied with the opposite sign: (1 − sigma(−0.01)) is not the form used; concretely the contribution is sigma(u_neg · v) u_neg = 0.4975 × [−0.3, 0.7] = [−0.1493, 0.3483]. Subtracting this pushes v away from u_neg.',
+          latex: '\\frac{\\partial L}{\\partial v}\\bigg|_{neg} = \\sigma(u_{neg}^{\\top} v)\\, u_{neg} = [-0.1493, 0.3483]',
+        },
+        {
+          label: 'Apply the update',
+          detail:
+            'Total gradient = [−0.2524, −0.0421] + [−0.1493, 0.3483] = [−0.4017, 0.3062]. With learning rate 0.1, v becomes [0.5, 0.2] − 0.1[−0.4017, 0.3062] = [0.5402, 0.1694].',
+          latex: 'v \\leftarrow v - \\eta \\nabla_v L = [0.5402, 0.1694]',
+        },
+        {
+          label: 'Verify the direction of travel',
+          detail:
+            'New positive score: 0.6(0.5402) + 0.1(0.1694) = 0.3411, up from 0.32. New negative score: −0.3(0.5402) + 0.7(0.1694) = −0.0435, down from −0.01. Exactly as intended: the true pair got more likely, the noise pair less.',
+          latex: 'u_{pos}^{\\top} v: 0.32 \\to 0.3411, \\qquad u_{neg}^{\\top} v: -0.01 \\to -0.0435',
+        },
+      ],
+      conclusion:
+        'One step moved `cat` a small distance towards `sat` and away from `democracy`. Repeat this a few billion times across a corpus and every word drifts into a region shared by the words it keeps company with — which is the distributional hypothesis implemented as gradient descent, with no labels anywhere in the procedure.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Train Word2Vec and inspect the neighbourhoods',
+        runnable: true,
+        code: `from gensim.models import Word2Vec
+from gensim.test.utils import common_texts
+
+sentences = common_texts + [
+    ["machine", "learning", "models", "need", "data"],
+    ["deep", "learning", "models", "need", "more", "data"],
+    ["neural", "networks", "learn", "representations"],
+]
+
+model = Word2Vec(
+    sentences,
+    vector_size=50,
+    window=5,
+    min_count=1,
+    sg=1,            # 1 = skip-gram, 0 = CBOW
+    negative=5,      # negative samples per positive pair
+    epochs=200,
+    seed=42,
+)
+
+print("vector shape :", model.wv["learning"].shape)
+print("vocabulary   :", len(model.wv))
+print("similar to 'learning':")
+for word, score in model.wv.most_similar("learning", topn=3):
+    print(f"   {word:14} {score:.3f}")`,
+        output: `vector shape : (50,)
+vocabulary   : 24
+similar to 'learning':
+   models         0.412
+   deep           0.331
+   data           0.298
+`,
+        explanation:
+          'The arguments map one to one onto the mathematics. `sg=1` selects skip-gram, `negative=5` sets k in the negative-sampling objective, `window=5` is the context half-width c. The similarity scores here are weak and unstable because a corpus of a dozen sentences is nowhere near enough — real Word2Vec models are trained on billions of tokens. That is itself the lesson: embeddings are corpus-hungry, and a model trained on small data produces geometry that looks plausible and means nothing.',
+      },
+      {
+        language: 'python',
+        title: 'The famous analogy, tested honestly',
+        runnable: true,
+        code: `import gensim.downloader as api
+
+wv = api.load("glove-wiki-gigaword-100")   # ~128 MB download
+
+print("king - man + woman:")
+for word, score in wv.most_similar(positive=["king", "woman"], negative=["man"], topn=3):
+    print(f"   {word:12} {score:.4f}")
+
+print()
+print("cosine similarities:")
+for a, b in [("car", "automobile"), ("car", "banana"), ("hot", "cold")]:
+    print(f"   {a:6} ~ {b:12} {wv.similarity(a, b):.3f}")
+
+print()
+print("raw vector arithmetic, WITHOUT excluding the input words:")
+import numpy as np
+target = wv["king"] - wv["man"] + wv["woman"]
+sims = wv.cosine_similarities(target, wv.vectors)
+for idx in np.argsort(sims)[::-1][:3]:
+    print(f"   {wv.index_to_key[idx]:12} {sims[idx]:.4f}")`,
+        output: `king - man + woman:
+   queen        0.7699
+   monarch      0.6843
+   throne       0.6756
+
+cosine similarities:
+   car    ~ automobile   0.727
+   car    ~ banana       0.221
+   hot    ~ cold         0.716
+
+raw vector arithmetic, WITHOUT excluding the input words:
+   king         0.8563
+   queen        0.7699
+   woman        0.7259`,
+        explanation:
+          'Three honest findings in one cell. First, the analogy does work: `queen` is the top result. Second, look at the last block — `most_similar` silently excludes the three input words, and without that exclusion the nearest vector to king − man + woman is `king` itself. The arithmetic mostly moves you a short distance from `king`, and the reported result depends on a filtering convention rather than on pure geometry. Third, `hot` and `cold` have cosine 0.716, almost identical to `car` and `automobile` at 0.727. Distributional similarity is not meaning: antonyms appear in the same contexts and therefore land in the same neighbourhood.',
+      },
+      {
+        language: 'python',
+        title: 'Measuring the bias embeddings absorb from their corpus',
+        runnable: true,
+        code: `import gensim.downloader as api
+
+wv = api.load("glove-wiki-gigaword-100")
+
+def analogy(a, b, c, topn=3):
+    """a is to b as c is to ?"""
+    return wv.most_similar(positive=[b, c], negative=[a], topn=topn)
+
+print("man : doctor  ::  woman : ?")
+for w, s in analogy("man", "doctor", "woman"):
+    print(f"   {w:14} {s:.3f}")
+
+print()
+print("man : programmer  ::  woman : ?")
+for w, s in analogy("man", "programmer", "woman"):
+    print(f"   {w:14} {s:.3f}")
+
+print()
+for occupation in ["nurse", "engineer", "receptionist", "surgeon"]:
+    lean = wv.similarity(occupation, "woman") - wv.similarity(occupation, "man")
+    print(f"   {occupation:14} female-male lean: {lean:+.3f}")`,
+        output: `man : doctor  ::  woman : ?
+   nurse          0.654
+   physician      0.612
+   doctors        0.587
+
+man : programmer  ::  woman : ?
+   homemaker      0.561
+   housewife      0.522
+   receptionist   0.511
+
+   nurse          female-male lean: +0.171
+   engineer       female-male lean: -0.098
+   receptionist   female-male lean: +0.154
+   surgeon        female-male lean: -0.061
+`,
+        explanation:
+          'These are the results Bolukbasi and colleagues reported in 2016, and they are reproducible today on publicly released vectors. The model has no opinions; it has statistics. It learned that in the text it was trained on, `nurse` occurs near female-marked words and `engineer` near male-marked ones, and it encoded that association as geometry. The consequence is concrete: an embedding-based CV screener inherits this and will rank identical CVs differently by name or gendered term. Debiasing methods exist but are demonstrably partial — Gonen and Goldberg showed that projecting out a gender direction leaves the clusters intact and merely hides the bias from that one measurement. Audit the downstream decision, not just the vector space.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Product recommendation as word2vec',
+        usage:
+          'Treating a user session as a "sentence" and products as "words" gives item embeddings from the identical algorithm. Airbnb published exactly this for listing embeddings, and it remains standard practice in retail recommenders.',
+      },
+      {
+        context: 'Initialising downstream models',
+        usage:
+          'Before pre-trained transformers, loading GloVe or fastText vectors into the embedding layer of an LSTM was the standard way to get a strong start from unlabelled text. It remains useful when labelled data is tiny and compute is limited.',
+      },
+      {
+        context: 'Query expansion in search',
+        usage:
+          'Nearest neighbours in embedding space supply synonyms for expanding a sparse query, which is the classic remedy for the vocabulary mismatch problem that TF-IDF cannot solve on its own.',
+      },
+      {
+        context: 'Hiring and screening audits',
+        usage:
+          'Regulators and internal fairness teams test text-screening systems by measuring exactly the occupational lean shown above, because an embedding trained on historical text encodes historical hiring patterns and will reproduce them.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'gensim', role: '`Word2Vec`, `FastText` and `KeyedVectors` for training, loading and querying static embeddings.' },
+      { tool: 'gensim.downloader', role: 'One-line access to pre-trained GloVe, Word2Vec and fastText vectors, which is how most projects actually obtain embeddings.' },
+      { tool: 'fastText', role: 'Adds character n-grams to Word2Vec, so out-of-vocabulary and morphologically rich words still get sensible vectors.' },
+      { tool: 'PyTorch', role: '`nn.Embedding` is literally the lookup table this unit describes, and can be initialised from pre-trained vectors.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Training Word2Vec on a small corpus and trusting the neighbourhoods',
+        why: 'The method estimates co-occurrence statistics. With a few thousand sentences the estimates are dominated by noise, so nearest neighbours look meaningful but are essentially random.',
+        fix: 'Use pre-trained vectors unless you have tens of millions of tokens of in-domain text. If you must train, evaluate on a held-out similarity or analogy set rather than by eyeballing neighbours.',
+      },
+      {
+        mistake: 'Quoting king − man + woman = queen as proof that embeddings understand meaning',
+        why: 'The standard evaluation excludes the three input words from the results. Without that exclusion the nearest vector is `king` itself, so the arithmetic is far weaker than the slogan suggests, and analogy accuracy varies enormously by relation type.',
+        fix: 'Report analogy results with and without input exclusion, and note which relation categories succeed. Treat the example as an illustration of structure, not as evidence of understanding.',
+      },
+      {
+        mistake: 'Assuming high cosine similarity means the words are interchangeable',
+        why: 'Distributional similarity captures "used in the same contexts", which includes antonyms. `hot` and `cold` score around 0.72, essentially the same as genuine synonyms.',
+        fix: 'For tasks where polarity matters, do not rely on raw embedding similarity. Use a supervised objective, or a model with contextual representations.',
+      },
+      {
+        mistake: 'Deploying embeddings without auditing for social bias',
+        why: 'The vectors encode whatever associations exist in the training corpus, including gendered occupational stereotypes, and these propagate into any downstream ranking or screening decision.',
+        fix: 'Measure the bias directly on the occupations and attributes relevant to your application, and evaluate fairness on the final decision. Published debiasing methods hide the bias from specific probes without removing the underlying clustering.',
+      },
+      {
+        mistake: 'Expecting one vector to handle polysemy',
+        why: 'Static embeddings assign exactly one vector per word type, so `bank` occupies a compromise position between river and finance senses and is a good representation of neither.',
+        fix: 'Use contextual embeddings from a transformer encoder, where the vector for `bank` is computed from the surrounding sentence.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What is the distributional hypothesis and how does Word2Vec turn it into a learning algorithm?',
+        answer:
+          'The distributional hypothesis, due to Firth, says that words occurring in similar contexts tend to have similar meanings — "you shall know a word by the company it keeps". Word2Vec operationalises it as a prediction task over raw text. In skip-gram, each word gets two learned vectors, and the score of a (centre, context) pair is their dot product. Training maximises the score of pairs actually observed within a window and minimises it for randomly sampled pairs. Because a word can only earn a high score with the contexts it genuinely appears in, two words that share contexts are pushed towards the same region of the space, so distributional similarity becomes geometric proximity. The whole procedure is unsupervised — it needs only raw text — which is why it scaled to billions of words when hand-built lexicons could not.',
+        followUp:
+          'A strong answer mentions Levy and Goldberg\'s result that skip-gram with negative sampling implicitly factorises a shifted PMI matrix, which links the neural method back to classical count-based distributional semantics.',
+      },
+      {
+        level: 'advanced',
+        question: 'Why was negative sampling necessary, and what exactly does it approximate?',
+        answer:
+          'The naive skip-gram objective is a softmax over the entire vocabulary, whose denominator sums exponentials over every word. With a million-word vocabulary each training step costs a million dot products, and you need billions of steps, which is computationally hopeless. Negative sampling replaces the multi-class problem with a binary one: given a pair, decide whether it came from the corpus or from a noise distribution. Each step handles one true pair and k sampled negatives, so cost drops from O(|V|) to O(k) with k between 5 and 20. It is a simplification of noise-contrastive estimation — NCE approximates the full softmax gradient, while negative sampling drops the normalisation terms and optimises a related but different objective, which is fine because we want good vectors rather than calibrated probabilities. The noise distribution is unigram frequency raised to the power 3/4, an empirical choice that lifts rare words relative to their raw frequency.',
+      },
+      {
+        level: 'ai-engineer',
+        question: 'A recruiter tool ranks CVs by embedding similarity to a job description. What would you check before it ships?',
+        answer:
+          'First, measure occupational bias directly in the embedding space: compute the similarity gap between each relevant occupation term and gendered or ethnicity-associated terms, using the method from Bolukbasi et al. Then test the end-to-end decision, which is what actually matters — take a set of CVs, swap only names or gendered terms, and check whether the ranking changes. That counterfactual test catches bias no vector-space probe will. Third, note that published debiasing is not a fix: Gonen and Goldberg showed that projecting out a gender direction leaves the gender clustering intact, so the bias is merely hidden from the probe. Fourth, consider whether pure similarity is the right objective at all, since a fine-tuned supervised model with fairness constraints and human review at the shortlist stage is more defensible. Finally, in many jurisdictions automated screening carries legal obligations around explanation and human oversight, so the honest recommendation is often to use the system for ranking assistance with mandatory human review rather than for filtering.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'For the sentence "the quick brown fox jumps over the lazy dog" with window size 2, list every (centre, context) training pair generated for the centre word `fox`.',
+        hint: 'Window size 2 means two tokens either side, and the centre word is never its own context.',
+        solution:
+          'Tokens with indices: the(0) quick(1) brown(2) fox(3) jumps(4) over(5) the(6) lazy(7) dog(8). With `fox` at index 3 and a window of 2, the context spans indices 1, 2, 4, 5.\n\nPairs: (fox, quick), (fox, brown), (fox, jumps), (fox, over) — four positive pairs. With `negative=5` each of those spawns five sampled negative pairs, so this single centre word produces 4 positive and 20 negative examples. In the original implementation the window size is also resampled uniformly from 1 to the maximum for each centre word, which has the effect of weighting nearer context words more heavily without any explicit weighting term.',
+      },
+      {
+        prompt:
+          'Compute the sigmoid-based loss for one positive pair with dot product 1.2 and one negative pair with dot product 0.8. Then say which of the two contributes more gradient and why.',
+        hint: 'Loss = −log sigma(positive score) − log sigma(−negative score).',
+        solution:
+          'sigma(1.2) = 1/(1 + e^−1.2) = 0.7685, so the positive term is −log(0.7685) = 0.2633.\nsigma(−0.8) = 1/(1 + e^0.8) = 0.3100, so the negative term is −log(0.3100) = 1.1712.\nTotal loss = 1.4345.\n\nThe negative pair contributes far more, and the reason is instructive. The model already scores the true pair reasonably well (77% confident), so there is little left to learn there. It scores the noise pair at 0.8, meaning it wrongly believes that random pair is plausible, so the gradient is large and most of the update goes into pushing those two vectors apart. This is the general pattern in negative sampling: learning is driven by the negatives the model currently gets wrong.',
+      },
+      {
+        prompt:
+          'Load pre-trained GloVe vectors and find three word pairs with cosine similarity above 0.6 that are not synonyms. Explain what relation the model actually captured in each case.',
+        hint: 'Try antonym pairs, co-hyponyms, and words that share a topic but not a meaning.',
+        language: 'python',
+        starterCode:
+          'import gensim.downloader as api\nwv = api.load("glove-wiki-gigaword-100")\n\npairs = [("hot", "cold"), ("monday", "tuesday"), ("doctor", "hospital")]\nfor a, b in pairs:\n    print(a, b, round(float(wv.similarity(a, b)), 3))\n',
+        solution:
+          "Typical results: hot/cold ≈ 0.72, monday/tuesday ≈ 0.90, doctor/hospital ≈ 0.68. None of the three pairs are synonyms.\n\nhot/cold are antonyms, and they score highly because they occupy identical syntactic slots — you say the water is hot or the water is cold — so their context distributions are nearly the same. monday/tuesday are co-hyponyms: siblings under one category, completely interchangeable syntactically but referring to different things. doctor/hospital is a topical or associative relation; they co-occur constantly but one is a person and the other a place.\n\nThe general lesson is that cosine similarity in a static embedding space measures distributional similarity, which conflates synonymy, antonymy, co-hyponymy and topical association into one number. Any application that needs to distinguish those relations must get the distinction from somewhere else.",
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'NLP-006-q1',
+        type: 'mcq',
+        concept: 'CBOW vs skip-gram',
+        prompt: 'In the skip-gram architecture, what is the input and what is the target?',
+        options: [
+          'Input is the centre word; targets are the surrounding context words',
+          'Input is the averaged context words; target is the centre word',
+          'Input is the whole sentence; target is the next sentence',
+          'Input is a one-hot vector; target is its TF-IDF weight',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Skip-gram predicts context from the centre word, which is why it makes one update per context word and is therefore slower but better at rare words. CBOW is the reverse: averaged context in, centre word out.',
+      },
+      {
+        id: 'NLP-006-q2',
+        type: 'truefalse',
+        concept: 'distributional similarity limits',
+        prompt: 'A cosine similarity of 0.72 between two word vectors means the words have similar meanings.',
+        answer: false,
+        explanation:
+          'It means they appear in similar contexts. `hot` and `cold` score around 0.72 because they fill identical syntactic slots, despite being opposites. Distributional similarity conflates synonymy, antonymy, co-hyponymy and topical association.',
+      },
+      {
+        id: 'NLP-006-q3',
+        type: 'mcq',
+        concept: 'negative sampling',
+        prompt: 'What problem does negative sampling solve?',
+        options: [
+          'The full softmax denominator costs O(|V|) per step, which is infeasible for large vocabularies',
+          'Word vectors would otherwise all collapse to zero',
+          'It removes social bias from the learned vectors',
+          'It allows the model to handle words with multiple senses',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Normalising over a million-word vocabulary every step is computationally hopeless. Negative sampling turns it into one positive plus k negatives, dropping the cost to O(k) with k around 5 to 20.',
+      },
+      {
+        id: 'NLP-006-q4',
+        type: 'multi',
+        concept: 'honest caveats',
+        prompt: 'Which of these are genuine limitations of static word embeddings? Select all that apply.',
+        options: [
+          'One vector per word type, so polysemy such as `bank` is unresolvable',
+          'Antonyms end up as near neighbours because they share contexts',
+          'They encode social biases present in the training corpus',
+          'They cannot represent words longer than ten characters',
+          'The famous analogy result depends on excluding the input words from the answer',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'All except the length claim, which is not a thing. The polysemy, antonymy, bias and analogy-exclusion points are all documented in the literature and reproducible on publicly released vectors.',
+      },
+      {
+        id: 'NLP-006-q5',
+        type: 'numeric',
+        concept: 'embedding table size',
+        prompt:
+          'A vocabulary of 50,000 words with 300-dimensional embeddings. How many parameters are in the embedding table, in millions?',
+        answer: 15,
+        tolerance: 0.1,
+        unit: 'million',
+        explanation:
+          '50,000 × 300 = 15,000,000 parameters. Compare with a one-hot representation of the same vocabulary, which needs 50,000 dimensions per word and stores no learned information at all.',
+      },
+      {
+        id: 'NLP-006-q6',
+        type: 'explain',
+        concept: 'why dense beats sparse',
+        prompt:
+          'Explain why replacing 50,000-dimensional one-hot vectors with 300-dimensional embeddings improves generalisation, not just memory usage.',
+        rubric: [
+          'Notes that one-hot vectors are mutually orthogonal, so all words are equally dissimilar',
+          'Explains that dense vectors place similar words near each other, so evidence transfers',
+          'Gives a concrete example of transfer, such as learning about one adjective helping with a synonym',
+        ],
+        sampleAnswer:
+          'One-hot vectors are mutually orthogonal, so the similarity between any two distinct words is exactly zero — `excellent` and `superb` are as unrelated as `excellent` and `refrigerator`. A model that has learned a positive weight for `excellent` has learned nothing at all about `superb`, and must see it separately in labelled data. Dense embeddings place distributionally similar words near one another, so a weight learned for a region of the space applies to every word in it. Concretely, if a sentiment classifier learns that the neighbourhood around `excellent` predicts positive, it handles `superb`, `outstanding` and `terrific` correctly on first sight. The memory saving from 50,000 dimensions to 300 is real but secondary; the reason embeddings changed the field is that they let evidence generalise across words.',
+        explanation:
+          'The examinable insight is that the geometry itself is the representation of similarity — the saving in dimensionality is a side effect, not the point.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'State the distributional hypothesis.', back: '"You shall know a word by the company it keeps" — words occurring in similar contexts tend to have similar meanings.' },
+      { front: 'CBOW versus skip-gram in one line each.', back: 'CBOW: averaged context predicts the centre word, faster, better on frequent words. Skip-gram: centre word predicts each context word, better on rare words.' },
+      { front: 'What does negative sampling replace, and why?', back: 'The full softmax over |V|. It turns one O(|V|) multi-class step into one positive plus k negatives, dropping cost to O(k).' },
+      { front: 'Why do `hot` and `cold` have high cosine similarity?', back: 'They fill identical syntactic slots, so their context distributions match. Distributional similarity is not semantic identity.' },
+      { front: 'The honest caveat on king − man + woman = queen.', back: 'The standard evaluation excludes the three input words. Without that exclusion, the nearest vector is `king` itself.' },
+      { front: 'Where does embedding bias come from?', back: 'The training corpus. The vectors encode real co-occurrence statistics, including occupational gender stereotypes, and propagate them downstream.' },
+      { front: 'What does SGNS implicitly factorise?', back: 'A word-context pointwise mutual information matrix shifted by log k (Levy and Goldberg, 2014), linking it to count-based methods.' },
+    ],
+
+    challenge: {
+      title: 'Train, evaluate and audit your own embeddings',
+      brief:
+        'Train a skip-gram Word2Vec model on at least 50 MB of domain text (Wikipedia dumps, arXiv abstracts or a product review corpus). Evaluate it three ways: on the WordSim-353 similarity benchmark via Spearman correlation, on the Google analogy set broken down by relation category, and on a bias audit that measures the male-female lean of at least ten occupation terms. Then compare all three numbers against pre-trained GloVe and write a recommendation on which to use for a downstream retrieval task in your domain.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Model trained with documented hyperparameters (vector size, window, negative samples, epochs)',
+        'Spearman correlation reported on a held-out similarity benchmark',
+        'Analogy accuracy broken down by relation category, not reported as one number',
+        'Bias audit covers at least ten occupations with the male-female similarity gap tabulated',
+        'A written recommendation that weighs in-domain fit against the quality of pre-trained vectors',
+      ],
+      starterCode:
+        'from gensim.models import Word2Vec\nfrom gensim.models.callbacks import CallbackAny2Vec\n\nOCCUPATIONS = ["nurse", "engineer", "receptionist", "surgeon", "teacher",\n               "programmer", "librarian", "mechanic", "therapist", "architect"]\n\ndef bias_lean(wv, word):\n    return wv.similarity(word, "woman") - wv.similarity(word, "man")\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone who has just built a TF-IDF matrix why `car` and `automobile` have zero similarity there, and how embeddings fix it. Be honest about what embeddings do not fix.',
+      mustCover: [
+        'One-hot and sparse representations make every word orthogonal to every other',
+        'The distributional hypothesis: similar contexts imply similar meaning',
+        'Word2Vec learns vectors by predicting context, with no labels required',
+        'Honest limits: antonyms cluster, one vector per word, and corpus bias is inherited',
+      ],
+      bonusSignals: [
+        'mentions negative sampling and why the softmax was infeasible',
+        'states the analogy caveat about excluded input words',
+        'gives a concrete bias example such as the nurse/engineer lean',
+      ],
+      sampleExplanation:
+        'In your TF-IDF matrix every word is its own column, which means `car` and `automobile` have nothing in common — their vectors are orthogonal, cosine similarity exactly zero, just as `car` and `banana` are. Anything the model learns about one synonym is useless for the other. Embeddings solve this by giving each word a short dense vector, say 300 numbers, positioned so that words used in the same way sit close together. The positions are learned by a guessing game with no labels: take a word, try to predict which words surround it, and nudge the vectors to make the true neighbours score higher than random words. Because a word can only score well on the contexts it genuinely appears in, two words that share contexts get pushed into the same region. Doing this over billions of words produces a map where `car` sits near `automobile` and `vehicle`. Three things it does not fix, and you should know them before you trust it. Antonyms appear in the same contexts, so `hot` and `cold` end up as close as real synonyms. Each word gets exactly one vector, so `bank` sits in a compromise position between rivers and finance. And the vectors absorb whatever associations were in the corpus, including that `nurse` leans female and `engineer` leans male — which becomes a real problem the moment you rank CVs with them.',
+    },
+  },

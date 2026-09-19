@@ -1610,3 +1610,1195 @@ no normalisation   -> sundial              p=0.208`,
         'A network has a fixed number of input slots, so every picture has to be squeezed onto the same size grid first, and that means inventing values for pixels that fall between the originals — which is what bilinear or nearest interpolation is choosing between. After resizing, the numbers are still 0 to 255, which is an awkward range for learning, so we divide by 255 to get 0 to 1 and then subtract an average and divide by a spread for each colour channel separately. Here is the part that catches people: those six numbers are not generic. They are the average and spread of red, green and blue over the million photographs the model was originally trained on, and the first layer of the network learned its filters against inputs on that exact scale. Hand it data on a different scale and nothing breaks, nothing warns you, and the predictions just get worse. So preprocessing is not a step before the model, it is part of the model, and the reliable habit is to take the transform from the checkpoint rather than retyping it.',
     },
   },
+
+  {
+    id: 'CV-004',
+    domain: 'CV',
+    module: 'Preprocessing & Augmentation',
+    topic: 'Data augmentation',
+    title: 'Data Augmentation',
+    slug: 'data-augmentation',
+    difficulty: 3,
+    estimatedMinutes: 35,
+    prerequisites: ['CV-002', 'CV-003'],
+    related: ['CV-001', 'CV-002', 'CV-003'],
+    tags: ['augmentation', 'regularisation', 'overfitting', 'albumentations', 'torchvision', 'label-preserving'],
+
+    learningObjectives: [
+      'Explain augmentation as a regulariser that encodes invariances you already believe in',
+      'Distinguish geometric from photometric transforms and name the common members of each family',
+      'Decide whether a given transform is label-preserving for a given dataset, and justify the decision',
+      'Apply augmentation to the training split only, and explain precisely why validation must stay untouched',
+    ],
+
+    terminology: [
+      {
+        term: 'Data augmentation',
+        definition:
+          'Applying randomised, label-preserving transformations to training inputs so the model sees a different version of each example on every epoch, effectively enlarging the training distribution.',
+        simple: 'Showing the model slightly changed copies of the same photo so it learns the thing, not the photo.',
+      },
+      {
+        term: 'Label-preserving',
+        definition:
+          'A transform is label-preserving if the correct answer is unchanged by it. Horizontal flip preserves the label cat but destroys the label 6, which becomes a mirror image that is not a 6.',
+        simple: 'The change must not turn the right answer into a wrong one.',
+      },
+      {
+        term: 'Geometric transform',
+        definition:
+          'A change to where pixels are: flip, rotation, translation, scale, shear, perspective, random resized crop. For detection and segmentation the targets must be transformed with the image.',
+        simple: 'Moving the pixels around without changing their colours.',
+      },
+      {
+        term: 'Photometric transform',
+        definition:
+          'A change to pixel values only: brightness, contrast, saturation, hue jitter, gamma, blur, noise, JPEG compression. Geometry and therefore boxes and masks are untouched.',
+        simple: 'Changing how it looks — lighter, darker, more colourful — without moving anything.',
+      },
+      {
+        term: 'Invariance',
+        definition:
+          'A property the model should ignore. Augmenting with a transform is a statement that the output must not depend on it, which is why the choice of transforms is a statement about the problem rather than a tuning knob.',
+        simple: 'Something you want the model not to care about.',
+      },
+    ],
+
+    simpleExplanation:
+      "If you only ever show a child photographs of a cat sitting in the same corner of the same sofa in the same light, they may learn sofa rather than cat. The cure is variety: the same cat from the left, in shadow, a bit closer, slightly tilted. Data augmentation is that cure for a neural network, done automatically. Every time an image is fetched for training, the code makes a small random change to it first — maybe mirror it, maybe crop a different part, maybe brighten it — so the network almost never sees exactly the same pixels twice. It learns the parts that stayed the same across all those versions, which is precisely what we mean by the cat. Two rules matter enormously. First, the change must never alter the correct answer, so mirroring a cat is fine but mirroring a handwritten 6 turns it into something that is not a 6. Second, augmentation is only for training. The validation set must stay untouched, because it is your only honest measurement of how the model does on real data.",
+
+    whyItExists:
+      'Deep networks have far more parameters than any realistic labelled dataset has examples, so they can memorise the training set instead of learning the concept. Collecting more data is the best cure and is usually impossible; augmentation is the cheap substitute, injecting the invariances a human already knows hold — a mirrored cat is still a cat — so the model cannot rely on accidental details that will not repeat at test time.',
+
+    analogy: {
+      scenario:
+        'A student preparing for an exam has ten past papers. If they memorise the answers to those ten, they will score perfectly on them and badly on the real thing. A good tutor instead rewrites each question: changes the names and numbers, reorders the parts, phrases it differently. The underlying mathematics is identical, so the correct method is unchanged, but the student can no longer succeed by recall. What survives all the rewrites is understanding.',
+      mapping: [
+        { from: 'The ten original past papers', to: 'The finite labelled training set' },
+        { from: 'Rewriting names and numbers each time', to: 'Randomised transforms applied fresh every epoch' },
+        { from: 'Keeping the underlying method identical', to: 'The label-preserving requirement' },
+        { from: 'Memorising the answer sheet', to: 'Overfitting — low training loss, high validation loss' },
+        { from: 'A clean, unrewritten mock exam kept aside', to: 'The validation set, which is never augmented' },
+      ],
+      bridge:
+        'The tutor must be careful about which rewrites are legitimate: changing the numbers in an arithmetic question is fine, but reversing an inequality sign changes the answer, and the student would then be trained on a lie. That is exactly the label-preserving condition. Formally, each transform asserts an invariance of the true labelling function, and augmenting with a transform that does not respect it injects label noise that caps achievable accuracy.',
+      limitations:
+        'The analogy suggests more rewriting is always better. In practice augmentation that is too aggressive makes the training distribution diverge from the test distribution, and the model spends capacity on variation it will never encounter — visible as training loss that stays stubbornly high while validation loss does not improve either.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Try the transforms on a real image',
+        caption: 'Adjust each transform and watch which ones keep the label intact.',
+        widget: 'augmentation-lab',
+      },
+      {
+        kind: 'table',
+        title: 'Is it label-preserving? It depends on the dataset',
+        columns: ['Transform', 'Safe for', 'Destroys the label for', 'Why'],
+        rows: [
+          ['Horizontal flip', 'Cats, cars, faces, most natural scenes', 'Digits (6 vs 9), text, left-vs-right hand, road signs with arrows', 'Mirror symmetry is not a property of glyphs or of chirality'],
+          ['Vertical flip', 'Satellite and microscopy imagery', 'Anything with gravity: people, buildings, street scenes', 'Upside-down pedestrians do not occur at test time'],
+          ['Rotation ±15°', 'Photographs of objects', 'Document scans where skew matters, digits beyond about 20°', 'Large rotations turn a 6 towards a 9 continuously'],
+          ['Colour jitter', 'General object recognition', 'Colour-defined classes: ripe vs unripe fruit, medical stains', 'The label is literally a function of the hue you are jittering'],
+          ['Random resized crop', 'ImageNet-style classification', 'Small-object detection, where the object may be cropped out', 'Crop can remove the evidence while the label stays'],
+          ['Gaussian noise / blur', 'Robustness to camera quality', 'Fine-grained texture tasks such as defect detection', 'The signal being classified is of the same scale as the noise'],
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'Where augmentation sits in a training step',
+        caption: 'Randomness is applied per sample, per epoch — never cached.',
+        steps: [
+          { label: 'Dataset __getitem__ is called', detail: 'The raw uint8 image is decoded from disk for index i.' },
+          { label: 'Random transform is sampled', detail: 'Each call draws new random parameters: this flip, that crop box, that brightness factor.' },
+          { label: 'Transform is applied to image and targets', detail: 'Geometric changes must move boxes and masks with the pixels; photometric ones leave them alone.' },
+          { label: 'ToTensor and Normalize', detail: 'Deterministic preprocessing runs last, so the augmented pixels reach the model on the expected scale.' },
+          { label: 'Batch is collated and stepped', detail: 'The next epoch sees the same image again with different random parameters.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Train transform versus eval transform',
+        caption: 'Two pipelines, built once, imported everywhere.',
+        left: {
+          heading: 'Training',
+          points: [
+            'RandomResizedCrop(224), RandomHorizontalFlip()',
+            'ColorJitter, RandAugment or TrivialAugmentWide',
+            'Fresh randomness on every access, every epoch',
+            'Makes training loss look worse than it is — this is expected',
+          ],
+        },
+        right: {
+          heading: 'Validation and test',
+          points: [
+            'Resize(256) then CenterCrop(224) — deterministic',
+            'No flips, no jitter, no random crops',
+            'Same pipeline used in production serving',
+            'The only honest estimate of generalisation you have',
+          ],
+        },
+      },
+    ],
+
+    formalDefinition:
+      'Data augmentation replaces the empirical risk over a finite sample with the expected risk over a distribution of transformed samples: the objective becomes an expectation over a family of stochastic transforms T, each required to satisfy the label-preservation condition y(t(x)) = y(x). It acts as a data-dependent regulariser, enlarging the support of the training distribution along directions the modeller asserts are irrelevant, and it is applied only to the training split so that validation remains an unbiased estimate of performance on untransformed data.',
+
+    math: {
+      intuition:
+        'Ordinary training minimises the average loss over the examples you happen to have. Augmentation changes the target to the average loss over every transformed version of every example, which is an infinitely larger set that you sample from one draw at a time. Because the transforms are chosen to leave the label alone, the minimiser is pushed towards functions that give the same answer across the whole orbit of each image — which is the formal content of the phrase learn the object, not the photograph.',
+      formulas: [
+        {
+          latex: '\\mathcal{L}_{\\text{aug}} = \\frac{1}{N}\\sum_{i=1}^{N} \\mathbb{E}_{t \\sim \\mathcal{T}}\\big[\\, \\ell\\big(f_\\theta(t(x_i)),\\, y_i\\big) \\,\\big]',
+          name: 'Augmented empirical risk',
+          meaning:
+            'The quantity training actually minimises when augmentation is on. The inner expectation over transforms is never computed exactly; each epoch draws one sample of t per image, which is an unbiased estimate of it.',
+          variables: [
+            { symbol: 'N', meaning: 'Number of labelled training examples' },
+            { symbol: 't \\sim \\mathcal{T}', meaning: 'A transform drawn from the augmentation distribution, for example a flip with probability 0.5 combined with a random crop' },
+            { symbol: 'f_\\theta', meaning: 'The network with parameters theta' },
+            { symbol: '\\ell', meaning: 'The per-example loss, typically cross-entropy' },
+            { symbol: 'y_i', meaning: 'The label, which by assumption is unchanged by t' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: 'y\\big(t(x)\\big) = y(x) \\quad \\forall t \\in \\mathcal{T}',
+          name: 'The label-preservation condition',
+          meaning:
+            'The assumption that makes augmentation valid. Violating it means training on examples whose labels are wrong, which is indistinguishable from label noise and puts a ceiling on achievable accuracy.',
+          variables: [
+            { symbol: 'y(\\cdot)', meaning: 'The true labelling function of the task' },
+            { symbol: 't', meaning: 'Any transform in the chosen family' },
+            { symbol: '\\mathcal{T}', meaning: 'The augmentation family you configured' },
+          ],
+        },
+        {
+          latex: '\\tilde{x} = \\lambda x_i + (1-\\lambda) x_j, \\qquad \\tilde{y} = \\lambda y_i + (1-\\lambda) y_j, \\qquad \\lambda \\sim \\text{Beta}(\\alpha, \\alpha)',
+          name: 'Mixup',
+          meaning:
+            'An augmentation that blends two images and their one-hot labels in the same proportion. It is not label-preserving in the usual sense; instead it changes the label consistently, which regularises the decision boundary between classes.',
+          variables: [
+            { symbol: 'x_i, x_j', meaning: 'Two training images drawn from the batch' },
+            { symbol: '\\lambda', meaning: 'Mixing weight in [0,1], drawn from a Beta distribution with alpha typically 0.2 to 0.4' },
+            { symbol: '\\tilde{y}', meaning: 'The soft label, which is no longer one-hot' },
+          ],
+          category: 'deep-learning',
+        },
+      ],
+      derivation: [
+        'Without augmentation the model can drive the training loss to zero by memorising each x_i, because with enough parameters a network can fit arbitrary labels.',
+        'With augmentation, the same weights must now achieve low loss on t(x_i) for every t in the family, and the model never sees the same pixel array twice.',
+        'Memorising a specific pixel array therefore buys almost nothing, since the exact array recurs with probability near zero.',
+        'The cheapest remaining way to reduce loss is to become insensitive to the transform family while staying sensitive to whatever distinguishes the classes.',
+        'That insensitivity is the invariance you wanted, which is why the choice of family is a modelling decision and not a hyperparameter to be swept blindly.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Auditing an augmentation policy for a street-sign dataset',
+      setup:
+        'A team is training a classifier on 43 classes of European road signs, roughly 2,000 images per class, taken from dashcams in daylight and at night. They copy a standard ImageNet recipe: RandomResizedCrop(224, scale=(0.08, 1.0)), RandomHorizontalFlip(), ColorJitter(0.4, 0.4, 0.4, 0.1). Validation accuracy stalls at 91 per cent while training accuracy sits at 94. We audit each transform against the task.',
+      steps: [
+        {
+          label: 'Horizontal flip: reject',
+          detail:
+            'Several classes are distinguished only by direction — turn left ahead versus turn right ahead, and the two no-overtaking variants. Flipping turns one class into another while keeping the old label, so roughly one image in two of those classes is now mislabelled.',
+          latex: 'y(\\text{flip}(x)) \\neq y(x) \\text{ for directional classes}',
+        },
+        {
+          label: 'Colour jitter with hue 0.1: reduce sharply',
+          detail:
+            'Red versus blue is the primary cue separating prohibition signs from information signs. A hue jitter of 0.1 is 36 degrees of hue rotation, which is enough to move a red rim towards orange and weaken exactly the feature the task depends on. Brightness and contrast jitter, by contrast, model day and night and should stay.',
+        },
+        {
+          label: 'RandomResizedCrop with scale down to 0.08: reduce',
+          detail:
+            'Signs are already tightly cropped, so a crop taking 8 per cent of the area frequently contains only rim and no glyph, while the label still claims the glyph. Raising the lower bound to 0.7 keeps scale variation without destroying evidence.',
+          latex: '\\text{scale} \\in [0.08, 1.0] \\rightarrow [0.7, 1.0]',
+        },
+        {
+          label: 'Add transforms that match the real failure modes',
+          detail:
+            'Dashcam footage is motion-blurred, compressed and sometimes rotated by a few degrees on a bumpy road. Adding MotionBlur, ImageCompression(quality 40–90) and Rotate(limit=10) augments along directions the test distribution actually varies.',
+        },
+        {
+          label: 'Measure, do not assume',
+          detail:
+            'Each change is validated on the untouched validation split. Removing flip alone recovered 2.1 points; the added dashcam-specific transforms added a further 1.4, and validation accuracy settled at 94.6 with training accuracy at 95.8 — a healthy, small gap.',
+        },
+      ],
+      conclusion:
+        'The default recipe was not wrong in general; it was wrong for this labelling function. Augmentation is a statement about which changes leave the answer alone, so it must be audited class by class rather than copied. The tell-tale symptom of a label-destroying transform is a validation score that plateaus below what the data should support while the train-validation gap stays small, because the model is fitting contradictory labels rather than memorising.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Two pipelines: one for training, one for everything else',
+        runnable: true,
+        code: `from torchvision import transforms
+from torchvision.datasets import ImageFolder
+from torch.utils.data import DataLoader
+
+MEAN = [0.485, 0.456, 0.406]
+STD = [0.229, 0.224, 0.225]
+
+train_tf = transforms.Compose([
+    transforms.RandomResizedCrop(224, scale=(0.5, 1.0)),
+    transforms.RandomHorizontalFlip(p=0.5),
+    transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.2),
+    transforms.ToTensor(),
+    transforms.Normalize(MEAN, STD),
+    transforms.RandomErasing(p=0.25),          # after Normalize, on the tensor
+])
+
+eval_tf = transforms.Compose([
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    transforms.Normalize(MEAN, STD),
+])
+
+train_ds = ImageFolder("data/train", transform=train_tf)
+val_ds = ImageFolder("data/val", transform=eval_tf)   # never the train transform
+
+train_dl = DataLoader(train_ds, batch_size=64, shuffle=True, num_workers=8)
+val_dl = DataLoader(val_ds, batch_size=64, shuffle=False, num_workers=8)
+
+print("train samples:", len(train_ds), "| classes:", len(train_ds.classes))
+print("same index twice gives different pixels:",
+      not train_ds[0][0].equal(train_ds[0][0]))`,
+        output: `train samples: 12800 | classes: 10
+same index twice gives different pixels: True`,
+        explanation:
+          'The final print is the important one: asking for sample 0 twice returns two different tensors, because the random parameters are drawn inside __getitem__ on every access rather than once at construction. Note also that RandomErasing comes after Normalize, since it operates on tensors and erases with zeros on the normalised scale, while all the PIL-based transforms must precede ToTensor.',
+      },
+      {
+        language: 'python',
+        title: 'Albumentations keeps boxes and masks in sync',
+        runnable: true,
+        code: `import albumentations as A
+import numpy as np
+
+tf = A.Compose(
+    [
+        A.LongestMaxSize(max_size=640),
+        A.PadIfNeeded(640, 640, border_mode=0, value=(114, 114, 114)),
+        A.HorizontalFlip(p=0.5),
+        A.RandomBrightnessContrast(p=0.5),
+        A.MotionBlur(blur_limit=5, p=0.2),
+    ],
+    bbox_params=A.BboxParams(format="pascal_voc", label_fields=["labels"], min_visibility=0.3),
+)
+
+image = np.zeros((720, 1280, 3), dtype=np.uint8)
+boxes = [[100, 200, 300, 500]]          # x_min, y_min, x_max, y_max
+labels = [1]
+
+out = tf(image=image, bboxes=boxes, labels=labels)
+print("image:", out["image"].shape)
+print("boxes:", [[round(v, 1) for v in b] for b in out["bboxes"]])
+print("labels kept:", out["labels"])`,
+        output: `image: (640, 640, 3)
+boxes: [[50.0, 240.0, 150.0, 390.0]]
+labels kept: [1]`,
+        explanation:
+          'The geometric transforms moved the box automatically, which is the whole reason Albumentations exists for detection: writing the box arithmetic by hand for a flip followed by a pad followed by a crop is where hours disappear. min_visibility=0.3 drops boxes whose visible area falls below 30 per cent after cropping, preventing the model from being trained to find an object that is no longer in the frame. The same Compose accepts a mask= argument and applies nearest-neighbour resampling to it.',
+      },
+      {
+        language: 'python',
+        title: 'Mixup in a training step',
+        runnable: true,
+        code: `import numpy as np
+import torch
+import torch.nn.functional as F
+
+
+def mixup(x, y, alpha=0.2):
+    lam = float(np.random.beta(alpha, alpha))
+    idx = torch.randperm(x.size(0), device=x.device)
+    mixed = lam * x + (1.0 - lam) * x[idx]
+    return mixed, y, y[idx], lam
+
+
+x = torch.randn(4, 3, 32, 32)
+y = torch.tensor([0, 1, 2, 3])
+
+mixed_x, y_a, y_b, lam = mixup(x, y)
+logits = torch.randn(4, 10)                     # stand-in for model(mixed_x)
+loss = lam * F.cross_entropy(logits, y_a) + (1 - lam) * F.cross_entropy(logits, y_b)
+
+print("lambda:", round(lam, 3))
+print("mixed batch:", tuple(mixed_x.shape))
+print("loss:", round(float(loss), 4))`,
+        output: `lambda: 0.271
+mixed batch: (4, 3, 32, 32)
+loss: 2.4713`,
+        explanation:
+          'Mixup blends two images and weights the two losses by the same lambda, which is equivalent to training on the blended soft label without materialising it. The partner images come from a permutation of the current batch, so no extra data loading is needed. It regularises the decision boundary and improves calibration, at the cost of a training loss that is no longer comparable to a non-mixup run — a frequent source of confusion when comparing experiments.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Medical imaging with a few hundred labelled scans',
+        usage:
+          'Elastic deformation, small rotations and intensity shifts are standard because expert annotation is prohibitively expensive. Horizontal flip is often banned outright: organ laterality is diagnostic, and a mirrored chest X-ray can turn dextrocardia into a normal heart.',
+      },
+      {
+        context: 'Self-driving perception stacks',
+        usage:
+          'Training data is augmented with synthetic rain, fog, glare, motion blur and night-time colour shifts, because the long tail of weather is what causes failures and collecting real examples of every condition is slow and dangerous.',
+      },
+      {
+        context: 'Self-supervised pretraining',
+        usage:
+          'SimCLR and its successors define the learning signal itself with augmentation: two random views of the same image must produce similar representations. The choice of augmentation family stops being a regulariser and becomes the definition of the task.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'torchvision.transforms.v2', role: 'The current API, which unlike v1 transforms images, boxes and masks together and accepts tensors as well as PIL images.' },
+      { tool: 'Albumentations', role: 'Fast OpenCV-backed augmentation with first-class support for bounding boxes and segmentation masks.' },
+      { tool: 'RandAugment / TrivialAugmentWide', role: 'Automated policies that remove most manual tuning; TrivialAugmentWide has no hyperparameters at all and is a strong default.' },
+      { tool: 'Weights & Biases or TensorBoard', role: 'Logging a grid of augmented batches is the only reliable way to catch a policy that is destroying labels.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Augmenting the validation or test set',
+        why: 'The validation score stops measuring performance on real data and starts measuring performance on randomly distorted data, so it becomes noisy between epochs and systematically pessimistic, and model selection based on it picks the wrong checkpoint.',
+        fix: 'Build exactly two transforms — train and eval — and pass eval_tf to both the validation and test datasets. The one legitimate exception is deliberate test-time augmentation, which averages predictions over several views and must be applied identically at every evaluation.',
+      },
+      {
+        mistake: 'Using horizontal flip on digits, text or directional classes',
+        why: 'The transform is not label-preserving: a mirrored 6 is not a 6, mirrored text is not text, and a mirrored turn-left sign is a turn-right sign. The model is trained on contradictory labels and cannot resolve them.',
+        fix: 'Audit each transform against the labelling function of your specific dataset. When in doubt, render a grid of augmented samples and try to label them yourself.',
+      },
+      {
+        mistake: 'Applying the same random transform to a whole batch',
+        why: 'Sampling the random parameters once outside the loop means every image in the batch is flipped identically, which reduces the effective variety enormously and correlates the gradient contributions.',
+        fix: 'Sample inside __getitem__ so each image is transformed independently. Batch-level operations such as mixup are a deliberate exception and are applied on top, not instead.',
+      },
+      {
+        mistake: 'Forgetting to transform boxes and masks with the image',
+        why: 'A geometric augmentation that moves pixels but leaves targets alone produces training data where the box is in the wrong place, which teaches the model a systematic localisation error.',
+        fix: 'Use an API that transforms targets jointly — Albumentations with bbox_params, or torchvision transforms v2 — rather than applying transforms to images and targets in separate code paths.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Why does data augmentation reduce overfitting? Answer without using the phrase more data.',
+        answer:
+          'Overfitting is the model using features that are predictive in the training sample but not in the population — the exact background, the exact crop, a lighting quirk. Augmentation randomises precisely those nuisance factors, so a feature that depends on them stops being predictive during training and the optimiser abandons it. Put formally, it changes the objective from the average loss over the sample to the average loss over the orbit of each sample under a transform family, which constrains the learned function to be approximately invariant along those directions. That is a regularisation constraint, and like any regulariser it trades a little training fit for better generalisation, which is why training accuracy usually falls when you add augmentation while validation accuracy rises.',
+        followUp:
+          'A strong answer notes the constraint is only valid when the transforms are label-preserving, and that the invariances imposed are a modelling assumption that can be wrong.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Your validation accuracy is noisy and consistently lower than training accuracy by twenty points. What do you check, in order?',
+        answer:
+          'First, whether the validation set is being augmented — random transforms on validation make the metric jump between epochs and bias it downwards. Second, whether the model is in eval mode during validation, since dropout stays active and batch norm keeps updating its running statistics otherwise. Third, whether the two splits are genuinely from the same distribution: a temporal or per-patient split can be legitimately harder than a random one, and duplicate or near-duplicate images leaking across splits produce the opposite error. Only once those are ruled out is a twenty-point gap real overfitting, at which point stronger augmentation, weight decay, early stopping and a smaller model are the tools, in roughly that order of cost.',
+        followUp:
+          'The best answers mention checking that the augmentation policy is label-preserving, since a destructive transform lowers both scores and can be mistaken for underfitting.',
+      },
+      {
+        level: 'advanced',
+        question: 'How is mixup different from the geometric and photometric transforms, and when is it worth using?',
+        answer:
+          'Conventional augmentation preserves the label exactly and enlarges the support of the input distribution along directions we believe are irrelevant. Mixup does something different: it forms convex combinations of two images and of their one-hot labels, so the label genuinely changes and the model is asked to behave linearly between examples. That is a constraint on the decision boundary rather than an invariance, and empirically it improves calibration, reduces memorisation of corrupted labels and helps robustness to adversarial perturbations. It is worth using for large-scale classification where you already have strong standard augmentation and are chasing the last point or two, and it pairs well with CutMix and label smoothing. It is a poor fit for detection and segmentation, where blending two scenes produces targets that no longer correspond to anything physical, and it makes training loss incomparable to a baseline run.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'For a dataset of chest X-rays labelled with pathology, decide whether each is label-preserving: horizontal flip, ±10 degree rotation, brightness jitter, vertical flip. Justify each.',
+        hint: 'Ask whether the transformed image could plausibly arrive from the real imaging process with the same correct label.',
+        solution:
+          'Horizontal flip: not safe. Laterality is diagnostic — a left-sided pleural effusion becomes right-sided, and situs inversus is itself a finding. Rotation ±10 degrees: safe, since patient positioning varies by a few degrees in practice. Brightness jitter: safe in moderation, as exposure varies between machines, though extreme shifts can wash out the low-contrast findings that define some labels. Vertical flip: not safe, because no chest radiograph is ever acquired upside down, so it wastes capacity on a region of input space the model will never see at test time.',
+      },
+      {
+        prompt:
+          'Write the training and evaluation transforms for a 64x64 fine-grained flower classification task where colour is a defining feature, and explain the two decisions you made differently from the ImageNet default.',
+        hint: 'Consider which of the standard transforms attacks the feature the labels depend on.',
+        language: 'python',
+        starterCode: 'from torchvision import transforms\n\nMEAN = [0.485, 0.456, 0.406]\nSTD = [0.229, 0.224, 0.225]\n',
+        solution:
+          'train_tf = transforms.Compose([\n    transforms.RandomResizedCrop(64, scale=(0.6, 1.0)),\n    transforms.RandomHorizontalFlip(),\n    transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.1, hue=0.0),\n    transforms.ToTensor(),\n    transforms.Normalize(MEAN, STD),\n])\neval_tf = transforms.Compose([\n    transforms.Resize(72),\n    transforms.CenterCrop(64),\n    transforms.ToTensor(),\n    transforms.Normalize(MEAN, STD),\n])\n\nTwo deliberate departures. Hue jitter is set to zero because petal colour is a defining feature and rotating hue would relabel a blue flower as purple. The crop scale floor is raised from 0.08 to 0.6 because at 64 pixels an aggressive crop leaves too little of the flower to identify, so the label would no longer be supported by the evidence in the image.',
+      },
+      {
+        prompt:
+          'A colleague reports that augmentation made training accuracy drop from 99 per cent to 93 per cent, and wants to turn it off. What do you tell them, and what would you ask to see?',
+        hint: 'Which number actually measures the thing you care about?',
+        solution:
+          'Training accuracy falling is the expected consequence of augmentation, not evidence against it: the model is now being scored on harder, distorted versions of the data. The only number that matters is validation accuracy on the untouched split. Ask to see both curves together. If validation improved, augmentation is working and 93 versus 99 is the healthy price. If validation is flat or worse, the policy is probably too aggressive or contains a transform that is not label-preserving for this dataset, and the next step is to render a grid of augmented samples and check whether a human could still label them correctly.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'CV-004-q1',
+        type: 'truefalse',
+        concept: 'where augmentation applies',
+        prompt: 'Augmentation should be applied to the training set and the validation set equally, to keep them comparable.',
+        answer: false,
+        explanation:
+          'Only the training split is augmented. Validation exists to estimate performance on real, untransformed data, and randomising it makes the metric noisy and pessimistic, which corrupts model selection and early stopping.',
+      },
+      {
+        id: 'CV-004-q2',
+        type: 'multi',
+        concept: 'label preservation',
+        prompt: 'For a dataset of handwritten digits, which transforms are safe to use? Select all that apply.',
+        options: [
+          'Small rotations of up to 10 degrees',
+          'Horizontal flip',
+          'Random translation of a few pixels',
+          'Vertical flip',
+          'Mild elastic deformation',
+        ],
+        answerIndices: [0, 2, 4],
+        explanation:
+          'Flips break digits: a mirrored 6 is not a 6, and a vertically flipped 6 looks like a 9. Small rotations, translations and elastic deformations all model genuine handwriting variation and leave the label intact, which is why they are standard for digit datasets.',
+      },
+      {
+        id: 'CV-004-q3',
+        type: 'mcq',
+        concept: 'augmentation as regularisation',
+        prompt: 'After adding augmentation, training accuracy fell and validation accuracy rose. What happened?',
+        options: [
+          'The regulariser is working: the model can no longer memorise, so it generalises better',
+          'The model is broken and should be retrained without augmentation',
+          'The learning rate is now too high',
+          'The validation set must have been augmented too',
+        ],
+        answerIndex: 0,
+        explanation:
+          'A narrower train-validation gap with a higher validation score is exactly the intended effect. Training accuracy is measured on deliberately harder, distorted inputs, so its drop is a cost that was paid for the generalisation gain.',
+      },
+      {
+        id: 'CV-004-q4',
+        type: 'debug',
+        language: 'python',
+        concept: 'transform placement',
+        prompt: 'A team finds their validation accuracy fluctuates by three points between epochs. What is wrong?',
+        code: 'train_ds = ImageFolder("data/train", transform=train_tf)\nval_ds = ImageFolder("data/val", transform=train_tf)',
+        options: [
+          'The validation dataset is using the random training transform instead of the deterministic eval transform',
+          'The batch size is too small for validation',
+          'shuffle should be True for the validation loader',
+          'ImageFolder cannot be used for validation data',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Both datasets were given train_tf, so validation images are randomly cropped, flipped and jittered on every epoch. The metric then measures a different, harder dataset each time, which explains both the fluctuation and its systematic pessimism.',
+      },
+      {
+        id: 'CV-004-q5',
+        type: 'match',
+        concept: 'transform families',
+        prompt: 'Match each transform to its family and to what must be updated alongside the image.',
+        pairs: [
+          { left: 'RandomHorizontalFlip', right: 'Geometric — boxes and masks must be flipped with it' },
+          { left: 'ColorJitter', right: 'Photometric — targets are untouched' },
+          { left: 'RandomResizedCrop', right: 'Geometric — boxes may be clipped or dropped entirely' },
+          { left: 'GaussianNoise', right: 'Photometric — models sensor quality, targets unchanged' },
+        ],
+        explanation:
+          'Geometric transforms move pixels, so any target expressed in pixel coordinates must move identically. Photometric transforms change values only, which is why they are safe to apply to the image alone in a detection pipeline.',
+      },
+      {
+        id: 'CV-004-q6',
+        type: 'explain',
+        concept: 'invariance as an assumption',
+        prompt:
+          'Explain why choosing an augmentation policy is a modelling decision about the task rather than a hyperparameter to sweep.',
+        rubric: [
+          'States that each transform asserts an invariance of the true labelling function',
+          'Gives a concrete example where the assertion is false',
+          'Explains the consequence: label noise that caps achievable accuracy',
+        ],
+        sampleAnswer:
+          'Adding a transform to the policy is a claim that the correct answer does not change when you apply it. For cats and horizontal flip that claim is true, so the model is being told something correct about the world and learns faster. For road signs it is false, because a mirrored turn-left sign is a turn-right sign, and the training set now contains images whose stated label contradicts their content. No amount of capacity or training time resolves a contradiction, so accuracy plateaus below what the data supports and the train-validation gap stays deceptively small. You cannot discover this by sweeping a strength parameter, because the problem is not the amount of the transform but its validity, which only knowledge of the labelling function can settle.',
+        explanation:
+          'The examinable idea is that augmentation encodes prior knowledge about invariances, so a wrong choice injects label noise rather than merely being suboptimal.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What makes a transform label-preserving?', back: 'The correct answer is unchanged by it. Flipping a cat is fine; flipping a 6, text or a directional road sign is not.' },
+      { front: 'Which splits get augmented?', back: 'Training only. Validation and test use the deterministic eval transform, so the metric measures real data.' },
+      { front: 'Geometric versus photometric', back: 'Geometric moves pixels, so boxes and masks must move too. Photometric changes values only and leaves targets alone.' },
+      { front: 'Why does training accuracy drop when augmentation is added?', back: 'The model is scored on harder distorted inputs. Only validation accuracy measures what you care about.' },
+      { front: 'What does mixup do?', back: 'Blends two images and their labels with the same weight lambda, regularising the decision boundary and improving calibration.' },
+      { front: 'Where should random parameters be sampled?', back: 'Inside __getitem__, per image, per epoch — so every sample is transformed independently and never cached.' },
+    ],
+
+    challenge: {
+      title: 'Audit and improve an augmentation policy',
+      brief:
+        'Take a dataset of your choice and a baseline policy of RandomResizedCrop plus RandomHorizontalFlip plus ColorJitter. Write code that renders a 4x8 grid of augmented samples with their labels, then label twenty of them yourself without seeing the ground truth and measure your own accuracy. Use that result to justify keeping, weakening or removing each transform, then train two short runs — baseline policy and revised policy — and report train and validation curves for both.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Renders a grid of augmented samples with labels for visual inspection',
+        'Includes a written judgement on label preservation for every transform in the policy',
+        'Compares train and validation curves for baseline and revised policies, not just final numbers',
+        'The evaluation transform is identical across both runs',
+        'States one transform that was added because it matches a real failure mode of the data',
+      ],
+      starterCode: 'import matplotlib.pyplot as plt\nimport torch\nfrom torchvision import transforms\nfrom torchvision.utils import make_grid\n\n\ndef show_augmented(dataset, n=32):\n    samples = [dataset[i % len(dataset)][0] for i in range(n)]\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'A classmate has a small dataset and a model that scores 99 per cent on training data and 72 per cent on validation. Teach them what augmentation is, why it helps here, and what they must be careful about.',
+      mustCover: [
+        'Augmentation applies random label-preserving changes to training images on every epoch',
+        'It works because it removes the nuisance features a model would otherwise memorise',
+        'A transform must never change the correct answer, and whether it does depends on the dataset',
+        'Only the training split is augmented; validation stays untouched so it measures reality',
+      ],
+      bonusSignals: ['mentions that training accuracy is expected to fall', 'names a transform that is unsafe for a specific dataset', 'mentions transforming boxes and masks alongside the image'],
+      sampleExplanation:
+        'A 27-point gap between training and validation means the model has memorised the specific photographs rather than learned the categories, which happens when there are far more parameters than examples. Augmentation attacks that directly: every time an image is loaded for training, the code makes a small random change first — mirrors it, crops a different region, brightens it a little — so the exact pixel array almost never repeats. Memorising stops paying off, and the only thing that reliably reduces the loss across all those variants is the feature that actually defines the class. Two cautions. The change must never alter the right answer: mirroring a cat is fine, mirroring a handwritten 6 or a turn-left sign is not, and if you get that wrong you are training on labels that contradict the pixels. And augmentation is for training only — leave validation alone, because it is your one honest measurement. Expect training accuracy to fall when you switch this on; that is the price, and the validation number is the one to watch.',
+    },
+  },
+
+  {
+    id: 'CV-005',
+    domain: 'CV',
+    module: 'Convolution in Practice',
+    topic: 'Filters and edges',
+    title: 'Convolution Filters and Edge Detection',
+    slug: 'convolution-filters-edge-detection',
+    difficulty: 3,
+    estimatedMinutes: 40,
+    prerequisites: ['CV-001', 'CV-002'],
+    related: ['CV-001', 'CV-002', 'CV-003'],
+    tags: ['convolution', 'kernel', 'sobel', 'laplacian', 'blur', 'edge-detection', 'cross-correlation'],
+
+    learningObjectives: [
+      'Slide a 3x3 kernel over a patch and compute the output value by hand',
+      'Distinguish true convolution from cross-correlation and explain why deep learning libraries implement the latter',
+      'Explain what Sobel, Laplacian and box or Gaussian blur kernels do and why their weights have the signs they do',
+      'Compute output spatial size from input size, kernel size, padding and stride',
+      'Explain the central shift: CNNs learn kernel weights rather than having them hand-designed',
+    ],
+
+    terminology: [
+      {
+        term: 'Kernel (filter)',
+        definition:
+          'A small grid of weights, usually 3x3 or 5x5, that is slid across the image. At each position the overlapping pixels are multiplied by the weights and summed to produce one output value.',
+        simple: 'A tiny grid of numbers you slide over the picture, multiplying and adding as you go.',
+      },
+      {
+        term: 'Cross-correlation',
+        definition:
+          'The sliding weighted sum without flipping the kernel. This is what cv2.filter2D, scipy.signal.correlate2d and every deep learning convolution layer actually compute.',
+        simple: 'Sliding the little grid over the picture exactly as written.',
+      },
+      {
+        term: 'Convolution (strict)',
+        definition:
+          'The same operation with the kernel rotated by 180 degrees first. The flip makes the operation commutative and associative, which matters for signal-processing theory and not at all for learned weights.',
+        simple: 'The same thing, but the little grid is turned upside down first.',
+      },
+      {
+        term: 'Feature map',
+        definition:
+          'The output grid produced by applying one kernel across the whole input. A layer with 64 kernels produces 64 feature maps, which become the channel axis of the next layer input.',
+        simple: 'The picture of responses you get after sliding one filter everywhere.',
+      },
+      {
+        term: 'Padding and stride',
+        definition:
+          'Padding adds a border of pixels, usually zeros, so the output keeps its size and the edges are not undersampled. Stride is the step between sampling positions; a stride of 2 halves the output resolution.',
+        simple: 'Padding is a border so the edges get a fair turn; stride is how far you jump each time.',
+      },
+      {
+        term: 'Gradient magnitude',
+        definition:
+          'The length of the vector of horizontal and vertical derivatives at a pixel, sqrt(Gx^2 + Gy^2). It is large where intensity changes rapidly, which is the operational definition of an edge.',
+        simple: 'How fast the brightness is changing at that spot, ignoring which direction.',
+      },
+    ],
+
+    simpleExplanation:
+      "Put a small grid of numbers — say three by three — on top of the image so it covers nine pixels. Multiply each pixel by the number sitting on it, add up the nine products, and write the answer into a new image at the position of the centre. Then shift the little grid one pixel to the right and do it again, and keep going until you have covered the whole picture. That is a convolution, and everything from blurring to sharpening to finding edges is just a different choice of those nine numbers. If all nine are one ninth, you are averaging the neighbourhood and the picture gets blurry. If the left column is negative and the right column is positive, the sum is near zero wherever the brightness is flat and large wherever the left side is darker than the right — which is precisely what a vertical edge is. For forty years engineers designed those numbers by hand. The breakthrough behind every modern vision system is simple to state: stop designing them, make them parameters, and let gradient descent discover which filters are worth having.",
+
+    whyItExists:
+      'Individual pixel values carry almost no information about content, because what identifies an object is local structure: edges, corners, textures, repeated patterns. Convolution is the operation that measures local structure at every position at once, with the same small set of weights reused everywhere, so it captures the two facts that matter about images — that useful features are local, and that a feature means the same thing wherever it appears.',
+
+    analogy: {
+      scenario:
+        'Imagine reading a long document through a small cardboard window that shows only three words at a time, with a scoring card telling you how much each of the three positions counts. You slide the window along, compute a score at every position, and write the scores in the margin. One scoring card gives a high score wherever a sentence changes topic; another gives a high score wherever a name appears. The document is unchanged — you have produced a new strip of numbers describing where something of interest happens.',
+      mapping: [
+        { from: 'The small cardboard window', to: 'The kernel footprint — the receptive field of one output value' },
+        { from: 'The scoring card of weights', to: 'The kernel weights themselves' },
+        { from: 'Sliding the window along the page', to: 'Translating the kernel across every spatial position' },
+        { from: 'Using the same card at every position', to: 'Weight sharing, which makes a feature mean the same thing everywhere' },
+        { from: 'The strip of scores in the margin', to: 'The output feature map' },
+        { from: 'Owning several scoring cards', to: 'A layer with many kernels, producing many feature maps' },
+      ],
+      bridge:
+        'The essential move is that a scoring card is not a description of the document, it is a detector for one pattern, and running many cards over the same page gives you a profile of what kinds of structure occur where. A convolution layer with 64 kernels is 64 such detectors applied everywhere. The step that turns this into learning is refusing to design the cards: initialise them randomly, measure how badly the final answer comes out, and adjust the weights in the direction that reduces the error — which is exactly what backpropagation does to convolution kernels.',
+      limitations:
+        'The reading analogy is one-dimensional and suggests each position is independent. Real convolution stacks: the second layer sees the outputs of the first, so its three-by-three window covers a much larger region of the original image, and by the tenth layer a single output value depends on most of the picture.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Slide a kernel and watch the sum',
+        caption: 'Change the weights and see which structures light up in the output.',
+        widget: 'convolution-lab',
+      },
+      {
+        kind: 'widget',
+        title: 'Edge detection on a real photograph',
+        caption: 'Compare Sobel horizontal, Sobel vertical, gradient magnitude and Laplacian on the same image.',
+        widget: 'edge-detection-lab',
+      },
+      {
+        kind: 'table',
+        title: 'Classic kernels and what they measure',
+        columns: ['Kernel', 'Weights (3x3, row-major)', 'Effect', 'Why the weights work'],
+        rows: [
+          ['Identity', '0 0 0 / 0 1 0 / 0 0 0', 'Copies the image unchanged', 'Only the centre pixel contributes, with weight one'],
+          ['Box blur', '1/9 everywhere', 'Smooths, reduces noise, loses detail', 'A plain average of the neighbourhood; weights sum to 1 so brightness is preserved'],
+          ['Gaussian blur', '1 2 1 / 2 4 2 / 1 2 1, divided by 16', 'Smooths with less ringing than a box', 'Nearer pixels count more, approximating a Gaussian falloff'],
+          ['Sobel x', '-1 0 1 / -2 0 2 / -1 0 1', 'Responds to vertical edges', 'Right minus left, with the centre row weighted double for noise resistance'],
+          ['Sobel y', '-1 -2 -1 / 0 0 0 / 1 2 1', 'Responds to horizontal edges', 'Bottom minus top, the transpose of Sobel x'],
+          ['Laplacian', '0 1 0 / 1 -4 1 / 0 1 0', 'Responds to intensity curvature, both edges and blobs', 'Sum of neighbours minus four times the centre; zero on any flat or linear ramp'],
+          ['Sharpen', '0 -1 0 / -1 5 -1 / 0 -1 0', 'Increases local contrast', 'Identity plus a Laplacian: the original with its own curvature added back'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Hand-designed filters versus learned filters',
+        caption: 'The same arithmetic. A completely different research programme.',
+        left: {
+          heading: 'Classical computer vision',
+          points: [
+            'A human chooses the weights from theory: Sobel, Gabor, Haar, SIFT descriptors',
+            'Interpretable, no training data needed, deterministic',
+            'Each new task needs a new hand-designed feature pipeline',
+            'Performance plateaued on ImageNet at roughly 74 per cent top-5 in 2011',
+          ],
+        },
+        right: {
+          heading: 'Convolutional networks',
+          points: [
+            'Weights are parameters initialised randomly and learned by gradient descent',
+            'The first layer typically converges to edge and colour-blob detectors anyway',
+            'Deeper layers learn features no one would have designed',
+            'AlexNet reached 84.7 per cent top-5 in 2012 and the gap kept widening',
+          ],
+        },
+      },
+      {
+        kind: 'annotated',
+        title: 'The output-size formula',
+        subject: 'H_out = floor((H_in + 2P - K) / S) + 1',
+        annotations: [
+          { part: 'H_in', note: 'Input height. The same formula applies independently to width.' },
+          { part: '2P', note: 'Padding added on both sides. P = 1 with K = 3 keeps the size unchanged.' },
+          { part: 'K', note: 'Kernel size. A 3x3 kernel with no padding loses one pixel at each edge.' },
+          { part: 'S', note: 'Stride. S = 2 approximately halves the output, which is how networks downsample.' },
+          { part: 'floor(...) + 1', note: 'Count the valid positions: the last partial window is simply not sampled.' },
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'For a single-channel input I and kernel K of size (2a+1) x (2b+1), the cross-correlation at position (i, j) is S(i, j) = sum over u in [-a, a], v in [-b, b] of I(i+u, j+v) K(a+u, b+v). True convolution flips the kernel in both axes before this sum. A convolutional layer generalises it to multiple channels: each of the C_out kernels has shape (C_in, K, K), is correlated across all input channels and summed, and a per-kernel bias is added, giving an output tensor of shape (N, C_out, H_out, W_out) with spatial dimensions floor((H + 2P - K)/S) + 1.',
+
+    math: {
+      intuition:
+        'Every kernel answers one question about a neighbourhood, and the answer is a dot product between the kernel weights and the pixels underneath. Blur kernels have all-positive weights that sum to one, so they answer what is the average brightness here. Derivative kernels have weights summing to zero, so they answer how fast is brightness changing here — and summing to zero is exactly why they output nothing on a flat region, which is what makes edges stand out.',
+      formulas: [
+        {
+          latex: 'S(i,j) = \\sum_{u=-a}^{a} \\sum_{v=-b}^{b} I(i+u,\\, j+v)\\, K(a+u,\\, b+v)',
+          name: 'Cross-correlation (what libraries call convolution)',
+          meaning:
+            'The output at one position is the sum of products between each kernel weight and the pixel beneath it. Note the plus signs in the index of I: the kernel is used as written, not flipped.',
+          variables: [
+            { symbol: 'I', meaning: 'The input image, indexed by row and column' },
+            { symbol: 'K', meaning: 'The kernel of weights, size (2a+1) x (2b+1)' },
+            { symbol: 'i, j', meaning: 'The output position, corresponding to the kernel centre' },
+            { symbol: 'u, v', meaning: 'Offsets within the kernel footprint' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '(I * K)(i,j) = \\sum_{u}\\sum_{v} I(i-u,\\, j-v)\\, K(u,v)',
+          name: 'True convolution',
+          meaning:
+            'The textbook operation, with minus signs that amount to rotating the kernel by 180 degrees. It is commutative and associative, which matters for Fourier arguments; for learned weights the flip is absorbed into the parameters and is therefore irrelevant.',
+          variables: [
+            { symbol: '*', meaning: 'The convolution operator' },
+            { symbol: 'I(i-u, j-v)', meaning: 'The input sampled in reversed order, which is the flip' },
+          ],
+        },
+        {
+          latex: 'G_x = \\begin{bmatrix} -1 & 0 & 1 \\\\ -2 & 0 & 2 \\\\ -1 & 0 & 1 \\end{bmatrix}, \\quad G_y = \\begin{bmatrix} -1 & -2 & -1 \\\\ 0 & 0 & 0 \\\\ 1 & 2 & 1 \\end{bmatrix}',
+          name: 'Sobel operators',
+          meaning:
+            'Separable approximations to the horizontal and vertical partial derivatives. Each is a difference of two sides combined with a [1 2 1] smoothing along the perpendicular axis, which is why Sobel is much less noise-sensitive than a bare difference.',
+          variables: [
+            { symbol: 'G_x', meaning: 'Kernel whose response is large at vertical edges (horizontal change)' },
+            { symbol: 'G_y', meaning: 'Kernel whose response is large at horizontal edges (vertical change)' },
+          ],
+        },
+        {
+          latex: 'M = \\sqrt{G_x^2 + G_y^2}, \\qquad \\theta = \\operatorname{atan2}(G_y,\\, G_x)',
+          name: 'Gradient magnitude and orientation',
+          meaning:
+            'Combining the two directional responses gives edge strength independent of direction, and the angle of the strongest change. Canny edge detection is built on exactly these two quantities.',
+          variables: [
+            { symbol: 'M', meaning: 'Edge strength at the pixel' },
+            { symbol: '\\theta', meaning: 'Edge orientation in radians, perpendicular to the edge itself' },
+          ],
+        },
+        {
+          latex: 'H_{\\text{out}} = \\left\\lfloor \\frac{H_{\\text{in}} + 2P - K}{S} \\right\\rfloor + 1',
+          name: 'Output spatial size',
+          meaning:
+            'The arithmetic that decides whether your layers line up. With K = 3, P = 1, S = 1 the size is preserved exactly; with S = 2 it halves, which is the standard downsampling step in a CNN.',
+          variables: [
+            { symbol: 'H_in', meaning: 'Input height (or width, computed separately)' },
+            { symbol: 'P', meaning: 'Padding applied to each side' },
+            { symbol: 'K', meaning: 'Kernel size along that axis' },
+            { symbol: 'S', meaning: 'Stride along that axis' },
+          ],
+          category: 'deep-learning',
+        },
+      ],
+      derivation: [
+        'Ask why derivative kernels must have weights summing to zero. Apply an arbitrary kernel K to a perfectly flat patch where every pixel equals c.',
+        'The output is sum over u,v of c times K(u,v) = c times sum of K.',
+        'If the weights sum to zero, the output is zero regardless of c: the filter is blind to absolute brightness and responds only to variation. That is the definition of a derivative filter.',
+        'If instead the weights sum to one, a flat patch of value c returns c: brightness is preserved, which is what a blur must do.',
+        'Check Sobel x: (-1 + 0 + 1) + (-2 + 0 + 2) + (-1 + 0 + 1) = 0, so it vanishes on flat regions. Check box blur: nine times one ninth = 1, so brightness survives.',
+        'This single observation explains why a blur kernel that does not sum to one darkens or brightens an image, a bug that appears the first time anyone builds a kernel by hand.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Computing a 3x3 Sobel response by hand',
+      setup:
+        'Take a 3x3 patch straddling a vertical edge in a grayscale image: the left column is dark at 10, the middle column is a transition at 100, and the right column is bright at 200. We will apply Sobel x, then Sobel y, then combine them, using nothing but multiplication and addition. The patch, row by row, is [10, 100, 200] / [10, 100, 200] / [10, 100, 200].',
+      steps: [
+        {
+          label: 'Write the kernel over the patch',
+          detail:
+            'Sobel x is [-1, 0, 1] / [-2, 0, 2] / [-1, 0, 1]. Each kernel weight sits on the pixel in the same position, so -1 sits on 10, 0 sits on 100, 1 sits on 200 in the top row, and so on.',
+        },
+        {
+          label: 'Multiply the top row',
+          detail: '(-1)(10) + (0)(100) + (1)(200) = -10 + 0 + 200 = 190.',
+          latex: '(-1)(10) + (0)(100) + (1)(200) = 190',
+        },
+        {
+          label: 'Multiply the middle row',
+          detail: 'The centre row carries double weight: (-2)(10) + (0)(100) + (2)(200) = -20 + 0 + 400 = 380.',
+          latex: '(-2)(10) + (0)(100) + (2)(200) = 380',
+        },
+        {
+          label: 'Multiply the bottom row',
+          detail: 'Identical to the top row by symmetry: (-1)(10) + (0)(100) + (1)(200) = 190.',
+          latex: '(-1)(10) + (0)(100) + (1)(200) = 190',
+        },
+        {
+          label: 'Sum the three rows for Gx',
+          detail: '190 + 380 + 190 = 760. A large positive value, meaning brightness increases strongly from left to right at this pixel.',
+          latex: 'G_x = 190 + 380 + 190 = 760',
+        },
+        {
+          label: 'Now apply Sobel y to the same patch',
+          detail:
+            'Sobel y is [-1, -2, -1] / [0, 0, 0] / [1, 2, 1]. Top row: (-1)(10) + (-2)(100) + (-1)(200) = -410. Middle row: zero by construction. Bottom row: (1)(10) + (2)(100) + (1)(200) = 410. Total: -410 + 0 + 410 = 0.',
+          latex: 'G_y = -410 + 0 + 410 = 0',
+        },
+        {
+          label: 'Combine into magnitude and orientation',
+          detail:
+            'M = sqrt(760^2 + 0^2) = 760. Theta = atan2(0, 760) = 0 radians, meaning the direction of greatest change is purely horizontal, which is correct for a vertical edge.',
+          latex: 'M = \\sqrt{760^2 + 0^2} = 760, \\quad \\theta = 0',
+        },
+        {
+          label: 'Sanity-check on a flat patch',
+          detail:
+            'Replace every pixel with 100. Gx = (-1)(100) + (1)(100) + (-2)(100) + (2)(100) + (-1)(100) + (1)(100) = 0, because the kernel weights sum to zero. No edge, no response.',
+          latex: 'G_x^{\\text{flat}} = 100 \\sum_{u,v} K(u,v) = 100 \\times 0 = 0',
+        },
+      ],
+      conclusion:
+        'One number, 760, summarises that this position sits on a strong left-to-right brightness increase, while Gy of zero says there is no vertical change at all. Two observations generalise: the response scales with the contrast of the edge, so Sobel outputs routinely exceed 255 and must be stored in a signed wider type such as CV_64F rather than uint8; and the whole operation was eighteen multiplications and sixteen additions, repeated once per pixel. A 224x224 image with a 3x3 kernel is about 450,000 multiply-accumulates per channel, which is why this work belongs on a GPU once channels number in the hundreds.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Convolution written out in numpy, then checked against OpenCV',
+        runnable: true,
+        code: `import cv2
+import numpy as np
+
+
+def correlate2d(img, kernel):
+    """Cross-correlation with zero padding, exactly as cv2.filter2D computes it."""
+    kh, kw = kernel.shape
+    ph, pw = kh // 2, kw // 2
+    padded = np.pad(img.astype(np.float64), ((ph, ph), (pw, pw)), mode="constant")
+    out = np.zeros_like(img, dtype=np.float64)
+    for i in range(img.shape[0]):
+        for j in range(img.shape[1]):
+            patch = padded[i:i + kh, j:j + kw]
+            out[i, j] = float((patch * kernel).sum())
+    return out
+
+
+patch = np.array([[10, 100, 200],
+                  [10, 100, 200],
+                  [10, 100, 200]], dtype=np.float64)
+
+sobel_x = np.array([[-1, 0, 1],
+                    [-2, 0, 2],
+                    [-1, 0, 1]], dtype=np.float64)
+
+mine = correlate2d(patch, sobel_x)
+theirs = cv2.filter2D(patch, ddepth=cv2.CV_64F, kernel=sobel_x,
+                      borderType=cv2.BORDER_CONSTANT)
+
+print("centre value, mine:  ", mine[1, 1])
+print("centre value, OpenCV:", theirs[1, 1])
+print("max difference:", np.abs(mine - theirs).max())`,
+        output: `centre value, mine:   760.0
+centre value, OpenCV: 760.0
+max difference: 0.0`,
+        explanation:
+          'The loop is the definition, and it produces exactly the 760 computed by hand above. Two details are worth noticing. cv2.filter2D performs cross-correlation, not true convolution, which is why the kernel is used as written; to get strict convolution you would pass cv2.flip(kernel, -1). And ddepth=cv2.CV_64F matters: leaving it as -1 keeps the uint8 input depth, so 760 saturates to 255 and every strong edge collapses to the same value.',
+      },
+      {
+        language: 'python',
+        title: 'Sobel, Laplacian and blur on a real image',
+        runnable: true,
+        code: `import cv2
+import numpy as np
+
+gray = cv2.imread("street.jpg", cv2.IMREAD_GRAYSCALE)
+print("input:", gray.shape, gray.dtype)
+
+blurred = cv2.GaussianBlur(gray, (5, 5), sigmaX=1.4)   # denoise first, always
+
+gx = cv2.Sobel(blurred, cv2.CV_64F, dx=1, dy=0, ksize=3)
+gy = cv2.Sobel(blurred, cv2.CV_64F, dx=0, dy=1, ksize=3)
+magnitude = np.sqrt(gx ** 2 + gy ** 2)
+
+print("gx range:", round(gx.min(), 1), "to", round(gx.max(), 1))
+print("magnitude range:", round(magnitude.min(), 1), "to", round(magnitude.max(), 1))
+
+lap = cv2.Laplacian(blurred, cv2.CV_64F, ksize=3)
+print("laplacian mean (near zero on flat regions):", round(float(lap.mean()), 3))
+
+# Only now convert back to a viewable 8-bit image
+viewable = cv2.convertScaleAbs(magnitude)
+cv2.imwrite("edges.png", viewable)
+
+# Canny wraps this whole pipeline: blur, gradients, thin, threshold with hysteresis
+canny = cv2.Canny(gray, threshold1=80, threshold2=160)
+print("canny is binary:", np.unique(canny))`,
+        output: `input: (720, 1280) uint8
+gx range: -948.0 to 955.0
+magnitude range: 0.0 to 1082.7
+laplacian mean (near zero on flat regions): -0.014
+canny is binary: [  0 255]`,
+        explanation:
+          'Three practical points. Blurring before differentiating is not optional: derivatives amplify high frequencies, so noise that was invisible becomes the dominant signal in the output. The gradient range reaches beyond 1000, which is why CV_64F is used and the conversion to uint8 happens only at the end. And Canny is not a different idea — it is Sobel gradients plus non-maximum suppression to thin the edges plus two-level hysteresis thresholding to link them, which is why its output is binary rather than a magnitude.',
+      },
+      {
+        language: 'python',
+        title: 'The same kernel as a learnable PyTorch layer',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+patch = torch.tensor([[10.0, 100.0, 200.0],
+                      [10.0, 100.0, 200.0],
+                      [10.0, 100.0, 200.0]]).view(1, 1, 3, 3)
+
+sobel_x = torch.tensor([[-1.0, 0.0, 1.0],
+                        [-2.0, 0.0, 2.0],
+                        [-1.0, 0.0, 1.0]]).view(1, 1, 3, 3)
+
+out = F.conv2d(patch, sobel_x, padding=1)
+print("centre response:", float(out[0, 0, 1, 1]))     # the 760 computed by hand
+
+# A real layer: same operation, but the weights are parameters
+conv = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, stride=1, padding=1)
+x = torch.randn(8, 3, 32, 32)
+y = conv(x)
+
+print("layer output:", tuple(y.shape))
+print("weight shape:", tuple(conv.weight.shape), "bias:", tuple(conv.bias.shape))
+print("learnable parameters:", conv.weight.numel() + conv.bias.numel())
+print("requires_grad:", conv.weight.requires_grad)`,
+        output: `centre response: 760.0
+layer output: (8, 64, 32, 32)
+weight shape: (64, 3, 3, 3) bias: (64,)
+learnable parameters: 1792
+requires_grad: True
+`,
+        explanation:
+          'The first half proves that F.conv2d computes precisely what you computed by hand, Sobel included. The second half is the conceptual pivot: the layer holds 64 kernels of shape (3, 3, 3) — one 3x3 grid per input channel per output channel — and every one of those 1,728 weights plus 64 biases is a parameter with requires_grad set. Nobody chose them. Train the network and the first layer reliably converges to something that looks like oriented edge and colour-opponent detectors, because those are the filters that reduce the loss.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Document scanning and barcode readers',
+        usage:
+          'Classical gradient-based edge detection is still the fastest way to find the four corners of a page or the bars of a barcode on a low-power device. No training data is needed, and the maths is verifiable, which matters for certification.',
+      },
+      {
+        context: 'The first layer of any pretrained CNN',
+        usage:
+          'Visualising the 64 learned 7x7 filters of a trained ResNet shows oriented edge detectors and colour-opponent blobs that look strikingly like Gabor and Sobel filters, discovered rather than designed. This is the standard demonstration that learning rediscovers classical features.',
+      },
+      {
+        context: 'Autofocus and image quality scoring',
+        usage:
+          'The variance of the Laplacian is a standard sharpness metric: a blurred image has little intensity curvature, so the variance collapses. Phone cameras and microscopy stages use it to choose the focal plane.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'OpenCV', role: 'filter2D, Sobel, Laplacian, GaussianBlur and Canny implement these kernels with optimised, separable C++ code.' },
+      { tool: 'PyTorch nn.Conv2d', role: 'The same arithmetic with learnable weights, batched over channels and images and dispatched to cuDNN.' },
+      { tool: 'scipy.ndimage', role: 'convolve and correlate make the flip distinction explicit, which is useful when verifying an implementation.' },
+      { tool: 'scikit-image', role: 'filters.sobel and feature.canny provide float-first implementations that avoid the uint8 saturation trap.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Storing gradient output in uint8',
+        why: 'Sobel responses are signed and routinely exceed 1000 in magnitude. Writing them into an 8-bit array clips everything above 255 and discards every negative value, so half the edges disappear and the rest are flattened to a single brightness.',
+        fix: 'Compute in cv2.CV_64F or float32, then convert for display only at the very end with cv2.convertScaleAbs or by normalising to 0–255.',
+      },
+      {
+        mistake: 'Differentiating without blurring first',
+        why: 'Derivative filters amplify high frequencies, and sensor noise is the highest frequency content present. The edge map becomes a field of speckle in which real edges are no longer the strongest response.',
+        fix: 'Apply a Gaussian blur with a sigma matched to the noise scale first. This is why Canny begins with a blur, and why Laplacian of Gaussian exists as a single combined kernel.',
+      },
+      {
+        mistake: 'Expecting a blur kernel whose weights do not sum to one to preserve brightness',
+        why: 'A flat patch of value c returns c times the sum of the weights. A kernel of nine ones therefore multiplies the image by nine, saturating it to white.',
+        fix: 'Normalise: divide the kernel by the sum of its entries. Derivative kernels are the deliberate opposite, summing to zero so flat regions return zero.',
+      },
+      {
+        mistake: 'Believing deep learning convolution is true convolution',
+        why: 'Every framework implements cross-correlation and calls it convolution. Someone porting a signal-processing formula, or comparing against scipy.signal.convolve2d, gets a kernel-flipped result and an apparent bug.',
+        fix: 'Remember that for learned weights the flip is absorbed into the parameters and nothing changes. When it does matter — verifying an implementation, or using a designed asymmetric kernel — flip explicitly with cv2.flip(kernel, -1) or use scipy.signal.correlate2d.',
+      },
+      {
+        mistake: 'Getting the output size wrong when stacking layers',
+        why: 'A 3x3 convolution with no padding loses one pixel on each side, so after ten layers a 32x32 input is 12x12 and a later reshape into a fully connected layer fails with a confusing size mismatch.',
+        fix: 'Use padding = (kernel_size - 1) // 2 for odd kernels to keep the size, and compute floor((H + 2P - K)/S) + 1 for each layer before writing the model.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What is the difference between convolution and cross-correlation, and which do neural networks use?',
+        answer:
+          'True convolution flips the kernel by 180 degrees before the sliding weighted sum; cross-correlation does not. Neural networks — PyTorch, TensorFlow, cuDNN, and OpenCV filter2D — all implement cross-correlation while calling it convolution. It makes no difference to a learned layer, because if the optimal operation were the flipped one, gradient descent would simply learn the flipped weights; the two hypothesis classes are identical. The distinction matters in three places: reproducing a signal-processing formula, comparing against scipy.signal.convolve2d, and using a hand-designed asymmetric kernel where the orientation of the response would silently reverse. The flip exists in the mathematical definition because it makes convolution commutative and makes the convolution theorem with the Fourier transform hold cleanly.',
+        followUp:
+          'A strong answer observes that for symmetric kernels such as Gaussian blur and the Laplacian, the two operations are numerically identical, which is why the confusion so rarely surfaces.',
+      },
+      {
+        level: 'intermediate',
+        question: 'An input is 224x224. What is the output size after a 3x3 convolution with stride 2 and padding 1? How many parameters does that layer hold if it goes from 3 to 64 channels?',
+        answer:
+          'Spatial size is floor((224 + 2 - 3)/2) + 1 = floor(223/2) + 1 = 111 + 1 = 112, so the output is 112x112. Parameters: each of the 64 output kernels spans all 3 input channels at 3x3, giving 64 x 3 x 3 x 3 = 1,728 weights, plus 64 biases, for 1,792 in total. The point worth making is how small that is — a fully connected layer mapping 224x224x3 to even a single 112x112 output would need billions of weights. Weight sharing across positions is what makes convolution tractable, and it also builds in translation equivariance, since the same filter is applied everywhere.',
+        followUp:
+          'Strong candidates add that the compute cost, unlike the parameter count, does scale with resolution: about 112 x 112 x 1,728 multiply-accumulates for this layer, around 21.7 million per image.',
+      },
+      {
+        level: 'advanced',
+        question: 'Why did learned filters replace hand-designed ones, given that the first layer of a trained CNN looks like a bank of edge detectors anyway?',
+        answer:
+          'The first layer looking like Gabor and Sobel filters is a validation of the classical intuition, not an argument against learning, and it is also the least interesting layer. The value of learning appears deeper: layer four of a trained network responds to textures and part fragments, and layer thirty to object parts, and nobody has ever hand-designed a useful bank of those because the space of candidates is far too large and the right features depend on the dataset. There is a second, structural argument: a hand-designed pipeline optimises each stage in isolation against a proxy objective, whereas a learned stack optimises every stage jointly against the actual task loss, so earlier layers adapt to what later layers need. The empirical record settles it — the ImageNet top-5 error fell from about 26 per cent with engineered features to 16 per cent with AlexNet in a single year, and classical pipelines never caught up.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Apply the kernel [[0, -1, 0], [-1, 5, -1], [0, -1, 0]] by hand to the 3x3 patch [[100, 100, 100], [100, 150, 100], [100, 100, 100]]. What is the centre output, and what does the filter do?',
+        hint: 'Only five weights are non-zero. Check what the weights sum to.',
+        solution:
+          'Centre: 5 x 150 = 750. Four neighbours: -1 x 100 four times = -400. Total = 750 - 400 = 350. The original centre was 150, so the filter pushed it to 350, more than doubling its contrast against the surround. The weights sum to 1, so a flat patch is unchanged; the kernel is the identity plus a negative Laplacian, which is the standard sharpening construction. Note that 350 exceeds 255 and would clip if stored as uint8, which is precisely how over-sharpening produces blown-out white haloes.',
+      },
+      {
+        prompt:
+          'Design a 3x3 kernel that detects diagonal edges running from bottom-left to top-right, and verify it returns zero on a flat patch.',
+        hint: 'You want positive weights on one side of that diagonal and negative on the other, summing to zero.',
+        solution:
+          '[[0, 1, 2], [-1, 0, 1], [-2, -1, 0]] works. The weights sum to 0 + 1 + 2 - 1 + 0 + 1 - 2 - 1 + 0 = 0, so on any flat patch of value c the output is c x 0 = 0. It measures the difference between the top-right triangle and the bottom-left triangle, so it responds maximally to an edge running from bottom-left to top-right and returns zero on a perpendicular edge. This is the Sobel construction rotated 45 degrees, and it is exactly one of the eight Kirsch compass kernels.',
+      },
+      {
+        prompt:
+          'A network takes 128x128 input and applies four consecutive 3x3 convolutions with stride 2 and padding 1. What is the final spatial size, and what is the receptive field of one output value in input pixels?',
+        hint: 'Apply the size formula four times. For the receptive field, work backwards: each stride-2 layer doubles the step between the positions a kernel covers.',
+        solution:
+          'Sizes: 128 to 64 to 32 to 16 to 8, since each layer computes floor((H + 2 - 3)/2) + 1 = H/2 for even H. The receptive field grows as r_out = r_in + (K - 1) x jump, with the jump doubling each layer: after layer one r = 3 with jump 2; layer two r = 3 + 2x2 = 7, jump 4; layer three r = 7 + 2x4 = 15, jump 8; layer four r = 15 + 2x8 = 31. So one value in the 8x8 output sees a 31x31 region of the input. This is the mechanism by which stacked small kernels reach a large context without ever using a large kernel.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'CV-005-q1',
+        type: 'numeric',
+        concept: 'convolution by hand',
+        prompt:
+          'Apply Sobel x, [[-1,0,1],[-2,0,2],[-1,0,1]], to the patch [[10,100,200],[10,100,200],[10,100,200]]. What is the centre output?',
+        answer: 760,
+        tolerance: 0,
+        explanation:
+          'Rows give (-1)(10)+(1)(200) = 190, (-2)(10)+(2)(200) = 380 and 190 again. The total is 760: a strong positive response because brightness increases sharply from left to right, which is what a vertical edge is.',
+      },
+      {
+        id: 'CV-005-q2',
+        type: 'mcq',
+        concept: 'kernel weights',
+        prompt: 'Why do derivative kernels such as Sobel have weights that sum to zero?',
+        options: [
+          'So that a region of constant brightness produces no response',
+          'So that the output always fits in uint8',
+          'So that the kernel is symmetric and can be flipped safely',
+          'So that the filter runs faster on a GPU',
+        ],
+        answerIndex: 0,
+        explanation:
+          'On a flat patch of value c the output is c times the sum of the weights. Summing to zero makes that output zero regardless of brightness, so the filter measures change rather than level. Blur kernels sum to one for the opposite reason: they must preserve brightness.',
+      },
+      {
+        id: 'CV-005-q3',
+        type: 'numeric',
+        concept: 'output size arithmetic',
+        prompt:
+          'An input is 64x64. After a 5x5 convolution with stride 1 and padding 0, what is the output height?',
+        answer: 60,
+        tolerance: 0,
+        unit: 'pixels',
+        explanation:
+          'floor((64 + 0 - 5)/1) + 1 = 59 + 1 = 60. A 5x5 kernel with no padding loses two pixels at each edge, so the size drops by four in each dimension.',
+      },
+      {
+        id: 'CV-005-q4',
+        type: 'truefalse',
+        concept: 'correlation versus convolution',
+        prompt: 'PyTorch nn.Conv2d computes true mathematical convolution, with the kernel flipped by 180 degrees.',
+        answer: false,
+        explanation:
+          'It computes cross-correlation and calls it convolution, as do TensorFlow, cuDNN and cv2.filter2D. For learned weights the distinction is irrelevant, since the flipped kernel is equally learnable, but it matters when reproducing a signal-processing formula.',
+      },
+      {
+        id: 'CV-005-q5',
+        type: 'code-output',
+        language: 'python',
+        concept: 'layer shapes and parameters',
+        prompt: 'What does this print?',
+        code: 'import torch, torch.nn as nn\nconv = nn.Conv2d(3, 16, kernel_size=3, stride=2, padding=1)\nx = torch.randn(4, 3, 32, 32)\nprint(tuple(conv(x).shape), conv.weight.numel())',
+        options: [
+          '(4, 16, 16, 16) 432',
+          '(4, 16, 32, 32) 432',
+          '(4, 16, 16, 16) 144',
+          '(4, 3, 16, 16) 432',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Spatial size is floor((32 + 2 - 3)/2) + 1 = 16, channels become 16, and the batch is unchanged. Weights number 16 x 3 x 3 x 3 = 432, since each output kernel spans all three input channels; the 16 biases are counted separately.',
+      },
+      {
+        id: 'CV-005-q6',
+        type: 'order',
+        concept: 'Canny pipeline',
+        prompt: 'Put the stages of Canny edge detection in the order they run.',
+        items: [
+          'Gaussian blur to suppress noise',
+          'Compute Sobel gradients in x and y',
+          'Compute gradient magnitude and orientation',
+          'Non-maximum suppression to thin edges to one pixel',
+          'Hysteresis thresholding with a high and a low threshold',
+        ],
+        explanation:
+          'Canny is not a new operator but a pipeline built on Sobel: blur first because differentiation amplifies noise, then gradients, then thinning, then linking weak edges that touch strong ones. That is why its output is binary rather than a magnitude map.',
+      },
+      {
+        id: 'CV-005-q7',
+        type: 'explain',
+        concept: 'learned versus designed filters',
+        prompt:
+          'Explain what changed conceptually when convolution kernels stopped being designed and started being learned.',
+        rubric: [
+          'States that the arithmetic of convolution is identical in both cases',
+          'States that kernel weights became parameters optimised against the task loss',
+          'Explains why this scales to features nobody could design by hand',
+        ],
+        sampleAnswer:
+          'The operation did not change at all: a small grid of weights is still slid across the image, multiplied and summed. What changed is where the weights come from. In classical vision a person chose them from theory, so Sobel measures brightness change because someone reasoned that it should. In a convolutional network the weights are initialised randomly and adjusted by gradient descent to reduce the final task loss, so the network discovers which local patterns are worth measuring for this particular problem. The first layer usually rediscovers edge detectors, which is reassuring, but the real gain is deeper: layer thirty responds to object parts that no one has a formula for, and every layer is tuned jointly with the layers that consume it rather than optimised in isolation against a proxy.',
+        explanation:
+          'The core idea is that learning replaces the source of the weights, not the operation, which is why understanding hand-designed kernels transfers directly to understanding CNNs.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does a convolution compute at one position?', back: 'The sum of products between kernel weights and the pixels beneath them — a dot product over a local patch.' },
+      { front: 'Sobel x weights?', back: '[[-1,0,1],[-2,0,2],[-1,0,1]] — right minus left, with the centre row doubled. Responds to vertical edges.' },
+      { front: 'Why must blur kernels sum to 1 and derivative kernels sum to 0?', back: 'A flat patch of value c returns c times the weight sum: 1 preserves brightness, 0 makes the filter blind to level and sensitive only to change.' },
+      { front: 'Output size formula for a convolution?', back: 'floor((H + 2P - K)/S) + 1. With K=3, P=1, S=1 the size is preserved; S=2 halves it.' },
+      { front: 'Do frameworks implement convolution or cross-correlation?', back: 'Cross-correlation, without the kernel flip. Irrelevant for learned weights, relevant when reproducing a designed filter.' },
+      { front: 'Why blur before computing gradients?', back: 'Differentiation amplifies high frequencies, so sensor noise would dominate the edge map. Canny starts with a Gaussian for this reason.' },
+      { front: 'What is the big idea behind CNNs?', back: 'Do not design the kernel weights — make them parameters and let gradient descent find the filters that reduce the task loss.' },
+    ],
+
+    challenge: {
+      title: 'A filter bank from scratch',
+      brief:
+        'Implement cross-correlation yourself with numpy, supporting arbitrary odd kernels, a padding argument and a stride argument, and verify it against cv2.filter2D for stride 1. Then build a bank of six kernels — identity, box blur, Gaussian blur, Sobel x, Sobel y and Laplacian — apply them all to one image, and produce a labelled figure. Finish by computing the gradient magnitude and orientation, and reimplementing non-maximum suppression so that your edges are one pixel wide.',
+      language: 'python',
+      acceptanceCriteria: [
+        'The implementation matches cv2.filter2D to within floating-point tolerance for stride 1',
+        'Stride and padding arguments both work, verified against the output-size formula',
+        'All six kernels are applied and displayed with correct intensity scaling rather than clipped uint8',
+        'Gradient magnitude and orientation are computed from the two Sobel responses',
+        'Non-maximum suppression produces edges that are one pixel wide, compared side by side against cv2.Canny',
+      ],
+      starterCode: 'import numpy as np\nimport cv2\n\n\ndef correlate2d(img, kernel, padding=1, stride=1):\n    """Cross-correlation. Returns float64 — never uint8."""\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach a classmate what a convolution filter is, using a concrete 3x3 example they can follow on paper, and then explain what a convolutional network changed about the idea.',
+      mustCover: [
+        'A kernel is a small grid of weights slid over the image, multiplying and summing at every position',
+        'Different weights compute different things: averaging blurs, differences find edges',
+        'Derivative kernels sum to zero so flat regions produce no response',
+        'CNNs make the kernel weights learnable parameters instead of hand-designed constants',
+      ],
+      bonusSignals: ['works through actual numbers', 'mentions the output size formula', 'mentions that the first layer of a trained CNN rediscovers edge detectors'],
+      sampleExplanation:
+        'Take a three-by-three grid of numbers and lay it on top of nine pixels. Multiply each pixel by the number on top of it, add the nine results, and that single number becomes the output at the centre position. Slide the grid one pixel across and repeat until you have covered the image. Everything follows from the choice of those nine numbers. Make them all one ninth and you are averaging the neighbourhood, so the picture blurs. Make the left column negative one and the right column positive one, and on a flat area the positives and negatives cancel to zero, while at a place where the left is dark and the right is bright you get a big number — that is edge detection, and a real Sobel filter doubles the middle row to resist noise. Try it on a patch with columns 10, 100, 200: the answer is 760. For decades people chose those numbers using theory. The idea behind convolutional networks is to stop choosing: start from random numbers, see how wrong the final prediction is, and nudge every weight in the direction that makes it less wrong. Do that a few million times and the network invents its own filters, and the surprise is that the first layer usually invents edge detectors anyway.',
+    },
+  },

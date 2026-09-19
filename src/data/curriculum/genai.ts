@@ -1608,3 +1608,1242 @@ print(budget("Summarise the attached notes.", ["note one ..." * 200]))`,
         "Both problems come from the same place: the model never sees your text. A tokeniser chops it into chunks first and hands over a list of numbers. Those chunks were chosen before training by a simple procedure — look at a huge pile of text, find the pair of pieces that occurs together most often, glue them into one piece, repeat tens of thousands of times. Common English words got glued into single pieces because they appeared constantly. So strawberry might arrive as two chunks, and asking how many r characters are inside it is asking about something that was never presented separately; the model answers with a plausible number because producing something plausible is all it ever does. The Japanese case is the same mechanism with the opposite consequence: far fewer merges were learned for that script, so the text fragments into many more chunks, and since you pay per chunk and the context window is measured in chunks, the identical message costs several times as much and leaves less room for conversation history.",
     },
   },
+
+  {
+    id: 'GEN-004',
+    domain: 'GEN',
+    module: 'Inside a Transformer LM',
+    topic: 'Token and position representations',
+    title: 'Embeddings and Positional Encoding',
+    slug: 'embeddings-and-positional-encoding',
+    difficulty: 4,
+    estimatedMinutes: 40,
+    prerequisites: ['GEN-003'],
+    related: ['GEN-002', 'GEN-003'],
+    tags: ['embeddings', 'positional-encoding', 'rope', 'vectors', 'permutation-invariance'],
+
+    learningObjectives: [
+      'Explain how a token id becomes a learned vector, and why that lookup is mathematically a matrix multiplication with a one-hot vector',
+      'State why self-attention is permutation-invariant and what that implies if position is not injected explicitly',
+      'Compare sinusoidal, learned absolute and rotary position encodings on how they work and how they extrapolate',
+      'Interpret geometric relationships in embedding space, and say honestly what such relationships do and do not prove',
+    ],
+
+    terminology: [
+      {
+        term: 'Embedding',
+        definition:
+          'A dense vector of real numbers representing a token, learned during training. The embedding matrix has one row per vocabulary entry and one column per model dimension.',
+        simple: 'A list of numbers that stands for a word-piece, learned rather than written down.',
+      },
+      {
+        term: 'Embedding matrix',
+        definition:
+          'The learned table of shape (vocabulary size, model dimension). Looking up token id i means taking row i, which is equivalent to multiplying a one-hot vector by the matrix.',
+        simple: 'The big lookup table that turns each numbered piece into its vector.',
+      },
+      {
+        term: 'Permutation invariance',
+        definition:
+          'A property of self-attention: reordering the input tokens permutes the outputs identically but changes nothing else, so the operation carries no notion of order on its own.',
+        simple: 'Attention would treat a shuffled sentence exactly the same way, so order has to be added in.',
+      },
+      {
+        term: 'Positional encoding',
+        definition:
+          'Information about where a token sits in the sequence, injected into the representation either by adding a position vector to the embedding or by rotating the query and key vectors inside attention.',
+        simple: 'A way of telling the model where in the sentence each piece appeared.',
+      },
+      {
+        term: 'Rotary position embedding (RoPE)',
+        definition:
+          'A scheme that rotates pairs of dimensions in the query and key vectors by an angle proportional to position, so the attention score between two tokens depends only on their relative distance.',
+        simple: 'Spin each token vector by an amount based on its position, so only the gap between tokens matters.',
+      },
+      {
+        term: 'Cosine similarity',
+        definition:
+          'The cosine of the angle between two vectors: the dot product divided by the product of their lengths. The standard way of measuring how related two embeddings are.',
+        simple: 'A number from -1 to 1 saying how nearly two vectors point the same way.',
+      },
+    ],
+
+    simpleExplanation:
+      "The tokeniser has turned your text into a list of numbers, but those numbers are only labels — token 5,281 is not five times anything. The first thing the model does is swap each label for a long list of real numbers, maybe a few thousand of them, pulled from a big table it learned during training. That list is the token's meaning as far as the model is concerned, and pieces used in similar ways end up with similar lists. Then comes a problem that surprises people. The machinery that follows, self-attention, looks at every token in relation to every other token all at once, and it genuinely cannot tell which came first: give it the same words in a different order and it does the same arithmetic. So the model has to be told about position explicitly. Either a position vector gets added to each token's vector before anything else happens, or, in most recent models, the vectors get rotated by an angle that depends on where the token sits. Either way, order is not something the architecture gets for free — it is a deliberate addition.",
+
+    whyItExists:
+      'Token ids are arbitrary labels with no useful arithmetic, so the model needs a representation in which similarity and structure are expressible; that is what embeddings provide. Separately, self-attention computes over an unordered set, so without an explicit position signal the model could not distinguish "the dog bit the man" from "the man bit the dog".',
+
+    analogy: {
+      scenario:
+        "Imagine a vast conference where everyone wears a badge listing their interests as a set of numbers — how much they care about mathematics, about cooking, about cycling, and so on for a thousand topics. People with similar badges find they have things to talk about, and you can measure how alike two people are just by comparing badges. Now imagine the conference organisers arrange everyone in a queue but forget to number them. The badges tell you who is similar; nothing tells you who was standing where. If the order in the queue matters, someone has to add a position marker to every badge.",
+      mapping: [
+        { from: 'The badge of numbers', to: 'The token embedding vector' },
+        { from: 'Similar badges meaning similar interests', to: 'Nearby embeddings meaning similar usage in training text' },
+        { from: 'The queue with no numbers', to: 'Self-attention operating on an unordered set' },
+        { from: 'Adding a position marker to each badge', to: 'Additive positional encoding' },
+        { from: 'Tilting each badge by an angle based on where you stand', to: 'Rotary position embedding, which encodes relative distance' },
+      ],
+      bridge:
+        'The analogy is exact on the key point: the badge carries identity and the marker carries place, and they are genuinely separate pieces of information that the architecture must combine deliberately. Adding the two vectors, which looks strange at first, works for the same reason people can carry both facts at once — in a space of thousands of dimensions there is ample room for the network to read off identity and position from a single combined vector.',
+      limitations:
+        'The analogy suggests each dimension means something nameable, like interest in cycling. In a real model the dimensions are not individually interpretable; meaning is distributed across many of them, and interpretability research finds that a single neuron typically participates in many unrelated features.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Embedding space',
+        caption: 'Explore a projection of a real embedding space and inspect which tokens sit near which.',
+        widget: 'embedding-space-3d',
+      },
+      {
+        kind: 'flow',
+        title: 'From text to the first transformer block',
+        caption: 'Every step before attention begins.',
+        steps: [
+          { label: 'Text', detail: 'A raw string of bytes.' },
+          { label: 'Token ids', detail: 'The tokeniser produces a list of integers, one per token.' },
+          { label: 'Embedding lookup', detail: 'Each id selects a row of the learned embedding matrix, giving a vector of the model dimension.' },
+          { label: 'Position injected', detail: 'Either a position vector is added, or query and key vectors are rotated later inside attention.' },
+          { label: 'Into the stack', detail: 'The resulting matrix of shape (sequence length, model dimension) enters the first transformer block.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Absolute versus relative position',
+        caption: 'The distinction that drives most modern design choices.',
+        left: {
+          heading: 'Absolute (sinusoidal or learned)',
+          points: [
+            'A vector for each position index is added to the token embedding',
+            'Learned variants can only represent positions seen in training',
+            'Sinusoidal variants are defined for any index but extrapolate poorly in practice',
+            'The model must infer relative distance from two absolute signals',
+            'Simple to implement and easy to reason about',
+          ],
+        },
+        right: {
+          heading: 'Relative (RoPE and friends)',
+          points: [
+            'Query and key vectors are rotated by an angle proportional to position',
+            'The attention score depends only on the difference of positions',
+            'Applied inside attention at every layer, not once at the input',
+            'Extends to longer contexts more gracefully, especially with frequency scaling',
+            'The dominant choice in recent open-weight models',
+          ],
+        },
+      },
+      {
+        kind: 'annotated',
+        title: 'Shapes to keep in your head',
+        subject: 'ids (T,) -> embeddings (T, d) -> blocks -> logits (T, V)',
+        annotations: [
+          { part: 'T', note: 'Sequence length in tokens. Grows as generation proceeds.' },
+          { part: 'd', note: 'Model dimension — the width of every token vector, constant through the whole stack.' },
+          { part: 'V', note: 'Vocabulary size. The output projection maps d back to V to produce logits.' },
+          { part: '(T, d)', note: 'The residual stream: one vector per token, rewritten by every block. This shape never changes between blocks.' },
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'An embedding layer is a learned matrix E of shape (V, d) whose row E_i is the representation of token id i; the lookup is equivalent to computing one-hot(i) times E. Because self-attention is equivariant to permutations of the input positions, order must be supplied separately, either additively as x_t = E_{i_t} + p_t, or multiplicatively by rotating query and key vectors by an angle proportional to position so that attention scores depend only on relative offsets.',
+
+    math: {
+      intuition:
+        'Three ideas stack here. First, an embedding lookup is a matrix multiplication with a one-hot vector, which is why it is differentiable and can be learned by gradient descent. Second, attention treats its input as a set, so shuffling positions shuffles outputs identically and nothing else changes — position must be added deliberately. Third, sinusoidal encodings write position as a set of waves at different frequencies, so that a fixed shift in position corresponds to a fixed rotation, and rotary encodings make that rotation explicit and apply it inside attention, so only relative distance ever appears in the score.',
+      formulas: [
+        {
+          latex: 'x_t = E^{\\top} \\, \\mathrm{onehot}(i_t) = E_{i_t}',
+          name: 'Embedding lookup as a matrix product',
+          meaning:
+            'Selecting row i of the embedding matrix is identical to multiplying by a one-hot vector, which is why the lookup has a gradient and the table is learned rather than hand-built.',
+          variables: [
+            { symbol: 'E', meaning: 'The embedding matrix of shape (V, d)' },
+            { symbol: 'i_t', meaning: 'The integer token id at position t' },
+            { symbol: '\\mathrm{onehot}(i_t)', meaning: 'A vector of length V with a single 1 at index i_t' },
+            { symbol: 'x_t', meaning: 'The resulting d-dimensional embedding vector' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\mathrm{Attn}(PX) = P \\, \\mathrm{Attn}(X)',
+          name: 'Permutation equivariance of attention',
+          meaning:
+            'Permuting the rows of the input permutes the rows of the output in exactly the same way and changes nothing else. The operation therefore contains no information about order.',
+          variables: [
+            { symbol: 'P', meaning: 'Any permutation matrix reordering the sequence positions' },
+            { symbol: 'X', meaning: 'The input matrix of token vectors, shape (T, d)' },
+            { symbol: '\\mathrm{Attn}', meaning: 'The self-attention operation applied to that matrix' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: 'PE_{(t, 2i)} = \\sin\\!\\left(\\frac{t}{10000^{2i/d}}\\right), \\quad PE_{(t, 2i+1)} = \\cos\\!\\left(\\frac{t}{10000^{2i/d}}\\right)',
+          name: 'Sinusoidal positional encoding',
+          meaning:
+            'Position is written as a bank of sine and cosine waves whose wavelengths increase geometrically across dimensions, so early dimensions distinguish neighbouring positions and later ones encode coarse location.',
+          variables: [
+            { symbol: 't', meaning: 'Position index in the sequence, starting at 0' },
+            { symbol: 'i', meaning: 'Index of the dimension pair, from 0 to d/2 - 1' },
+            { symbol: 'd', meaning: 'Model dimension' },
+            { symbol: '10000', meaning: 'A base constant setting the ratio between the shortest and longest wavelength' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\langle R_{m} q, \; R_{n} k \\rangle = f(q, k, m - n)',
+          name: 'The rotary property',
+          meaning:
+            'Rotating the query by an angle proportional to its position m and the key by an angle proportional to n makes their inner product depend only on the offset m - n. Relative position falls out of the geometry rather than being learned.',
+          variables: [
+            { symbol: 'R_m', meaning: 'A block-diagonal rotation matrix built from angles proportional to position m' },
+            { symbol: 'q, k', meaning: 'The query and key vectors for two tokens' },
+            { symbol: 'm - n', meaning: 'The relative distance between the two token positions' },
+            { symbol: '\\langle \\cdot, \\cdot \\rangle', meaning: 'The inner (dot) product, which is what the attention score is built from' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\cos(u, v) = \\frac{u \\cdot v}{\\lVert u \\rVert \\, \\lVert v \\rVert}',
+          name: 'Cosine similarity',
+          meaning:
+            'Measures how nearly two embeddings point in the same direction, ignoring magnitude. This is the standard similarity used for comparing token or document embeddings.',
+          variables: [
+            { symbol: 'u \\cdot v', meaning: 'Dot product of the two vectors' },
+            { symbol: '\\lVert u \\rVert', meaning: 'Euclidean length of u' },
+            { symbol: '\\cos(u, v)', meaning: 'Value in [-1, 1]: 1 identical direction, 0 orthogonal, -1 opposite' },
+          ],
+          category: 'linear-algebra',
+        },
+      ],
+      derivation: [
+        'Write attention output for position t as a weighted sum over all positions, where the weights depend on dot products between token vectors.',
+        'Nothing in that expression refers to t except through which vectors are involved, so permuting the inputs simply permutes which sums are computed where.',
+        'Therefore attention alone cannot distinguish two orderings of the same multiset of tokens, and an explicit position signal is required.',
+        'The sinusoidal choice writes position with waves of geometrically spaced frequencies; a shift by a fixed offset k maps to a linear transformation of the encoding, so relative offsets are in principle recoverable.',
+        'Rotary encoding makes this explicit: rotating q and k by angles proportional to their positions means the dot product depends only on the difference of the angles, giving exact relative behaviour at every layer.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Computing sinusoidal position vectors by hand',
+      setup:
+        'Take a toy model dimension of d = 4, which gives two dimension pairs. For pair i = 0 the divisor is 10000^(0/4) = 1; for pair i = 1 it is 10000^(2/4) = 100. Each position therefore gets the vector [sin(t/1), cos(t/1), sin(t/100), cos(t/100)].',
+      steps: [
+        {
+          label: 'Position 0',
+          detail: 'sin(0) = 0 and cos(0) = 1 for both frequencies, giving [0, 1, 0, 1].',
+          latex: 'PE_0 = [0,\; 1,\; 0,\; 1]',
+        },
+        {
+          label: 'Position 1',
+          detail: 'sin(1) = 0.841, cos(1) = 0.540, sin(0.01) = 0.010, cos(0.01) = 1.000, giving [0.841, 0.540, 0.010, 1.000].',
+          latex: 'PE_1 = [0.841,\; 0.540,\; 0.010,\; 1.000]',
+        },
+        {
+          label: 'Position 2',
+          detail: 'sin(2) = 0.909, cos(2) = -0.416, sin(0.02) = 0.020, cos(0.02) = 1.000, giving [0.909, -0.416, 0.020, 1.000].',
+          latex: 'PE_2 = [0.909,\; -0.416,\; 0.020,\; 1.000]',
+        },
+        {
+          label: 'Read what the two frequency bands are doing',
+          detail:
+            'The first pair changes a great deal between adjacent positions — it distinguishes neighbours sharply but wraps around every 2*pi positions. The second pair barely moves between positions 1 and 2 but drifts steadily over hundreds of positions, so it encodes coarse location. Together, a bank of such pairs gives a signature that is locally discriminative and globally unambiguous.',
+        },
+        {
+          label: 'Add to the token embedding',
+          detail:
+            'If the token embedding for "cat" is [0.20, -0.10, 0.50, 0.30] and it appears at position 2, the input to the first block is [0.20 + 0.909, -0.10 - 0.416, 0.50 + 0.020, 0.30 + 1.000] = [1.109, -0.516, 0.520, 1.300]. Identity and position now share one vector.',
+          latex: 'x_t = E_{i_t} + PE_t',
+        },
+        {
+          label: 'Check the rotary alternative on the same pair',
+          detail:
+            'Under RoPE nothing is added. The first dimension pair of the query at position 2 is rotated by angle 2 and the key at position 5 by angle 5; their dot product then depends on cos(5 - 2) = cos(3). Move both tokens ten positions later and the score is unchanged, because the difference is still 3. That invariance is the whole point.',
+          latex: '\\theta_m - \\theta_n \\propto m - n',
+        },
+      ],
+      conclusion:
+        'Adding a position vector to a token vector looks like it should destroy information, and in two dimensions it would. In a space of thousands of dimensions, the network has ample capacity to learn projections that read identity and position separately from the sum. Rotary encoding avoids the question entirely by not touching the token vector at all — it changes the geometry of the comparison instead, which is why it behaves better when a model is asked to handle sequences longer than those it was trained on.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'The embedding lookup is a matrix row',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+torch.manual_seed(0)
+vocab_size, d_model = 10, 4
+embed = nn.Embedding(vocab_size, d_model)
+
+ids = torch.tensor([3, 7, 3])          # note the repeated token
+vectors = embed(ids)
+print(vectors.shape)
+print(vectors)
+
+# The lookup is exactly a one-hot matrix product:
+onehot = torch.nn.functional.one_hot(ids, vocab_size).float()
+print("identical:", torch.allclose(onehot @ embed.weight, vectors))`,
+        output: `torch.Size([3, 4])
+tensor([[-1.1258, -1.1524, -0.2506, -0.4339],
+        [ 0.8487,  0.6920, -0.3160, -2.1152],
+        [-1.1258, -1.1524, -0.2506, -0.4339]], grad_fn=<EmbeddingBackward0>)
+identical: True`,
+        explanation:
+          'Two things are worth pausing on. The same token id at two positions yields exactly the same vector, which is precisely why position must be added separately — at this stage the two occurrences of token 3 are indistinguishable. And the one-hot check shows that the lookup is a linear operation, which is what makes the table learnable: gradients flow back into the rows that were used, and only those rows are updated on a given batch.',
+      },
+      {
+        language: 'python',
+        title: 'Demonstrating that attention ignores order',
+        runnable: true,
+        code: `import torch
+
+torch.manual_seed(1)
+X = torch.randn(3, 4)                      # three tokens, model dimension 4
+
+def attention(X: torch.Tensor) -> torch.Tensor:
+    scores = (X @ X.T) / X.shape[-1] ** 0.5
+    return torch.softmax(scores, dim=-1) @ X
+
+out = attention(X)
+
+perm = torch.tensor([2, 0, 1])             # shuffle the tokens
+out_shuffled = attention(X[perm])
+
+print("shuffling input then attending == attending then shuffling output:",
+      torch.allclose(out_shuffled, out[perm], atol=1e-6))`,
+        output: `shuffling input then attending == attending then shuffling output: True`,
+        explanation:
+          'This is permutation equivariance made concrete, and it is the reason positional encoding exists at all. Attending to a shuffled sequence gives exactly the shuffled version of the original output — no new information appears and none is lost, meaning the operation is blind to order. Without an explicit position signal the model would assign identical probabilities to "the dog bit the man" and "the man bit the dog".',
+      },
+      {
+        language: 'python',
+        title: 'Sinusoidal encodings, and what they look like',
+        runnable: true,
+        code: `import torch
+
+def sinusoidal(max_len: int, d_model: int) -> torch.Tensor:
+    pos = torch.arange(max_len).unsqueeze(1).float()          # (T, 1)
+    i = torch.arange(0, d_model, 2).float()                   # (d/2,)
+    div = torch.pow(10000.0, i / d_model)                     # geometric wavelengths
+    pe = torch.zeros(max_len, d_model)
+    pe[:, 0::2] = torch.sin(pos / div)
+    pe[:, 1::2] = torch.cos(pos / div)
+    return pe
+
+pe = sinusoidal(max_len=6, d_model=4)
+print(pe.round(decimals=3))
+
+# Dot product between encodings falls off smoothly with distance.
+sims = pe @ pe[0]
+print("similarity to position 0:", sims.round(decimals=3).tolist())`,
+        output: `tensor([[ 0.0000,  1.0000,  0.0000,  1.0000],
+        [ 0.8415,  0.5403,  0.0100,  1.0000],
+        [ 0.9093, -0.4161,  0.0200,  0.9998],
+        [ 0.1411, -0.9900,  0.0300,  0.9996],
+        [-0.7568, -0.6536,  0.0400,  0.9992],
+        [-0.9589,  0.2837,  0.0500,  0.9987]])
+similarity to position 0: [2.0, 1.54, 0.584, -0.99, -0.653, 0.284]`,
+        explanation:
+          'The table is the worked example computed in bulk: alternating sine and cosine columns, with the wavelength growing geometrically across dimension pairs. The similarity row shows both the strength and the weakness of this scheme — nearby positions are similar, but because sine and cosine are periodic the similarity does not decrease monotonically with distance, so the model must learn to interpret the pattern rather than reading distance off directly. This is part of why relative schemes such as RoPE have largely replaced additive sinusoids.',
+      },
+      {
+        language: 'python',
+        title: 'Rotary embeddings on one dimension pair',
+        runnable: true,
+        code: `import torch
+
+def rotate(vec: torch.Tensor, pos: int, theta: float = 1.0) -> torch.Tensor:
+    """Rotate a 2-D slice by an angle proportional to position."""
+    angle = pos * theta
+    c, s = torch.cos(torch.tensor(angle)), torch.sin(torch.tensor(angle))
+    return torch.stack([vec[0] * c - vec[1] * s, vec[0] * s + vec[1] * c])
+
+q = torch.tensor([1.0, 0.0])
+k = torch.tensor([0.0, 1.0])
+
+for (m, n) in [(2, 5), (12, 15), (100, 103)]:
+    score = torch.dot(rotate(q, m), rotate(k, n))
+    print(f"positions ({m:>3}, {n:>3})  offset {n - m}  score {score:+.4f}")`,
+        output: `positions (  2,   5)  offset 3  score +0.1411
+positions ( 12,  15)  offset 3  score +0.1411
+positions (100, 103)  offset 3  score +0.1411`,
+        explanation:
+          'The same offset gives the same score no matter where in the sequence the pair sits. That is the defining property of rotary embeddings and it is pure geometry — rotating both vectors by angles proportional to their positions leaves only the difference of angles in the dot product. Real implementations apply this to every consecutive dimension pair with a different theta per pair, mirroring the frequency bank of the sinusoidal scheme, and apply it inside every attention layer rather than once at the input.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Semantic search over a document collection',
+        usage:
+          'Sentence embeddings place documents in a vector space where cosine similarity approximates topical relatedness, which is what makes retrieval work at all. The same principle as token embeddings, applied at a coarser unit.',
+      },
+      {
+        context: 'Extending a model to a longer context',
+        usage:
+          'Teams routinely extend context length after pretraining by scaling the rotary frequencies and briefly fine-tuning. This is only possible because position is encoded by a parameterised function rather than a learned table with a fixed number of rows.',
+      },
+      {
+        context: 'Weight tying in language models',
+        usage:
+          'Many models reuse the transpose of the embedding matrix as the output projection to logits. It saves a large number of parameters and reflects the fact that both layers are mapping between the same two spaces.',
+      },
+      {
+        context: 'Recommendation systems',
+        usage:
+          'The same idea appears well outside language: users and items get learned vectors, and a dot product predicts affinity. The embedding layer is one of the most transferable ideas in modern machine learning.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'PyTorch', role: '`nn.Embedding` is the lookup table; positional schemes are implemented as ordinary tensor operations around it.' },
+      { tool: 'sentence-transformers', role: 'Produces sentence-level embeddings for retrieval, using the same geometry with pooling over token vectors.' },
+      { tool: 'Hugging Face transformers', role: 'Model configs expose `rope_theta` and scaling factors, which are exactly the knobs used to extend context length.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Thinking individual embedding dimensions have nameable meanings',
+        why: 'Meaning is distributed across many dimensions, and interpretability research finds that single neurons commonly participate in several unrelated features at once.',
+        fix: 'Reason about directions and distances in the space rather than about individual coordinates, and treat any single-neuron story as a hypothesis requiring evidence.',
+      },
+      {
+        mistake: 'Assuming attention understands word order by itself',
+        why: 'Attention is permutation-equivariant, as the code example demonstrates. Order is supplied by positional encoding and by nothing else in the architecture.',
+        fix: 'Remember that if you removed positional encoding, the model would treat a sentence as a bag of tokens. Recurrent networks and convolutions get order structurally; transformers do not.',
+      },
+      {
+        mistake: 'Expecting a model to handle sequences longer than it was trained on, for free',
+        why: 'Learned absolute encodings simply have no row for an unseen position, and even sinusoidal and rotary schemes degrade beyond the training length because attention patterns were never calibrated there.',
+        fix: 'Use an explicit long-context technique: frequency scaling plus fine-tuning, or a model trained at the length you need. Verify the claimed length with a retrieval test rather than trusting the configuration value.',
+      },
+      {
+        mistake: 'Treating the famous word-vector analogies as proof of reasoning',
+        why: 'Vector arithmetic on static embeddings does produce some striking results, but the effect is sensitive to normalisation, to excluding the input terms from the search, and to which words are tested. It reflects co-occurrence structure in the corpus.',
+        fix: 'Report the geometry accurately — related words occupy nearby regions — without inferring a semantic capability that has not been demonstrated.',
+      },
+      {
+        mistake: 'Confusing static token embeddings with contextual representations',
+        why: 'The embedding table gives one fixed vector per token id, so bank has one vector regardless of context. Context sensitivity is produced by the attention layers that follow, not by the table.',
+        fix: 'Use the hidden states from a later layer when you want a context-aware representation, and the embedding table only when you genuinely want the context-free one.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Why do transformers need positional encoding when recurrent networks do not?',
+        answer:
+          'A recurrent network processes tokens in sequence and carries a hidden state forward, so order is built into the computation itself — position is implicit in when a token is consumed. Self-attention computes all pairwise interactions simultaneously and is equivariant to permutations of its input: shuffle the tokens and the outputs shuffle identically, with no other change. That parallelism is exactly what makes transformers trainable at scale, and losing the ordering is the price. Positional encoding pays that price back by injecting position explicitly, either by adding a position vector to each token embedding or, in most recent models, by rotating query and key vectors so that attention scores depend on relative distance.',
+        followUp:
+          'A strong answer observes that this is a deliberate trade: parallel training was worth having to re-add position by hand.',
+      },
+      {
+        level: 'advanced',
+        question: 'Compare sinusoidal, learned absolute and rotary positional encodings.',
+        answer:
+          'Sinusoidal encodings are a fixed function of position using sine and cosine at geometrically spaced frequencies; they add no parameters and are defined for any index, though in practice they do not extrapolate well beyond the training length. Learned absolute encodings allocate a trainable vector per position, which fits the training distribution well but has literally no representation for a position never seen, capping the context hard. Rotary embeddings take a different route: rather than adding anything to the token vector, they rotate query and key vectors by an angle proportional to position inside each attention layer, so the resulting score depends only on relative offset. That makes relative position exact rather than inferred, plays well with KV caching, and can be stretched to longer contexts by rescaling the rotation frequencies and fine-tuning briefly. Rotary encoding is the common choice in current open-weight models for those reasons.',
+        followUp:
+          'A strong candidate mentions ALiBi as a further alternative that biases attention scores by distance directly, with no vector manipulation.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Does adding a positional vector to a token embedding not corrupt the token information?',
+        answer:
+          'It is a reasonable worry and the answer is that dimensionality saves you. In a space with thousands of dimensions there are many nearly orthogonal directions, so the network can learn projections that recover token identity and positional information largely independently from the sum. Empirically it works, and probing studies can recover position from the resulting vectors with high accuracy. It is worth being honest that this is a somewhat inelegant solution, and part of the appeal of rotary embeddings is that they avoid the question altogether: the token vector is never modified, only the geometry of the comparison between two tokens is.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A model has a vocabulary of 50,000 tokens and a model dimension of 2,048. How many parameters are in the embedding matrix, and what fraction of a one-billion-parameter model is that?',
+        hint: 'The matrix is (vocabulary size) by (model dimension).',
+        solution:
+          '50,000 x 2,048 = 102,400,000 parameters, roughly 102 million, which is about 10 per cent of a one-billion-parameter model. Two implications follow. Vocabulary size is not a free choice — it buys shorter sequences with a substantial parameter cost. And weight tying, where the output projection reuses the transposed embedding matrix, saves another 102 million parameters, which is why so many models do it.',
+      },
+      {
+        prompt:
+          'Using the toy sinusoidal scheme with d = 4, compute the position vector for t = 3 and state which dimension pair distinguishes it most clearly from t = 2.',
+        hint: 'The two divisors are 1 and 100.',
+        solution:
+          'sin(3) = 0.141, cos(3) = -0.990, sin(0.03) = 0.030, cos(0.03) = 1.000, so PE_3 = [0.141, -0.990, 0.030, 1.000]. Comparing with PE_2 = [0.909, -0.416, 0.020, 1.000], the first pair changed by 0.768 and 0.574 while the second pair changed by 0.010 and 0.000. The high-frequency pair does essentially all the work of distinguishing neighbours; the low-frequency pair only becomes informative over spans of hundreds of positions.',
+      },
+      {
+        prompt:
+          'Explain in three sentences why a model with learned absolute position embeddings cannot process an input longer than its training length, while one with rotary embeddings can at least attempt it.',
+        hint: 'What data structure holds the position information in each case?',
+        solution:
+          'Learned absolute embeddings are a table with one row per position, so position 5,000 in a model trained to 4,096 simply has no row and no defined behaviour; the implementation will raise an index error or silently truncate. Rotary embeddings compute a rotation angle from the position with a formula that is defined for any integer, so a longer sequence produces valid numbers. That said, valid numbers are not the same as good behaviour — attention patterns beyond the training length were never calibrated, quality degrades, and the usual practice is to rescale the rotation frequencies and fine-tune briefly before claiming the longer context works.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'GEN-004-q1',
+        type: 'mcq',
+        concept: 'embedding lookup',
+        prompt: 'What is an embedding lookup equivalent to, mathematically?',
+        options: [
+          'Multiplying a one-hot vector by the embedding matrix',
+          'Applying a softmax over the vocabulary',
+          'Computing a dot product between two token vectors',
+          'Normalising the token id to a value between 0 and 1',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Selecting row i is exactly one-hot(i) times E. This equivalence is why the table is a differentiable layer whose rows are updated by gradient descent rather than a fixed dictionary.',
+      },
+      {
+        id: 'GEN-004-q2',
+        type: 'truefalse',
+        concept: 'permutation invariance',
+        prompt: 'Without positional encoding, a transformer would produce the same set of outputs for a sentence and for a shuffled version of it.',
+        answer: true,
+        explanation:
+          'Self-attention is permutation-equivariant: shuffling the input shuffles the output identically and changes nothing else. Order enters the model only through positional encoding.',
+      },
+      {
+        id: 'GEN-004-q3',
+        type: 'mcq',
+        concept: 'rotary embeddings',
+        prompt: 'What property does rotary position embedding give the attention score between two tokens?',
+        options: [
+          'It depends only on the relative distance between the two positions',
+          'It depends only on the absolute position of the query',
+          'It becomes independent of position entirely',
+          'It grows linearly with sequence length',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Rotating the query by an angle proportional to m and the key by an angle proportional to n leaves only m - n in the inner product, so the score is a function of the offset rather than of either absolute position.',
+      },
+      {
+        id: 'GEN-004-q4',
+        type: 'numeric',
+        concept: 'parameter counting',
+        prompt: 'A model has a vocabulary of 32,000 and a model dimension of 4,096. How many million parameters are in the embedding matrix?',
+        answer: 131,
+        tolerance: 1,
+        explanation:
+          '32,000 x 4,096 = 131,072,000, roughly 131 million parameters. Embedding and output layers are a serious share of a small model, which is the main argument for weight tying.',
+      },
+      {
+        id: 'GEN-004-q5',
+        type: 'match',
+        concept: 'positional schemes',
+        prompt: 'Match each positional scheme to its defining characteristic.',
+        pairs: [
+          { left: 'Sinusoidal', right: 'A fixed function of position using sine and cosine at geometric frequencies' },
+          { left: 'Learned absolute', right: 'One trainable vector per position index, with no row beyond the training length' },
+          { left: 'Rotary (RoPE)', right: 'Rotates query and key vectors so the score depends on relative offset' },
+          { left: 'No encoding at all', right: 'The model treats the input as an unordered set of tokens' },
+        ],
+        explanation:
+          'The axis that matters is absolute versus relative, and whether the scheme is a parameterised function or a lookup table. Only a function can be evaluated at a position never seen in training.',
+      },
+      {
+        id: 'GEN-004-q6',
+        type: 'explain',
+        concept: 'why position must be injected',
+        prompt: 'Explain why a transformer needs positional information supplied explicitly, and describe one way of supplying it.',
+        rubric: [
+          'States that self-attention is permutation-equivariant and therefore order-blind',
+          'Gives a concrete consequence, such as two sentences with the same words being indistinguishable',
+          'Describes at least one mechanism accurately, additive or rotary',
+        ],
+        sampleAnswer:
+          'Self-attention computes every pairwise interaction at once, and nothing in that computation refers to where a token sits — shuffle the inputs and the outputs shuffle identically with no other change. Left alone, the model would therefore assign the same probabilities to "the dog bit the man" and "the man bit the dog", because it would see the same multiset of tokens. The original solution adds a position vector to each token embedding before the first block, built from sine and cosine waves at geometrically spaced frequencies so that nearby positions get similar vectors and distant ones do not. Most recent models instead rotate the query and key vectors inside attention by an angle proportional to position, which makes the attention score depend only on how far apart two tokens are, and generalises better when the context is stretched beyond the training length.',
+        explanation:
+          'The examinable idea is that order is an architectural addition rather than a property transformers possess, and that the choice of how to add it drives real behaviour such as long-context quality.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What is a token embedding?', back: 'A learned dense vector per vocabulary entry, taken as a row of the (V, d) embedding matrix. The lookup equals a one-hot matrix product.' },
+      { front: 'Why does a transformer need positional encoding?', back: 'Self-attention is permutation-equivariant, so it carries no information about order. Position must be injected explicitly.' },
+      { front: 'Sinusoidal encoding in one line', back: 'Sine and cosine of position divided by geometrically spaced wavelengths — fixed, parameter-free, defined for any index.' },
+      { front: 'What does RoPE do?', back: 'Rotates query and key vectors by an angle proportional to position, so the attention score depends only on relative distance.' },
+      { front: 'Static embedding versus contextual representation', back: 'The table gives one fixed vector per token id; context sensitivity comes from the attention layers that follow, not from the table.' },
+      { front: 'What is weight tying?', back: 'Reusing the transposed embedding matrix as the output projection to logits, saving V x d parameters.' },
+      { front: 'Why can rotary models be stretched to longer contexts?', back: 'Position enters through a formula defined at any index, so frequencies can be rescaled and briefly fine-tuned rather than needing new table rows.' },
+    ],
+
+    challenge: {
+      title: 'Build the input stage of a transformer',
+      brief:
+        'Implement a module that takes a batch of token ids and returns the tensor that would enter the first transformer block: an embedding lookup, plus a sinusoidal positional encoding you compute yourself. Then add a switch that disables the positional encoding, and empirically verify with a permutation test that the output is order-blind when it is off and order-sensitive when it is on. Report the tensor shapes at each stage.',
+      language: 'python',
+      acceptanceCriteria: [
+        'The embedding lookup and the positional encoding are implemented separately and combined',
+        'The sinusoidal table is computed from the formula rather than hard-coded',
+        'A permutation test demonstrates order-blindness with encoding off and order-sensitivity with it on',
+        'Shapes are printed at each stage and explained in a comment',
+      ],
+      starterCode: 'import torch\nimport torch.nn as nn\n\nclass InputStage(nn.Module):\n    def __init__(self, vocab_size: int, d_model: int, max_len: int, use_positions: bool = True):\n        super().__init__()\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain to someone who knows basic linear algebra how a token id becomes something a neural network can work with, and why the model needs to be told where each token sits.',
+      mustCover: [
+        'Token ids are arbitrary labels, so they are replaced by learned vectors from a table',
+        'Similar-usage tokens end up with similar vectors because training pushes them together',
+        'Self-attention treats its input as a set and cannot see order',
+        'Position is supplied either by adding a position vector or by rotating query and key vectors',
+      ],
+      bonusSignals: ['mentions that the lookup is a one-hot matrix product and is therefore learnable', 'distinguishes absolute from relative encoding', 'is careful not to claim individual dimensions are interpretable'],
+      sampleExplanation:
+        "The tokeniser hands over integers, but an integer is just a label — token 400 is not twice token 200. So the first layer is a lookup table with one row per vocabulary entry and a few thousand columns, and each id is swapped for its row. Those rows start random and are learned, and because tokens that appear in similar contexts receive similar gradient updates, they drift towards similar vectors; the geometry of the space ends up carrying real information about usage. The lookup is not a special operation, incidentally: selecting row i is the same as multiplying a one-hot vector by the matrix, which is exactly why gradients can flow into it. Then there is a wrinkle. The attention machinery that follows compares every token with every other token simultaneously, and if you shuffle the input the output simply shuffles to match — it has no way to know which token came first. Order therefore has to be added deliberately, either by adding a position vector to each token vector before the stack begins, or, in most current models, by rotating the vectors used for comparison by an angle that depends on position, so that only the distance between two tokens affects how strongly they attend to each other.",
+    },
+  },
+
+  {
+    id: 'GEN-005',
+    domain: 'GEN',
+    module: 'Inside a Transformer LM',
+    topic: 'Scaled dot-product attention',
+    title: 'Self-Attention',
+    slug: 'self-attention',
+    difficulty: 5,
+    estimatedMinutes: 50,
+    prerequisites: ['GEN-004'],
+    related: ['GEN-003', 'GEN-004'],
+    tags: ['attention', 'query-key-value', 'softmax', 'multi-head', 'causal-mask', 'quadratic'],
+
+    learningObjectives: [
+      'Describe query, key and value as a soft dictionary lookup, and say what each vector is responsible for',
+      'Compute scaled dot-product attention by hand for a short sequence and interpret the resulting weights',
+      'Explain why the dot products are divided by the square root of the key dimension',
+      'Explain what multi-head attention buys and how the heads are combined',
+      'Explain causal masking and why a decoder requires it, and state the cost of attention in time and memory',
+    ],
+
+    terminology: [
+      {
+        term: 'Query, key, value',
+        definition:
+          'Three vectors produced from each token by separate learned linear projections. The query says what this token is looking for, the key advertises what a token offers, and the value carries the content that gets mixed in.',
+        simple: 'What I want, what I have to offer, and what I actually pass along.',
+      },
+      {
+        term: 'Attention score',
+        definition:
+          'The dot product between one query and one key, scaled by the square root of the key dimension. A larger score means a stronger match before normalisation.',
+        simple: 'How well one token matches what another is looking for.',
+      },
+      {
+        term: 'Attention weights',
+        definition:
+          'A softmax over the scores for a given query, forming a distribution over all visible positions that sums to one. These weights decide how much of each value is mixed into the output.',
+        simple: 'Percentages saying how much attention this token pays to each other token.',
+      },
+      {
+        term: 'Multi-head attention',
+        definition:
+          'Running several attention operations in parallel over different learned projections of the same input, then concatenating their outputs and applying a final linear layer.',
+        simple: 'Several independent attention mechanisms looking for different things at once.',
+      },
+      {
+        term: 'Causal mask',
+        definition:
+          'Setting the scores for all future positions to negative infinity before the softmax, so a token cannot attend to anything that comes after it.',
+        simple: 'Blindfolding each position so it can only look backwards.',
+      },
+      {
+        term: 'Quadratic complexity',
+        definition:
+          'Attention computes all pairwise interactions, so time and memory grow with the square of sequence length for a fixed model size.',
+        simple: 'Double the text, quadruple the attention work.',
+      },
+    ],
+
+    simpleExplanation:
+      "Every token in a sentence needs information from other tokens to be understood. In 'the trophy did not fit in the suitcase because it was too big', working out what 'it' refers to means looking back at earlier words and deciding which ones matter. Self-attention is the mechanism that does this, and it works like a soft dictionary lookup. Each token produces three things: a question about what it needs, a label advertising what it can offer, and the content it would contribute. To process one token, the model compares its question against every label, turns those comparisons into percentages that add to one hundred, and then mixes the contents together in those proportions. Nothing is chosen outright — a token might take sixty per cent from one word, thirty from another and a sprinkling from the rest. Doing this for every token at once, in several parallel copies looking for different kinds of relationship, is the entire innovation that made modern language models possible.",
+
+    whyItExists:
+      'Recurrent networks passed information along a chain, so relating two distant words required the signal to survive every step in between, which both degraded it and forced computation to be sequential. Attention gives every position direct access to every other position in one step, and because all those comparisons are independent, they can be computed in parallel on a GPU — which is what made training on internet-scale corpora feasible.',
+
+    analogy: {
+      scenario:
+        "Picture a researcher with a specific question walking into a library where every book has a one-line description on its spine. She does not read every book. She reads her question against every spine, judges how relevant each is, and then reads the relevant books in proportion to that judgement — thirty minutes with the most relevant, ten with the next, a glance at the rest. What she takes away is a blend of their contents, weighted by relevance. Crucially, the spine description and the contents are different things: a book can advertise itself well and contain something quite specific.",
+      mapping: [
+        { from: 'The question she walks in with', to: 'The query vector for the current token' },
+        { from: 'The one-line description on each spine', to: 'The key vector of each token' },
+        { from: 'What is actually written inside the book', to: 'The value vector of each token' },
+        { from: 'Judging relevance of question against spine', to: 'The dot product between query and key' },
+        { from: 'Splitting her time in proportion to relevance', to: 'The softmax turning scores into weights that sum to one' },
+        { from: 'The blended notes she leaves with', to: 'The attention output: a weighted sum of value vectors' },
+        { from: 'Several researchers with different questions on the same shelves', to: 'Multi-head attention' },
+      ],
+      bridge:
+        'The three-way split is the point. Separating key from value lets a token advertise itself on one basis while contributing something else entirely, which a simple similarity search over the token vectors could not do. And because the weights are a softmax rather than a choice, the lookup is differentiable — the model can learn what to attend to by gradient descent, which would be impossible with a hard selection.',
+      limitations:
+        'The researcher reads sequentially and knows what she is looking for. Attention computes every comparison simultaneously, has no goal, and the query is simply a learned linear function of the token vector rather than anything resembling an intention.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Attention laboratory',
+        caption: 'Watch the attention matrix form for a sentence, and see which tokens each head attends to.',
+        widget: 'attention-lab',
+      },
+      {
+        kind: 'flow',
+        title: 'Scaled dot-product attention, step by step',
+        caption: 'Every one of these steps is a matrix operation, which is why it is fast on a GPU.',
+        steps: [
+          { label: 'Project', detail: 'Multiply the input X by three learned matrices to get Q, K and V, each of shape (T, d_k).' },
+          { label: 'Score', detail: 'Compute Q times K transposed, giving a (T, T) matrix of raw scores — every query against every key.' },
+          { label: 'Scale', detail: 'Divide by the square root of d_k to keep the scores in a range where softmax gradients do not vanish.' },
+          { label: 'Mask', detail: 'In a decoder, set all positions above the diagonal to negative infinity so no token sees the future.' },
+          { label: 'Softmax', detail: 'Normalise each row into a probability distribution over visible positions.' },
+          { label: 'Mix', detail: 'Multiply the weight matrix by V, producing one output vector per token: a weighted blend of value vectors.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Self-attention versus recurrence',
+        caption: 'The trade that made the transformer worth building.',
+        left: {
+          heading: 'Recurrent network',
+          points: [
+            'Path length between two distant tokens grows linearly with distance',
+            'Signal degrades over long ranges; gradients vanish',
+            'Computation is inherently sequential, so training cannot be parallelised over time',
+            'Memory cost is linear in sequence length',
+          ],
+        },
+        right: {
+          heading: 'Self-attention',
+          points: [
+            'Path length between any two tokens is one step',
+            'Distant relationships are as accessible as adjacent ones',
+            'All pairwise comparisons computed in parallel during training',
+            'Time and memory cost grow with the square of sequence length',
+          ],
+        },
+      },
+      {
+        kind: 'annotated',
+        title: 'Reading the attention formula',
+        subject: 'Attention(Q, K, V) = softmax(Q K^T / sqrt(d_k)) V',
+        annotations: [
+          { part: 'Q K^T', note: 'All pairwise dot products at once: row i, column j is how well query i matches key j. Shape (T, T).' },
+          { part: '/ sqrt(d_k)', note: 'Controls the variance of the scores. Without it, large d_k makes the softmax nearly one-hot and gradients disappear.' },
+          { part: 'softmax(...)', note: 'Turns each row into a distribution summing to one, so the output is a weighted average rather than an unbounded sum.' },
+          { part: 'V', note: 'The content actually mixed in. Separating it from K is what lets a token advertise one thing and contribute another.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Costs at a glance',
+        caption: 'T is sequence length, d the model dimension. This is why context length is expensive.',
+        columns: ['Quantity', 'Cost', 'Consequence'],
+        rows: [
+          ['Score matrix', 'T squared entries', 'Memory grows quadratically; the naive implementation stores the whole matrix'],
+          ['Attention compute', 'On the order of T squared times d', 'Doubling context roughly quadruples attention work'],
+          ['Feed-forward compute', 'On the order of T times d squared', 'Dominates at short contexts; attention dominates at long ones'],
+          ['KV cache during generation', 'Linear in T per layer', 'The memory that makes generating token n cheap after token n-1'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'Given an input matrix X of shape (T, d), self-attention computes Q = X W_Q, K = X W_K and V = X W_V, then returns softmax(Q K^T / sqrt(d_k) + M) V, where M is an additive mask containing zero for permitted positions and negative infinity elsewhere. Multi-head attention performs h such operations with independent projections of dimension d_k = d / h, concatenates the results and applies a learned output projection W_O.',
+
+    math: {
+      intuition:
+        'The dot product between a query and a key measures alignment: large when the two vectors point in similar directions. Softmax turns a row of such measurements into weights that sum to one, so the output for each token is a weighted average of value vectors — a blend rather than a choice. The scaling factor exists for a statistical reason: if query and key entries are roughly independent with unit variance, their dot product over d_k dimensions has variance d_k, so without dividing by the square root of d_k the scores grow with dimension, the softmax saturates towards one-hot, and the gradient through it becomes vanishingly small.',
+      formulas: [
+        {
+          latex: '\\text{Attention}(Q, K, V) = \\text{softmax}\\left(\\frac{QK^{T}}{\\sqrt{d_k}}\\right) V',
+          name: 'Scaled dot-product attention',
+          meaning:
+            'Compare every query with every key, scale, normalise into weights, and use those weights to average the value vectors. One equation is the whole mechanism.',
+          variables: [
+            { symbol: 'Q', meaning: 'Query matrix of shape (T, d_k) — one query row per token' },
+            { symbol: 'K', meaning: 'Key matrix of shape (T, d_k) — one key row per token' },
+            { symbol: 'V', meaning: 'Value matrix of shape (T, d_v) — the content that gets mixed' },
+            { symbol: 'd_k', meaning: 'Dimension of the query and key vectors' },
+            { symbol: 'T', meaning: 'Sequence length in tokens' },
+            { symbol: 'QK^{T}', meaning: 'The (T, T) matrix of all pairwise scores' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\alpha_{ij} = \\frac{\\exp(s_{ij})}{\\sum_{j\'} \\exp(s_{ij\'})}, \\qquad s_{ij} = \\frac{q_i \\cdot k_j}{\\sqrt{d_k}}',
+          name: 'Attention weights for one query',
+          meaning:
+            'Row i of the weight matrix is a probability distribution over positions j, saying how much of each value vector token i absorbs.',
+          variables: [
+            { symbol: '\\alpha_{ij}', meaning: 'Weight token i places on token j; each row sums to one' },
+            { symbol: 's_{ij}', meaning: 'Scaled score between query i and key j' },
+            { symbol: 'q_i, k_j', meaning: 'The query vector of token i and key vector of token j' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\mathrm{Var}(q \\cdot k) = d_k \\quad \\text{when} \\quad \\mathrm{Var}(q_m) = \\mathrm{Var}(k_m) = 1',
+          name: 'Why the square root appears',
+          meaning:
+            'The dot product is a sum of d_k independent products, so its variance grows linearly with dimension. Dividing by the square root of d_k restores unit variance and keeps softmax out of its saturated region.',
+          variables: [
+            { symbol: 'q_m, k_m', meaning: 'Individual components of the query and key vectors' },
+            { symbol: 'd_k', meaning: 'Number of dimensions summed over' },
+            { symbol: '\\mathrm{Var}', meaning: 'Variance across random initialisation' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: 'M_{ij} = \\begin{cases} 0 & j \\leq i \\\\ -\\infty & j > i \\end{cases}',
+          name: 'Causal mask',
+          meaning:
+            'Adding this matrix to the scores before softmax makes future positions receive exactly zero weight, since exp of negative infinity is zero. It enforces that predictions depend only on the past.',
+          variables: [
+            { symbol: 'i', meaning: 'Query position — the token being computed' },
+            { symbol: 'j', meaning: 'Key position — the token potentially attended to' },
+            { symbol: '-\\infty', meaning: 'In practice a large negative constant, so the softmax output is numerically zero' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\text{MultiHead}(X) = \\left[\\,\\text{head}_1; \\dots; \\text{head}_h\\,\\right] W_O, \\quad \\text{head}_i = \\text{Attention}(XW_Q^i, XW_K^i, XW_V^i)',
+          name: 'Multi-head attention',
+          meaning:
+            'Run h attention operations over independently projected subspaces, concatenate the outputs and mix them with a learned output matrix. Each head can specialise in a different kind of relationship.',
+          variables: [
+            { symbol: 'h', meaning: 'Number of heads' },
+            { symbol: 'W_Q^i, W_K^i, W_V^i', meaning: 'Per-head projection matrices, each mapping d down to d / h' },
+            { symbol: 'W_O', meaning: 'Output projection recombining the concatenated heads back to dimension d' },
+          ],
+          category: 'deep-learning',
+        },
+      ],
+      derivation: [
+        'Start from the aim: for each token, build a representation that incorporates relevant information from other tokens.',
+        'Measure relevance as a dot product, but not between the raw token vectors — project them first, so the model can learn what "relevant" means for this purpose. This gives queries and keys.',
+        'Project a third time for the content to be mixed, so that advertising and contributing are decoupled. This gives values.',
+        'Normalise the scores for each query with a softmax so the result is a weighted average and the whole operation stays differentiable.',
+        'Observe that the variance of the score grows with d_k, so divide by its square root to keep the softmax in a well-conditioned range.',
+        'Add a mask before the softmax to forbid attending to the future, which is what makes the model usable for left-to-right generation.',
+        'Finally, note that one attention operation can only express one notion of relevance, so run several in parallel over lower-dimensional subspaces and combine them.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Attention weights for "the cat sat", with real numbers',
+      setup:
+        'Three tokens: the (position 1), cat (position 2), sat (position 3). Take d_k = 4, so the scaling factor is the square root of 4, which is 2. The learned projections have produced these vectors. Queries: q1 = [1, 0, 0, 0], q2 = [0, 1, 1, 0], q3 = [1, 0, 1, 0]. Keys: k1 = [1, 0, 0, 0], k2 = [1, 0, 1, 0], k3 = [0, 0, 1, 0]. Values: v1 = [1, 0, 0, 0], v2 = [0, 2, 0, 0], v3 = [0, 0, 3, 0]. This is a decoder, so causal masking applies.',
+      steps: [
+        {
+          label: 'Row 1: what does "the" attend to?',
+          detail:
+            'Causal masking leaves only position 1 visible. The score is q1 . k1 = 1, scaled to 0.5. A softmax over a single value is always 1.0, so "the" attends entirely to itself. The first token in a decoder always does — there is nothing else it is permitted to see.',
+          latex: '\\alpha_{1} = [1.000, \; -, \; -]',
+        },
+        {
+          label: 'Row 2: the scores for "cat"',
+          detail:
+            'q2 . k1 = (0)(1) + (1)(0) + (1)(0) + (0)(0) = 0. q2 . k2 = (0)(1) + (1)(0) + (1)(1) + (0)(0) = 1. Position 3 is masked. Scaling by 2 gives 0 and 0.5.',
+          latex: 's_{2} = [0.0, \; 0.5, \; -\\infty]',
+        },
+        {
+          label: 'Row 2: softmax',
+          detail:
+            'exp(0) = 1.000 and exp(0.5) = 1.649, summing to 2.649. Dividing gives 1.000 / 2.649 = 0.378 and 1.649 / 2.649 = 0.622. So "cat" takes 38 per cent from "the" and 62 per cent from itself.',
+          latex: '\\alpha_{2} = [0.378, \; 0.622, \; -]',
+        },
+        {
+          label: 'Row 3: the scores for "sat"',
+          detail:
+            'q3 . k1 = (1)(1) = 1. q3 . k2 = (1)(1) + (1)(1) = 2. q3 . k3 = (1)(1) = 1. Nothing is masked, since position 3 sees everything. Dividing each by 2 gives 0.5, 1.0 and 0.5.',
+          latex: 's_{3} = [0.5, \; 1.0, \; 0.5]',
+        },
+        {
+          label: 'Row 3: softmax',
+          detail:
+            'exp(0.5) = 1.6487, exp(1.0) = 2.7183, exp(0.5) = 1.6487. The sum is 6.0157. Dividing: 1.6487 / 6.0157 = 0.274, 2.7183 / 6.0157 = 0.452, 1.6487 / 6.0157 = 0.274. So "sat" attends 27 per cent to "the", 45 per cent to "cat" and 27 per cent to itself — a plausible pattern for a verb locating its subject.',
+          latex: '\\alpha_{3} = [0.274, \; 0.452, \; 0.274]',
+        },
+        {
+          label: 'The output for "sat"',
+          detail:
+            'Blend the value vectors with those weights: 0.274 x [1,0,0,0] + 0.452 x [0,2,0,0] + 0.274 x [0,0,3,0] = [0.274, 0.904, 0.822, 0]. The output vector for "sat" now carries information from all three tokens in learned proportions, and this is what continues into the rest of the block.',
+          latex: 'o_3 = \\sum_j \\alpha_{3j} v_j = [0.274,\; 0.904,\; 0.822,\; 0]',
+        },
+        {
+          label: 'What the scaling changed',
+          detail:
+            'Without dividing by 2, the row-3 scores would be 1, 2, 1, giving exp values 2.718, 7.389, 2.718 and weights 0.212, 0.576, 0.212. The distribution is noticeably sharper. With d_k = 4 the difference is mild; at d_k = 128 the unscaled scores would be large enough to push softmax almost entirely onto one position and flatten the gradient to nearly zero.',
+          latex: '\\alpha_{3}^{\\text{unscaled}} = [0.212, \; 0.576, \; 0.212]',
+        },
+        {
+          label: 'The full attention matrix',
+          detail:
+            'Stacking the three rows gives a lower-triangular matrix: row 1 is [1.000, 0, 0], row 2 is [0.378, 0.622, 0], row 3 is [0.274, 0.452, 0.274]. Every row sums to one and the upper triangle is exactly zero, which is the visual signature of causal attention.',
+        },
+      ],
+      conclusion:
+        'Every number here came from three dot products, one division and one softmax per row. Scale this to 64 dimensions per head, 32 heads, 40 layers and 8,000 tokens and nothing conceptual changes — only the size of the matrices. It is also worth noticing what the attention weights are not: they are the mixing proportions used at one layer of one head, and reading them as an explanation of the model output is a well-documented mistake, because the value vectors and the forty layers that follow matter just as much.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Attention from scratch, matching the worked example',
+        runnable: true,
+        code: `import torch
+
+d_k = 4
+scale = d_k ** 0.5                       # = 2.0
+
+Q = torch.tensor([[1., 0., 0., 0.],      # the
+                  [0., 1., 1., 0.],      # cat
+                  [1., 0., 1., 0.]])     # sat
+K = torch.tensor([[1., 0., 0., 0.],
+                  [1., 0., 1., 0.],
+                  [0., 0., 1., 0.]])
+V = torch.tensor([[1., 0., 0., 0.],
+                  [0., 2., 0., 0.],
+                  [0., 0., 3., 0.]])
+
+scores = (Q @ K.T) / scale
+mask = torch.triu(torch.ones(3, 3), diagonal=1).bool()   # True above the diagonal
+scores = scores.masked_fill(mask, float("-inf"))
+
+weights = torch.softmax(scores, dim=-1)
+out = weights @ V
+
+print("attention weights:\\n", weights.round(decimals=3))
+print("output:\\n", out.round(decimals=3))`,
+        output: `attention weights:
+ tensor([[1.0000, 0.0000, 0.0000],
+        [0.3775, 0.6225, 0.0000],
+        [0.2741, 0.4519, 0.2741]])
+output:
+ tensor([[1.0000, 0.0000, 0.0000, 0.0000],
+        [0.3775, 1.2450, 0.0000, 0.0000],
+        [0.2741, 0.9037, 0.8222, 0.0000]])`,
+        explanation:
+          'These are exactly the numbers computed by hand, which is worth confirming for yourself — the gap between reading the formula and trusting it closes when the arithmetic matches. Two implementation details matter in practice: the mask is applied to the scores before the softmax rather than to the weights afterwards, because zeroing weights after normalisation would leave rows that no longer sum to one, and the mask uses a large negative value rather than a literal infinity in production code to avoid producing not-a-number values under mixed precision.',
+      },
+      {
+        language: 'python',
+        title: 'Multi-head attention as a module',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+class MultiHeadSelfAttention(nn.Module):
+    def __init__(self, d_model: int, n_heads: int):
+        super().__init__()
+        assert d_model % n_heads == 0
+        self.n_heads = n_heads
+        self.d_head = d_model // n_heads
+        self.qkv = nn.Linear(d_model, 3 * d_model, bias=False)   # one fused projection
+        self.proj = nn.Linear(d_model, d_model, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        B, T, D = x.shape
+        q, k, v = self.qkv(x).split(D, dim=2)
+        # (B, T, D) -> (B, n_heads, T, d_head): each head gets its own slice
+        q = q.view(B, T, self.n_heads, self.d_head).transpose(1, 2)
+        k = k.view(B, T, self.n_heads, self.d_head).transpose(1, 2)
+        v = v.view(B, T, self.n_heads, self.d_head).transpose(1, 2)
+
+        scores = (q @ k.transpose(-2, -1)) / self.d_head ** 0.5
+        causal = torch.triu(torch.ones(T, T, device=x.device), diagonal=1).bool()
+        scores = scores.masked_fill(causal, float("-inf"))
+
+        out = torch.softmax(scores, dim=-1) @ v                  # (B, heads, T, d_head)
+        out = out.transpose(1, 2).contiguous().view(B, T, D)     # concatenate heads
+        return self.proj(out)
+
+x = torch.randn(2, 6, 64)
+print(MultiHeadSelfAttention(d_model=64, n_heads=8)(x).shape)`,
+        output: `torch.Size([2, 6, 64])`,
+        explanation:
+          'This is a complete, working attention layer in about twenty lines. The view-and-transpose dance is the part worth studying: the model dimension is split into equal slices, one per head, so eight heads over 64 dimensions each operate in an 8-dimensional subspace. Heads cost nothing extra in total compute — they redistribute the same parameters — which is why they are close to free and why models use many of them. The output projection at the end is not decoration: without it the concatenated head outputs would never be mixed with one another.',
+      },
+      {
+        language: 'python',
+        title: 'Measuring the quadratic cost yourself',
+        runnable: true,
+        code: `import torch, time
+
+def attention_cost(T: int, d: int = 64, trials: int = 5) -> float:
+    q = torch.randn(1, T, d)
+    k = torch.randn(1, T, d)
+    v = torch.randn(1, T, d)
+    start = time.perf_counter()
+    for _ in range(trials):
+        w = torch.softmax(q @ k.transpose(-2, -1) / d ** 0.5, dim=-1)
+        _ = w @ v
+    return (time.perf_counter() - start) / trials
+
+base = attention_cost(512)
+for T in [512, 1024, 2048, 4096]:
+    t = attention_cost(T)
+    print(f"T={T:>5}  time x{t / base:6.1f}  score matrix entries {T * T:,}")`,
+        output: `T=  512  time x   1.0  score matrix entries 262,144
+T= 1024  time x   3.8  score matrix entries 1,048,576
+T= 2048  time x  15.1  score matrix entries 4,194,304
+T= 4096  time x  61.4  score matrix entries 16,777,216`,
+        explanation:
+          'Each doubling of sequence length costs roughly four times as much, which is the quadratic term made visible on your own machine. This single measurement explains why long context is expensive, why FlashAttention — which computes the same result without ever materialising the full score matrix in memory — was such a significant engineering result, and why a great deal of research has gone into approximations that trade exactness for subquadratic scaling.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Coreference within a long document',
+        usage:
+          'When a model correctly resolves a pronoun to a noun mentioned three paragraphs earlier, attention is the mechanism that made that noun directly reachable. In a recurrent model the information would have had to survive hundreds of sequential steps.',
+      },
+      {
+        context: 'Code models tracking a variable',
+        usage:
+          'A model completing a function must connect a use of a variable to its definition far above. Attention heads that specialise in this kind of matching have been identified directly in interpretability work.',
+      },
+      {
+        context: 'Serving cost and context pricing',
+        usage:
+          'The quadratic term is why providers price long contexts as they do and why latency rises sharply with prompt length. Understanding it changes how you design a retrieval pipeline: sending three relevant chunks rather than thirty is a cost decision grounded in this formula.',
+      },
+      {
+        context: 'Attention visualisations in model debugging',
+        usage:
+          'Plotting attention matrices helps diagnose behaviour — for instance seeing most weight parked on the first token, a well-documented pattern often called an attention sink. It is a useful diagnostic, but it is weak evidence about why a particular output was produced.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'PyTorch', role: '`torch.nn.functional.scaled_dot_product_attention` provides a fused, memory-efficient implementation used by most modern code.' },
+      { tool: 'FlashAttention', role: 'Computes exact attention without materialising the T-by-T matrix, turning a memory bottleneck into a compute-bound operation.' },
+      { tool: 'Hugging Face transformers', role: 'Every causal model exposes `output_attentions=True`, which returns the per-head weight matrices for inspection.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Omitting the square-root scaling',
+        why: 'The dot product of two d_k-dimensional vectors has variance proportional to d_k, so at realistic dimensions unscaled scores are large, the softmax saturates towards one-hot, and gradients through it approach zero. Training stalls or becomes unstable.',
+        fix: 'Always divide by the square root of the head dimension — note head dimension, not model dimension, which is a common off-by-a-factor bug in hand-written implementations.',
+      },
+      {
+        mistake: 'Applying the causal mask after the softmax',
+        why: 'Zeroing weights after normalisation leaves rows that no longer sum to one, so the output is a shrunken blend and the model leaks a scale signal about how many positions were masked.',
+        fix: 'Add negative infinity to the scores before the softmax. The exponential of negative infinity is zero, and the remaining weights renormalise correctly.',
+      },
+      {
+        mistake: 'Treating attention weights as an explanation of the output',
+        why: 'Weights describe mixing proportions in one head of one layer. The value vectors, the other heads, and every subsequent layer all shape the result, and there is published work showing attention maps can be altered without changing predictions.',
+        fix: 'Use attention maps as a diagnostic and a source of hypotheses. For causal claims, use interventional methods such as ablating a head and measuring the effect.',
+      },
+      {
+        mistake: 'Believing multi-head attention multiplies the compute cost',
+        why: 'The model dimension is split across heads rather than duplicated, so eight heads of dimension 64 cost about the same as one head of dimension 512.',
+        fix: 'Think of heads as partitioning the same budget into independent subspaces, which lets different heads learn different relational patterns at essentially no extra cost.',
+      },
+      {
+        mistake: 'Assuming a longer context window is always better',
+        why: 'Attention cost grows quadratically, and retrieval quality within a very long context is uneven — models often attend well to the beginning and end and less well to the middle.',
+        fix: 'Put the most relevant material in the context rather than the most material. Measure whether your pipeline actually uses what you send before paying for a longer window.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Explain query, key and value, and why three projections are needed rather than one.',
+        answer:
+          'Each token is projected three ways by separate learned matrices. The query represents what this token needs from context; the key represents what a token offers as a basis for matching; the value is the content contributed when a match occurs. Separating query from key allows the matching to be asymmetric, so token A can strongly attend to B without B attending to A — which is necessary, because a pronoun should seek its antecedent and not the reverse. Separating key from value decouples advertising from content, so a token can be easy to find on one basis while contributing something quite different. If you collapsed all three into the raw token vector you would have symmetric similarity search over the input, which is strictly less expressive and empirically much worse.',
+        followUp:
+          'A strong candidate notes that Q, K and V are usually computed by one fused linear layer for efficiency, then split.',
+      },
+      {
+        level: 'advanced',
+        question: 'Why is the dot product divided by the square root of d_k?',
+        answer:
+          'Assume the query and key components are roughly independent with unit variance at initialisation. Their dot product is a sum of d_k such products, so it has variance d_k and standard deviation the square root of d_k. At a head dimension of 128 that means scores routinely reaching magnitudes around 11, and the difference between the largest and the rest is then large enough that the softmax output is nearly one-hot. Since the gradient of softmax is proportional to p times (1 - p), a saturated softmax passes almost no gradient, so the attention pattern cannot be learned. Dividing by the square root of d_k restores unit variance regardless of dimension, keeping the softmax in a region where it discriminates but still has usable gradients.',
+        followUp:
+          'A strong answer distinguishes head dimension from model dimension, since the scaling uses the former.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'What is the computational complexity of self-attention, and what follows from it in practice?',
+        answer:
+          'Building the score matrix requires T squared times d_k multiply-accumulate operations and produces a T-by-T matrix, so both time and memory are quadratic in sequence length, while the feed-forward sublayer is linear in T and quadratic in model dimension. At short contexts the feed-forward term dominates; as context grows, attention takes over. Three practical consequences follow. Long-context inference is expensive and latency climbs faster than linearly with prompt length. Memory, not compute, is often the first binding constraint, which is why FlashAttention — computing exact attention in tiles without ever materialising the full matrix — was such a significant result. And at inference the KV cache makes each new token cost linear rather than quadratic work, at the price of memory that grows with context length, which is frequently what limits how many concurrent requests a server can hold.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'With d_k = 16, a query and key give a raw dot product of 8. What is the scaled score? If a second key gives a raw dot product of 12, what are the two attention weights after softmax over just these two?',
+        hint: 'Scale first, then exponentiate the scaled values.',
+        solution:
+          'The square root of 16 is 4, so the scaled scores are 8 / 4 = 2 and 12 / 4 = 3. Exponentiating gives 7.389 and 20.086, summing to 27.475, so the weights are 0.269 and 0.731. Note what the scaling did: unscaled, the scores 8 and 12 would give weights of 0.018 and 0.982, an almost one-hot distribution. The same raw preference becomes a far more moderate one, which is exactly the point of the scaling factor.',
+      },
+      {
+        prompt:
+          'Write out the causal mask for a sequence of length 4 as a matrix of 0 and negative infinity, and state how many of the 16 score entries are actually used.',
+        hint: 'Position i may attend to position j only when j is less than or equal to i.',
+        solution:
+          'Row 1 is [0, -inf, -inf, -inf]; row 2 is [0, 0, -inf, -inf]; row 3 is [0, 0, 0, -inf]; row 4 is [0, 0, 0, 0]. Ten of the sixteen entries are used — the count is T(T+1)/2 = 10. This is why causal attention costs roughly half of bidirectional attention, and it is also why the first token has no choice but to attend entirely to itself, since it is the only position it can see.',
+      },
+      {
+        prompt:
+          'A model has model dimension 512 and 8 heads. What is the head dimension, what are the shapes of Q, K and V per head for a 100-token sequence, and how many entries does one head\'s score matrix contain?',
+        hint: 'The model dimension is divided among the heads, not duplicated.',
+        solution:
+          'The head dimension is 512 / 8 = 64. Per head, Q, K and V each have shape (100, 64). The score matrix for one head is (100, 100) = 10,000 entries, and across 8 heads that is 80,000 entries for this one layer at this short length. Scaling the sequence to 8,000 tokens would give 64 million entries per head per layer, which is a direct route to understanding why memory rather than arithmetic is usually the first thing to break at long context.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'GEN-005-q1',
+        type: 'mcq',
+        concept: 'qkv roles',
+        prompt: 'In self-attention, what does the value vector represent?',
+        options: [
+          'The content mixed into the output when a token is attended to',
+          'What the current token is looking for',
+          'How a token advertises itself for matching',
+          'The position of the token in the sequence',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The query is what a token seeks and the key is how a token advertises itself; the value is the content actually blended into the output. Keeping key and value separate lets a token be findable on one basis and contribute something different.',
+      },
+      {
+        id: 'GEN-005-q2',
+        type: 'numeric',
+        concept: 'attention arithmetic',
+        prompt: 'Scores after scaling are [0.5, 1.0, 0.5]. What attention weight does the middle position receive, to three decimal places?',
+        answer: 0.452,
+        tolerance: 0.005,
+        explanation:
+          'exp(0.5) = 1.6487 twice and exp(1.0) = 2.7183, summing to 6.0157. The middle weight is 2.7183 / 6.0157 = 0.452 — exactly the row computed in the worked example.',
+      },
+      {
+        id: 'GEN-005-q3',
+        type: 'truefalse',
+        concept: 'scaling factor',
+        prompt: 'The square-root scaling in attention exists to keep the output vectors small.',
+        answer: false,
+        explanation:
+          'It controls the variance of the scores entering the softmax. Without it, large head dimensions push the softmax towards one-hot, where its gradient nearly vanishes and the attention pattern cannot be learned.',
+      },
+      {
+        id: 'GEN-005-q4',
+        type: 'order',
+        concept: 'attention pipeline',
+        prompt: 'Order the steps of masked scaled dot-product attention.',
+        items: [
+          'Project the input into queries, keys and values',
+          'Compute all pairwise query-key dot products',
+          'Divide the scores by the square root of the head dimension',
+          'Add the causal mask so future positions score negative infinity',
+          'Apply softmax along each row',
+          'Multiply the weights by the value matrix',
+        ],
+        explanation:
+          'The mask must be applied to the scores before the softmax. Masking afterwards would leave rows that no longer sum to one and would leak information about how many positions were hidden.',
+      },
+      {
+        id: 'GEN-005-q5',
+        type: 'code-output',
+        language: 'python',
+        concept: 'causal masking',
+        prompt: 'What are the attention weights in row 1 of a causally masked 3-token sequence?',
+        code: 'scores = torch.tensor([[2.0, 5.0, 1.0]])\nmask = torch.tensor([[False, True, True]])\nscores = scores.masked_fill(mask, float("-inf"))\nprint(torch.softmax(scores, dim=-1))',
+        options: [
+          'tensor([[1., 0., 0.]])',
+          'tensor([[0.0464, 0.9362, 0.0171]])',
+          'tensor([[0.3333, 0.3333, 0.3333]])',
+          'tensor([[2.0, 0.0, 0.0]])',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Positions 2 and 3 are masked to negative infinity, whose exponential is zero, so all the weight falls on position 1 regardless of the fact that position 2 had the highest raw score. The first token in a decoder always attends entirely to itself.',
+      },
+      {
+        id: 'GEN-005-q6',
+        type: 'multi',
+        concept: 'complexity and heads',
+        prompt: 'Which statements about attention cost and multi-head attention are correct? Select all that apply.',
+        options: [
+          'The score matrix has T squared entries for a sequence of length T',
+          'Doubling sequence length roughly quadruples attention compute',
+          'Eight heads cost roughly eight times as much compute as one head of the same model dimension',
+          'Heads split the model dimension into subspaces rather than duplicating it',
+          'The output projection after concatenating heads can be omitted with no loss',
+        ],
+        answerIndices: [0, 1, 3],
+        explanation:
+          'Heads partition the same dimension budget, so they are close to free. The output projection is required — without it the concatenated head outputs are never mixed with one another, which removes a meaningful part of the layer expressiveness.',
+      },
+      {
+        id: 'GEN-005-q7',
+        type: 'explain',
+        concept: 'attention as soft lookup',
+        prompt: 'Explain self-attention as a soft dictionary lookup, and say why the lookup has to be soft.',
+        rubric: [
+          'Maps query, key and value onto the dictionary metaphor accurately',
+          'Explains that softmax produces weights that sum to one, giving a blended result',
+          'States that a hard selection would not be differentiable and could not be trained by gradient descent',
+        ],
+        sampleAnswer:
+          'In an ordinary dictionary you supply a key, it matches exactly one stored key, and you get back its value. Attention does the same shape of thing with three differences. Every token emits a query saying what it needs, every token emits a key advertising what it offers, and matching is by dot product rather than by equality. Rather than selecting one match, the scores are pushed through a softmax to produce weights summing to one, and the output is a blend of every value in those proportions. The softness is not merely a nicety: a hard argmax selection is a step function with zero gradient almost everywhere, so the model could never learn what to attend to. Softmax makes the whole lookup differentiable, which means the projections that define what counts as a match are learned from data along with everything else.',
+        explanation:
+          'A good answer connects the metaphor to the mathematics and identifies differentiability as the reason for the softmax, rather than treating softness as a design preference.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'The attention formula', back: 'softmax(Q K^T / sqrt(d_k)) V — compare every query with every key, scale, normalise, then blend the value vectors.' },
+      { front: 'What do Q, K and V represent?', back: 'Query: what this token needs. Key: what a token offers for matching. Value: the content blended into the output.' },
+      { front: 'Why divide by sqrt(d_k)?', back: 'The dot product has variance d_k, so without scaling the softmax saturates at large head dimensions and its gradient nearly vanishes.' },
+      { front: 'What is a causal mask?', back: 'Negative infinity added to scores for future positions before the softmax, so a token can only attend to itself and earlier tokens.' },
+      { front: 'What does multi-head attention buy?', back: 'Several independent relational patterns learned in parallel over subspaces of the same dimension budget, then concatenated and projected.' },
+      { front: 'Cost of attention', back: 'Quadratic in sequence length for both time and memory: the score matrix has T squared entries.' },
+      { front: 'Are attention weights an explanation?', back: 'No. They are mixing proportions in one head of one layer. Causal claims need interventions such as ablating a head.' },
+    ],
+
+    challenge: {
+      title: 'Implement and interrogate an attention layer',
+      brief:
+        'Write multi-head causal self-attention from scratch in PyTorch without using any built-in attention function, and verify it against `torch.nn.functional.scaled_dot_product_attention` on random input. Then run a small pretrained causal model on a sentence containing a pronoun, extract the attention matrices, and find the head whose weights most strongly connect the pronoun to its antecedent. Write a paragraph on what that head appears to do, and a second paragraph on why that observation is weaker evidence than it looks.',
+      language: 'python',
+      acceptanceCriteria: [
+        'The hand-written implementation matches the reference within floating-point tolerance',
+        'Causal masking is applied to scores before the softmax and verified to produce a lower-triangular weight matrix',
+        'Attention maps are extracted from a real model and one head is identified with evidence',
+        'The second paragraph names a concrete reason attention maps are not explanations',
+      ],
+      starterCode: 'import torch\nimport torch.nn as nn\nimport torch.nn.functional as F\n\nclass MyAttention(nn.Module):\n    def __init__(self, d_model: int, n_heads: int):\n        super().__init__()\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach self-attention to someone who understands dot products but has never seen a transformer. Use a concrete three-word example and real numbers.',
+      mustCover: [
+        'Each token produces a query, a key and a value through learned projections',
+        'Scores are dot products between queries and keys, scaled by the square root of the head dimension',
+        'Softmax turns the scores into weights that sum to one, and the output is a weighted blend of values',
+        'A decoder masks future positions so each token sees only itself and what came before',
+      ],
+      bonusSignals: ['walks through actual arithmetic rather than describing it', 'explains why the scaling matters', 'mentions multiple heads and the quadratic cost'],
+      sampleExplanation:
+        "Take the three words the, cat, sat. Each word gets turned into three different vectors by three learned matrices: a query saying what it needs from the rest of the sentence, a key advertising what it has, and a value carrying what it would contribute. To work out the new representation of sat, take its query and dot it against all three keys. Suppose that gives 1, 2 and 1. Divide each by the square root of the head dimension — with four dimensions that is 2, so we get 0.5, 1, 0.5 — and push them through a softmax, which gives 0.27, 0.45 and 0.27. Those are proportions, and they add to one. The output for sat is then 0.27 of the value vector for the, plus 0.45 of the value for cat, plus 0.27 of its own. It has absorbed information from the whole sentence, weighted by how relevant each word turned out to be. Two additions complete the picture. Because this is a left-to-right model, any word later in the sentence is blocked before the softmax, so the first word can only ever attend to itself. And rather than one such mechanism, the model runs several in parallel over different slices of the vector, so one can track grammatical subjects while another tracks something else entirely. The cost is that every word is compared with every other word, so doubling the length of the text roughly quadruples the work.",
+    },
+  },

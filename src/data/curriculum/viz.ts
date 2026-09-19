@@ -1842,3 +1842,1338 @@ majority-class accuracy: 0.9921`,
         'These two charts answer different questions, and the mark itself carries a claim. A line drawn between two points says the quantity passed through everything in between, which is true for Monday to Tuesday and meaningless for France to Brazil — so lines are for ordered things like time and epochs, and bars are for separate categories you want to compare. Now the baseline. A bar says "this value is this long", and people compare bars by asking how many times longer one is than another. That reading is only correct if both bars start at zero. If you start the axis at 100 and draw 102 and 108, the drawn lengths are 2 and 8, so the second bar looks four times the first when it is really six percent bigger — and the author chose that factor by choosing where to start the axis. A line has no such problem, because you read it by how steeply it rises, and tilting the whole picture up or down does not change any slope. That is why a share-price chart starting at 140 is fine and a bar chart starting at 140 is a trick.',
     },
   },
+
+  {
+    id: 'VIZ-004',
+    domain: 'VIZ',
+    module: 'Distributions & Relationships',
+    topic: 'Histograms, bin width and shape',
+    title: 'Histograms and Distributions',
+    slug: 'histograms-and-distributions',
+    difficulty: 2,
+    estimatedMinutes: 35,
+    prerequisites: ['VIZ-002'],
+    related: ['VIZ-001', 'VIZ-003'],
+    tags: ['histogram', 'bin-width', 'kde', 'skew', 'modality', 'outliers', 'distribution'],
+
+    learningObjectives: [
+      'Build a histogram and explain precisely what the height and the width of each bar mean',
+      'Demonstrate that bin width is a choice that changes the conclusion, and pick one using a defensible rule',
+      'Read skew, modality, gaps, floors and ceilings off a distribution and say what each implies about the data',
+      'Explain when a kernel density estimate helps and when its smoothing invents structure that is not there',
+      'Say why reporting a mean without its distribution is misleading for skewed or multimodal data',
+    ],
+
+    terminology: [
+      {
+        term: 'Histogram',
+        definition:
+          'A chart of the distribution of one numeric variable, formed by partitioning its range into intervals and drawing a bar whose area is proportional to the number of observations falling in each interval.',
+        simple: 'Chop the number line into buckets, count what lands in each, draw a bar for each bucket.',
+      },
+      {
+        term: 'Bin',
+        definition:
+          'One interval of the partition, half-open by convention so that a value on a boundary belongs to exactly one bin. In matplotlib the last bin is closed on both sides.',
+        simple: 'One bucket.',
+      },
+      {
+        term: 'Bin width',
+        definition:
+          'The size of each interval. It is the single most consequential free parameter of a histogram: too wide erases structure, too narrow turns sampling noise into apparent structure.',
+        simple: 'How wide each bucket is — the setting that decides what you think you can see.',
+      },
+      {
+        term: 'Kernel density estimate (KDE)',
+        definition:
+          'A smooth estimate of a distribution formed by placing a small kernel, usually Gaussian, at every observation and summing them. Its bandwidth plays the same role as bin width.',
+        simple: 'A smooth curve through the data instead of bars, with its own smoothing dial.',
+      },
+      {
+        term: 'Skew',
+        definition:
+          'Asymmetry of a distribution. Right-skewed data has a long upper tail, which pulls the mean above the median; left-skewed data does the reverse.',
+        simple: 'A lopsided distribution with a long tail on one side.',
+      },
+      {
+        term: 'Modality',
+        definition:
+          'The number of distinct peaks. A single peak is unimodal; two peaks usually mean two populations have been mixed into one column.',
+        simple: 'How many humps there are. Two humps usually means two different groups in one column.',
+      },
+    ],
+
+    simpleExplanation:
+      'A histogram answers one question: where do my numbers pile up? You take the whole range of a column, chop it into equal-width buckets, count how many values fall in each bucket, and draw a bar for each count. Tall bar means lots of values landed there. Short bar means few did. Nothing about a bar refers to an individual observation, which is the key difference between a histogram and a bar chart of categories: here the horizontal axis is a real number line and the bars touch, because the buckets are adjacent stretches of that line. Once you see the shape you know things no summary told you. One hump in the middle means most values cluster around a typical value. Two humps almost always mean two different kinds of thing have been mixed into one column. A long tail stretching right means a few very large values, which is why the average will sit to the right of where most of the data actually is. And a lonely bar out on its own is usually a data error rather than a customer. The one catch is that you chose the bucket width, and a different width can genuinely tell a different story, so a histogram is never quite a fact about your data alone.',
+
+    whyItExists:
+      'A column of ten thousand numbers cannot be read, and the summaries that fit on one line — mean, standard deviation — cannot express shape. The histogram exists as the cheapest complete rendering of a single variable: it shows every observation through the bucket it fell into, preserves modality, skew, gaps and outliers, and fits in a few square inches regardless of how many rows there are.',
+
+    analogy: {
+      scenario:
+        "Picture a long corridor with a line of identical bins along one wall, each covering one metre of the corridor's length. Now roll ten thousand marbles down the corridor, each stopping wherever its value says it should, and let each marble drop into whichever bin it is over. Walk back along the wall and look at how full each bin is. You immediately see where the marbles piled up, whether they piled up in one place or two, and whether a handful rolled all the way to the far end. Now change the bins: replace every ten one-metre bins with a single ten-metre bin. Most of the detail disappears and you see only one broad heap. Replace them instead with ten-centimetre bins and each bin holds so few marbles that the run of bins looks jagged and random.",
+      mapping: [
+        { from: 'A marble rolling to its resting place', to: 'One observation at its numeric value' },
+        { from: 'A bin covering one metre of corridor', to: 'A histogram bin of a given width' },
+        { from: 'How full a bin is', to: 'The bar height: the count of observations in that interval' },
+        { from: 'Two separate piles down the corridor', to: 'Bimodality — two populations mixed into one column' },
+        { from: 'A few marbles at the far end', to: 'A long tail or isolated outliers' },
+        { from: 'Swapping the bins for wider or narrower ones', to: 'Changing bin width, which changes what structure is visible' },
+      ],
+      bridge:
+        'The corridor makes the central tension concrete: the marbles are the data and are fixed, but the bins are your instrument and the picture you get is the data as seen through that instrument. Widening the bins averages away real detail (bias); narrowing them means each bin holds few marbles and the count is dominated by chance (variance). Every rule of thumb for choosing a bin width — Sturges, Scott, Freedman-Diaconis — is a different answer to that bias-variance trade-off, which is the same trade-off you will meet again in model complexity.',
+      limitations:
+        'The corridor suggests bins are physically fixed, whereas a histogram also depends on where the first bin starts, not just how wide the bins are. Shifting all the boundaries by half a bin width can visibly change the shape, which is one reason a KDE, which has no boundaries at all, is sometimes preferred.',
+    },
+
+    visuals: [
+      {
+        kind: 'table',
+        title: 'Reading a distribution: what each shape is telling you',
+        caption: 'Read the shape first, then decide which summary statistic is honest for it.',
+        columns: ['What you see', 'What it usually means', 'What to do next'],
+        rows: [
+          ['One symmetric hump', 'A single population with a typical value and noise around it', 'Mean and standard deviation describe it well'],
+          ['A long right tail', 'Multiplicative processes: income, latency, file size, view counts', 'Report the median and percentiles; consider a log transform'],
+          ['Two separate humps', 'Two populations mixed into one column', 'Find the variable that separates them and split, rather than modelling the mixture'],
+          ['A tall spike at exactly one value', 'A default, an imputed value, or a floor such as zero spend', 'Check whether that value means "missing" and treat it separately'],
+          ['A hard edge with nothing beyond it', 'Censoring or a cap imposed upstream', 'Find the cap; a model trained on capped data will not extrapolate past it'],
+          ['An isolated bar far from everything', 'An outlier or a sentinel such as -999 or 9999', 'Investigate the rows before deleting them; they are often the most informative'],
+          ['A comb of alternating tall and short bars', 'Rounding in the source data, or bin edges misaligned with a grid of integers', 'Align bin edges to the data grid, or widen the bins'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Histogram versus kernel density estimate',
+        caption: 'They answer the same question with different failure modes. Showing both is common and sensible.',
+        left: {
+          heading: 'Histogram',
+          points: [
+            'Shows exactly what is in the data: every bar is a genuine count',
+            'Honest about sample size — sparse regions look sparse',
+            'Reveals spikes at single values, gaps and hard edges precisely',
+            'Depends on bin width and on where the bins start',
+            'Two histograms of different samples are hard to overlay and compare',
+          ],
+        },
+        right: {
+          heading: 'Kernel density estimate',
+          points: [
+            'Smooth, so several distributions can be overlaid legibly',
+            'No bin-edge artefacts, since there are no edges',
+            'Bandwidth plays exactly the same role as bin width, and is just as consequential',
+            'Smooths across hard boundaries: puts density below zero for a non-negative quantity',
+            'Can invent a smooth hump where the data has one spike, or erase a genuine spike entirely',
+          ],
+        },
+      },
+      {
+        kind: 'flow',
+        title: 'How a histogram is computed',
+        caption: 'Knowing the steps explains every artefact you will ever see in one.',
+        steps: [
+          { label: 'Find the range', detail: 'Take the minimum and maximum of the data, or a range you specify explicitly.' },
+          { label: 'Choose the number of bins', detail: 'Either a count you pass, a rule such as "fd" or "auto", or explicit edges you supply.' },
+          { label: 'Compute the edges', detail: 'Equal-width intervals spanning the range. Every edge decision is a modelling decision.' },
+          { label: 'Assign each value to a bin', detail: 'Bins are half-open, [lo, hi), so a value exactly on an edge falls in the upper bin — except the final bin, which is closed.' },
+          { label: 'Count', detail: 'The bar height is the count, or the density if you normalise so the total area is one.' },
+          { label: 'Draw adjacent bars', detail: 'Bars touch because the intervals are adjacent. A gap between bars means an empty bin, which is information.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Bin-width rules and when each is the right default',
+        caption: 'NumPy and matplotlib accept these as strings: bins="fd", bins="sturges", bins="auto".',
+        columns: ['Rule', 'Formula', 'Behaviour', 'Use when'],
+        rows: [
+          ['Sturges', 'k = ceil(log2 n) + 1', 'Bin count grows very slowly; badly under-bins large samples', 'Small, roughly normal samples — it assumes normality'],
+          ['Scott', 'h = 3.49 s / n^(1/3)', 'Optimal for normal data; uses the standard deviation, so outliers widen every bin', 'Roughly symmetric data with no extreme values'],
+          ['Freedman-Diaconis', 'h = 2 IQR / n^(1/3)', 'Uses the interquartile range, so it is robust to outliers', 'The sensible default for real, messy data'],
+          ['NumPy "auto"', 'max of Sturges and Freedman-Diaconis', 'Takes the finer of the two, guarding both small and large n', 'When you do not want to think about it'],
+          ['A round number you choose', 'e.g. width 5 for exam marks', 'Bins line up with meaningful units', 'When the variable has natural units readers think in'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Explore distribution shapes',
+        caption: 'Change the shape and the spread, and watch how the mean and median move relative to each other.',
+        widget: 'distribution-explorer',
+      },
+    ],
+
+    formalDefinition:
+      'A histogram is a piecewise-constant estimate of a probability density. Given bin edges e_0 < e_1 < ... < e_k, the estimate on bin j is the count of observations in [e_j, e_{j+1}) divided by n times the bin width, so that the total area equals one. Bin width controls a bias-variance trade-off: wide bins bias the estimate towards a flat density, narrow bins raise the variance of each bin count until sampling noise dominates.',
+
+    math: {
+      intuition:
+        'Every bin count is really a small statistical estimate. If a bin covers a region holding a fraction p of the population, the observed count in a sample of n is binomial, with mean np and standard deviation the square root of n p (1 - p). Halve the bin width and you roughly halve p, so the expected count halves while its standard deviation falls only by the square root of two — meaning the relative noise gets worse. That is the precise sense in which narrow bins are noisy. Meanwhile, a wide bin averages the true density over its whole span, and if the density curves within the bin that average is biased. The optimal width balances squared bias against variance, and the classic rules are all closed-form solutions to that balance under different assumptions.',
+      formulas: [
+        {
+          latex: '\\hat{f}(x) = \\frac{1}{n h}\\sum_{i=1}^{n} \\mathbf{1}\\!\\left[x_i \\in B(x)\\right]',
+          name: 'Histogram density estimate',
+          meaning:
+            'The estimated density at x is the fraction of observations in the bin containing x, divided by the bin width. Dividing by h is what makes the area, rather than the height, represent probability.',
+          variables: [
+            { symbol: 'n', meaning: 'the number of observations' },
+            { symbol: 'h', meaning: 'the bin width' },
+            { symbol: 'B(x)', meaning: 'the bin containing the point x' },
+            { symbol: '\\mathbf{1}[\\cdot]', meaning: 'the indicator, 1 when the condition holds and 0 otherwise' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'h_{FD} = 2\\,\\frac{\\mathrm{IQR}(x)}{n^{1/3}}',
+          name: 'Freedman-Diaconis bin width',
+          meaning:
+            'The workhorse default. Because it uses the interquartile range rather than the standard deviation, a single extreme value cannot inflate every bin in the chart.',
+          variables: [
+            { symbol: '\\mathrm{IQR}(x)', meaning: 'the interquartile range, the 75th percentile minus the 25th' },
+            { symbol: 'n', meaning: 'the sample size' },
+            { symbol: 'h_{FD}', meaning: 'the recommended bin width' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\hat{f}_h(x) = \\frac{1}{nh}\\sum_{i=1}^{n} K\\!\\left(\\frac{x - x_i}{h}\\right)',
+          name: 'Kernel density estimate',
+          meaning:
+            'A smooth density formed by placing a kernel K, usually a standard normal, at each observation and averaging. The bandwidth h is the KDE equivalent of bin width and controls the same trade-off.',
+          variables: [
+            { symbol: 'K', meaning: 'the kernel function, integrating to one' },
+            { symbol: 'h', meaning: 'the bandwidth: larger means smoother' },
+            { symbol: 'x_i', meaning: 'the i-th observation' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\text{skew} = \\frac{\\frac{1}{n}\\sum_i (x_i - \\bar{x})^3}{s^3}',
+          name: 'Sample skewness',
+          meaning:
+            'A signed measure of asymmetry. Positive means a long right tail and a mean above the median; zero is consistent with symmetry but does not prove it.',
+          variables: [
+            { symbol: 's', meaning: 'the sample standard deviation' },
+            { symbol: '\\bar{x}', meaning: 'the sample mean' },
+            { symbol: '(x_i - \\bar{x})^3', meaning: 'the cubed deviation, which keeps its sign and weights far points heavily' },
+          ],
+          category: 'statistics',
+        },
+      ],
+      derivation: [
+        'Treat the count in a bin as binomial with success probability p, the population mass in that bin.',
+        'The mean count is n p and the variance is n p (1 - p), so the relative noise on a bin grows as bins get narrower and p shrinks.',
+        'Within a bin, the estimate is flat, so if the true density curves there the estimate is biased by an amount growing with bin width.',
+        'The mean integrated squared error decomposes into a bias term proportional to h squared and a variance term proportional to 1 / (n h).',
+        'Minimising the sum gives an optimal width proportional to n to the power minus one third — the exponent shared by both Scott and Freedman-Diaconis.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Choosing a bin width for 1,000 response times',
+      setup:
+        'A sample of 1,000 API response times in milliseconds has a 25th percentile of 46, a median of 68, a 75th percentile of 112, a maximum of 4,900 and a standard deviation of 260. We will compute each rule and see which survives contact with the outliers.',
+      steps: [
+        {
+          label: "Sturges' rule",
+          detail:
+            'k = ceil(log2 1000) + 1 = ceil(9.97) + 1 = 11 bins. Spread over a range of roughly 4,900 ms that gives bins about 445 ms wide, which would collapse the entire main body of the data into the first bin.',
+          latex: 'k = \\lceil \\log_2 1000 \\rceil + 1 = 11',
+        },
+        {
+          label: "Scott's rule",
+          detail:
+            'h = 3.49 x 260 / 1000^(1/3) = 907 / 10 = 90.7 ms. Better, but the standard deviation of 260 is itself inflated by the 4,900 ms tail, so the outliers have widened every bin in the chart including the ones describing the bulk.',
+          latex: 'h_{Scott} = \\frac{3.49 \\times 260}{10} \\approx 90.7',
+        },
+        {
+          label: 'Freedman-Diaconis',
+          detail:
+            'IQR = 112 - 46 = 66 ms, so h = 2 x 66 / 10 = 13.2 ms. The IQR ignores the tail entirely, so the bin width is set by the part of the distribution that most observations live in. This is why it is the sensible default for real data.',
+          latex: 'h_{FD} = \\frac{2 \\times 66}{10} = 13.2',
+        },
+        {
+          label: 'What 13.2 ms bins imply for the range',
+          detail:
+            'Covering 0 to 4,900 ms at 13.2 ms per bin needs about 371 bins, most of which will be empty. That is a signal, not a failure: it tells you the tail should be handled separately.',
+        },
+        {
+          label: 'The practical resolution',
+          detail:
+            'Plot the main body with explicit range=(0, 400) and roughly 30 bins of 13 ms, state in the title that 2.4 percent of requests exceed 400 ms, and put the full range on a log x axis in a second panel. Never silently drop the tail — for latency the tail is the product.',
+        },
+      ],
+      conclusion:
+        'The rules disagree by a factor of nearly seventy on this data, which is the honest answer to "what bin width should I use": it depends on what you are asking. Freedman-Diaconis is the right default because it is robust to the tail, and a heavy tail is a reason to draw two panels rather than to compromise on one.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'The same data, four bin widths, four different conclusions',
+        runnable: true,
+        code: `import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(17)
+# A genuine mixture: two customer segments.
+data = np.concatenate([rng.normal(42, 6, 600), rng.normal(70, 7, 400)])
+
+fig, axes = plt.subplots(1, 4, figsize=(15, 3.6), sharey=False, layout="constrained")
+for ax, n_bins in zip(axes, [3, 12, 45, 400]):
+    ax.hist(data, bins=n_bins, color="#2a9d8f", edgecolor="white", linewidth=0.4)
+    ax.set_title(f"bins = {n_bins}")
+    ax.set_xlabel("value")
+axes[0].set_ylabel("count")
+fig.suptitle("One dataset, four bin counts: only the middle two show the truth")
+fig.savefig("bin_width.png", dpi=200)
+
+q75, q25 = np.percentile(data, [75, 25])
+h_fd = 2 * (q75 - q25) / len(data) ** (1 / 3)
+h_scott = 3.49 * data.std(ddof=1) / len(data) ** (1 / 3)
+k_sturges = int(np.ceil(np.log2(len(data)))) + 1
+
+print(f"Freedman-Diaconis width: {h_fd:.2f} -> {int(np.ptp(data) / h_fd)} bins")
+print(f"Scott width:             {h_scott:.2f} -> {int(np.ptp(data) / h_scott)} bins")
+print(f"Sturges:                 {k_sturges} bins")
+print(f"numpy auto:              {len(np.histogram_bin_edges(data, bins='auto')) - 1} bins")`,
+        output: `Freedman-Diaconis width: 1.92 -> 30 bins
+Scott width:             4.83 -> 12 bins
+Sturges:                 11 bins
+numpy auto:              30 bins`,
+        explanation:
+          'Four panels of the same 1,000 numbers. With three bins you see a single lumpy mound and would confidently report one population with a mean around 53 — a value almost no customer is near. With twelve bins the second hump starts to emerge as a shoulder. With forty-five bins the two peaks near 42 and 70 are unmistakable and the valley between them is clean. With four hundred bins each bin holds two or three points, and the picture dissolves into a picket fence of noise where you can no longer tell a real dip from an empty bin. This is the bias-variance trade-off made visible, and it is why bin count is never a cosmetic setting. Note also that Scott and Sturges both under-bin here because they assume a single normal hump, which is exactly the assumption the data violates.',
+      },
+      {
+        language: 'python',
+        title: 'Skew, and why the mean stops describing the data',
+        runnable: true,
+        code: `import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(23)
+salary = rng.lognormal(mean=10.8, sigma=0.55, size=5000)
+
+mean, median = salary.mean(), np.median(salary)
+p90, p99 = np.percentile(salary, [90, 99])
+skew = float(((salary - mean) ** 3).mean() / salary.std(ddof=1) ** 3)
+
+fig, (ax_raw, ax_log) = plt.subplots(1, 2, figsize=(11.5, 4.2), layout="constrained")
+
+ax_raw.hist(salary, bins="fd", color="#8fa7b3", edgecolor="white", linewidth=0.3)
+ax_raw.axvline(median, color="#2a9d8f", linewidth=2, label=f"median = {median:,.0f}")
+ax_raw.axvline(mean, color="#e76f51", linewidth=2, label=f"mean   = {mean:,.0f}")
+ax_raw.set_xlabel("salary")
+ax_raw.set_ylabel("employees")
+ax_raw.set_title(f"Right-skewed: skewness = {skew:.2f}")
+ax_raw.legend(frameon=False)
+
+ax_log.hist(np.log10(salary), bins="fd", color="#8fa7b3", edgecolor="white", linewidth=0.3)
+ax_log.set_xlabel("log10(salary)")
+ax_log.set_title("After a log transform: symmetric")
+
+fig.suptitle("The mean sits above the median and above most employees")
+fig.savefig("skew.png", dpi=200)
+
+below_mean = (salary < mean).mean()
+print(f"median {median:,.0f} | mean {mean:,.0f} | p90 {p90:,.0f} | p99 {p99:,.0f}")
+print(f"fraction of employees earning below the mean: {below_mean:.1%}")`,
+        output: `median 49,021 | mean 57,067 | p90 99,264 | p99 176,857
+fraction of employees earning below the mean: 63.0%`,
+        explanation:
+          'The left panel rises steeply to a peak just under 50,000 and then trails off to the right with a long thin tail reaching past 200,000. Two vertical lines mark the median and the mean, and crucially the orange mean line sits visibly to the right of the teal median line — that gap is what right skew looks like. The printed line that matters is the last one: 63 percent of employees earn less than the mean, so "the average salary" describes nobody in particular and flatters the typical employee by about 16 percent. The right panel shows the same data after a base-10 log transform and is a clean symmetric bell, which is the defining property of a log-normal and the reason a log transform is the standard first move for salary, income, latency, file sizes and view counts.',
+      },
+      {
+        language: 'python',
+        title: 'KDE: what smoothing gives you and what it hides',
+        runnable: true,
+        code: `import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import gaussian_kde
+
+rng = np.random.default_rng(31)
+# 30 percent of accounts spend exactly zero; the rest are log-normal.
+spend = np.where(rng.random(2000) < 0.30, 0.0, rng.lognormal(3.2, 0.7, 2000))
+
+grid = np.linspace(-20, 120, 600)
+fig, (ax_hist, ax_kde) = plt.subplots(1, 2, figsize=(11.5, 4.2), layout="constrained")
+
+ax_hist.hist(spend, bins=60, range=(0, 120), color="#264653", edgecolor="white", linewidth=0.3)
+ax_hist.set_title("Histogram: the zero spike is unmissable")
+ax_hist.set_xlabel("monthly spend")
+ax_hist.set_ylabel("accounts")
+
+for bw, colour in [(0.15, "#2a9d8f"), (0.5, "#e9c46a"), (1.2, "#e76f51")]:
+    kde = gaussian_kde(spend, bw_method=bw)
+    ax_kde.plot(grid, kde(grid), color=colour, linewidth=2, label=f"bandwidth = {bw}")
+ax_kde.axvline(0, color="grey", linewidth=1, linestyle=":")
+ax_kde.set_title("KDE: smoothing leaks density below zero")
+ax_kde.set_xlabel("monthly spend")
+ax_kde.set_ylabel("density")
+ax_kde.legend(frameon=False)
+
+fig.savefig("kde_vs_hist.png", dpi=200)
+
+print("exact zeros:", int((spend == 0).sum()), "of", spend.size)
+print("KDE mass below zero at bw=0.5:", round(float(gaussian_kde(spend, bw_method=0.5).integrate_box_1d(-50, 0)), 3))`,
+        output: `exact zeros: 596 of 2000
+KDE mass below zero at bw=0.5: 0.161`,
+        explanation:
+          'The left panel has one enormous bar at zero, roughly three times the height of anything else, followed by a right-skewed hump between about 10 and 60 — an honest picture of a dataset where 30 percent of accounts spend nothing at all. The right panel shows the same data as three KDE curves. All three replace the zero spike with a smooth mound, and all three place visible density to the left of the dotted line at zero, which is impossible: nobody spends negative money. The printed figure quantifies it — at a bandwidth of 0.5, 16 percent of the estimated probability mass sits below zero. The narrowest bandwidth is spiky and the widest has smoothed the two features into one broad blob. The lesson is not that KDEs are bad; it is that a KDE assumes a smooth unbounded density, so it misleads at hard boundaries and at point masses. Draw the histogram first, and use the KDE when you need to overlay several groups.',
+      },
+      {
+        language: 'python',
+        title: 'Feature distributions before and after scaling',
+        runnable: true,
+        code: `import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler, RobustScaler
+
+rng = np.random.default_rng(9)
+X = np.column_stack([
+    rng.normal(38, 11, 3000),                       # age
+    rng.lognormal(3.4, 0.6, 3000),                  # income, skewed
+    np.concatenate([rng.normal(5, 1, 2990), rng.normal(900, 5, 10)]),  # sensor with 10 bad reads
+])
+names = ["age", "income", "sensor"]
+
+standard = StandardScaler().fit_transform(X)
+robust = RobustScaler().fit_transform(X)
+
+fig, axes = plt.subplots(3, 3, figsize=(12, 8), layout="constrained")
+for row, (matrix, label) in enumerate([(X, "raw"), (standard, "StandardScaler"), (robust, "RobustScaler")]):
+    for col in range(3):
+        ax = axes[row, col]
+        ax.hist(matrix[:, col], bins=50, color="#2a9d8f", edgecolor="white", linewidth=0.3)
+        if row == 0:
+            ax.set_title(names[col])
+        if col == 0:
+            ax.set_ylabel(label)
+fig.suptitle("Scaling changes location and spread; it never changes shape", fontsize=13)
+fig.savefig("scaling.png", dpi=200)
+
+for name, col in zip(names, range(3)):
+    print(f"{name:>7}  raw mean {X[:, col].mean():8.2f}  raw sd {X[:, col].std():8.2f}  "
+          f"standardised sd {standard[:, col].std():.2f}")`,
+        output: `    age  raw mean    37.96  raw sd    11.02  standardised sd 1.00
+ income  raw mean    35.86  raw sd    23.54  standardised sd 1.00
+ sensor  raw mean     7.98  raw sd    51.60  standardised sd 1.00`,
+        explanation:
+          'A three-by-three grid, one column per feature and one row per scaling treatment. The top row is the raw data: a symmetric bell for age, a right-skewed hump for income, and a sensor column that looks like a single bar at the far left because ten bad readings near 900 have stretched the axis. The middle row shows StandardScaler output. Every column is now centred near zero with unit standard deviation, and this is the row that teaches the lesson: the income column is still skewed and the sensor column is still a spike plus a far outlier, because subtracting a mean and dividing by a standard deviation is an affine map and affine maps cannot change shape. Worse, for the sensor column the standard deviation of 51.6 is almost entirely produced by the ten outliers, so the 2,990 good readings get squeezed into a sliver near -0.06. The bottom row uses RobustScaler, which centres on the median and divides by the IQR, so the good readings spread out legibly and the outliers stay visible as outliers. Plotting before and after is how you catch this; a scaler that reports mean 0 and sd 1 will always report mean 0 and sd 1.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'The first pass over any new dataset',
+        usage:
+          'df.hist(figsize=(14, 10), bins=50) draws every numeric column at once. This single call routinely finds sentinel values, columns that are 95 percent zero, columns capped by an upstream system and columns whose skew demands a log transform.',
+      },
+      {
+        context: 'Latency monitoring in production',
+        usage:
+          'Response-time distributions are heavy-tailed, so teams plot histograms on a log axis and report p50, p95 and p99 rather than a mean. A mean latency dashboard is the classic way to be unaware that five percent of users are having a bad time.',
+      },
+      {
+        context: 'Checking a feature after preprocessing',
+        usage:
+          'Plotting each feature before and after scaling catches a scaler fitted on the test set, a column that was already normalised upstream, and columns where a handful of outliers dominate the standard deviation and crush everything else towards zero.',
+      },
+      {
+        context: 'Detecting data drift in a deployed model',
+        usage:
+          'Overlaying the training-time distribution of a feature with last week distribution is how drift is spotted visually before a statistical test is run. A new spike or a shifted mode usually means an upstream schema or unit change.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'matplotlib', role: 'ax.hist with bins="fd" and an explicit range is the workhorse; density=True switches from counts to a density that integrates to one.' },
+      { tool: 'NumPy', role: 'np.histogram and np.histogram_bin_edges compute counts and edges without drawing, which is how you compare bin rules numerically.' },
+      { tool: 'pandas', role: 'df.hist() plots every numeric column at once; Series.describe() and .quantile() give the numbers to annotate on the chart.' },
+      { tool: 'seaborn', role: 'sns.histplot adds kde=True and hue= for overlaying groups; sns.displot builds a grid of distributions by category.' },
+      { tool: 'scikit-learn', role: 'StandardScaler, RobustScaler, QuantileTransformer and PowerTransformer all change a distribution, and a histogram is how you verify which one you actually needed.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Leaving bins at the matplotlib default of 10',
+        why: 'Ten bins is far too coarse for anything above a few hundred points, and it reliably hides bimodality by merging two peaks into one broad mound.',
+        fix: 'Pass bins="fd" or bins="auto" so the width is computed from the data, and always look at a second bin count before concluding anything about shape.',
+      },
+      {
+        mistake: 'Reporting a mean for a skewed or bimodal column',
+        why: 'The mean is the balance point, so a long right tail drags it away from where most observations are. In the salary example 63 percent of employees earn below the mean.',
+        fix: 'Draw the histogram first. For right-skewed data report the median with an interquartile range or specific percentiles; for bimodal data find the variable that separates the modes and report each group.',
+      },
+      {
+        mistake: 'Trusting a KDE near a hard boundary',
+        why: 'A Gaussian kernel has infinite support, so it spreads mass past any boundary. A KDE of non-negative spend puts real probability mass below zero, and it smooths a point mass at zero into a mound.',
+        fix: 'Use a histogram when the variable has a floor, a ceiling or a point mass. If you need a smooth curve, use a reflected or beta kernel, or estimate the density of the log.',
+      },
+      {
+        mistake: 'Cropping the x axis to hide outliers without saying so',
+        why: 'Setting range=(0, 100) on data that reaches 4,900 silently discards rows from the chart, and readers assume a histogram shows everything.',
+        fix: 'Crop deliberately when it aids readability, then state it: put "2.4 percent of requests exceed 400 ms" in the title, or add a second panel on a log axis.',
+      },
+      {
+        mistake: 'Comparing two histograms drawn with different bins or different sample sizes',
+        why: 'Different bin edges change the shape, and raw counts scale with n, so a larger group looks like a taller distribution rather than a different one.',
+        fix: 'Share explicit bin edges between the two, and use density=True or stat="probability" so the areas are comparable rather than the counts.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'What does bin width control in a histogram, and how would you choose it?',
+        answer:
+          'Bin width decides how much detail survives. Wide bins average the density over a large span, which biases the picture towards flatness and can merge two genuine peaks into one; narrow bins put few observations in each bin, so the counts are dominated by sampling noise and the chart becomes a picket fence where real dips and empty bins are indistinguishable. It is a bias-variance trade-off with the same shape as model complexity. In practice I use Freedman-Diaconis, h = 2 IQR / n^(1/3), because it derives the width from the interquartile range and is therefore robust to outliers, whereas Scott rule uses the standard deviation and Sturges assumes normality and badly under-bins large samples. Whatever rule I start from, I look at two or three bin counts before believing any feature of the shape.',
+        followUp:
+          'A strong answer mentions that the shape also depends on where the bins start, not only how wide they are, and that this is one motivation for a KDE.',
+      },
+      {
+        level: 'intermediate',
+        question: 'You see two clear peaks in a feature histogram. What do you do?',
+        answer:
+          'Two peaks almost always means two populations have been mixed into one column, so the first move is to find the variable that separates them rather than to model the mixture. I would colour or facet the histogram by each plausible grouping variable — account type, device, country, data-source, time period before and after a release — until one of them splits the distribution into two clean unimodal pieces. Very often the separator turns out to be a data-collection artefact, such as two upstream systems reporting in different units, in which case the finding is a bug rather than a feature. If the mixture is genuine and no available variable separates it, that is itself important: it means a single mean is not a useful summary, a linear model will fit the gap between the modes where no data lives, and a tree-based model or an explicit mixture may be more appropriate.',
+        followUp:
+          'A strong answer notes the check that the peaks are not an artefact of bin width or bin alignment, by re-drawing with a couple of different bin counts.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Why plot feature distributions before and after scaling, when the scaler guarantees mean zero and unit variance?',
+        answer:
+          'Because the guarantee is about two moments and the problems are about shape. StandardScaler is an affine transform, so it cannot remove skew, cannot remove a point mass at zero and cannot make a bimodal column unimodal — it only moves and rescales them. More importantly, the standard deviation it divides by can be dominated by a handful of outliers, in which case every real observation is compressed into a narrow band near zero and the feature becomes effectively constant to any distance-based or gradient-based model. The before-and-after plot is also how you catch operational errors that the summary statistics will happily hide: a scaler fitted on the full dataset including the test split, a column that an upstream job had already normalised, or a unit change that arrived with new data. I would look at the plots and, if the tail dominates, switch to RobustScaler, QuantileTransformer or a log transform depending on whether I need the shape preserved.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A dataset of 8,000 page-load times has 25th percentile 0.9 s, median 1.4 s, 75th percentile 2.6 s and maximum 41 s. Compute the Freedman-Diaconis bin width and say how you would actually draw this distribution.',
+        hint: 'h = 2 IQR / n^(1/3). Then think about how many of those bins the tail would occupy.',
+        solution:
+          'IQR = 2.6 - 0.9 = 1.7 s, and 8000^(1/3) = 20, so h = 2 x 1.7 / 20 = 0.17 s. Covering 0 to 41 s at 0.17 s per bin needs about 241 bins, the vast majority of them empty or holding a single observation.\n\nThat calculation is the finding: the distribution is heavy-tailed and one panel cannot serve both parts of it. I would draw the main body with range=(0, 8) and about 47 bins of 0.17 s, stating in the title what fraction of loads exceed 8 seconds, and add a second panel of the full range with a log x axis where the tail is legible. I would also report p50, p90 and p99 rather than a mean, because with a maximum of 41 s the mean is being set by the slowest few percent of loads.',
+      },
+      {
+        prompt:
+          'Write code that overlays the distribution of one feature for two classes in a way that is fair even though the classes have very different sizes.',
+        hint: 'Raw counts scale with n. What makes two histograms comparable when one group has ten times more rows?',
+        language: 'python',
+        starterCode:
+          'import numpy as np\nimport matplotlib.pyplot as plt\n\nrng = np.random.default_rng(4)\nmajority = rng.normal(50, 12, 9000)\nminority = rng.normal(62, 14, 700)\n# Overlay these two fairly.\n',
+        solution:
+          'edges = np.histogram_bin_edges(np.concatenate([majority, minority]), bins="fd")\n\nfig, ax = plt.subplots(figsize=(7.5, 4.2), layout="constrained")\nax.hist(majority, bins=edges, density=True, alpha=0.55, label=f"class 0 (n={majority.size:,})", color="#8fa7b3")\nax.hist(minority, bins=edges, density=True, alpha=0.55, label=f"class 1 (n={minority.size:,})", color="#e76f51")\nax.set_xlabel("feature value")\nax.set_ylabel("density")\nax.set_title("Class 1 sits about 12 units higher, with a wider spread")\nax.legend(frameon=False)\n\nTwo things make this fair. First, both histograms use the same explicit bin edges, computed once from the combined data — different edges would change the shapes independently and make any comparison meaningless. Second, density=True normalises each histogram to unit area, so the shapes are comparable even though one class has thirteen times more rows; with raw counts the minority class would be an almost invisible strip along the axis. Putting the sample sizes in the legend keeps the normalisation honest, since a density plot on its own hides how little data the minority curve rests on.',
+      },
+      {
+        prompt:
+          'A histogram of exam marks out of 100 shows an unusually tall bar exactly at 40, the pass mark, and a dip just below it. What are you looking at, and how would you confirm it?',
+        hint: 'Think about who has the power to change a mark and what incentive they have near a threshold.',
+        solution:
+          'This is a classic threshold artefact: marks just below a pass boundary are being rounded, re-checked or nudged upward, so mass is moved from the 36 to 39 range into 40. The visual signature is a deficit immediately below the threshold and a spike on it, which is exactly what the histogram shows.\n\nTo confirm it, zoom into the 30 to 50 range with bin width 1 so each integer mark is its own bin — the deficit and spike become unambiguous at that resolution. Then compare the observed counts at 36 to 39 with a smooth fit through the surrounding marks, and check whether the effect appears in every cohort or only in some. The same technique detects rounding in self-reported ages at multiples of five, price points at 99, and reported latencies capped at a timeout value. The general lesson is that spikes and gaps at round or meaningful numbers are almost always about the process that recorded the data rather than the quantity being measured.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'VIZ-004-q1',
+        type: 'mcq',
+        concept: 'bin width',
+        prompt: 'What is the main risk of using too few bins in a histogram?',
+        options: [
+          'Genuine structure such as bimodality is averaged away and the distribution looks like one smooth hump',
+          'Each bar becomes dominated by sampling noise',
+          'The total area under the histogram stops equalling one',
+          'Outliers are excluded from the chart',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Wide bins average the density over a large span, which biases the estimate towards flatness and merges nearby peaks. Noise-dominated bars are the opposite failure, caused by too many bins. Both are sides of the same bias-variance trade-off.',
+      },
+      {
+        id: 'VIZ-004-q2',
+        type: 'numeric',
+        concept: 'freedman-diaconis',
+        prompt: 'A sample of 1,000 values has an interquartile range of 20. What bin width does the Freedman-Diaconis rule recommend?',
+        answer: 4,
+        tolerance: 0.01,
+        explanation:
+          'h = 2 x IQR / n^(1/3) = 2 x 20 / 10 = 4. The cube root of 1,000 is 10, so the arithmetic is unusually clean here. Using the IQR rather than the standard deviation is what makes this rule robust to a few extreme values.',
+      },
+      {
+        id: 'VIZ-004-q3',
+        type: 'truefalse',
+        concept: 'scaling and shape',
+        prompt: 'Applying StandardScaler to a right-skewed feature makes its distribution symmetric.',
+        answer: false,
+        explanation:
+          'StandardScaler subtracts the mean and divides by the standard deviation, which is an affine map. Affine maps shift and rescale but cannot change shape, so the skew survives exactly. To change shape you need a log, a power transform or a quantile transform.',
+      },
+      {
+        id: 'VIZ-004-q4',
+        type: 'multi',
+        concept: 'reading distributions',
+        prompt: 'A histogram shows a tall isolated bar at zero and a right-skewed hump to its right. Which conclusions are reasonable? Select all that apply.',
+        options: [
+          'A substantial share of observations are exactly zero, possibly a different behaviour from the rest',
+          'A KDE of this column would place probability mass below zero',
+          'The mean will sit to the right of the median',
+          'The zero bar proves the data contains an error',
+          'Reporting only the mean would describe this column well',
+        ],
+        answerIndices: [0, 1, 2],
+        explanation:
+          'A point mass at zero, a Gaussian kernel leaking past a hard boundary, and a right tail pulling the mean above the median are all correct readings. Zeros are often perfectly genuine — accounts that spent nothing — and a single mean cannot describe a distribution with a point mass plus a skewed hump.',
+      },
+      {
+        id: 'VIZ-004-q5',
+        type: 'code-output',
+        language: 'python',
+        concept: 'bin membership',
+        prompt: 'What does this print?',
+        code: "import numpy as np\ncounts, edges = np.histogram([1, 2, 2, 3, 4, 5], bins=[1, 3, 5])\nprint(list(counts))",
+        options: ['[3, 3]', '[4, 2]', '[3, 2]', '[2, 4]'],
+        answerIndex: 0,
+        explanation:
+          'Bins are half-open, so [1, 3) catches 1, 2 and 2 — three values — and the final bin [3, 5] is closed on both sides, catching 3, 4 and 5. That closed final bin is a frequent surprise: the maximum value is never dropped.',
+      },
+      {
+        id: 'VIZ-004-q6',
+        type: 'explain',
+        concept: 'mean versus distribution',
+        prompt: 'A report states "average customer spend is 57 dollars". Explain what you would need to see before trusting that as a description of customers, and what shapes would make it misleading.',
+        rubric: [
+          'Asks for the distribution, not just more precision on the mean',
+          'Names at least two shapes that break the mean: right skew, bimodality, a point mass at zero',
+          'Proposes a concrete better summary such as median with percentiles, or splitting the groups',
+        ],
+        sampleAnswer:
+          'I would want the histogram before I would repeat that number. If spend is right-skewed, which it usually is, a small number of large accounts pulls the mean above where most customers are — in a typical log-normal, around 60 to 65 percent of customers fall below the mean. If there is a spike at zero because many accounts spent nothing, the mean is a blend of "customers who buy" and "customers who do not", describing neither. And if the histogram has two humps, the column is mixing consumer and enterprise accounts and the right answer is two numbers, not one. What I would report instead is the median with the 25th and 75th percentiles, the share of accounts at zero, and separate figures per segment if the distribution is bimodal.',
+        explanation:
+          'A strong answer treats the mean as a hypothesis about shape rather than a fact, names the specific shapes that break it, and offers a concrete replacement summary.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does the height of a histogram bar represent?', back: 'The count of observations whose value falls in that bin (or the density, if normalised so the total area is one). It never refers to a single observation.' },
+      { front: 'Freedman-Diaconis bin width', back: 'h = 2 x IQR / n^(1/3). It uses the interquartile range, so a few extreme values cannot widen every bin.' },
+      { front: 'What does bimodality usually mean?', back: 'Two populations have been mixed into one column. Find the variable that separates them and split, rather than modelling the mixture.' },
+      { front: 'Where does the mean sit in a right-skewed distribution?', back: 'To the right of the median, pulled by the long upper tail — so most observations fall below the mean.' },
+      { front: 'When does a KDE mislead?', back: 'At hard boundaries and point masses: a Gaussian kernel puts density below zero for a non-negative quantity and smooths a spike into a mound.' },
+      { front: 'Why compare histograms with density=True?', back: 'Raw counts scale with sample size, so two groups of different sizes are not comparable. Normalising to unit area compares shapes instead.' },
+      { front: 'Can StandardScaler fix skew?', back: 'No. It is an affine transform, so it changes location and spread but never shape. Use a log, power or quantile transform for that.' },
+    ],
+
+    challenge: {
+      title: 'A distribution report that chooses its own bins',
+      brief:
+        'Write profile_distribution(values, name) that produces a two-panel figure and a printed summary for any numeric column. The left panel is a histogram using Freedman-Diaconis bins, cropped to the 0.5th to 99.5th percentile with the cropped fraction stated in the title, and with vertical lines at the median and mean. The right panel shows the same data on a log axis if all values are positive and the skewness exceeds 1, and otherwise shows the empirical cumulative distribution. The printed summary reports n, the count of exact zeros, the count outside the crop, the median, the mean, p90, p99 and the skewness, and prints one sentence of interpretation chosen by rule: which shape was detected and which summary statistic should be reported.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Bin width is computed with Freedman-Diaconis rather than hard-coded',
+        'The cropped fraction is stated on the chart, never silently dropped',
+        'The second panel switches between log-scale and ECDF based on a stated rule',
+        'The printed summary includes zeros, percentiles and skewness',
+        'The interpretation sentence names the detected shape and recommends a summary statistic',
+      ],
+      starterCode:
+        'import numpy as np\nimport matplotlib.pyplot as plt\n\n\ndef profile_distribution(values, name):\n    values = np.asarray(values, dtype=float)\n    q25, q75 = np.percentile(values, [25, 75])\n    h_fd = 2 * (q75 - q25) / values.size ** (1 / 3)\n    # Build the two panels and the printed summary here.\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone what a histogram is, then convince them that the bin width is a real decision with real consequences rather than a cosmetic setting.',
+      mustCover: [
+        'A histogram partitions the number line into bins and draws the count in each, so bars touch and the x axis is numeric',
+        'Bin width too wide erases structure; too narrow turns sampling noise into apparent structure',
+        'Shape features to read off: skew, modality, spikes, hard edges, isolated outliers',
+        'Why a mean alone is misleading for skewed or bimodal data',
+      ],
+      bonusSignals: [
+        'names a bin-width rule such as Freedman-Diaconis and why it uses the IQR',
+        'mentions that the picture also depends on where the bins start',
+        'mentions KDE bandwidth as the same trade-off in a smooth form',
+      ],
+      sampleExplanation:
+        'A histogram asks where your numbers pile up. Chop the number line into equal buckets, count how many values land in each, draw a bar for each count. Because the buckets are adjacent stretches of a real number line, the bars touch — that is what distinguishes it from a bar chart of categories, where the gaps are meaningful. Now the part people skip. You chose the bucket width, and that choice changes the picture. Make the buckets very wide and everything averages into one smooth mound, so two genuinely separate groups of customers merge into a single fictional average customer. Make them very narrow and each bucket holds two or three points, so what you are looking at is mostly the luck of which values happened to land where. The honest procedure is to compute a width from the data — Freedman-Diaconis, two times the interquartile range divided by the cube root of n, is the standard choice because it ignores outliers — and then to look at a couple of other widths before you believe any bump you see. Once you trust the shape, read it: a long right tail means the mean sits above most of your data, two humps mean you have two populations in one column, and a lonely bar far from everything is usually a data error rather than a customer.',
+    },
+  },
+
+  {
+    id: 'VIZ-005',
+    domain: 'VIZ',
+    module: 'Distributions & Relationships',
+    topic: 'Scatter plots, correlation and overplotting',
+    title: 'Scatter Plots and Correlation',
+    slug: 'scatter-plots-and-correlation',
+    difficulty: 2,
+    estimatedMinutes: 35,
+    prerequisites: ['VIZ-002', 'VIZ-004'],
+    related: ['VIZ-001', 'VIZ-004'],
+    tags: ['scatter', 'correlation', 'pearson', 'spearman', 'overplotting', 'hexbin', 'causation'],
+
+    learningObjectives: [
+      'Read a scatter plot for four separate things: direction, form, strength and unusual observations',
+      'State what Pearson correlation measures, what it cannot measure, and why it must be shown next to the picture',
+      'Diagnose overplotting and fix it with transparency, sampling, hexbin or a two-dimensional density',
+      'Explain concretely why correlation does not establish causation, naming confounding, reverse causation and selection',
+      'Use a residual plot to check whether a fitted relationship has captured the structure in a scatter',
+    ],
+
+    terminology: [
+      {
+        term: 'Scatter plot',
+        definition:
+          'A chart placing one mark per observation at coordinates given by two variables. It is the only common chart that shows the joint distribution of two variables without aggregating.',
+        simple: 'One dot per row, positioned by two of its columns.',
+      },
+      {
+        term: 'Pearson correlation',
+        definition:
+          'The covariance of two variables divided by the product of their standard deviations. It lies in [-1, 1] and measures the strength of the linear relationship only.',
+        simple: 'A number from -1 to 1 saying how close the dots are to a single straight line.',
+      },
+      {
+        term: 'Spearman correlation',
+        definition:
+          'Pearson correlation applied to the ranks rather than the values. It measures monotonic association, so it detects a curved but consistently increasing relationship that Pearson understates.',
+        simple: 'Correlation of the orderings rather than the numbers — catches "always rising" even when the rise is curved.',
+      },
+      {
+        term: 'Overplotting',
+        definition:
+          'The condition where marks overlap so heavily that regions of very different density render identically, making the chart a poor representation of the data.',
+        simple: 'So many dots on top of each other that you cannot tell a hundred from a hundred thousand.',
+      },
+      {
+        term: 'Confounder',
+        definition:
+          'A third variable that causally influences both of two correlated variables, producing an association between them that would vanish if it were held fixed.',
+        simple: 'A hidden cause behind both things, making them move together without either causing the other.',
+      },
+      {
+        term: 'Heteroscedasticity',
+        definition:
+          'Non-constant spread of the response across the range of the predictor. In a scatter it looks like a fan or cone; it violates an assumption of ordinary least squares inference.',
+        simple: 'The spread of the dots widens as you move right — a fan shape rather than a band.',
+      },
+    ],
+
+    simpleExplanation:
+      'A scatter plot puts one dot on the page for every row of your data, using one column to decide how far right the dot goes and another to decide how far up. That is all it does, and it is the most informative chart there is, because nothing has been summarised away. You read it by asking four questions in order. Which way does the cloud lean — up to the right, down, or not at all? That is direction. What shape does it make — a straight band, a curve, a fan that widens, two separate blobs? That is form. How tightly do the dots hug that shape? That is strength. And is anything sitting on its own, far from the rest? Those are the points worth investigating. People often skip straight to a single number, the correlation coefficient, and that number only answers the third question and only if the answer to the second was "a straight line". A perfect U-shaped relationship scores a correlation of zero, which does not mean there is no relationship; it means there is no straight one. Always look at the dots, then look at the number, and never the number alone.',
+
+    whyItExists:
+      'Two variables have a joint distribution, and no pair of one-dimensional summaries can describe it: two columns can each be perfectly normal while together forming a ring, a cross or two separated clusters. The scatter plot exists because it is the only cheap rendering of that joint structure, and because the alternative — reading a correlation coefficient — collapses the whole relationship into a single number that measures only straightness.',
+
+    analogy: {
+      scenario:
+        "Imagine mapping where every tree in a forest stands, one pin per tree on a large map. Stand back and you see instantly whether the trees line up along a river, cluster in two groves with a clearing between them, thin out towards the ridge, or scatter with no pattern at all. Now imagine instead being handed a single number: the average compass bearing from the forest centre to a tree. That number is real and computable, and it tells you almost nothing — it would be identical for a forest that lines the river and a forest that forms a perfect circle, because the circle's bearings cancel out.",
+      mapping: [
+        { from: 'One pin per tree on the map', to: 'One mark per observation in a scatter plot' },
+        { from: 'Trees lining up along the river', to: 'A strong relationship with a clear form' },
+        { from: 'Two groves with a clearing between', to: 'Two clusters — usually two subpopulations in one dataset' },
+        { from: 'The single average bearing', to: 'The Pearson correlation coefficient' },
+        { from: 'The circle whose bearings cancel to zero', to: 'A symmetric non-linear relationship with r near zero' },
+        { from: 'Pins so dense they become one dark blob', to: 'Overplotting, where density information is lost' },
+      ],
+      bridge:
+        'The bearing and the correlation fail in the same way and for the same reason: both are averages over directions, and an average of directions that oppose each other is zero regardless of how strong each direction is. Pearson r is literally the average of the products of standardised deviations, so a relationship that goes down on the left and up on the right contributes negative and positive products that cancel. This is why a scatter plot is not a nicer way of presenting the correlation; it is strictly more information, and the coefficient is a lossy summary of it.',
+      limitations:
+        'The forest map is trustworthy at any density because the pins are physically separated, whereas a scatter plot of a million rows genuinely stops being faithful — ten points and ten thousand points paint the same black region. That is the failure the transparency, sampling and hexbin techniques in this unit exist to fix.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'Reading a scatter plot in four passes',
+        caption: 'Do them in this order. Most people jump to strength and skip form, which is where the modelling decisions live.',
+        steps: [
+          { label: 'Direction', detail: 'Does the cloud rise to the right, fall, or neither? This is the only question the sign of r answers.' },
+          { label: 'Form', detail: 'Straight band, curve, fan, step, ring, two clusters? Form decides the model family and whether r is even meaningful.' },
+          { label: 'Strength', detail: 'How tightly do points hug that form? A tight curve is a strong relationship even when r is near zero.' },
+          { label: 'Unusual points', detail: 'Outliers in y, high-leverage points far out in x, and whole clusters sitting apart from the rest.' },
+          { label: 'Density', detail: 'Ask whether you are seeing points or seeing saturation. If the middle is solid, the chart is hiding its own sample size.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Fixing overplotting: four techniques and their trade-offs',
+        caption: 'The right choice depends on how many rows you have and whether you need individual points to remain visible.',
+        columns: ['Technique', 'How', 'Good for', 'Cost'],
+        rows: [
+          ['Transparency', 'alpha=0.05 to 0.3, often with smaller marker size', 'Up to roughly 50,000 points', 'Dense cores still saturate to solid; hard to compare densities numerically'],
+          ['Random sampling', 'df.sample(5000) before plotting', 'Any size; keeps a true scatter with individual points', 'Rare events and tails are thinned out, sometimes to nothing'],
+          ['Hexbin', 'ax.hexbin(x, y, gridsize=50) with a colourbar', 'Hundreds of thousands to millions of rows', 'Individual outliers vanish into a bin of count one; needs a colourbar to be readable'],
+          ['2-D density contours', 'sns.kdeplot(x=..., y=..., levels=...)', 'Showing the shape of the bulk, overlaying groups', 'Smooths across boundaries and can invent structure, exactly as a 1-D KDE does'],
+          ['Jitter', 'Add small random noise to discrete coordinates', 'Integer or categorical coordinates stacking on the same point', 'Displaces the data slightly, so it must be small and disclosed'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'What the correlation coefficient does and does not tell you',
+        caption: 'Every item on the right is a reason the coefficient must be read next to the picture.',
+        left: {
+          heading: 'r tells you',
+          points: [
+            'The sign of the linear trend: rises or falls',
+            'How tightly points cluster around the best straight line',
+            'A scale-free number, unchanged by unit changes or affine rescaling',
+            'r squared: the fraction of variance in y explained by a linear fit on x',
+          ],
+        },
+        right: {
+          heading: 'r does not tell you',
+          points: [
+            'Whether the relationship is straight at all — a parabola can score zero',
+            'The slope: r = 0.9 is consistent with a slope of 0.001 or 1000',
+            'Whether one or two points are producing the whole result',
+            'Whether the cloud is one population or several with different trends',
+            'Anything whatsoever about causation or direction of influence',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Why a correlation exists: five explanations, only one of them causal',
+        caption: 'Before claiming X causes Y, you have to rule out the other four.',
+        columns: ['Explanation', 'Example', 'How you would tell'],
+        rows: [
+          ['X causes Y', 'More training epochs lowers training loss', 'Intervene: change X deliberately and see whether Y moves'],
+          ['Y causes X', 'Hospitals with more staff have sicker patients — severity drives staffing', 'Check the time ordering and the mechanism'],
+          ['A confounder causes both', 'Ice-cream sales and drowning both rise with summer temperature', 'Condition on the suspected confounder and see whether the association survives'],
+          ['Selection effect', 'Among admitted students, test scores and grades correlate negatively', 'Ask how the sample was selected and whether selection depends on both variables'],
+          ['Coincidence', 'Two unrelated series both trending upward over a decade', 'Test out of sample, on a different period or population'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Which chart shows a relationship',
+        caption: 'Compare the scatter against the alternatives for relationship questions with different data types.',
+        widget: 'chart-chooser',
+      },
+    ],
+
+    formalDefinition:
+      'A scatter plot maps each observation of a bivariate sample to a point in the plane using position on two common scales, rendering the empirical joint distribution without aggregation. The Pearson correlation coefficient is the cosine of the angle between the two mean-centred data vectors, equivalently the covariance normalised by both standard deviations; it is invariant under separate positive affine transformations of each variable and is a complete summary of dependence only for jointly normal data.',
+
+    math: {
+      intuition:
+        'Correlation has a geometric meaning that makes its limits obvious. Centre both variables by subtracting their means, and treat each as a vector in n-dimensional space with one coordinate per observation. Then r is exactly the cosine of the angle between those two vectors. Cosine is 1 when they point the same way, -1 when opposite, and 0 when perpendicular. Perpendicular does not mean unrelated — it means that, after centring, the two vectors have no common direction. A parabola produces a y vector that is perpendicular to the x vector even though y is a deterministic function of x, and that is the whole reason r = 0 does not imply independence. Squaring r gives the fraction of variance in y that a straight-line fit on x accounts for, which is why r = 0.5 corresponds to only a quarter of the variance explained.',
+      formulas: [
+        {
+          latex: 'r = \\frac{\\operatorname{cov}(x, y)}{s_x s_y} = \\frac{\\sum_i (x_i - \\bar{x})(y_i - \\bar{y})}{\\sqrt{\\sum_i (x_i - \\bar{x})^2}\\sqrt{\\sum_i (y_i - \\bar{y})^2}}',
+          name: 'Pearson correlation coefficient',
+          meaning:
+            'Covariance rescaled so it cannot depend on units. It is the cosine of the angle between the two mean-centred data vectors, so it lies between -1 and 1 by the Cauchy-Schwarz inequality.',
+          variables: [
+            { symbol: 'x_i, y_i', meaning: 'the paired observations' },
+            { symbol: '\\bar{x}, \\bar{y}', meaning: 'the sample means' },
+            { symbol: 's_x, s_y', meaning: 'the sample standard deviations' },
+            { symbol: '\\operatorname{cov}(x, y)', meaning: 'the sample covariance, the mean product of the deviations' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'r^2 = 1 - \\frac{\\sum_i (y_i - \\hat{y}_i)^2}{\\sum_i (y_i - \\bar{y})^2}',
+          name: 'Coefficient of determination',
+          meaning:
+            'The fraction of the variance of y removed by a least-squares straight line on x. A correlation of 0.5 leaves 75 percent of the variance unexplained, which is why moderate correlations are weaker than they sound.',
+          variables: [
+            { symbol: '\\hat{y}_i', meaning: 'the value predicted by the fitted line' },
+            { symbol: 'y_i - \\hat{y}_i', meaning: 'the residual for observation i' },
+            { symbol: '\\bar{y}', meaning: 'the mean of y, the prediction you would make with no model' },
+          ],
+          category: 'regression',
+        },
+        {
+          latex: '\\hat{\\beta} = r\\,\\frac{s_y}{s_x}, \\qquad \\hat{\\alpha} = \\bar{y} - \\hat{\\beta}\\bar{x}',
+          name: 'Least-squares slope from the correlation',
+          meaning:
+            'Shows precisely why r is not a slope: the same r gives a different slope for every ratio of standard deviations. Change the unit of y from euros to cents and the slope multiplies by a hundred while r does not move.',
+          variables: [
+            { symbol: '\\hat{\\beta}', meaning: 'the fitted slope' },
+            { symbol: '\\hat{\\alpha}', meaning: 'the fitted intercept' },
+            { symbol: 's_y / s_x', meaning: 'the ratio of spreads, which carries all the unit dependence' },
+          ],
+          category: 'regression',
+        },
+        {
+          latex: '\\rho_s = r_{\\,\\operatorname{rank}(x),\\ \\operatorname{rank}(y)}',
+          name: 'Spearman rank correlation',
+          meaning:
+            'Pearson correlation of the ranks. It reaches 1 for any strictly increasing relationship, however curved, and is far less sensitive to a single extreme value.',
+          variables: [
+            { symbol: '\\operatorname{rank}(x)', meaning: 'the position of each x value in sorted order, ties averaged' },
+            { symbol: '\\rho_s', meaning: "Spearman's rho, in [-1, 1]" },
+          ],
+          category: 'statistics',
+        },
+      ],
+      derivation: [
+        'Centre both variables: u = x - mean(x) and v = y - mean(y), each a vector of length n.',
+        'The sample covariance is the inner product of u and v divided by n - 1.',
+        'Dividing by the two standard deviations normalises both vectors to unit length.',
+        'What remains is the inner product of two unit vectors, which is the cosine of the angle between them.',
+        'Cosine lies in [-1, 1], giving the range of r, and equals zero exactly when the centred vectors are orthogonal — which is a statement about linear independence, not about independence.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Computing r by hand on five points, then seeing what it missed',
+      setup:
+        'Five observations: (1, 2), (2, 4), (3, 5), (4, 4), (5, 2). We will compute the correlation and then look at what the number omitted.',
+      steps: [
+        {
+          label: 'Means',
+          detail: 'The x values sum to 15 and the y values sum to 17, so mean x is 3.0 and mean y is 3.4.',
+          latex: '\\bar{x} = 3.0,\\quad \\bar{y} = 3.4',
+        },
+        {
+          label: 'Deviations',
+          detail:
+            'x deviations are -2, -1, 0, 1, 2. y deviations are -1.4, 0.6, 1.6, 0.6, -1.4. Notice the y deviations are symmetric about the middle point while the x deviations are antisymmetric.',
+        },
+        {
+          label: 'Products and sums',
+          detail:
+            'The products are 2.8, -0.6, 0.0, 0.6 and -2.8, which sum to exactly zero. The first and last cancel, and so do the second and fourth.',
+          latex: '\\sum_i (x_i - \\bar{x})(y_i - \\bar{y}) = 0',
+        },
+        {
+          label: 'The coefficient',
+          detail:
+            'The numerator is zero, so r = 0 regardless of the denominators. Reported alone, this says "no linear relationship", and a careless reader hears "no relationship".',
+          latex: 'r = \\frac{0}{\\sqrt{10}\\,\\sqrt{7.2}} = 0',
+        },
+        {
+          label: 'What the scatter shows',
+          detail:
+            'The five points form a clean inverted V: y rises from 2 to 5 as x goes 1 to 3, then falls symmetrically back to 2. y is very nearly a deterministic function of x. The relationship is strong, and Pearson r is exactly zero because the rising and falling halves contribute products that cancel.',
+        },
+        {
+          label: 'What would have caught it',
+          detail:
+            "Spearman is also near zero here, because the relationship is not monotonic. What catches it is the picture, a quadratic fit, or a dependence measure such as mutual information or distance correlation. There is no scalar substitute for looking.",
+        },
+      ],
+      conclusion:
+        'Five points are enough to show that a correlation of exactly zero is compatible with an almost deterministic relationship. This is the same failure as Anscombe dataset II, reduced to arithmetic you can do in your head, and it is why every reported correlation in this curriculum appears beside its scatter plot.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Four relationships, four correlations, one lesson',
+        runnable: true,
+        code: `import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import pearsonr, spearmanr
+
+rng = np.random.default_rng(13)
+n = 300
+x = rng.uniform(-3, 3, n)
+
+cases = {
+    "linear, noisy":      (x, 1.4 * x + rng.normal(0, 1.5, n)),
+    "quadratic":          (x, x ** 2 + rng.normal(0, 0.6, n)),
+    "monotonic but curved": (x, np.exp(x) + rng.normal(0, 1.0, n)),
+    "linear + 1 outlier":  (np.append(x[:n - 1], 14.0), np.append(0.05 * x[:n - 1] + rng.normal(0, 1, n - 1), 22.0)),
+}
+
+fig, axes = plt.subplots(1, 4, figsize=(15, 3.8), layout="constrained")
+for ax, (name, (xi, yi)) in zip(axes, cases.items()):
+    r, _ = pearsonr(xi, yi)
+    rho, _ = spearmanr(xi, yi)
+    ax.scatter(xi, yi, s=14, alpha=0.6, color="#264653")
+    ax.set_title(f"{name}\\nr = {r:+.2f}   rho = {rho:+.2f}", fontsize=10)
+    ax.set_xlabel("x")
+    ax.grid(alpha=0.25)
+    print(f"{name:>22}  pearson {r:+.3f}   spearman {rho:+.3f}")
+axes[0].set_ylabel("y")
+fig.suptitle("The coefficient is never the whole story", fontsize=13)
+fig.savefig("correlation_cases.png", dpi=200)`,
+        output: `         linear, noisy  pearson +0.823   spearman +0.818
+             quadratic  pearson -0.019   spearman -0.031
+   monotonic but curved  pearson +0.762   spearman +0.988
+     linear + 1 outlier  pearson +0.905   spearman +0.079`,
+        explanation:
+          'Four panels, and each one breaks a different intuition. The first is an honest upward band with r = 0.82, the case everyone imagines. The second is an unmistakable parabola — a clean U of points — with r = -0.02: the relationship is nearly deterministic and Pearson reports nothing, because the falling left half and the rising right half cancel. The third is a curve that only ever rises, where Pearson says 0.76 but Spearman says 0.99, which is the signature of a strong monotonic relationship that is not straight. The fourth is the most alarming: a shapeless blob of 299 points near the origin with essentially no trend, plus one point at (14, 22) far to the upper right, and that single point alone produces r = 0.91. Spearman, working on ranks, is unmoved at 0.08. Print the coefficient if you like, but never without the panel above it.',
+      },
+      {
+        language: 'python',
+        title: 'Overplotting and three ways out of it',
+        runnable: true,
+        code: `import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(2)
+n = 400_000
+x = rng.normal(0, 1, n)
+y = 0.7 * x + rng.normal(0, 0.7, n)
+# A small, genuinely interesting second cluster that overplotting will hide.
+x = np.concatenate([x, rng.normal(3.2, 0.25, 2000)])
+y = np.concatenate([y, rng.normal(-2.5, 0.25, 2000)])
+
+fig, axes = plt.subplots(1, 4, figsize=(16, 4), sharex=True, sharey=True, layout="constrained")
+
+axes[0].scatter(x, y, s=6)
+axes[0].set_title(f"Naive scatter, n = {x.size:,}")
+
+axes[1].scatter(x, y, s=3, alpha=0.02, color="#264653")
+axes[1].set_title("alpha = 0.02")
+
+idx = rng.choice(x.size, 4000, replace=False)
+axes[2].scatter(x[idx], y[idx], s=8, alpha=0.5, color="#264653")
+axes[2].set_title("random sample of 4,000")
+
+hb = axes[3].hexbin(x, y, gridsize=60, bins="log", cmap="viridis")
+axes[3].set_title("hexbin, log colour scale")
+fig.colorbar(hb, ax=axes[3], label="log10(count)")
+
+for ax in axes:
+    ax.set_xlabel("x")
+axes[0].set_ylabel("y")
+fig.suptitle("The same 402,000 points drawn four ways")
+fig.savefig("overplotting.png", dpi=200)
+
+print("points:", x.size, "| second cluster size:", 2000, f"({2000 / x.size:.2%} of rows)")`,
+        output: `points: 402000 | second cluster size: 2000 (0.50%)`,
+        explanation:
+          'Four panels of identical data. The first is a solid navy lozenge: every mark is opaque, so 400,000 points and 4,000 points render the same, and the only readable feature is the outline. The second, at alpha 0.02, recovers the density gradient — the core is dark and the edges fade — and the small second cluster at roughly (3.2, -2.5) appears as a faint but distinct smudge. The third plots a random sample of 4,000 points; the main cloud is rendered beautifully with individual points visible, but the rare cluster is now represented by only about twenty points and is easy to miss, which is the cost of sampling. The fourth, hexbin with a log colour scale, is the most quantitative: the colourbar means you can read approximate counts off the page rather than guessing from ink density, and the second cluster shows as a small patch of distinctly coloured hexagons. For hundreds of thousands of rows, hexbin plus a colourbar is usually the right default, with a sampled scatter beside it when individual points matter.',
+      },
+      {
+        language: 'python',
+        title: 'Confounding: the same data tells opposite stories',
+        runnable: true,
+        code: `import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import pearsonr
+
+rng = np.random.default_rng(8)
+
+# Three hospitals. Severity drives both the treatment dose and the bad outcome.
+rows = []
+for hospital, severity, dose_shift in [("A", 1.0, 0.0), ("B", 2.0, 2.0), ("C", 3.0, 4.0)]:
+    n = 200
+    dose = rng.normal(5 + dose_shift, 1.0, n)
+    # Within a hospital, MORE dose genuinely REDUCES the bad outcome.
+    outcome = 10 + 4 * severity - 0.8 * (dose - dose.mean()) + rng.normal(0, 1.0, n)
+    rows.append((hospital, dose, outcome))
+
+all_dose = np.concatenate([d for _, d, _ in rows])
+all_outcome = np.concatenate([o for _, _, o in rows])
+r_pooled, _ = pearsonr(all_dose, all_outcome)
+
+fig, (ax_pool, ax_split) = plt.subplots(1, 2, figsize=(11.5, 4.5), sharey=True, layout="constrained")
+
+ax_pool.scatter(all_dose, all_outcome, s=12, alpha=0.5, color="#6b7280")
+b, a = np.polyfit(all_dose, all_outcome, 1)
+grid = np.linspace(all_dose.min(), all_dose.max(), 50)
+ax_pool.plot(grid, a + b * grid, color="#e76f51", linewidth=2)
+ax_pool.set_title(f"Pooled: r = {r_pooled:+.2f}, slope = {b:+.2f}")
+ax_pool.set_xlabel("dose (mg)")
+ax_pool.set_ylabel("bad-outcome score")
+
+for (hospital, dose, outcome), colour in zip(rows, ["#264653", "#2a9d8f", "#e9c46a"]):
+    r_h, _ = pearsonr(dose, outcome)
+    b_h, a_h = np.polyfit(dose, outcome, 1)
+    g = np.linspace(dose.min(), dose.max(), 30)
+    ax_split.scatter(dose, outcome, s=12, alpha=0.6, color=colour, label=f"hospital {hospital}: r = {r_h:+.2f}")
+    ax_split.plot(g, a_h + b_h * g, color=colour, linewidth=2)
+    print(f"hospital {hospital}: r = {r_h:+.3f}  slope = {b_h:+.3f}")
+ax_split.set_title("Split by hospital: every slope is negative")
+ax_split.set_xlabel("dose (mg)")
+ax_split.legend(frameon=False, fontsize=9)
+
+print(f"pooled:     r = {r_pooled:+.3f}  slope = {b:+.3f}")
+fig.suptitle("Simpson's paradox: pooling reverses the sign of the effect")
+fig.savefig("confounding.png", dpi=200)`,
+        output: `hospital A: r = -0.617  slope = -0.797
+hospital B: r = -0.593  slope = -0.766
+hospital C: r = -0.596  slope = -0.822
+pooled:     r = +0.868  slope = +1.686`,
+        explanation:
+          'The left panel is a single grey cloud sloping clearly upward, with a red line through it and a correlation of +0.87 — read naively it says higher doses cause worse outcomes. The right panel is the same 600 points coloured by hospital, and it shows three separate elongated clusters arranged like a staircase going up to the right, each of which slopes downward internally. Every within-hospital correlation is about -0.6. Nothing in the data changed; only the grouping variable was revealed. The mechanism is that severity drives both the dose prescribed and the outcome, so severity is a confounder, and pooling across hospitals with different severity mixes reverses the apparent sign. This is Simpson paradox, and it is the single most concrete reason to distrust a correlation computed on pooled observational data.',
+      },
+      {
+        language: 'python',
+        title: 'Residual plots: checking a fit with a scatter',
+        runnable: true,
+        code: `import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(21)
+x = rng.uniform(0, 10, 400)
+y_true = 3 + 0.4 * x ** 2                      # the real relationship curves
+y = y_true + rng.normal(0, 1 + 0.35 * x, 400)  # and the noise grows with x
+
+slope, intercept = np.polyfit(x, y, 1)
+pred = intercept + slope * x
+resid = y - pred
+
+fig, (ax_fit, ax_res) = plt.subplots(1, 2, figsize=(11.5, 4.3), layout="constrained")
+
+ax_fit.scatter(x, y, s=14, alpha=0.6, color="#264653")
+grid = np.linspace(0, 10, 50)
+ax_fit.plot(grid, intercept + slope * grid, color="#e76f51", linewidth=2)
+ax_fit.set_xlabel("x")
+ax_fit.set_ylabel("y")
+ax_fit.set_title(f"Linear fit, r^2 = {np.corrcoef(x, y)[0, 1] ** 2:.2f}")
+
+ax_res.axhline(0, color="grey", linewidth=1)
+ax_res.scatter(x, resid, s=14, alpha=0.6, color="#2a9d8f")
+ax_res.set_xlabel("x")
+ax_res.set_ylabel("residual")
+ax_res.set_title("Residuals: curvature AND a widening fan")
+
+fig.suptitle("A respectable r-squared hiding two violated assumptions")
+fig.savefig("residuals.png", dpi=200)
+
+left = resid[x < 3].mean()
+mid = resid[(x >= 3) & (x < 7)].mean()
+right = resid[x >= 7].mean()
+print(f"mean residual  x<3: {left:+.2f}   3<=x<7: {mid:+.2f}   x>=7: {right:+.2f}")
+print(f"residual sd    x<3: {resid[x < 3].std():.2f}   x>=7: {resid[x >= 7].std():.2f}")`,
+        output: `mean residual  x<3: +2.31   3<=x<7: -2.74   x>=7: +2.26
+residual sd    x<3: 1.55   x>=7: 3.74`,
+        explanation:
+          'The left panel shows a rising cloud with a straight red line through it and an r-squared around 0.87, which in isolation looks like a good fit. The right panel is where the truth lives. The residuals form an unmistakable U: positive on the left, dipping well below zero in the middle, positive again on the right — the printed means of +2.31, -2.74 and +2.26 quantify exactly that. Structure in residuals means the functional form is wrong, and this U is the signature of fitting a line to a curve. Simultaneously the vertical spread of the residuals widens from left to right, a fan shape, and the printed standard deviations of 1.55 and 3.74 confirm the noise more than doubles across the range. That is heteroscedasticity, which leaves the fitted slope unbiased but makes the usual standard errors and prediction intervals wrong. Two violated assumptions, both invisible in r-squared, both obvious in one scatter of residuals — which is why a residual plot is the standard next step after any fit.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Feature selection during model development',
+        usage:
+          'Plotting each candidate feature against the target reveals which relationships are linear, which need a transform and which are step functions. A correlation table alone would rank a strong quadratic feature as useless.',
+      },
+      {
+        context: 'Predicted versus actual for a regression model',
+        usage:
+          'A scatter of predictions against truth with a 45-degree reference line is the standard diagnostic. Points bending away from the line at the extremes reveal the model regressing towards the mean, which no aggregate error metric shows.',
+      },
+      {
+        context: 'A/B test analysis on observational slices',
+        usage:
+          'Splitting results by device, country or cohort routinely reverses an effect visible in the pooled data, because assignment and outcome share a confounder. This is Simpson paradox appearing in ordinary product analytics.',
+      },
+      {
+        context: 'Embedding inspection in NLP and computer vision',
+        usage:
+          'Two-dimensional projections of learned embeddings are scatter plots of hundreds of thousands of points, where transparency or density binning is mandatory and where apparent clusters must be checked against labels before being believed.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'matplotlib', role: 'ax.scatter with s, alpha and c; ax.hexbin with a colourbar for large data.' },
+      { tool: 'SciPy', role: 'scipy.stats.pearsonr and spearmanr return the coefficient and a p-value; disagreement between them signals a monotonic but non-linear relationship.' },
+      { tool: 'pandas', role: 'df.corr() builds a correlation matrix and df.corr(method="spearman") the rank version; both need scatter plots beside them to be safely interpreted.' },
+      { tool: 'seaborn', role: 'sns.regplot adds a fit with a confidence band; sns.pairplot draws every pairwise scatter at once.' },
+      { tool: 'scikit-learn', role: 'PredictionErrorDisplay draws predicted-versus-actual and residual scatter plots directly from a fitted estimator.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Reporting a correlation without showing the scatter plot',
+        why: 'r measures only straightness. A parabola scores zero, a single leverage point can manufacture 0.9 from noise, and two subgroups with opposite trends can average to nothing.',
+        fix: 'Put the coefficient in the panel title of the scatter it came from. If a chart is not feasible, at least report Pearson and Spearman together and treat a large gap between them as a warning.',
+      },
+      {
+        mistake: 'Reading r as a slope or as a measure of effect size',
+        why: 'The slope is r times the ratio of standard deviations, so the same r is compatible with any slope at all. Changing the units of y changes the slope and leaves r untouched.',
+        fix: 'Report the slope with its units when the question is "how much does y change", and reserve r for "how tightly do the points follow a line".',
+      },
+      {
+        mistake: 'Plotting a million points as an opaque scatter',
+        why: 'Once marks saturate, the chart shows the support of the data but not its density, so a region with ten points and a region with ten thousand look identical.',
+        fix: 'Use alpha with a small marker size, sample and say how many you sampled, or use hexbin with a colourbar. State the technique in the caption so the reader knows what they are looking at.',
+      },
+      {
+        mistake: 'Inferring causation from an observational correlation',
+        why: 'The association is equally consistent with reverse causation, a confounder driving both, selection into the sample, or coincidence. Simpson paradox shows the pooled sign can even be the opposite of every subgroup sign.',
+        fix: 'Name the alternative explanations explicitly and test what you can: condition on suspected confounders, check time ordering, and where possible run an intervention such as a randomised experiment.',
+      },
+      {
+        mistake: 'Stopping at r-squared instead of plotting residuals',
+        why: 'r-squared is a single aggregate that a curved fit and a fan-shaped noise pattern can both survive with a respectable value, as the residual example in this unit shows.',
+        fix: 'Always plot residuals against the predictor and against the fitted values. Structureless residuals are the check; any visible pattern is signal the model missed.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'A feature has a Pearson correlation of 0.02 with the target. Should you drop it?',
+        answer:
+          'Not on that basis alone. Pearson r measures the strength of the linear relationship only, so a feature that is strongly but non-monotonically related — a U shape, a threshold effect, an interaction that only matters in one region — will score near zero while carrying real signal. The first thing I would do is plot the feature against the target; the second is compute Spearman, since a big gap between Pearson and Spearman indicates a monotonic but curved relationship; the third is check whether the relationship exists within subgroups but cancels when pooled. I would also remember that tree-based models and neural networks capture non-linear structure that a correlation screen cannot see, so a correlation filter is a crude feature-selection tool at best. Mutual information or a model-based importance measure is a better screen if one is needed.',
+        followUp:
+          'A strong answer mentions that a feature can also be valuable through interactions while having near-zero marginal association with the target.',
+      },
+      {
+        level: 'intermediate',
+        question: 'You have 5 million rows and need a scatter plot of two features. How do you produce something honest?',
+        answer:
+          'An opaque scatter of 5 million points is not a plot of the data, it is a plot of its support, so I would not draw one. My default is hexbin with a logarithmic colour scale and a colourbar, because the count per hexagon is then readable rather than guessed from ink density, and the log scale keeps both the dense core and the sparse tails legible. Alongside it I would draw a random sample of a few thousand points as a true scatter, because individual points and outliers matter and hexbin absorbs an isolated point into a bin of count one. I would state the sample size in the caption. If the goal is comparing groups rather than seeing raw density, two-dimensional KDE contours per group are more legible than either, provided I remember that the smoothing can invent structure near boundaries. What I would avoid is silently downsampling and presenting the result as if it were everything.',
+        followUp:
+          'Mentioning that rare but important events — fraud cases, failures — are exactly what sampling destroys, and should be overlaid separately, distinguishes a careful answer.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Explain Simpson paradox to a product manager who has just seen that heavier feature usage correlates with higher churn.',
+        answer:
+          'The pooled number can have the opposite sign from every group inside it. Suppose enterprise customers use the feature heavily and churn at 3 percent, while self-serve customers use it lightly and churn at 1 percent. Within each group, more usage genuinely predicts lower churn — the engaged users stay. But because the heavy-usage group also has the higher baseline churn for unrelated reasons, pooling the two makes usage look harmful. The account type is a confounder: it influences both usage and churn, so comparing across it compares apples with oranges. The practical response is to segment before drawing any conclusion, check whether the sign holds within every segment, and if we actually want to know whether the feature causes retention, run an experiment: randomise who gets nudged towards the feature, because randomisation is what breaks the link between the treatment and the confounder.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Compute Pearson r by hand for the points (1, 5), (2, 3), (3, 1), (4, 3), (5, 5), then describe the scatter and say what the coefficient missed.',
+        hint: 'Find the mean of each variable, form the deviation products, and look at whether they cancel.',
+        solution:
+          'Mean x is 3, mean y is 3.4. The x deviations are -2, -1, 0, 1, 2 and the y deviations are 1.6, -0.4, -2.4, -0.4, 1.6. The products are -3.2, 0.4, 0.0, -0.4 and 3.2, which sum to exactly zero, so r = 0.\n\nThe scatter is a clean V: y falls from 5 to 1 as x goes from 1 to 3, then rises symmetrically back to 5. y is a deterministic function of x apart from nothing at all — the relationship is perfect. Pearson reports zero because the descending half contributes negative products and the ascending half contributes matching positive ones. Spearman is also near zero, since the relationship is not monotonic. The general lesson: r = 0 rules out a straight-line relationship and rules out nothing else.',
+      },
+      {
+        prompt:
+          'Write code that draws a predicted-versus-actual scatter for a regression model, including a 45-degree reference line, the r-squared in the title, and a treatment for overplotting suitable for 200,000 predictions.',
+        hint: 'Equal axis limits and aspect ratio are what make the 45-degree line meaningful.',
+        language: 'python',
+        starterCode:
+          'import numpy as np\nimport matplotlib.pyplot as plt\n\n# y_true and y_pred are arrays of length 200_000\n',
+        solution:
+          'lo = min(y_true.min(), y_pred.min())\nhi = max(y_true.max(), y_pred.max())\n\nfig, ax = plt.subplots(figsize=(5.5, 5.5), layout="constrained")\nhb = ax.hexbin(y_true, y_pred, gridsize=70, bins="log", cmap="viridis", extent=(lo, hi, lo, hi))\nax.plot([lo, hi], [lo, hi], color="#e76f51", linewidth=1.5, linestyle="--", label="perfect prediction")\nr2 = 1 - ((y_true - y_pred) ** 2).sum() / ((y_true - y_true.mean()) ** 2).sum()\nax.set_xlim(lo, hi)\nax.set_ylim(lo, hi)\nax.set_aspect("equal")\nax.set_xlabel("actual")\nax.set_ylabel("predicted")\nax.set_title(f"Predicted vs actual, r^2 = {r2:.3f}")\nax.legend(frameon=False)\nfig.colorbar(hb, ax=ax, label="log10(count)")\n\nThree details carry the weight. Equal limits and set_aspect("equal") make the 45-degree line a genuine reference rather than an arbitrary diagonal. Hexbin with a log colour scale handles 200,000 points honestly and gives readable counts. And plotting predicted on the vertical axis against actual on the horizontal is the convention that makes the classic pathology visible: if the cloud is flatter than the reference line, the model is regressing towards the mean and under-predicting at both extremes.',
+      },
+      {
+        prompt:
+          'A study reports that people who own more books score higher on reading tests, r = 0.45, and concludes that buying books raises reading ability. Give three non-causal explanations and describe a study design that would settle it.',
+        hint: 'Work through the table of five explanations: reverse causation, confounding, selection, coincidence.',
+        solution:
+          'Three alternatives. Reverse causation: people who read well enjoy reading, so they buy more books — ability drives ownership rather than the other way round. Confounding: household income and parental education plausibly raise both book ownership and test scores, so the association could disappear entirely once you condition on them. Selection: if the sample came from library members or an online survey about reading, both variables influenced who is in the sample, which can manufacture or distort an association.\n\nTo settle it you need an intervention that breaks the link between book ownership and everything else. Randomly assign a book-provision programme: give a randomly chosen half of comparable households a substantial number of age-appropriate books, change nothing else, and measure reading scores after a fixed period. Randomisation makes the treated and untreated groups equal in expectation on income, parental education, prior ability and every unmeasured confounder, so a difference in outcomes is attributable to the books. Where randomisation is impossible, a natural experiment or a difference-in-differences design around a policy change is the next best evidence, and an observational correlation of 0.45 — which corresponds to only 20 percent of variance explained — is the weakest.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'VIZ-005-q1',
+        type: 'mcq',
+        concept: 'correlation limits',
+        prompt: 'A scatter plot shows a clean, tight parabola. What is the approximate Pearson correlation?',
+        options: [
+          'Near zero, because the relationship is strong but not linear',
+          'Near +1, because the relationship is strong',
+          'Near -1, because the curve turns downward on one side',
+          'Undefined, because the relationship is not a function',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Pearson measures only the straight-line component. In a symmetric parabola the falling half and the rising half contribute deviation products that cancel, giving r near zero despite an almost deterministic relationship. This is Anscombe dataset II in one sentence.',
+      },
+      {
+        id: 'VIZ-005-q2',
+        type: 'truefalse',
+        concept: 'r is not a slope',
+        prompt: 'A correlation of 0.9 means y increases by 0.9 units for each unit increase in x.',
+        answer: false,
+        explanation:
+          'The slope is r times the ratio of the standard deviations, so the same r is compatible with any slope. Change the units of y from metres to millimetres and the slope multiplies by a thousand while r does not move at all.',
+      },
+      {
+        id: 'VIZ-005-q3',
+        type: 'match',
+        concept: 'overplotting fixes',
+        prompt: 'Match each overplotting technique to its main drawback.',
+        pairs: [
+          { left: 'Transparency (low alpha)', right: 'Very dense cores still saturate to solid colour' },
+          { left: 'Random sampling', right: 'Rare events and tail points are thinned away' },
+          { left: 'Hexbin with a colourbar', right: 'An isolated outlier becomes one bin of count one and disappears' },
+          { left: '2-D KDE contours', right: 'Smoothing can invent structure and leak past hard boundaries' },
+        ],
+        explanation:
+          'Each technique trades away something different: alpha keeps every point but loses resolution in the core, sampling keeps individual points but loses rare ones, hexbin quantifies density but loses individuals, and KDE gives a clean shape but is an estimate rather than the data.',
+      },
+      {
+        id: 'VIZ-005-q4',
+        type: 'numeric',
+        concept: 'r-squared',
+        prompt: 'A feature has Pearson correlation 0.5 with the target. What fraction of the variance in the target does a straight-line fit on that feature explain? Give a decimal.',
+        answer: 0.25,
+        tolerance: 0.001,
+        explanation:
+          'The explained fraction is r squared, so 0.5 squared is 0.25 — a quarter of the variance, leaving three quarters unexplained. This is why moderate correlations sound far stronger than they are, and why r should usually be reported alongside r squared.',
+      },
+      {
+        id: 'VIZ-005-q5',
+        type: 'multi',
+        concept: 'causation',
+        prompt: 'Cities with more police officers report more crime. Which explanations are consistent with that correlation? Select all that apply.',
+        options: [
+          'City size confounds both: larger cities have more police and more crime',
+          'Reverse causation: higher crime leads cities to hire more police',
+          'Reporting effects: more officers means more crimes are recorded rather than committed',
+          'The correlation proves that police presence causes crime',
+          'Selection: only cities meeting a funding threshold appear in the dataset',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'Confounding by population, reverse causation, a measurement effect on recording, and selection into the sample are all consistent with the data. The only claim ruled out is the causal one, which requires an intervention or a design that breaks the link between police numbers and the alternatives.',
+      },
+      {
+        id: 'VIZ-005-q6',
+        type: 'explain',
+        concept: 'residual plots',
+        prompt: 'You fit a linear model, get r-squared of 0.87, and the residual plot shows a clear U shape that widens to the right. Explain what each feature means and what you would do.',
+        rubric: [
+          'Identifies the U shape as wrong functional form — the true relationship curves',
+          'Identifies the widening as heteroscedasticity and says what it invalidates',
+          'Proposes concrete fixes for both, such as a transform or an added term, and robust or weighted inference',
+        ],
+        sampleAnswer:
+          'The U says the model has the wrong functional form. Residuals from a well-specified model should look structureless, so a systematic pattern of positive residuals at both ends and negative in the middle means the true relationship curves and the straight line is cutting through it — the model will over-predict in the middle and under-predict at the extremes no matter how much data I add. The widening says the noise grows with x, which is heteroscedasticity; it leaves the fitted slope unbiased but makes the reported standard errors, p-values and prediction intervals wrong, and in particular too narrow where the noise is largest. For the curvature I would add a quadratic term, use a spline, or transform x or y — a log on y often fixes both problems at once when the data are positive. For the remaining non-constant spread I would use heteroscedasticity-robust standard errors or weighted least squares, and I would re-plot the residuals to confirm the structure has gone.',
+        explanation:
+          'A complete answer separates the two diagnoses, states the different consequences (biased predictions versus invalid inference), and gives a concrete remedy for each rather than just naming the problems.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'The four things to read off a scatter plot', back: 'Direction, form, strength and unusual points — plus a fifth check on whether overplotting is hiding density.' },
+      { front: 'What does Pearson r actually measure?', back: 'The strength of the linear relationship only. Geometrically it is the cosine of the angle between the two mean-centred data vectors.' },
+      { front: 'Why can r be 0 for a strong relationship?', back: 'Because a non-monotonic relationship contributes deviation products that cancel. A clean parabola has r near zero and is almost deterministic.' },
+      { front: 'Pearson versus Spearman', back: 'Pearson on the values measures linearity; Spearman on the ranks measures monotonicity. A big gap between them means the relationship is curved but consistently rising or falling.' },
+      { front: 'How do you plot a million points honestly?', back: 'Hexbin with a colourbar and a log colour scale, plus a random sample drawn as a true scatter; state the sample size in the caption.' },
+      { front: 'What does a U-shaped residual plot mean?', back: 'The functional form is wrong — a straight line has been fitted to a curved relationship. Add a term, use a spline, or transform a variable.' },
+      { front: "What is Simpson's paradox?", back: 'The pooled association can have the opposite sign to the association within every subgroup, because a confounder drives both the grouping and the outcome.' },
+      { front: 'What does r = 0.5 imply about explained variance?', back: 'r squared is 0.25, so a linear fit explains a quarter of the variance and leaves three quarters unexplained.' },
+    ],
+
+    challenge: {
+      title: 'A relationship report that refuses to be fooled',
+      brief:
+        'Write examine_relationship(x, y, group=None) that produces a three-panel figure and a printed verdict. Panel one is the scatter, drawn with the overplotting technique appropriate to the sample size (points under 5,000, alpha between 5,000 and 100,000, hexbin above), with Pearson and Spearman in the title. Panel two is the same data with a least-squares line and, if the gap between Pearson and Spearman exceeds 0.15, a quadratic fit overlaid too. Panel three is the residual plot from the linear fit with a horizontal zero line. If a group array is supplied, also compute and print the within-group correlations and flag loudly when any within-group sign differs from the pooled sign. The printed verdict must name the detected form — linear, monotonic-curved, non-monotonic, outlier-driven or none — using stated rules.',
+      language: 'python',
+      acceptanceCriteria: [
+        'The overplotting technique is selected automatically from the sample size and stated on the chart',
+        'Both Pearson and Spearman are computed and shown, and their disagreement drives the quadratic overlay',
+        'The residual panel is drawn with a zero reference line',
+        'Leverage is checked: the function reports how much r changes when the single most extreme point is removed',
+        'When a group array is supplied, a sign reversal between pooled and within-group correlations is flagged explicitly',
+      ],
+      starterCode:
+        'import numpy as np\nimport matplotlib.pyplot as plt\nfrom scipy.stats import pearsonr, spearmanr\n\n\ndef examine_relationship(x, y, group=None):\n    x, y = np.asarray(x, float), np.asarray(y, float)\n    r, _ = pearsonr(x, y)\n    rho, _ = spearmanr(x, y)\n    # Build the three panels and the printed verdict here.\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone how to read a scatter plot properly, and explain why the correlation coefficient is never a substitute for looking at one.',
+      mustCover: [
+        'A scatter plot shows the joint distribution without aggregating: direction, form, strength and unusual points',
+        'Pearson r measures only the linear component, so a curve can score zero and a single point can manufacture a high value',
+        'Overplotting makes a dense scatter unfaithful, and alpha, sampling or hexbin are the fixes',
+        'Correlation does not establish causation: confounding, reverse causation and selection are all live alternatives',
+      ],
+      bonusSignals: [
+        'mentions Spearman and what a Pearson-Spearman gap indicates',
+        'mentions residual plots as the follow-up to any fit',
+        "mentions Simpson's paradox or gives a concrete confounder",
+      ],
+      sampleExplanation:
+        'A scatter plot puts one dot per row on the page, positioned by two of its columns, and it is the most information-dense chart there is because nothing has been averaged away. Read it in four passes: which way does the cloud lean, what shape does it make, how tightly do the dots hug that shape, and is anything sitting on its own far from the rest. Now the correlation coefficient. It answers only the third question, and only if the answer to the second was "a straight line". A clean parabola — a strong, nearly deterministic relationship — has a correlation of essentially zero, because the falling half and the rising half cancel. Equally, a shapeless blob plus one far-off point can score 0.9, with that single point producing the entire result. So the coefficient goes in the title of the scatter, not instead of it. And even a genuine, strong, linear correlation says nothing about cause. Ice-cream sales and drownings move together because both rise with summer heat; police numbers and crime move together because both rise with city size. Before claiming that x causes y, you have to rule out that y causes x, that something else causes both, and that the way the sample was collected created the pattern — and the only thing that reliably settles it is intervening rather than observing.',
+    },
+  },

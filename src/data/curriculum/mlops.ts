@@ -1809,3 +1809,1498 @@ batch = client.post("/v1/predict:batch", json={"rows": rows[:64]}).json()`,
         'Calling a model over HTTP is the same idea as calling a function, except the arguments travel as text over a network. The caller sends a request with four parts: a method saying what kind of operation this is, usually POST for prediction; a path saying what is being addressed, such as `/v1/predict`; headers carrying metadata like the content type and the API key; and a body carrying the features as JSON. The server answers with a status code and a body. The status code is where beginners under-invest and it matters enormously, because the load balancer, the client\'s retry logic, the alerting and every dashboard all read it and nothing else. 2xx means it worked, 4xx means the caller sent something wrong and should not simply retry, 5xx means the server broke and a retry might help. If you return 200 with an error message inside the body, every one of those systems believes the service is perfectly healthy while it is failing every request. The reason to do any of this instead of importing the model is decoupling: consumers depend only on the shape of the request and response, so you can retrain, reframework or rehardware the model without anyone else changing a line.',
     },
   },
+
+  {
+    id: 'OPS-005',
+    domain: 'OPS',
+    module: 'Serving Models',
+    topic: 'FastAPI',
+    title: 'Serving a Model with FastAPI',
+    slug: 'serving-with-fastapi',
+    difficulty: 3,
+    estimatedMinutes: 45,
+    prerequisites: ['OPS-003', 'OPS-004'],
+    related: ['OPS-001'],
+    tags: ['fastapi', 'pydantic', 'uvicorn', 'lifespan', 'health check', 'inference', 'openapi'],
+
+    learningObjectives: [
+      'Build a working prediction service with FastAPI, from an empty file to a documented running endpoint',
+      'Load the model exactly once at startup using a lifespan handler, and explain why loading per request is catastrophic',
+      'Define Pydantic request and response models so invalid input is rejected before it reaches the model',
+      'Handle errors deliberately, returning the right status code and never leaking a stack trace',
+      'Add liveness and readiness health checks and explain what an orchestrator does with each',
+      'Run the service with uvicorn and use the auto-generated OpenAPI documentation to exercise it',
+    ],
+
+    terminology: [
+      {
+        term: 'ASGI',
+        definition:
+          'The asynchronous server interface FastAPI speaks. An ASGI server such as uvicorn accepts connections and hands each request to your application, allowing concurrency without one thread per request.',
+        simple: 'The standard plug between the web server and your Python app.',
+      },
+      {
+        term: 'Lifespan handler',
+        definition:
+          'An async context manager registered on the application that runs setup code before the server accepts traffic and teardown code as it shuts down. The correct place to load a model.',
+        simple: 'Code that runs once when the service starts and once when it stops.',
+      },
+      {
+        term: 'Pydantic model',
+        definition:
+          'A Python class declaring field names, types and constraints. FastAPI uses it to parse and validate the request body, to serialise the response, and to generate the OpenAPI schema automatically.',
+        simple: 'A typed form the incoming JSON must fill in correctly.',
+      },
+      {
+        term: 'Liveness vs readiness',
+        definition:
+          'Liveness asks "is this process alive, or should it be restarted?". Readiness asks "should traffic be sent here right now?". A service that is alive but still loading a model is live and not ready.',
+        simple: 'One check decides whether to restart you; the other decides whether to send you work.',
+      },
+      {
+        term: 'OpenAPI',
+        definition:
+          'A machine-readable JSON description of every endpoint, its parameters and its schemas. FastAPI generates it from your type hints and serves interactive documentation at `/docs`.',
+        simple: 'Documentation the framework writes for you, and that other tools can read.',
+      },
+      {
+        term: 'Worker',
+        definition:
+          'One process running your application. CPU-bound inference in Python needs several worker processes to use several cores, because threads within one process contend for the interpreter lock.',
+        simple: 'One copy of your app; more copies means more requests at once.',
+      },
+    ],
+
+    simpleExplanation:
+      "A trained model is a file and a function: given some numbers, return a score. Serving it means wrapping that function in a small web program so anyone can reach it over the network. FastAPI makes this unusually pleasant because it reads your ordinary Python type hints and does four jobs from them at once: it parses the incoming JSON, it checks every field is present and of the right type, it turns your return value back into JSON, and it writes interactive documentation you can click through in a browser. The one thing you must get right is where the model is loaded. Reading a model file takes hundreds of milliseconds or more, so if you load it inside the request handler, every single caller pays that cost and the service falls over under any real load. You load it once when the process starts, keep it in memory, and let every request reuse it. Add a health endpoint so the platform can tell whether you are ready for traffic, decide what happens when input is bad, and you have a real service.",
+
+    whyItExists:
+      'Before typed web frameworks, exposing a model meant hand-writing JSON parsing, hand-checking every field, hand-writing documentation that drifted from reality within a week, and discovering type errors deep inside the model instead of at the boundary. FastAPI removes that entire class of work by deriving validation, serialisation and documentation from the type hints you would have written anyway, so the contract in the code and the contract in the documentation cannot disagree.',
+
+    analogy: {
+      scenario:
+        "Think of a pharmacy counter. The pharmacist does not re-read the entire pharmacology textbook for each customer; she studied once, before opening, and now the knowledge is simply in her head. At the counter there is a printed form with named boxes: patient age, weight, allergy. A prescription with a missing age is handed straight back before any medicine is touched, because dispensing on a guess is worse than refusing. And there is a light above the door: off while she is still unlocking and setting up, on when she is genuinely ready to serve.",
+      mapping: [
+        { from: 'Studying once before opening', to: 'Loading the model in the lifespan handler at startup' },
+        { from: 'The form with named, mandatory boxes', to: 'The Pydantic request model' },
+        { from: 'Handing back an incomplete prescription', to: 'Returning 422 before invoking the model' },
+        { from: 'The light above the door', to: 'The readiness probe, `/ready`' },
+        { from: 'A second pharmacist at a second counter', to: 'An additional uvicorn worker process' },
+      ],
+      bridge:
+        'The pharmacist analogy pins the single most important design decision in this unit. Studying per customer is absurd for exactly the reason that loading the model per request is absurd: it is expensive, identical every time, and has nothing to do with the individual request. Everything else follows from the same principle — do expensive, request-independent work once at startup, and keep the per-request path as short as possible.',
+      limitations:
+        'A pharmacist can hold one conversation at a time; a Python process can interleave many requests but still executes Python bytecode on one core at a time, which is why real deployments run several worker processes rather than relying on async alone for CPU-bound inference.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'Startup, then every request',
+        caption: 'The expensive work happens once, on the left of the line.',
+        steps: [
+          { label: 'Process starts', detail: 'uvicorn imports your module and runs the lifespan startup block.' },
+          { label: 'Model loaded into memory', detail: 'One `joblib.load` or `torch.load`, taking anywhere from 200 ms to 30 s.' },
+          { label: '`/ready` starts returning 200', detail: 'Only now does the load balancer begin sending traffic to this instance.' },
+          { label: 'Request arrives', detail: 'Pydantic parses and validates the body; invalid input is rejected with 422.' },
+          { label: 'Inference', detail: 'The in-memory model scores the request. No file I/O on this path.' },
+          { label: 'Response serialised', detail: 'The typed response model becomes JSON, with the model version attached.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Load per request versus load at startup',
+        caption: 'The difference between a demo and a service.',
+        left: {
+          heading: 'Inside the handler (wrong)',
+          points: [
+            'Every caller pays the full load time, often 100x the inference time',
+            'Memory churns as copies are loaded and garbage collected',
+            'Throughput collapses under concurrency; disk becomes the bottleneck',
+            'A corrupt model file is discovered by a user, not by the deploy',
+          ],
+        },
+        right: {
+          heading: 'In the lifespan handler (right)',
+          points: [
+            'Loaded once per process; requests touch only memory',
+            'A failure to load stops the deploy before traffic arrives',
+            'Readiness can gate traffic until loading finishes',
+            'Predictable, flat latency under load',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Endpoints a production model service should expose',
+        columns: ['Path', 'Method', 'Purpose'],
+        rows: [
+          ['`/predict`', 'POST', 'Score one payload. Validated, versioned, logged.'],
+          ['`/predict:batch`', 'POST', 'Score many rows in one call, with an explicit maximum size.'],
+          ['`/health`', 'GET', 'Liveness: the process is running. Must not touch the model or a database.'],
+          ['`/ready`', 'GET', 'Readiness: the model is loaded and dependencies are reachable. Gates traffic.'],
+          ['`/metrics`', 'GET', 'Prometheus-format counters and histograms for latency, errors and prediction distribution.'],
+          ['`/docs`', 'GET', 'Interactive OpenAPI documentation, generated from your type hints.'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Run the service mentally, step by step',
+        caption: 'Trace what happens to a request as it passes through validation and inference.',
+        widget: 'ml-pipeline-flow',
+      },
+    ],
+
+    formalDefinition:
+      'A FastAPI inference service is an ASGI application whose lifespan scope performs one-time initialisation — deserialising the model and any preprocessing artifacts into process memory — and whose request scope applies a declared Pydantic schema to the request body, invokes the in-memory estimator, and serialises a declared response schema. Validation failures are surfaced as 422 responses generated by the framework before the handler executes, and readiness is exposed separately from liveness so that an orchestrator can gate traffic independently of restart decisions.',
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'A complete, production-shaped prediction service',
+        code: `from contextlib import asynccontextmanager
+import logging, os, time
+
+import joblib
+import numpy as np
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+
+log = logging.getLogger("churn")
+MODEL_PATH = os.environ.get("MODEL_PATH", "models/churn.joblib")
+MODEL_VERSION = os.environ.get("MODEL_VERSION", "unknown")
+
+state: dict = {"model": None}
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Runs ONCE before the server accepts traffic.
+    t0 = time.perf_counter()
+    state["model"] = joblib.load(MODEL_PATH)
+    log.info("model loaded path=%s version=%s ms=%.0f",
+             MODEL_PATH, MODEL_VERSION, (time.perf_counter() - t0) * 1000)
+    yield
+    state["model"] = None          # teardown on shutdown
+
+
+app = FastAPI(title="Churn scoring", version="1.0.0", lifespan=lifespan)
+
+
+class PredictRequest(BaseModel):
+    customer_id: str = Field(min_length=1, max_length=64)
+    tenure_months: int = Field(ge=0, le=600)
+    monthly_charges: float = Field(ge=0)
+    contract: str = Field(pattern="^(month-to-month|one-year|two-year)$")
+
+
+class PredictResponse(BaseModel):
+    customer_id: str
+    churn_probability: float
+    label: str
+    model_version: str
+
+
+@app.post("/predict", response_model=PredictResponse)
+def predict(req: PredictRequest) -> PredictResponse:
+    model = state["model"]
+    if model is None:
+        raise HTTPException(status_code=503, detail="model not loaded")
+
+    contract_code = {"month-to-month": 0, "one-year": 1, "two-year": 2}[req.contract]
+    x = np.array([[req.tenure_months, req.monthly_charges, contract_code]], dtype=float)
+
+    try:
+        p = float(model.predict_proba(x)[0, 1])
+    except Exception:
+        log.exception("inference failed customer_id=%s", req.customer_id)
+        raise HTTPException(status_code=500, detail="inference failed")
+
+    log.info("prediction customer_id=%s p=%.4f version=%s", req.customer_id, p, MODEL_VERSION)
+    return PredictResponse(
+        customer_id=req.customer_id,
+        churn_probability=round(p, 4),
+        label="at_risk" if p >= 0.5 else "safe",
+        model_version=MODEL_VERSION,
+    )
+
+
+@app.get("/health")
+def health() -> dict:
+    return {"status": "ok"}                    # liveness: cheap, no dependencies
+
+
+@app.get("/ready")
+def ready() -> JSONResponse:
+    loaded = state["model"] is not None
+    return JSONResponse({"ready": loaded}, status_code=200 if loaded else 503)
+
+
+@app.exception_handler(Exception)
+async def unhandled(request: Request, exc: Exception) -> JSONResponse:
+    log.exception("unhandled error path=%s", request.url.path)
+    return JSONResponse({"error": {"type": "internal_error"}}, status_code=500)`,
+        explanation:
+          'Read this as five decisions rather than as boilerplate. The model loads in `lifespan`, so it is deserialised once per process and every request touches memory only. The Pydantic models put constraints at the boundary, so `tenure_months: -3` never reaches the estimator — FastAPI returns 422 with a field-level message before your function runs. Errors map onto status codes deliberately: 503 while unloaded, 500 for a genuine inference failure, and the catch-all handler logs the traceback server-side while returning a body that leaks nothing. Liveness and readiness are separate endpoints, and the response carries `model_version` so any logged prediction can be attributed later.',
+      },
+      {
+        language: 'bash',
+        title: 'Running it, exercising it and measuring it',
+        code: `pip install "fastapi==0.115.0" "uvicorn[standard]==0.30.6" scikit-learn joblib
+
+# Development: reload on file change, single worker
+uvicorn app.main:app --reload --port 8000
+
+# Production: several worker processes, no reload, bounded request line
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4 --no-server-header
+
+curl -s localhost:8000/ready
+# {"ready":true}
+
+curl -s -X POST localhost:8000/predict -H "Content-Type: application/json" \\
+  -d '{"customer_id":"c_9182","tenure_months":14,"monthly_charges":79.35,"contract":"month-to-month"}'
+# {"customer_id":"c_9182","churn_probability":0.8123,"label":"at_risk","model_version":"churn-2024-09-02"}
+
+# Validation rejects bad input before the model is touched
+curl -s -X POST localhost:8000/predict -H "Content-Type: application/json" \\
+  -d '{"customer_id":"c_9182","tenure_months":-3,"monthly_charges":79.35,"contract":"weekly"}' | head -c 200
+# {"detail":[{"type":"greater_than_equal","loc":["body","tenure_months"], ...
+
+# Open http://localhost:8000/docs for the generated interactive documentation`,
+        explanation:
+          'The two uvicorn invocations differ in ways that matter. `--reload` watches the filesystem and restarts on change, which is wonderful locally and disastrous in production because it reloads the model constantly. `--workers 4` forks four processes, each with its own copy of the model in memory — so four workers with a 2 GB model needs 8 GB, which is the calculation people forget when a container starts being killed for exceeding its memory limit.',
+      },
+      {
+        language: 'python',
+        title: 'Batching, and a test that actually tests the contract',
+        code: `from fastapi.testclient import TestClient
+from pydantic import conlist
+
+class BatchRequest(BaseModel):
+    rows: conlist(PredictRequest, min_length=1, max_length=500)
+
+@app.post("/predict:batch")
+def predict_batch(req: BatchRequest) -> dict:
+    model = state["model"]
+    codes = {"month-to-month": 0, "one-year": 1, "two-year": 2}
+    X = np.array([[r.tenure_months, r.monthly_charges, codes[r.contract]] for r in req.rows])
+    probs = model.predict_proba(X)[:, 1]          # ONE vectorised call, not 500
+    return {
+        "model_version": MODEL_VERSION,
+        "predictions": [
+            {"customer_id": r.customer_id, "churn_probability": round(float(p), 4)}
+            for r, p in zip(req.rows, probs)
+        ],
+    }
+
+
+def test_predict_contract():
+    with TestClient(app) as client:              # 'with' runs the lifespan, loading the model
+        r = client.post("/predict", json={
+            "customer_id": "c_1", "tenure_months": 14,
+            "monthly_charges": 79.35, "contract": "month-to-month",
+        })
+        assert r.status_code == 200
+        body = r.json()
+        assert 0.0 <= body["churn_probability"] <= 1.0
+        assert body["model_version"]
+
+def test_rejects_negative_tenure():
+    with TestClient(app) as client:
+        r = client.post("/predict", json={
+            "customer_id": "c_1", "tenure_months": -3,
+            "monthly_charges": 79.35, "contract": "month-to-month",
+        })
+        assert r.status_code == 422`,
+        explanation:
+          'Batching matters because framework overhead and per-call model overhead are paid once instead of five hundred times; a vectorised `predict_proba` on a 500-row matrix is typically an order of magnitude faster than 500 single-row calls. The `max_length=500` cap is not decoration — without it a caller can send a million rows and exhaust your memory. In the tests, note the `with` block: `TestClient` only runs the lifespan handler when used as a context manager, and forgetting that is why people see `model is None` in tests that work fine in the running service.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'The demo that died at launch',
+        usage:
+          'A service loaded a 400 MB transformer inside the handler. It was perfect in a demo with one user and collapsed at ten concurrent requests, with p99 latency above 20 seconds and the container repeatedly killed for memory. Moving the load into the lifespan handler took four lines and fixed it entirely.',
+      },
+      {
+        context: 'Readiness preventing a bad deploy',
+        usage:
+          'A new image shipped with the model path wrong. Because `/ready` returned 503, the orchestrator never routed traffic to the new pods and the rollout halted automatically. Without a readiness probe the same mistake would have served 500s to every user for the length of the rollout.',
+      },
+      {
+        context: 'Validation catching a client bug on day one',
+        usage:
+          'A mobile client started sending `"tenure_months": "14"` as a string after a refactor. A typed schema returned 422 with the exact field, and the client team fixed it in an hour. Without validation the value would have been coerced or imputed and predictions would have been quietly wrong.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'FastAPI', role: 'The application framework: routing, validation, serialisation and generated documentation from type hints.' },
+      { tool: 'Pydantic', role: 'Defines and enforces the request and response contract, and produces the field-level error messages callers rely on.' },
+      { tool: 'uvicorn / gunicorn', role: 'The ASGI server and process manager that actually accepts connections and runs your workers.' },
+      { tool: 'pytest + TestClient', role: 'Exercises the real application in-process, so contract tests run in CI on every pull request.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Loading the model inside the request handler',
+        why: 'Deserialising a model costs from hundreds of milliseconds to tens of seconds. Paying it per request makes latency dominated by file I/O, causes memory to churn, and turns a load failure into a user-visible error rather than a failed deploy.',
+        fix: 'Load once in the lifespan handler and store it in module state. Verify with a log line showing the load happened exactly once per process start.',
+      },
+      {
+        mistake: 'Declaring a synchronous, CPU-bound handler as `async def`',
+        why: 'A plain `def` handler is run by FastAPI in a thread pool, but an `async def` handler runs directly on the event loop. Blocking CPU work inside it stalls the loop, so every other in-flight request waits, and concurrency silently collapses to one.',
+        fix: 'Use `def` for synchronous inference and let FastAPI offload it, or keep `async def` strictly for awaiting I/O. If you must do heavy work in async code, push it to `run_in_executor`.',
+      },
+      {
+        mistake: 'Returning the exception text to the caller',
+        why: 'Tracebacks leak file paths, library versions and sometimes data values, which is both an information disclosure risk and useless to the caller, who cannot act on it.',
+        fix: 'Log the traceback server-side with `log.exception`, return a stable error shape with a generic message and a correlation id, and let the caller quote that id in a bug report.',
+      },
+      {
+        mistake: 'One health endpoint used for both liveness and readiness',
+        why: 'If the single check touches the model or a database, a transient dependency failure makes the orchestrator restart healthy processes, turning a small problem into a restart storm. If it checks nothing, traffic is routed to instances still loading.',
+        fix: 'Keep `/health` trivial and dependency-free for liveness; make `/ready` assert that the model is loaded and dependencies are reachable, and wire that one to traffic gating.',
+      },
+      {
+        mistake: 'No limit on batch size or payload size',
+        why: 'An unbounded `rows` list lets one caller allocate gigabytes in your process, and the resulting out-of-memory kill takes down every other in-flight request on that worker.',
+        fix: 'Cap the list with `conlist(..., max_length=N)`, set a request body size limit at the proxy, and return 422 rather than truncating silently.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Where should a model be loaded in a FastAPI service, and what goes wrong if you get it wrong?',
+        answer:
+          'In the lifespan startup block, once per process, stored in module-level state that handlers read. Loading inside the handler means every request pays the deserialisation cost, which for a real model is often a hundred times the inference cost, so latency is dominated by disk I/O and throughput collapses under concurrency; memory also churns as copies are created and collected. There is a second, less obvious benefit: loading at startup makes a bad model path or a corrupt artifact fail the deploy rather than fail a user, and combined with a readiness probe that returns 503 until loading completes, the orchestrator simply never routes traffic to a broken instance. The cost to remember is that each worker process holds its own copy, so memory scales with worker count.',
+        followUp:
+          'A strong candidate mentions that module-level global loading at import time also works but makes testing and multiple-worker startup harder to reason about, and that lifespan gives you a matching teardown hook.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'A colleague writes `async def predict(...)` around a scikit-learn call to "make it faster". What do you tell them?',
+        answer:
+          'It will make it slower under load, not faster. `async def` handlers execute on the event loop itself; any blocking CPU work inside one holds the loop and prevents every other request from progressing, so effective concurrency drops to one. FastAPI already handles this correctly for synchronous handlers: a plain `def` endpoint is dispatched to a thread pool, so the loop stays free to accept and dispatch other requests. Async is the right tool when the handler awaits I/O — a feature store lookup, another HTTP call — because then the loop can do useful work during the wait. For CPU-bound inference the real levers are batching, a faster runtime such as ONNX Runtime, and running multiple worker processes, since the global interpreter lock means threads alone will not use multiple cores for Python-level work.',
+        followUp:
+          'The signal is understanding that async solves I/O concurrency, not CPU parallelism, and that process count is the lever for the latter.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'What is the difference between liveness and readiness, and how would you configure them for a service with a 30-second model load?',
+        answer:
+          'Liveness answers "should this process be killed and restarted?"; readiness answers "should traffic be routed here right now?". They must be separate, because a service that is alive but still loading needs traffic withheld, not a restart. For a 30-second load I make `/health` trivial — return 200 as soon as the process serves HTTP, touching nothing — and give the liveness probe a generous initial delay and failure threshold so the slow start never triggers a restart loop. `/ready` returns 503 until the model object exists and any critical dependency responds, and is polled frequently so the instance joins the pool promptly once loading finishes. That combination means a rollout with a bad artifact stalls with zero user-visible errors, because unready instances never receive requests.',
+        followUp:
+          'Mentioning startup probes as the cleaner way to express "do not judge me for the first N seconds" shows familiarity with real orchestrator configuration.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Take the service above and add a `/predict` field `promo_code` that is optional and may be absent for existing callers. Show the schema change and say why it is not a breaking change.',
+        hint: 'What does Pydantic do with a field that has a default?',
+        language: 'python',
+        solution:
+          'Add `promo_code: str | None = Field(default=None, max_length=32)` to `PredictRequest`. Because it has a default, requests that omit it still validate, so every existing caller continues to work unchanged — the change is additive. Inside the handler, map `None` to whatever value the model was trained to treat as "no promotion". Making it required instead would immediately 422 every existing caller at the moment of deploy, which is why a required new field belongs behind a new version of the path.',
+      },
+      {
+        prompt:
+          'Your service returns 200 for everything, including when the model file is missing at startup. Rewrite the startup and health behaviour so a missing model cannot reach users.',
+        hint: 'Two mechanisms: fail loudly at startup, and gate traffic on readiness.',
+        language: 'python',
+        solution:
+          'In the lifespan handler, let `joblib.load` raise rather than catching it — an exception during startup stops uvicorn and fails the deploy, which is exactly what you want. If you prefer the process to stay up for diagnostics, catch it, log with `log.exception`, leave `state["model"] = None`, and make `/ready` return 503 while it is None. The orchestrator then never routes traffic to that instance and the rollout halts. The wrong answer is catching the error and continuing to serve, because then `/predict` fails at request time and users see 500s that the deployment system believes are healthy.',
+      },
+      {
+        prompt:
+          'Measure whether batching helps your model. Describe the experiment and what you expect to see.',
+        hint: 'Compare per-row cost, not total time.',
+        solution:
+          'Score 1,000 rows two ways: 1,000 single-row POSTs and 20 batched POSTs of 50 rows, both against a warm service, and record total wall time and p95 per request. Divide by rows to get cost per row. Expect the batched path to be several times cheaper per row for tree models and often an order of magnitude cheaper for neural networks, because HTTP overhead, validation overhead and per-call framework overhead are amortised and the underlying library computes on a matrix rather than a vector. Plot per-row cost against batch size and you will see it fall steeply and then flatten; the flattening point, balanced against how long a caller will wait to fill a batch, is the batch size to choose.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'OPS-005-q1',
+        type: 'mcq',
+        concept: 'model loading',
+        prompt: 'Where should a model be deserialised in a FastAPI service?',
+        options: [
+          'Once in the lifespan startup handler, stored in process memory',
+          'At the top of each request handler so it is always fresh',
+          'Inside a Pydantic validator',
+          'In a background thread on every request',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Loading is expensive and request-independent, so it belongs at startup. That also turns a bad artifact into a failed deploy rather than a user-visible error, especially when paired with a readiness probe.',
+      },
+      {
+        id: 'OPS-005-q2',
+        type: 'truefalse',
+        concept: 'async semantics',
+        prompt: 'Marking a CPU-bound inference handler `async def` increases the number of requests the service can process concurrently.',
+        answer: false,
+        explanation:
+          'It decreases it. An `async def` handler runs on the event loop, so blocking CPU work stalls every other in-flight request. A plain `def` handler is dispatched to a thread pool and leaves the loop free.',
+      },
+      {
+        id: 'OPS-005-q3',
+        type: 'code-output',
+        language: 'bash',
+        concept: 'validation',
+        prompt: 'Given the `PredictRequest` schema above, what status does this request produce?',
+        code: 'curl -s -o /dev/null -w "%{http_code}" -X POST localhost:8000/predict \\\n  -H "Content-Type: application/json" \\\n  -d \'{"customer_id":"c_1","tenure_months":14,"monthly_charges":79.35,"contract":"weekly"}\'',
+        options: ['422', '200', '400', '500'],
+        answerIndex: 0,
+        explanation:
+          'The JSON parses, so it is not 400, but `contract` fails the pattern constraint, so FastAPI rejects it with 422 and a field-level message before the handler runs. The model is never touched.',
+      },
+      {
+        id: 'OPS-005-q4',
+        type: 'match',
+        concept: 'service anatomy',
+        prompt: 'Match each component to its responsibility.',
+        pairs: [
+          { left: 'Lifespan handler', right: 'One-time startup and shutdown work, such as loading the model' },
+          { left: 'Pydantic model', right: 'Parsing, validating and documenting the request and response shape' },
+          { left: '`/ready`', right: 'Tells the load balancer whether to send traffic to this instance' },
+          { left: '`/health`', right: 'Tells the orchestrator whether the process should be restarted' },
+          { left: 'uvicorn `--workers`', right: 'How many processes, and therefore cores, serve requests' },
+        ],
+        explanation:
+          'Each of these exists because a different actor needs a different answer: the framework, the caller, the load balancer, the orchestrator and the operating system scheduler.',
+      },
+      {
+        id: 'OPS-005-q5',
+        type: 'multi',
+        concept: 'production readiness',
+        prompt: 'Which of these belong in a production model service? Select all that apply.',
+        options: [
+          'A maximum batch size enforced by the schema',
+          'The model version in every response',
+          '`--reload` enabled so new models are picked up automatically',
+          'A catch-all exception handler that logs the traceback and returns a generic body',
+          'Separate liveness and readiness endpoints',
+        ],
+        answerIndices: [0, 1, 3, 4],
+        explanation:
+          '`--reload` watches the filesystem and restarts the process on change. It is a development convenience that in production causes repeated model reloads and unpredictable restarts.',
+      },
+      {
+        id: 'OPS-005-q6',
+        type: 'explain',
+        concept: 'validation at the boundary',
+        prompt: 'Explain why rejecting bad input at the API boundary is better than letting the model handle it.',
+        rubric: [
+          'Notes that models do not raise on out-of-range input; they return a confident wrong answer',
+          'Notes that the caller gets an actionable, field-level error instead of a mysterious number',
+          'Mentions that the error is cheap, fast and keeps error metrics honest',
+        ],
+        sampleAnswer:
+          'A model given nonsense does not complain. Pass a negative tenure or a string where a number belongs and, if it is coerced at all, the estimator returns a perfectly confident probability computed from a value that never existed. Nobody upstream can tell the difference between that and a real prediction, so the bug survives for weeks. Validating at the boundary converts a silent data-quality problem into a loud, immediate, field-level 422 that tells the caller exactly which field was wrong and why. It is also cheap — the request is rejected before any inference happens — and it keeps monitoring honest, because bad requests land in the 4xx bucket where they belong rather than being counted as successful predictions.',
+        explanation:
+          'The key insight is that machine learning models fail silently, so the type system at the boundary is doing safety work the model cannot do for itself.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Where does the model get loaded in FastAPI?', back: 'In the lifespan startup handler, once per process, stored in module state. Never inside the request handler.' },
+      { front: 'Liveness vs readiness', back: 'Liveness decides whether to restart the process; readiness decides whether to route traffic. A loading service is live but not ready.' },
+      { front: 'Why is `async def` wrong for CPU-bound inference?', back: 'It runs on the event loop, so blocking work stalls every other request. Plain `def` handlers are dispatched to a thread pool instead.' },
+      { front: 'What does a Pydantic request model buy you?', back: 'Parsing, type and range validation, automatic 422 responses with field-level detail, response serialisation and OpenAPI documentation.' },
+      { front: 'What does `uvicorn --workers 4` cost in memory?', back: 'Four independent processes, each holding its own copy of the model — four times the model memory.' },
+      { front: 'Why cap batch size in the schema?', back: 'An unbounded list lets one caller allocate gigabytes and trigger an out-of-memory kill that takes down every other in-flight request.' },
+    ],
+
+    challenge: {
+      title: 'Ship a model service you would be willing to be paged for',
+      brief:
+        'Take any model you have trained and build a FastAPI service around it with: lifespan loading, typed request and response models with real constraints, a single and a batch endpoint with a size cap, separate `/health` and `/ready`, structured log lines for every prediction including the model version, and a catch-all handler that never leaks a traceback. Write pytest contract tests covering a success, a validation failure and the not-ready case. Finally, measure p50 and p95 latency at batch sizes 1, 8 and 64 and write down the numbers.',
+      language: 'python',
+      acceptanceCriteria: [
+        'The model is deserialised exactly once per process, proven by a startup log line',
+        'Invalid input returns 422 with a field-level message and never reaches the model',
+        '`/ready` returns 503 until the model is loaded; `/health` touches no dependencies',
+        'Batch endpoint enforces a maximum size and uses one vectorised inference call',
+        'Tests cover success, validation failure and the unready state, and pass in CI',
+        'Measured p50 and p95 latency for three batch sizes are recorded',
+      ],
+      starterCode: 'from contextlib import asynccontextmanager\nfrom fastapi import FastAPI\n\nstate: dict = {"model": None}\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Walk a colleague through turning a trained model into a running HTTP service. Explain the startup/request split, validation, error handling and health checks, and why each one exists.',
+      mustCover: [
+        'The model is loaded once at startup, not per request, because loading is expensive and request-independent',
+        'Typed request and response models validate input before inference and generate documentation',
+        'Errors map onto status codes deliberately, and tracebacks stay server-side',
+        'Liveness and readiness answer different questions for different systems',
+      ],
+      bonusSignals: ['mentions worker processes and memory per worker', 'mentions batching', 'explains why async is not a speed-up for CPU-bound work'],
+      sampleExplanation:
+        'Serving a model is mostly about deciding what happens once and what happens per request. Reading the model file is expensive and identical every time, so it belongs in the startup hook: the process loads it, keeps it in memory, and only then starts telling the load balancer it is ready. Each request then does the minimum — parse the JSON, check it against a typed schema, run inference on the in-memory model, return a typed response. The schema is doing more work than it looks: it rejects a negative tenure or a misspelled category with a 422 and a field-level message before the model can quietly produce a confident wrong answer, and FastAPI turns the same type hints into interactive documentation, so the docs cannot drift from the code. Errors are mapped on purpose — 503 while loading, 422 for bad input, 500 for a genuine fault — with the traceback logged server-side and never returned. Two health endpoints exist because two different systems are asking different questions: the orchestrator wants to know whether to restart you, and the load balancer wants to know whether to send you traffic. And when you scale up with worker processes, remember each one holds its own copy of the model, so memory multiplies.',
+    },
+  },
+
+  {
+    id: 'OPS-006',
+    domain: 'OPS',
+    module: 'Serving Models',
+    topic: 'Demos',
+    title: 'Streamlit and Quick Demos',
+    slug: 'streamlit-demos',
+    difficulty: 2,
+    estimatedMinutes: 30,
+    prerequisites: ['OPS-003'],
+    related: ['OPS-005'],
+    tags: ['streamlit', 'demo', 'caching', 'widgets', 'prototype', 'stakeholders'],
+
+    learningObjectives: [
+      'Decide when a demo app is the right tool and when it is the wrong one',
+      'Explain Streamlit\'s rerun-on-interaction execution model and predict what it does to expensive code',
+      'Use `st.cache_data` and `st.cache_resource` correctly, and say which one a model goes in',
+      'Build a small interactive app with inputs, a prediction and an explanation of the result',
+      'Recognise the point at which a demo should graduate to an API plus a real frontend',
+    ],
+
+    terminology: [
+      {
+        term: 'Rerun model',
+        definition:
+          'Streamlit executes the entire script from the first line on every interaction. There is no callback graph and no component tree to update; state that must survive lives in `st.session_state` or in a cache.',
+        simple: 'Touch any control and the whole script runs again from the top.',
+      },
+      {
+        term: '`st.cache_resource`',
+        definition:
+          'Caches a single shared object across reruns, sessions and users — a loaded model, a database connection. The object is not copied, so it must be safe to share.',
+        simple: 'Load the heavy thing once and let everyone share it.',
+      },
+      {
+        term: '`st.cache_data`',
+        definition:
+          'Caches the return value of a function keyed by its arguments, returning a copy each time. Intended for data: query results, loaded frames, computed aggregates.',
+        simple: 'Remember the answer for these particular inputs.',
+      },
+      {
+        term: '`st.session_state`',
+        definition:
+          'A per-browser-session dictionary that survives reruns. The only correct place for values that must persist across interactions, such as a running conversation or a counter.',
+        simple: 'A memory that belongs to one user\'s tab.',
+      },
+      {
+        term: 'Demo debt',
+        definition:
+          'The accumulated cost of a prototype that quietly became load-bearing: no tests, no auth, no versioning, no scaling story, and a growing set of stakeholders who depend on it.',
+        simple: 'What you owe when a throwaway app stops being throwaway.',
+      },
+    ],
+
+    simpleExplanation:
+      "Most of the value of a model is invisible until somebody can poke at it. A notebook full of metrics convinces almost nobody, whereas a small web page where a product manager types in a customer and sees a prediction change produces real questions within minutes. Streamlit exists for exactly that: you write an ordinary Python script, use a few functions to put a slider or a text box on the page, and it becomes a web app without any HTML, JavaScript or routing. The one idea you must understand is how it runs. There is no event system. Every time a user moves a slider, Streamlit reruns your entire script from line one, with the widget now returning its new value. That model is beautifully simple and also a trap: if line three loads a 500 MB model, it reloads on every keystroke. The fix is caching — you mark the expensive loading function so its result is kept between runs. Understand rerun plus cache and you understand Streamlit.",
+
+    whyItExists:
+      'Getting feedback on a model used to require a frontend engineer, an API and a sprint, which meant most models were evaluated only by the person who built them. Streamlit collapses that to an afternoon by letting a data scientist write a script and get a shareable interface, so the expensive conversation with domain experts happens while the model can still be changed cheaply.',
+
+    analogy: {
+      scenario:
+        "Think of a whiteboard mock-up of a shop counter used to test a new checkout flow. You can move the card reader, redraw the queue line, and ask three customers to walk through it before anything is built in wood and steel. It is deliberately cheap and deliberately temporary. Nobody bolts the whiteboard to the floor and starts taking real payments through it — but that is exactly what happens to demos that quietly become the way the team does their job.",
+      mapping: [
+        { from: 'The whiteboard mock-up', to: 'The Streamlit app' },
+        { from: 'Walking three customers through it', to: 'Showing stakeholders a live model and collecting reactions' },
+        { from: 'Redrawing a line in thirty seconds', to: 'Editing a Python script and hitting save' },
+        { from: 'Bolting the whiteboard to the floor', to: 'Letting a demo become the production interface' },
+        { from: 'The actual counter built afterwards', to: 'A FastAPI service plus a proper frontend' },
+      ],
+      bridge:
+        'The analogy carries because the value of both is speed of iteration, and the danger of both is durability they were never designed for. Concretely: Streamlit reruns your script per interaction, keeps no request-level concurrency story beyond a process per user session, and has no built-in authentication or contract. Those are perfectly good trade-offs for a mock-up and unacceptable ones for a system other teams depend on, which is why "graduate the demo" is a real engineering decision with a real trigger.',
+      limitations:
+        'A whiteboard is obviously temporary; a Streamlit app looks like a finished product to a stakeholder, which is precisely why it accumulates dependants faster than a mock-up ever would.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'What happens when a user moves a slider',
+        caption: 'There is no partial update. The script runs again, top to bottom.',
+        steps: [
+          { label: 'User changes a widget', detail: 'The browser sends the new value to the Streamlit server.' },
+          { label: 'The whole script reruns', detail: 'From line one. Every statement executes again.' },
+          { label: 'Cached calls return instantly', detail: '`st.cache_resource` hands back the already-loaded model without re-executing the function body.' },
+          { label: 'Widgets return their current values', detail: '`st.slider(...)` now returns the value the user chose, not the default.' },
+          { label: 'The page is re-rendered', detail: 'Streamlit diffs the produced elements against the previous run and updates the browser.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'The two caches, and how to choose',
+        caption: 'Picking the wrong one is the most common Streamlit bug.',
+        left: {
+          heading: '`st.cache_resource`',
+          points: [
+            'One shared object for the whole server',
+            'Returns the same instance, not a copy',
+            'For models, tokenisers, database connections, HTTP clients',
+            'The object must be safe to share between users',
+          ],
+        },
+        right: {
+          heading: '`st.cache_data`',
+          points: [
+            'Keyed by the function arguments',
+            'Returns a copy, so mutating the result cannot corrupt the cache',
+            'For query results, DataFrames, computed aggregates',
+            'Use `ttl=` when the underlying data changes',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Demo or service?',
+        columns: ['Signal', 'Streamlit is fine', 'Time to build a real service'],
+        rows: [
+          ['Audience', 'A handful of colleagues', 'External users, or another system calling it'],
+          ['Access', 'Anyone with the link, on the internal network', 'Per-user authentication and authorisation required'],
+          ['Consumers', 'Humans clicking', 'Programs needing a stable contract'],
+          ['Load', 'A few concurrent sessions', 'Sustained concurrency or strict latency budgets'],
+          ['Consequences', 'A wrong number prompts a conversation', 'A wrong number changes a customer\'s bill'],
+          ['Lifetime', 'Weeks, then deleted', 'Owned, versioned and on-call for years'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'Streamlit is a Python framework in which the user interface is expressed as the side effect of executing a script top to bottom. Each client interaction triggers a complete re-execution of the script within a per-session context; widget functions return the current client-side value on each run, memoisation decorators short-circuit expensive computation across runs, and `st.session_state` provides the only mutable per-session persistence. The framework diffs the produced element tree between runs and patches the browser accordingly.',
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'A churn demo with correct caching',
+        code: `import joblib
+import pandas as pd
+import streamlit as st
+
+st.set_page_config(page_title="Churn explorer", layout="wide")
+
+
+@st.cache_resource          # one shared model for the whole server
+def load_model():
+    return joblib.load("models/churn.joblib")
+
+
+@st.cache_data(ttl=600)     # keyed by arguments, refreshed every 10 minutes
+def load_customers(segment: str) -> pd.DataFrame:
+    return pd.read_parquet(f"data/customers_{segment}.parquet")
+
+
+model = load_model()
+
+st.title("Churn risk explorer")
+st.caption("Prototype. Numbers are indicative, not a system of record.")
+
+with st.sidebar:
+    segment = st.selectbox("Segment", ["retail", "business"])
+    tenure = st.slider("Tenure (months)", 0, 72, 14)
+    charges = st.number_input("Monthly charges", 0.0, 500.0, 79.35, step=0.05)
+    contract = st.radio("Contract", ["month-to-month", "one-year", "two-year"])
+
+codes = {"month-to-month": 0, "one-year": 1, "two-year": 2}
+prob = float(model.predict_proba([[tenure, charges, codes[contract]]])[0, 1])
+
+left, right = st.columns(2)
+left.metric("Churn probability", f"{prob:.1%}")
+right.metric("Decision", "At risk" if prob >= 0.5 else "Safe")
+st.progress(min(prob, 1.0))
+
+st.subheader("Comparable customers")
+st.dataframe(load_customers(segment).head(20), use_container_width=True)`,
+        explanation:
+          'Every line here runs again each time the slider moves — which is fine, because the two expensive lines are behind caches. `load_model` uses `cache_resource` because a model is a single shared object that nobody should copy per user; `load_customers` uses `cache_data` because the result is data keyed by an argument and each caller should get its own copy to mutate safely. Swap the two decorators and you get either a model reloaded per segment or a DataFrame shared and quietly mutated across users.',
+      },
+      {
+        language: 'python',
+        title: 'Session state, and calling a real API instead of importing the model',
+        code: `import httpx
+import streamlit as st
+
+if "history" not in st.session_state:
+    st.session_state.history = []          # survives reruns; per browser session
+
+
+@st.cache_resource
+def client() -> httpx.Client:
+    return httpx.Client(base_url="https://churn.internal", timeout=5.0)
+
+
+customer_id = st.text_input("Customer id")
+
+if st.button("Score") and customer_id:
+    try:
+        r = client().post("/v1/predict", json={"customer_id": customer_id,
+                                               "tenure_months": 14,
+                                               "monthly_charges": 79.35,
+                                               "contract": "month-to-month"})
+        r.raise_for_status()
+        st.session_state.history.append(r.json())
+    except httpx.HTTPStatusError as e:
+        st.error(f"Service returned {e.response.status_code}")
+    except httpx.TimeoutException:
+        st.warning("Scoring service timed out; try again")
+
+for row in reversed(st.session_state.history[-10:]):
+    st.write(f"{row['customer_id']}: {row['churn_probability']:.2%} "
+             f"(model {row['model_version']})")`,
+        explanation:
+          'Two patterns worth copying. The history list lives in `st.session_state` because an ordinary Python list would be recreated empty on every rerun — this is the single most common beginner confusion. And the app calls the FastAPI service rather than importing the model: the demo and production then share one model version, one preprocessing path and one set of logs, so a number a stakeholder sees in the demo is genuinely the number the system would produce.',
+      },
+      {
+        language: 'bash',
+        title: 'Running and sharing it',
+        code: `pip install "streamlit==1.38.0"
+streamlit run app.py                    # opens on http://localhost:8501
+
+# Bind for colleagues on the same network, no auto-open, no telemetry prompt
+streamlit run app.py \\
+  --server.address 0.0.0.0 \\
+  --server.port 8501 \\
+  --server.headless true \\
+  --browser.gatherUsageStats false
+
+# Clear caches without restarting when the model file changes
+# (or press "C" in the running app, then Rerun)`,
+        explanation:
+          'Note what is missing: there is no authentication flag, because Streamlit has no built-in per-user auth. Anything sensitive must sit behind a reverse proxy or an identity-aware proxy, and that absence is one of the clearest signals that the app has outgrown the tool. Clearing the cache matters too — a cached model does not notice that you replaced the file on disk.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'A demo that changed the model spec',
+        usage:
+          'A fraud team showed an analyst a Streamlit page for twenty minutes. She immediately said the model was flagging legitimate seasonal spikes, which no offline metric had revealed because the evaluation set was sampled uniformly. That single conversation reshaped the feature set — and it required an interface, not a notebook.',
+      },
+      {
+        context: 'The demo that became load-bearing',
+        usage:
+          'An internal "quick tool" for scoring uploaded spreadsheets ended up used daily by fifteen people in operations, with no auth, no audit trail and no owner. Migrating it after the fact cost far more than building an API would have, which is why teams now agree a graduation trigger in advance.',
+      },
+      {
+        context: 'Demo and service sharing one model',
+        usage:
+          'A team pointed their Streamlit app at the same `/v1/predict` endpoint the product uses. When a stakeholder disputed a number, it could be traced to a specific `model_version` in the service logs rather than to a possibly stale copy of the model sitting next to the demo.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'Streamlit', role: 'Turns a script into a shareable interface in an afternoon, which is how model feedback gets collected early.' },
+      { tool: 'Gradio', role: 'A close alternative, especially strong for single-model input/output demos and for embedding in model hubs.' },
+      { tool: 'FastAPI', role: 'The service the demo should call, so that the demo and the product cannot disagree about which model is live.' },
+      { tool: 'Docker', role: 'Packages the demo so colleagues run it without recreating your environment.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Loading the model at the top of the script without a cache',
+        why: 'The script reruns on every interaction, so a 500 MB model is deserialised each time a slider moves. The app feels broken and the machine runs out of memory under two users.',
+        fix: 'Put the load behind `@st.cache_resource`. Confirm it worked by printing inside the function — you should see the message exactly once.',
+      },
+      {
+        mistake: 'Using `st.cache_data` for a model or a database connection',
+        why: '`cache_data` returns a copy of the cached value, so a large model is duplicated per call and unpicklable objects such as connections fail outright.',
+        fix: 'Use `cache_resource` for singletons and `cache_data` for data keyed by arguments. The question to ask is "should everyone share one instance, or should each caller get its own copy?".',
+      },
+      {
+        mistake: 'Keeping state in an ordinary variable',
+        why: 'Every rerun re-executes the assignment, so `history = []` resets on every interaction and the value the user just added disappears immediately.',
+        fix: 'Initialise once with `if "history" not in st.session_state` and mutate `st.session_state.history` thereafter.',
+      },
+      {
+        mistake: 'Letting a demo become the production interface',
+        why: 'There is no authentication, no request contract, no tests, no rollback and no scaling story. Every one of those gaps becomes an incident once people depend on it.',
+        fix: 'Agree a graduation trigger in advance — an external user, a second calling system, or any consequence beyond a conversation — and at that point move the model behind an API and build a proper frontend.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'Explain Streamlit\'s execution model and one bug it causes for newcomers.',
+        answer:
+          'Streamlit reruns the entire script from the top on every interaction; widget calls simply return their current values on the new run. There is no callback or component tree, which is what makes the code read like a plain script. The bug this causes constantly is state that resets: writing `history = []` at the top means it is reinitialised on every rerun, so anything appended vanishes the moment the user touches another control. The fix is `st.session_state`, which persists for the browser session. The same model explains the performance trap: expensive work at the top of the script executes on every interaction unless it is memoised with `st.cache_resource` or `st.cache_data`.',
+        followUp:
+          'A strong answer notes that the rerun model is a deliberate trade — it removes an entire class of state-synchronisation bugs that component frameworks have, at the cost of needing explicit caching.',
+      },
+      {
+        level: 'intermediate',
+        question: 'When would you refuse to build something in Streamlit?',
+        answer:
+          'When the consumer is a program rather than a person, because they need a stable versioned contract, not a rendered page. When per-user authentication and authorisation are required, since there is nothing built in and bolting on a proxy is weaker than designing for it. When latency or concurrency matter, because the model is a session per user rather than a tuned request pipeline. And when a wrong number has consequences beyond prompting a conversation — anything that touches billing, eligibility or a customer-facing decision needs tests, audit and rollback that a demo script does not have. In those cases I would put the model behind a service and, if humans still need an interface, build a small frontend against the same endpoint so the demo and the product cannot diverge.',
+        followUp:
+          'Naming a concrete graduation trigger agreed in advance is the answer of someone who has watched a prototype become load-bearing.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Your Streamlit demo and the production API give different predictions for the same customer. How do you find out why?',
+        answer:
+          'Almost always they are not running the same thing. I would first compare model identity rather than model behaviour: log the artifact hash or registry version in both, since the demo usually holds a local copy of the model that is weeks behind the deployed one, or a cached object from before the file was replaced. If the versions match, the difference is in preprocessing — the demo typically re-implements featurisation inline, so a different category encoding, a different imputation default or a different column order produces a different input vector from the same user input. The structural fix is to stop duplicating: have the demo call the production endpoint, so there is exactly one model and one featurisation path, and the demo becomes a thin client whose only job is to render.',
+        followUp:
+          'This is a small instance of training-serving skew, and candidates who name it and connect it to shared feature code are signalling real system-design instinct.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A colleague\'s app takes eight seconds to respond to every slider move. The script loads a model, reads a 200 MB parquet file, and runs inference. Fix it and predict the new behaviour.',
+        hint: 'Two different caches, chosen by whether the thing should be shared or copied.',
+        language: 'python',
+        solution:
+          'Wrap the model load in `@st.cache_resource` and the parquet read in `@st.cache_data`. After the first run, both return immediately from the cache, so a slider move re-executes only the cheap inference and the rendering — typically tens of milliseconds. Verify by printing inside each cached function: you should see each message exactly once per server start rather than once per interaction. If the data changes periodically, add `ttl=600` to the data cache rather than clearing it by hand.',
+      },
+      {
+        prompt:
+          'Add a feature where the user scores several customers in a row and sees the last five results. Explain why the obvious implementation fails.',
+        hint: 'What happens to a normal Python list when the script reruns?',
+        language: 'python',
+        solution:
+          'The obvious version, `results = []` followed by `results.append(...)`, fails because the script reruns from the top on every interaction, so the list is recreated empty each time and the user only ever sees the current result. The working version initialises once — `if "results" not in st.session_state: st.session_state.results = []` — and appends to `st.session_state.results`, which persists for the browser session. Display with `st.session_state.results[-5:]`. Note the state is per session: a second user gets their own, and nothing survives a server restart.',
+      },
+      {
+        prompt:
+          'Write the three criteria your team will use to decide that a demo must be rebuilt as a service. Justify each.',
+        hint: 'Think about who depends on it, what it is allowed to affect, and who is called when it breaks.',
+        solution:
+          'One: a non-human consumer. The moment another system wants the output, it needs a versioned contract and an SLA, which a rendered page cannot provide. Two: any consequence beyond a conversation — if the output changes a bill, an eligibility decision or a customer communication, it needs tests, audit logging, review and rollback. Three: an identifiable set of dependants outside the team, or any requirement for per-user access control, because at that point availability and authorisation become somebody\'s responsibility and Streamlit gives neither. Agreeing these in advance converts an awkward political conversation into a pre-committed engineering decision.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'OPS-006-q1',
+        type: 'mcq',
+        concept: 'execution model',
+        prompt: 'What happens when a user changes a Streamlit slider?',
+        options: [
+          'The entire script reruns from the top, with the widget returning its new value',
+          'Only the components downstream of the slider are re-rendered',
+          'A callback registered on the slider fires and nothing else runs',
+          'The server pushes a patch without executing Python',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Streamlit has no component graph. Every interaction re-executes the script, which is why caching is not an optimisation but a requirement for anything expensive.',
+      },
+      {
+        id: 'OPS-006-q2',
+        type: 'mcq',
+        concept: 'caching',
+        prompt: 'Which decorator belongs on a function that loads a 400 MB model?',
+        options: ['`@st.cache_resource`', '`@st.cache_data`', '`@st.session_state`', '`@st.experimental_memo` on the inference call instead'],
+        answerIndex: 0,
+        explanation:
+          '`cache_resource` stores one shared instance without copying, which is exactly what a model needs. `cache_data` returns a copy per call and would duplicate the model in memory.',
+      },
+      {
+        id: 'OPS-006-q3',
+        type: 'debug',
+        language: 'python',
+        concept: 'session state',
+        prompt: 'The user clicks Add three times but the list never grows beyond one item. Why?',
+        code: 'import streamlit as st\n\nitems = []\nif st.button("Add"):\n    items.append(st.text_input("Item"))\nst.write(items)',
+        options: [
+          '`items` is recreated on every rerun; it must live in `st.session_state`',
+          '`st.button` can only be clicked once per session',
+          '`st.write` cannot render a list',
+          'The text input must come before the button',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Each interaction reruns the script, so `items = []` executes again and discards everything. Values that must survive reruns belong in `st.session_state`, initialised once behind a membership check.',
+      },
+      {
+        id: 'OPS-006-q4',
+        type: 'multi',
+        concept: 'when to graduate',
+        prompt: 'Which signals mean a Streamlit demo should become a proper service? Select all that apply.',
+        options: [
+          'Another system wants to consume the output programmatically',
+          'The output now affects a customer-facing decision',
+          'Per-user authentication is required',
+          'A colleague asked for a different colour scheme',
+          'Fifteen people outside the team use it daily',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'Cosmetic requests are just demo work. The other four each introduce a requirement — a contract, auditability, authorisation, availability — that the tool does not provide.',
+      },
+      {
+        id: 'OPS-006-q5',
+        type: 'truefalse',
+        concept: 'cache invalidation',
+        prompt: 'Replacing `models/churn.joblib` on disk automatically causes a `@st.cache_resource` function to reload it.',
+        answer: false,
+        explanation:
+          'The cache is keyed by the function and its arguments, not by file contents or modification time. You must clear the cache or restart the app — which is exactly why demos silently serve a stale model.',
+      },
+      {
+        id: 'OPS-006-q6',
+        type: 'explain',
+        concept: 'demo value and risk',
+        prompt: 'Argue both sides: why a demo app is worth building early, and what it costs you if it survives too long.',
+        rubric: [
+          'Explains that an interface surfaces feedback a notebook cannot',
+          'Names concrete gaps: no auth, no contract, no tests, no rollback',
+          'Proposes an explicit graduation trigger rather than a vague intention',
+        ],
+        sampleAnswer:
+          'Building the demo early is worth it because domain experts cannot review a metric but they can immediately react to a prediction they disagree with, and that reaction usually arrives in the first twenty minutes — while the model is still cheap to change. The cost appears if the app survives past that conversation. It has no authentication, no request contract, no tests, no versioning and no rollback, and it holds its own copy of the model, so it quietly drifts away from whatever the product is serving. Once a group of people outside the team depend on it daily, all of those gaps become somebody\'s incident. The way to get the benefit without the debt is to agree the graduation trigger before building it — a non-human consumer, a real-world consequence, or an access-control requirement — and to point the demo at the production endpoint so that there is only ever one model.',
+        explanation:
+          'The examinable idea is that prototypes are valuable precisely because they omit production concerns, so the discipline is knowing when those omissions stop being acceptable.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'How does Streamlit respond to an interaction?', back: 'It reruns the whole script from the top; widget functions return their current values on the new run.' },
+      { front: '`st.cache_resource` vs `st.cache_data`', back: 'Resource caches one shared instance (models, connections) without copying. Data caches a return value keyed by arguments and returns a copy.' },
+      { front: 'Where does state that must survive interactions live?', back: '`st.session_state`, initialised once behind an `if "key" not in st.session_state` check. Ordinary variables reset on every rerun.' },
+      { front: 'Why should a demo call the API rather than import the model?', back: 'So the demo and the product cannot disagree about model version or preprocessing, and every number is traceable to a served `model_version`.' },
+      { front: 'Three triggers to graduate a demo', back: 'A non-human consumer, a real-world consequence such as billing or eligibility, or a requirement for per-user authentication.' },
+    ],
+
+    challenge: {
+      title: 'A demo that cannot drift from production',
+      brief:
+        'Build a Streamlit app for a model you have already served behind FastAPI. The app must call the API rather than importing the model, display the returned `model_version` prominently, keep a session history of the last ten scorings, handle a timeout and a 422 gracefully with a message a non-engineer can act on, and cache its HTTP client. Finish by writing the graduation criteria for this specific app: who would have to use it, or what would have to depend on it, before you rebuilt it properly.',
+      language: 'python',
+      acceptanceCriteria: [
+        'No model is loaded in the app; all predictions come from the API',
+        'The served `model_version` is visible on screen for every result',
+        'A session history of the last ten results persists across interactions',
+        'Timeout and validation errors produce clear, non-technical messages',
+        'The HTTP client is created once behind `st.cache_resource`',
+        'Written graduation criteria name at least three concrete triggers',
+      ],
+      starterCode: 'import streamlit as st\nimport httpx\n\nst.set_page_config(page_title="Model explorer")\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain to a data scientist who lives in notebooks what Streamlit is, how its execution model differs from what they expect, and when they should stop using it.',
+      mustCover: [
+        'The script reruns from the top on every interaction; there are no callbacks',
+        'Expensive work must be cached, with `cache_resource` for shared objects and `cache_data` for values',
+        'Persistent state lives in `st.session_state`, not in ordinary variables',
+        'A demo lacks auth, contract, tests and rollback, so it must graduate once people depend on it',
+      ],
+      bonusSignals: ['mentions pointing the demo at the production API', 'gives a concrete graduation trigger', 'notes that a cached model does not notice a changed file'],
+      sampleExplanation:
+        'Streamlit turns a plain Python script into a web page: you call a function to put a slider on the screen and it hands you back whatever the user chose. The part that surprises people is what happens on interaction — there is no callback and no partial update, the whole script simply runs again from line one. That makes the code delightfully linear, and it means anything expensive at the top runs on every keystroke unless you cache it. Use `st.cache_resource` for things everyone should share, like a loaded model or an HTTP client, and `st.cache_data` for values keyed by arguments, like a query result. Anything that has to survive between interactions — a history list, a counter — belongs in `st.session_state`, because an ordinary variable is recreated on every rerun. All of this is superb for getting a model in front of a domain expert in an afternoon, which is the fastest way to learn what is actually wrong with it. What it does not give you is authentication, a stable contract, tests or a rollback story, so the moment another system wants to call it, or its output starts affecting a real decision, it has stopped being a demo and needs to become a service.',
+    },
+  },
+
+  {
+    id: 'OPS-007',
+    domain: 'OPS',
+    module: 'Packaging & Delivery',
+    topic: 'Containers',
+    title: 'Docker and Containers',
+    slug: 'docker-and-containers',
+    difficulty: 3,
+    estimatedMinutes: 45,
+    prerequisites: ['OPS-003', 'OPS-005'],
+    related: ['OPS-001'],
+    tags: ['docker', 'container', 'image', 'dockerfile', 'layers', 'compose', 'volumes'],
+
+    learningObjectives: [
+      'Explain the difference between an image and a container, and why a container is not a virtual machine',
+      'Read and write a Dockerfile for an ML service, line by line, knowing what each instruction costs',
+      'Exploit layer caching by ordering instructions so dependency installs are not repeated on every code change',
+      'Keep images small with slim base images, multi-stage builds and a `.dockerignore`',
+      'Run and inspect containers with `docker build`, `run`, `logs`, `exec` and `compose`, and use volumes for data',
+      'Supply configuration and secrets at run time instead of baking them into the image',
+    ],
+
+    terminology: [
+      {
+        term: 'Image',
+        definition:
+          'A read-only, layered filesystem plus metadata describing the default command, environment and exposed ports. Images are built once and are immutable; they are identified by a digest and usually tagged.',
+        simple: 'The frozen template a container is started from.',
+      },
+      {
+        term: 'Container',
+        definition:
+          'A running process (or process tree) started from an image, isolated by kernel namespaces and constrained by cgroups, with a thin writable layer on top of the image\'s read-only layers.',
+        simple: 'A running copy of the template, with its own view of the filesystem and network.',
+      },
+      {
+        term: 'Layer',
+        definition:
+          'The filesystem delta produced by one Dockerfile instruction. Layers are content-addressed and cached: if an instruction and all its inputs are unchanged, the builder reuses the existing layer instead of re-running it.',
+        simple: 'One step of the build, saved so it does not have to be repeated.',
+      },
+      {
+        term: 'Build context',
+        definition:
+          'The directory sent to the builder when you run `docker build .`. Everything in it is uploaded unless excluded by `.dockerignore`, which is why a stray `data/` folder makes builds crawl.',
+        simple: 'The folder you hand to the builder.',
+      },
+      {
+        term: 'Multi-stage build',
+        definition:
+          'A Dockerfile with several `FROM` stages where later stages copy only the artifacts they need from earlier ones, leaving compilers and build dependencies out of the final image.',
+        simple: 'Build in a big workshop, ship only the finished product.',
+      },
+      {
+        term: 'Volume / bind mount',
+        definition:
+          'A mechanism for attaching storage from outside the container so data survives the container being replaced. A bind mount maps a host path; a named volume is managed by Docker.',
+        simple: 'A door into the container for data that must outlive it.',
+      },
+    ],
+
+    simpleExplanation:
+      "\"It works on my machine\" is usually true and usually useless, because your machine has a particular operating system, a particular set of C libraries, a particular Python and a particular pile of packages you installed months ago and forgot. A container fixes this by shipping the answer instead of the instructions. You write a short recipe called a Dockerfile that says which base system to start from, what to install and what command to run. Building it produces an image: a frozen, layered filesystem containing everything your program needs except the kernel. Anyone with that image runs exactly the same bytes you did, on their laptop, in the test system and in production. The distinction worth getting straight early is image versus container: the image is the template, immutable and shareable, and a container is one running instance of it. Starting ten containers from one image is normal, and throwing a container away loses nothing, because anything you needed to keep should have been written to a mounted volume or an external store.",
+
+    whyItExists:
+      'Virtual environments pin Python packages but not the operating system, system libraries, compilers or CUDA runtime, so a service that runs on a developer laptop can still fail on a server with a different glibc or driver. Containers exist to make the entire userspace an artifact that is built once, versioned, and run identically everywhere, which turns deployment from re-creating an environment into copying one.',
+
+    analogy: {
+      scenario:
+        "Think of shipping containers, the steel kind. Before them, cargo was loaded piece by piece and every port, crane and lorry had to cope with barrels, crates and sacks of different shapes. The container did not make cargo smaller; it made it uniform. Now a crane does not care whether it is lifting bananas or car parts, and a box packed in Shenzhen arrives in Rotterdam without being unpacked. The packing list stays on the outside, and nothing about the ship needs to know what is inside.",
+      mapping: [
+        { from: 'The steel box', to: 'The container image' },
+        { from: 'Whatever is packed inside', to: 'Your application, its dependencies and its system libraries' },
+        { from: 'The standard corner fittings every crane understands', to: 'The container runtime interface every platform supports' },
+        { from: 'The ship, the lorry, the crane', to: 'A laptop, a CI runner, a Kubernetes node' },
+        { from: 'The manifest taped to the door', to: 'Image metadata: entrypoint, exposed port, environment' },
+        { from: 'Refrigerated cargo plugged into ship power', to: 'A volume mounted at run time for data that must outlive the container' },
+      ],
+      bridge:
+        'The uniformity is the whole point and it maps precisely: because every platform understands the same image format, the same artifact runs on a laptop, in CI and in production without translation. Where the analogy misleads is weight. A steel container is heavy; a container image shares the host kernel and starts in milliseconds, which is why running one per request-handling process is ordinary rather than extravagant. It is emphatically not a virtual machine — there is no guest operating system booting inside it.',
+      limitations:
+        'A shipping container protects its contents completely; a Linux container shares the host kernel, so it is an isolation boundary for dependencies, not a hard security boundary against a determined attacker, and it cannot run a different kernel than the host provides.',
+    },
+
+    visuals: [
+      {
+        kind: 'compare',
+        title: 'Container versus virtual machine',
+        caption: 'Both isolate. Only one boots an operating system.',
+        left: {
+          heading: 'Container',
+          points: [
+            'Shares the host kernel; isolated by namespaces and cgroups',
+            'Starts in milliseconds; image measured in tens or hundreds of MB',
+            'Packages userspace only — libraries, runtime, your code',
+            'Dozens can run comfortably on one machine',
+          ],
+        },
+        right: {
+          heading: 'Virtual machine',
+          points: [
+            'Boots its own guest kernel on a hypervisor',
+            'Starts in tens of seconds; image measured in GB',
+            'Packages a whole operating system',
+            'Stronger isolation boundary, correspondingly heavier',
+          ],
+        },
+      },
+      {
+        kind: 'widget',
+        title: 'How layer caching decides what rebuilds',
+        caption: 'Change a line of source and watch which layers survive.',
+        widget: 'docker-layers',
+      },
+      {
+        kind: 'flow',
+        title: 'From Dockerfile to running service',
+        caption: 'Build once, run anywhere that speaks the same image format.',
+        steps: [
+          { label: '`docker build -t churn:1.4.0 .`', detail: 'The build context is uploaded, each instruction produces a layer, cached layers are reused.' },
+          { label: 'Image stored locally', detail: 'Immutable, identified by a digest, tagged `churn:1.4.0`.' },
+          { label: '`docker push registry/churn:1.4.0`', detail: 'Only layers the registry lacks are uploaded.' },
+          { label: '`docker run -p 8000:8000 --env-file .env churn:1.4.0`', detail: 'A container starts; configuration arrives at run time, not build time.' },
+          { label: 'Orchestrator pulls the same digest', detail: 'Staging and production run the identical bytes that were tested.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Why instruction order changes your build time',
+        columns: ['Dockerfile order', 'What happens when you edit `app/main.py`', 'Rebuild cost'],
+        rows: [
+          ['COPY . . then pip install', 'The COPY layer changes, so every layer after it is invalidated, including pip install', 'Full dependency reinstall, minutes'],
+          ['COPY requirements.txt, pip install, then COPY . .', 'Only the final COPY layer changes', 'Seconds'],
+          ['Multi-stage: build wheels, then copy them in', 'Only the final small stage rebuilds', 'Seconds, and a much smaller image'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'A container image is an ordered set of content-addressed filesystem layers plus a configuration object specifying entrypoint, command, environment, working directory and exposed ports. A container is an operating-system process executed against a union mount of those layers with a writable upper layer, isolated using kernel namespaces for process, mount, network, user and IPC views, and resource-constrained using cgroups. Because the kernel is shared, containers provide dependency and namespace isolation with near-native start-up latency, unlike hardware virtualisation which emulates a machine and boots a guest kernel.',
+
+    codeExamples: [
+      {
+        language: 'text',
+        title: 'An annotated Dockerfile for a FastAPI model service',
+        code: `# --- Stage 1: build the dependency set --------------------------------
+FROM python:3.11-slim AS builder
+
+# System packages needed only to COMPILE wheels. They never reach the final image.
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential \\
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy ONLY the dependency manifest first. This layer changes rarely,
+# so the expensive install below stays cached when you edit source code.
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# --- Stage 2: the runtime image ---------------------------------------
+FROM python:3.11-slim
+
+# Never run as root. A compromised process should not own the container.
+RUN useradd --create-home --uid 10001 appuser
+WORKDIR /app
+
+# Take only the installed packages from the builder; leave the compiler behind.
+COPY --from=builder /install /usr/local
+
+# Source last: editing it invalidates only this one small layer.
+COPY --chown=appuser:appuser app/ ./app/
+COPY --chown=appuser:appuser models/churn.joblib ./models/churn.joblib
+
+ENV PYTHONUNBUFFERED=1 \\
+    PYTHONDONTWRITEBYTECODE=1 \\
+    MODEL_PATH=/app/models/churn.joblib
+
+USER appuser
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s \\
+  CMD python -c "import urllib.request;urllib.request.urlopen('http://localhost:8000/health')"
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]`,
+        explanation:
+          'Four decisions carry most of the value. The dependency manifest is copied before the source, so editing `main.py` does not reinstall scikit-learn — this single reordering is often the difference between a four-minute and a six-second rebuild. The multi-stage split means `build-essential` compiles wheels and is then discarded, which can halve the image. `USER appuser` drops root, because a container is not a security boundary you should lean on. And `PYTHONUNBUFFERED=1` matters more than it looks: without it Python buffers stdout, so your logs appear minutes late or not at all when the container is killed.',
+      },
+      {
+        language: 'bash',
+        title: 'Build, run, inspect, debug',
+        code: `# .dockerignore first — otherwise the whole data directory is uploaded as build context
+printf '.git\\n.venv\\ndata/\\nnotebooks/\\n*.parquet\\n.pytest_cache\\n__pycache__\\n' > .dockerignore
+
+docker build -t churn:1.4.0 .
+docker images churn                    # REPOSITORY  TAG     SIZE
+                                       # churn       1.4.0   412MB
+
+# Run it. Config and secrets arrive at run time, never baked into the image.
+docker run --rm -p 8000:8000 \\
+  -e MODEL_VERSION=churn-2024-09-02 \\
+  --env-file .env.local \\
+  --memory=2g --cpus=2 \\
+  --name churn-svc churn:1.4.0
+
+curl -s localhost:8000/ready
+
+docker ps                              # what is running
+docker logs -f churn-svc               # stream stdout/stderr
+docker exec -it churn-svc /bin/bash    # a shell inside the running container
+docker stats churn-svc                 # live memory and CPU against the limits
+
+# Where did the size come from?
+docker history churn:1.4.0 --human --format '{{.Size}}\\t{{.CreatedBy}}' | head`,
+        explanation:
+          '`.dockerignore` is written first for a reason: without it, `docker build .` uploads every byte of your `data/` directory to the builder before the first instruction runs, which routinely turns a ten-second build into a ten-minute one. `--memory` and `--cpus` are worth setting locally because they reproduce the constraints the orchestrator will impose — a service that is fine unconstrained and gets killed in production is almost always discovering its memory limit for the first time. `docker history` tells you which instruction is responsible for an oversized image.',
+      },
+      {
+        language: 'yaml',
+        title: 'docker-compose for the service plus its dependencies',
+        code: `services:
+  api:
+    build: .
+    image: churn:1.4.0
+    ports:
+      - "8000:8000"
+    environment:
+      MODEL_PATH: /app/models/churn.joblib
+      FEATURE_DB_URL: postgresql://churn:secret@db:5432/features
+    env_file:
+      - .env.local            # git-ignored; never committed
+    volumes:
+      - ./models:/app/models:ro     # read-only: swap a model without rebuilding
+      - predictions:/var/log/preds  # named volume survives container replacement
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: churn
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: features
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U churn"]
+      interval: 5s
+      retries: 10
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  predictions:
+  pgdata:`,
+        explanation:
+          'Compose is how you run a service and its dependencies together with one command, which makes local development and integration tests match production topology. Two details repay attention. The `models` bind mount is read-only, so you can drop in a new artifact and restart without rebuilding the image, while the container cannot corrupt your local copy. And `depends_on` with `condition: service_healthy` waits for Postgres to actually accept connections rather than merely to have started, which removes the classic flaky "connection refused" on the first run.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'The CUDA mismatch',
+        usage:
+          'A training job runs on a laptop with CUDA 12.1 and fails on a cluster node with 11.8, because the PyTorch wheel was built against the newer runtime. Pinning the base image to `pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime` makes the runtime part of the artifact, and the mismatch disappears.',
+      },
+      {
+        context: 'A build that went from four minutes to eight seconds',
+        usage:
+          'A team had `COPY . .` before `pip install`, so every one-line code change reinstalled the entire dependency set. Moving the requirements copy above the install, and adding a `.dockerignore`, cut the inner development loop by two orders of magnitude.',
+      },
+      {
+        context: 'A secret baked into a layer',
+        usage:
+          'An engineer added `ENV AWS_SECRET_ACCESS_KEY=...` to a Dockerfile, then removed it in a later commit. The key remained in the earlier layer of every pushed image and was recoverable with `docker history`. Secrets must arrive at run time through the environment or a secret manager.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'Docker', role: 'Builds and runs the image that becomes the deployment artifact for every environment.' },
+      { tool: 'docker compose', role: 'Runs the service alongside its database, cache and mock dependencies for local development and integration tests.' },
+      { tool: 'GitHub Actions', role: 'Builds the image on every merge, tags it with the commit SHA, and pushes it to a registry — the subject of the CI/CD unit.' },
+      { tool: 'Kubernetes / ECS', role: 'Schedules containers, restarts unhealthy ones and uses your readiness probe to decide where traffic goes.' },
+      { tool: 'Trivy / Grype', role: 'Scans the built image for known vulnerable packages before it is allowed to ship.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Copying the whole source tree before installing dependencies',
+        why: 'A layer invalidates every layer after it. With `COPY . .` first, editing one line of Python changes that layer and forces the dependency install to run again from scratch on every single build.',
+        fix: 'Copy the manifest, install, then copy the source. Order instructions from least to most frequently changing, which is the general principle behind every Dockerfile optimisation.',
+      },
+      {
+        mistake: 'Baking secrets into the image with `ENV` or `COPY .env`',
+        why: 'Layers are immutable and independently inspectable. Anyone who can pull the image can read the value with `docker history` or by extracting the layer, even if a later instruction deletes the file.',
+        fix: 'Pass configuration at run time with `-e`, `--env-file` or an orchestrator secret. For build-time credentials, use BuildKit secret mounts, which are never persisted into a layer.',
+      },
+      {
+        mistake: 'Using `FROM python:3.11` and wondering why the image is 1.2 GB',
+        why: 'The full image carries a complete build toolchain and documentation nobody needs at run time. Size costs pull time on every deploy and every node, and enlarges the vulnerability surface that scanners report.',
+        fix: 'Start from `-slim`, use a multi-stage build so compilers stay in the builder stage, and check the result with `docker history` to find the instruction responsible for the bulk.',
+      },
+      {
+        mistake: 'Writing important data inside the container filesystem',
+        why: 'The writable layer dies with the container. Predictions, logs or uploaded files written to `/app/output` vanish the moment the orchestrator replaces the instance, which it does routinely.',
+        fix: 'Mount a volume for anything that must outlive the container, or better, write to an external store or a log pipeline. Treat container filesystems as strictly ephemeral.',
+      },
+      {
+        mistake: 'Running as root because it "just works"',
+        why: 'If the process is compromised, the attacker is root inside a container that shares the host kernel, which materially widens what an escape or a mounted-volume write can reach.',
+        fix: 'Create an unprivileged user in the Dockerfile and switch to it with `USER` before the `CMD`, giving it ownership only of the paths it genuinely needs.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'What is the difference between an image and a container, and how is a container different from a virtual machine?',
+        answer:
+          'An image is an immutable, layered filesystem plus metadata such as the default command and exposed ports; a container is a running process started from that image with a thin writable layer on top. One image can back any number of containers, and destroying a container loses only what was written to its writable layer. Against a virtual machine the key difference is the kernel: a VM boots its own guest kernel on a hypervisor and packages an entire operating system, so it starts in tens of seconds and is measured in gigabytes, whereas a container shares the host kernel and is isolated by namespaces and cgroups, so it starts in milliseconds and packages only userspace. That also bounds what containers can do — you cannot run a different kernel, and the isolation is weaker than a hypervisor boundary.',
+        followUp:
+          'A strong answer notes the practical consequence: because the kernel is shared, a Linux container cannot run natively on a machine with a different kernel, which is why Docker on macOS quietly runs a Linux virtual machine underneath.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Why are requirements copied into the image before the application source?',
+        answer:
+          'Because of layer caching. Each instruction produces a content-addressed layer, and changing one layer invalidates every layer after it. Dependencies change rarely and source changes constantly, so copying the manifest and installing before copying the source means a code edit invalidates only the final small COPY layer while the expensive install stays cached. Put `COPY . .` first and every one-character change reinstalls the entire dependency set, which on an ML image with PyTorch is minutes per build, repeated on every commit in CI. The general rule is to order instructions from least frequently changing to most frequently changing, and to pair it with a `.dockerignore` so the build context does not needlessly change either.',
+        followUp:
+          'Mentioning BuildKit cache mounts for the pip or uv cache, which persist across builds even when the layer is invalidated, shows a level beyond the textbook answer.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Your ML serving image is 6 GB and deploys are slow. Walk me through reducing it.',
+        answer:
+          'First I would measure rather than guess: `docker history` attributes size to instructions, and usually two or three dominate. The typical culprits are a full base image instead of slim, build tools left in the final stage, the CUDA development image where the runtime image would do, apt lists and pip caches not cleaned in the same layer that created them, and training data or notebooks copied in by an over-broad `COPY .` with no `.dockerignore`. The fixes in order of payoff: a multi-stage build so compilers and dev headers never reach the runtime stage, a `-slim` or `-runtime` base, `--no-cache-dir` for pip and `rm -rf /var/lib/apt/lists/*` in the same `RUN`, and a strict `.dockerignore`. For a large model artifact I would also question baking it in at all — mounting it from object storage or a volume at start-up keeps the image small and lets the same image serve several model versions. Finally, sharing a common base layer across services means nodes pull the heavy part once.',
+        followUp:
+          'The instinct being tested is measure-then-optimise, plus the architectural question of whether the model belongs inside the image at all, which trades deploy simplicity against image size and start-up time.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Given a Dockerfile whose first instruction after `WORKDIR` is `COPY . .`, followed by `RUN pip install -r requirements.txt`, explain what happens on a one-line code change and rewrite the relevant lines.',
+        hint: 'Which layer changed, and what does that do to the layers after it?',
+        language: 'text',
+        solution:
+          'The `COPY . .` layer includes the edited file, so its hash changes and every subsequent layer is invalidated — including the pip install, which re-runs in full. Rewrite as:\n\nCOPY requirements.txt .\nRUN pip install --no-cache-dir -r requirements.txt\nCOPY app/ ./app/\n\nNow a code edit changes only the final COPY. Add a `.dockerignore` containing `.git`, `.venv`, `data/` and `notebooks/` as well, because otherwise unrelated files in the build context can invalidate the copy layer and every build uploads gigabytes before it even starts.',
+      },
+      {
+        prompt:
+          'Your container writes prediction logs to `/app/logs/preds.jsonl`. After a deploy they are gone. Explain and fix, giving two options.',
+        hint: 'What happens to the writable layer when a container is replaced?',
+        language: 'bash',
+        solution:
+          'The writable layer is part of the container, not the image, so replacing the container discards it — and orchestrators replace containers on every deploy, scale event and health failure. Option one, minimal: mount storage, `docker run -v preds:/app/logs ...` with a named volume, or a bind mount in development. Option two, better for production: do not write files at all. Log structured JSON to stdout and let the platform collect it, or write predictions to a database or object store. The general rule is that container filesystems are ephemeral by design, so anything that must survive belongs outside the container.',
+      },
+      {
+        prompt:
+          'You need a Hugging Face token during `docker build` to download a model. Show the wrong way and the right way.',
+        hint: 'Anything in a layer can be extracted from the image, regardless of what later layers do.',
+        language: 'bash',
+        solution:
+          'Wrong: `ARG HF_TOKEN` plus `ENV HF_TOKEN=$HF_TOKEN`, or `COPY .env .` followed by a later `RUN rm .env`. Both persist the value in a layer that anyone who can pull the image may extract, and `docker history` often shows it outright. Right: a BuildKit secret mount, which exposes the value only for the duration of one `RUN` and never writes it into a layer:\n\nRUN --mount=type=secret,id=hf \\\n    HF_TOKEN=$(cat /run/secrets/hf) python download_model.py\n\ninvoked as `docker build --secret id=hf,env=HF_TOKEN .`. For run-time credentials, pass them with `--env-file` or an orchestrator secret rather than putting them in the image at all.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'OPS-007-q1',
+        type: 'mcq',
+        concept: 'image vs container',
+        prompt: 'Which statement is correct?',
+        options: [
+          'An image is an immutable template; a container is a running instance of it with a writable layer',
+          'An image is a running process; a container is the file it was built from',
+          'Each container needs its own image, built separately',
+          'Containers and virtual machines both boot their own kernel',
+        ],
+        answerIndex: 0,
+        explanation:
+          'One image can back many containers. Containers share the host kernel and are isolated by namespaces and cgroups, which is precisely what makes them start in milliseconds rather than tens of seconds.',
+      },
+      {
+        id: 'OPS-007-q2',
+        type: 'order',
+        concept: 'layer caching',
+        prompt: 'Order these Dockerfile instructions to maximise cache reuse during development.',
+        items: [
+          'FROM python:3.11-slim',
+          'RUN apt-get install system libraries',
+          'COPY requirements.txt .',
+          'RUN pip install -r requirements.txt',
+          'COPY app/ ./app/',
+        ],
+        explanation:
+          'Least frequently changing first. System packages and dependencies change rarely; source changes constantly, so it goes last and a code edit invalidates only that final small layer.',
+      },
+      {
+        id: 'OPS-007-q3',
+        type: 'truefalse',
+        concept: 'secrets in layers',
+        prompt: 'Adding `RUN rm /app/.env` after copying a secrets file removes the secret from the image.',
+        answer: false,
+        explanation:
+          'Layers are immutable and stacked. The earlier layer still contains the file and can be extracted from the image, so the secret is recoverable. Use BuildKit secret mounts at build time and run-time environment variables otherwise.',
+      },
+      {
+        id: 'OPS-007-q4',
+        type: 'multi',
+        concept: 'image size',
+        prompt: 'Which of these genuinely reduce the size of an ML serving image? Select all that apply.',
+        options: [
+          'A multi-stage build that leaves compilers in the builder stage',
+          'A `-slim` or `-runtime` base image instead of the full one',
+          '`pip install --no-cache-dir` and cleaning apt lists in the same RUN',
+          'Deleting files in a later RUN instruction',
+          'A `.dockerignore` that excludes `data/` and `notebooks/`',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'Deleting in a later layer hides files from the running container but keeps them in the image, so the download is no smaller. Cleanup only helps when it happens in the same instruction that created the files.',
+      },
+      {
+        id: 'OPS-007-q5',
+        type: 'debug',
+        language: 'yaml',
+        concept: 'ephemeral filesystem',
+        prompt: 'Predictions written by this service disappear on every deploy. Which line is the problem?',
+        code: 'services:\n  api:\n    image: churn:1.4.0\n    environment:\n      OUTPUT_PATH: /app/output/preds.jsonl\n    ports:\n      - "8000:8000"',
+        options: [
+          'There is no volume mounted at `/app/output`, so the data lives in the container\'s writable layer',
+          'The port mapping is wrong',
+          '`OUTPUT_PATH` must be an absolute URL',
+          'The image tag must be `latest`',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Anything written inside the container dies with it. Mount a named volume at `/app/output`, or better, stop writing files and send predictions to a datastore or to stdout for the platform to collect.',
+      },
+      {
+        id: 'OPS-007-q6',
+        type: 'explain',
+        concept: 'why containers for ML',
+        prompt: 'A colleague says a virtual environment plus a pinned `requirements.txt` is enough and containers are overkill. Respond.',
+        rubric: [
+          'Identifies what a virtual environment does not capture: OS, system libraries, drivers, Python build',
+          'Gives a concrete ML failure such as a CUDA or glibc mismatch',
+          'Notes the operational benefits: one artifact across environments, easy rollback, orchestrator integration',
+        ],
+        sampleAnswer:
+          'A lockfile fixes the Python layer precisely, and for a pure-Python script on a uniform fleet that is often genuinely enough. It stops being enough the moment anything below Python matters, which in machine learning is most of the time: the CUDA runtime and driver pairing, cuDNN, the BLAS library a wheel was linked against, the glibc version, even the Python patch build. A container captures all of that as one immutable artifact, so the bytes tested in CI are the bytes running in production rather than an environment reconstructed on a hopefully-similar machine. It also buys operational properties that are hard to get otherwise: a rollback is repointing at a previous digest, scaling is starting another copy, and orchestrators can restart and health-check it without knowing anything about Python. The cost is a build step, some image-size discipline and a new set of things to learn, which is a fair trade once more than one machine runs your code.',
+        explanation:
+          'The examinable idea is that reproducibility is layered and containers close the layer that virtual environments cannot reach, while also giving you a deployable, rollbackable unit.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Image vs container', back: 'The image is the immutable layered template; a container is one running instance of it with a thin writable layer that dies with it.' },
+      { front: 'Why copy requirements before source?', back: 'Changing a layer invalidates every later layer. Source changes constantly, dependencies rarely — so installing first keeps the expensive layer cached.' },
+      { front: 'Why is `RUN rm secret.env` not a fix?', back: 'The earlier layer still holds the file and can be extracted from the image. Use BuildKit secret mounts or run-time environment variables.' },
+      { front: 'What does `.dockerignore` prevent?', back: 'Uploading the whole directory as build context and letting unrelated files invalidate the COPY layer. Exclude `.git`, `.venv`, `data/`, notebooks.' },
+      { front: 'Where should data that must survive go?', back: 'A mounted volume or an external store. The container filesystem is ephemeral and is discarded on every replacement.' },
+      { front: 'Container vs virtual machine, in one line', back: 'A container shares the host kernel and isolates userspace (milliseconds, hundreds of MB); a VM boots a guest kernel (seconds, gigabytes).' },
+    ],
+
+    challenge: {
+      title: 'Containerise your model service properly',
+      brief:
+        'Take the FastAPI service you built earlier and containerise it. Write a `.dockerignore` first, then a multi-stage Dockerfile with slim bases, a non-root user, a healthcheck and no secrets. Measure three things and write them down: the image size before and after the multi-stage split, the rebuild time when you change one line of source versus one line of `requirements.txt`, and the container memory used under a small load test. Finish with a `docker compose` file that runs the service with its model mounted read-only.',
+      language: 'text',
+      acceptanceCriteria: [
+        'The image builds, runs, and answers `/ready` with 200',
+        'Multi-stage build with a slim runtime base; final image under about 600 MB for a scikit-learn service',
+        'The container runs as a non-root user and contains no secrets in any layer',
+        'A one-line source change rebuilds in seconds, proving the dependency layer stayed cached',
+        'Compose runs the service with the model bind-mounted read-only and memory limited',
+        'Measured image size, rebuild times and memory usage are recorded',
+      ],
+      starterCode: '# syntax=docker/dockerfile:1\nFROM python:3.11-slim AS builder\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain containers to someone who already uses virtual environments and does not see the point. Cover images versus containers, layers and caching, and what must never go into an image.',
+      mustCover: [
+        'A container packages the whole userspace, which a virtual environment cannot',
+        'An image is an immutable template; a container is a disposable running instance',
+        'Layers are cached, so instruction order determines build time',
+        'Secrets and data must arrive at run time, never be baked into layers',
+      ],
+      bonusSignals: ['contrasts containers with virtual machines correctly', 'mentions running as non-root', 'mentions that container filesystems are ephemeral'],
+      sampleExplanation:
+        'A virtual environment pins your Python packages, which solves a real problem, but it says nothing about the operating system, the C libraries those packages were compiled against, or the CUDA runtime a GPU wheel expects. That is exactly the layer where machine learning breaks between a laptop and a server. A container captures all of it. You write a short recipe, build it once, and the result is an image: an immutable stack of filesystem layers plus the command to run. A container is one running instance of that image, and it is meant to be disposable — anything written inside it disappears when it is replaced, which is why data and logs go to a mounted volume or an external store. The layers matter for a practical reason: each instruction produces one, they are cached, and changing one invalidates everything after it. So you copy the requirements file and install dependencies before copying your source, because then editing a line of Python rebuilds one tiny layer instead of reinstalling PyTorch. Two things must never go in: secrets, because a layer can be extracted even if a later instruction deletes the file, and anything huge that you could mount instead.',
+    },
+  },

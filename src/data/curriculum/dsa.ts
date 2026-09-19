@@ -1429,3 +1429,1502 @@ print(grid)   # [[1, 0, 0], [1, 0, 0], [1, 0, 0]]`,
 
     masteryRequirements: { understoodScore: 0.7, proficientScore: 0.85, practiceRequired: 2, teachRequired: true },
   },
+
+  {
+    id: 'DSA-004',
+    domain: 'DSA',
+    module: 'Linear Structures',
+    topic: 'Immutable sequences of characters',
+    title: 'Strings as Data Structures',
+    slug: 'strings-as-data-structures',
+    difficulty: 2,
+    estimatedMinutes: 30,
+    prerequisites: ['DSA-003'],
+    related: ['DSA-001', 'DSA-003'],
+    tags: ['strings', 'immutability', 'join', 'anagram', 'text-processing'],
+
+    learningObjectives: [
+      'Explain what immutability costs and buys when a string is modified in a loop',
+      'Give the complexity of indexing, slicing, concatenating, joining and searching a string',
+      'Apply the standard string interview patterns: frequency counting, two pointers and sliding window',
+      'Distinguish characters, code points and bytes well enough to avoid encoding bugs in a text pipeline',
+    ],
+
+    terminology: [
+      {
+        term: 'Immutability',
+        definition:
+          'A string object can never be modified after creation. Every operation that appears to change one — upper(), replace(), += — actually builds a new string.',
+        simple: 'Once the word is printed, you cannot edit it; you can only print a new one.',
+      },
+      {
+        term: 'Interning',
+        definition:
+          'CPython stores one shared copy of certain short, identifier-like strings so equal literals can be the same object, which makes equality checks fast in the common case.',
+        simple: 'Keeping a single master copy of common words instead of many duplicates.',
+      },
+      {
+        term: 'Code point',
+        definition:
+          'An integer that Unicode assigns to a character. A Python `str` is a sequence of code points; indexing gives you one code point, not one byte.',
+        simple: 'The official number for a letter or symbol, agreed worldwide.',
+      },
+      {
+        term: 'Encoding',
+        definition:
+          'The rule mapping code points to bytes for storage or transmission. UTF-8 uses one byte for ASCII and up to four for other characters, so len(str) and len(bytes) differ.',
+        simple: 'How the numbers for letters get written down as actual computer bytes.',
+      },
+      {
+        term: 'String builder pattern',
+        definition:
+          'Collecting pieces in a list and calling "".join(pieces) once, so total work is O(total length) rather than the O(n^2) of repeated concatenation.',
+        simple: 'Gather all the scraps first, then glue them together in one go.',
+      },
+    ],
+
+    simpleExplanation:
+      "A string is an array whose slots hold characters, so most of what you know about arrays carries straight over: reaching the fifth character is instant, scanning for a substring means looking at the characters one by one. The one big difference is that strings in Python cannot be changed once they exist. If you write name = name + \"!\", Python does not add an exclamation mark to the existing string; it builds an entirely new string containing everything from the old one plus the new character, and points the name at that. For a single line of code nobody notices. Inside a loop that runs ten thousand times it is a disaster, because you copy the whole growing string on every pass. The fix is always the same: collect the pieces in a list, which can genuinely be appended to cheaply, and glue them together once at the end with join. Immutability is not an oversight — it is what lets strings be dictionary keys and be shared safely — but it does mean building text has to be done deliberately.",
+
+    whyItExists:
+      'Text is the dominant form of human data, and it needs a representation that is safe to share, hashable so it can key a dictionary, and cheap to index. Immutability delivers all three, at the price of making in-place editing impossible and making naive concatenation quadratic.',
+
+    analogy: {
+      scenario:
+        "Think of a string as a line of type set in metal for an old printing press. Once the line is locked into its frame, you cannot slide an extra letter in — the whole point is that it is fixed, so several pages can safely reuse the same line without one page's edit corrupting another's. To produce a longer line you set a new one from scratch. A printer who needed a hundred-word paragraph would never re-set the entire line a hundred times, once per word; he would gather the words in a tray and set the whole paragraph in a single pass.",
+      mapping: [
+        { from: 'The locked line of metal type', to: 'An immutable string object' },
+        { from: 'Several pages safely reusing one line', to: 'Strings being shareable, hashable and usable as dict keys' },
+        { from: 'Re-setting the whole line to add a word', to: '`s = s + word`, which copies all existing characters: O(len(s))' },
+        { from: 'Gathering words in a tray, then setting once', to: 'Appending to a list and calling `"".join(parts)`: O(total length)' },
+        { from: 'Counting letters in a line without touching it', to: 'Read-only operations such as indexing, slicing and counting' },
+      ],
+      bridge:
+        'The tray is the whole lesson. Because each individual concatenation copies everything accumulated so far, doing it n times costs 1 + 2 + ... + n = O(n^2) character copies, while collecting into a list costs O(1) amortised per piece and one final O(total) pass. That is the same geometric-growth argument that made list append cheap in the previous unit, applied to text.',
+      limitations:
+        'CPython contains an optimisation that sometimes resizes a string in place when it has exactly one reference, so a naive `s += x` loop occasionally appears fast. It is an implementation detail that vanishes the moment a second reference exists, and it does not exist in PyPy or Jython, so never rely on it.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'A string is an indexable sequence',
+        caption: 'Index and slice a short string and watch the positions, including negative indices.',
+        widget: 'array-indexing',
+        props: { sequence: ['m', 'a', 'c', 'h', 'i', 'n', 'e'] },
+      },
+      {
+        kind: 'table',
+        title: 'What each string operation costs',
+        caption: 'n is the string length, k the slice or pattern length.',
+        columns: ['Operation', 'Complexity', 'Note'],
+        rows: [
+          ['`s[i]`', 'O(1)', 'Direct indexing into the code-point array'],
+          ['`s[a:b]`', 'O(b - a)', 'Allocates and copies a new string'],
+          ['`len(s)`', 'O(1)', 'Stored on the object'],
+          ['`s + t`', 'O(len(s) + len(t))', 'Both are copied into a fresh object'],
+          ['`"".join(parts)`', 'O(total length)', 'One allocation, one pass — the correct way to build text'],
+          ['`sub in s`', 'O(n * k) worst case', 'CPython uses a mix of Crochemore-Perrin and Boyer-Moore, near O(n) in practice'],
+          ['`s.replace(a, b)`', 'O(n)', 'Builds a new string; the original is untouched'],
+          ['`sorted(s)`', 'O(n log n)', 'Returns a list of characters, not a string'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Building a 100,000-word document',
+        caption: 'Identical output, quadratically different cost.',
+        left: {
+          heading: 'Concatenation in a loop',
+          points: [
+            '`out = out + word` on each iteration',
+            'Copies every character accumulated so far, every time',
+            'O(n^2) total character copies',
+            'Creates and discards n intermediate string objects',
+          ],
+        },
+        right: {
+          heading: 'Collect and join',
+          points: [
+            '`parts.append(word)` then `"".join(parts)`',
+            'Each append is amortised O(1)',
+            'O(total length) overall, one final allocation',
+            'Reads better, and is what every style guide recommends',
+          ],
+        },
+      },
+    ],
+
+    formalDefinition:
+      'A Python `str` is an immutable sequence of Unicode code points with O(1) indexed access and a cached hash, so it can serve as a dictionary key. Every operation that changes content returns a new object; the original is never modified. Encoding to `bytes` maps each code point to one or more bytes under a chosen codec, so the byte length is generally not equal to the code-point length.',
+
+    math: {
+      intuition:
+        'Repeated concatenation and list-building differ by exactly the same argument that separates fixed-increment growth from geometric growth in a dynamic array. Each concatenation copies everything already accumulated, so the copies grow linearly and their sum is quadratic; each list append copies nothing, and only the final join touches every character once.',
+      formulas: [
+        {
+          latex: '\\sum_{i=1}^{n} i \\cdot k = k \\cdot \\frac{n(n+1)}{2} = O(n^2 k)',
+          name: 'Cost of n concatenations of k-character pieces',
+          meaning: 'The i-th concatenation copies the i*k characters gathered so far, so the total is quadratic in the number of pieces.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'n', meaning: 'Number of pieces concatenated' },
+            { symbol: 'k', meaning: 'Average characters per piece' },
+            { symbol: 'i \\cdot k', meaning: 'Characters already accumulated before the i-th concatenation' },
+          ],
+        },
+        {
+          latex: 'T_{\\text{join}}(n, k) = O(nk)',
+          name: 'Cost of the join pattern',
+          meaning: 'Appending n pieces is O(n) total and the single join pass copies each of the nk characters exactly once.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'nk', meaning: 'Total characters in the final string' },
+            { symbol: 'T_{\\text{join}}', meaning: 'Total time, linear in output size — the best any builder can do' },
+          ],
+        },
+      ],
+      derivation: [
+        'Let each piece have k characters and let there be n pieces.',
+        'Before concatenation i, the accumulated string holds (i-1)k characters.',
+        'Building the new string copies (i-1)k + k = ik characters.',
+        'Summing over i = 1..n gives k(1 + 2 + ... + n) = k n(n+1)/2.',
+        'Discarding constants, that is O(n^2 k) — quadratic in the number of pieces.',
+        'The join pattern instead performs n amortised-O(1) appends plus one pass over nk characters: O(nk).',
+      ],
+    },
+
+    workedExample: {
+      title: 'Anagram check by frequency counting, traced',
+      setup:
+        'Decide whether "listen" and "silent" are anagrams using a single dictionary of character counts: add one for every character of the first word, subtract one for every character of the second, then check that every count is zero. Both words have n = 6 characters.',
+      steps: [
+        { label: 'Length guard', detail: 'len("listen") == len("silent") == 6. If the lengths differed we could return False immediately in O(1).' },
+        { label: 'Count "listen"', detail: 'After the first pass the table is {l: 1, i: 1, s: 1, t: 1, e: 1, n: 1}. Six dictionary updates, each O(1) average.' },
+        { label: 'Subtract s', detail: 'counts[s] goes 1 -> 0.' },
+        { label: 'Subtract i', detail: 'counts[i] goes 1 -> 0.' },
+        { label: 'Subtract l', detail: 'counts[l] goes 1 -> 0.' },
+        { label: 'Subtract e', detail: 'counts[e] goes 1 -> 0.' },
+        { label: 'Subtract n', detail: 'counts[n] goes 1 -> 0.' },
+        { label: 'Subtract t', detail: 'counts[t] goes 1 -> 0. The table is now all zeros.' },
+        { label: 'Verdict', detail: 'Every value is zero, so the two words use exactly the same multiset of characters: they are anagrams.' },
+        { label: 'Counter-case', detail: 'For "listen" against "listed", the d key would end at -1 and the n key at +1, so the check fails on the first non-zero entry.' },
+      ],
+      conclusion:
+        'Time complexity is O(n): two passes of n constant-time dictionary operations, plus a final scan of at most n distinct keys. Space complexity is O(min(n, a)) where a is the alphabet size, since the table never holds more entries than there are distinct characters — O(1) if the alphabet is fixed at 26 letters. The obvious alternative, sorted(a) == sorted(b), is correct and one line long but costs O(n log n) time and O(n) space, so counting wins asymptotically while sorting wins on readability for short inputs.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Concatenation versus join, measured',
+        runnable: true,
+        code: `import time
+
+words = [f"token{i}" for i in range(50_000)]
+
+start = time.perf_counter()
+out = ""
+for w in words:
+    out = out + w + " "          # copies everything accumulated, every time
+concat = time.perf_counter() - start
+
+start = time.perf_counter()
+out2 = " ".join(words) + " "     # one pass over the final character count
+join = time.perf_counter() - start
+
+print(out == out2)
+print(f"concatenation {concat:.4f}s   join {join:.4f}s")`,
+        output: `True
+concatenation 0.3918s   join 0.0021s`,
+        explanation:
+          'Note that `out = out + w + " "` defeats the CPython in-place-resize optimisation because the intermediate `out + w` creates a second reference. That makes the quadratic behaviour visible, which is exactly the point: the optimisation is fragile and the join pattern is not. At 500,000 words the gap becomes roughly a hundredfold, because the concatenation cost grows quadratically while join grows linearly.',
+      },
+      {
+        language: 'python',
+        title: 'Three interview patterns in one file',
+        runnable: true,
+        code: `from collections import Counter
+
+def is_anagram(a, b):                      # frequency counting: O(n) time
+    return Counter(a) == Counter(b)
+
+def is_palindrome(s):                      # two pointers: O(n) time, O(1) space
+    i, j = 0, len(s) - 1
+    while i < j:
+        if s[i] != s[j]:
+            return False
+        i, j = i + 1, j - 1
+    return True
+
+def longest_unique_substring(s):           # sliding window: O(n) time
+    last_seen, start, best = {}, 0, 0
+    for i, ch in enumerate(s):
+        if ch in last_seen and last_seen[ch] >= start:
+            start = last_seen[ch] + 1      # shrink the window past the repeat
+        last_seen[ch] = i
+        best = max(best, i - start + 1)
+    return best
+
+print(is_anagram("listen", "silent"))
+print(is_palindrome("racecar"), is_palindrome("raceca"))
+print(longest_unique_substring("abcabcbb"))`,
+        output: `True
+True False
+3`,
+        explanation:
+          'These three shapes cover a large share of string questions. Frequency counting answers "same characters?" in O(n). Two pointers answer symmetry questions in O(n) time and O(1) space, beating the tempting `s == s[::-1]`, which allocates a reversed copy. The sliding window keeps a left boundary that only ever moves right, so every index is visited at most twice — which is why it is O(n) and not O(n^2) despite containing what looks like nested movement.',
+      },
+      {
+        language: 'python',
+        title: 'Characters, code points and bytes are three different things',
+        runnable: true,
+        code: `s = "café"
+print(len(s), [ord(c) for c in s])
+
+utf8 = s.encode("utf-8")
+print(len(utf8), utf8)
+
+latin = s.encode("latin-1")
+print(len(latin), latin)
+
+# The classic failure: decoding with the wrong codec
+try:
+    utf8.decode("ascii")
+except UnicodeDecodeError as e:
+    print("UnicodeDecodeError:", e.reason)`,
+        output: `4 [99, 97, 102, 233]
+5 b'caf\\xc3\\xa9'
+4 b'caf\\xe9'
+UnicodeDecodeError: ordinal not in range(128)`,
+        explanation:
+          'The string has four characters but five UTF-8 bytes, because the é needs two. Truncating text by byte count therefore risks slicing a character in half, and this is the root cause of the mojibake you see in badly handled datasets. Always decode at the boundary of your system, work in `str` internally, and encode again on the way out — the rule is often called the Unicode sandwich.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Tokenisation in an NLP pipeline',
+        usage:
+          'A tokeniser scans millions of documents, splits them and looks fragments up in a vocabulary. Every scan is a string traversal and every lookup is a hash of an immutable string — the immutability is what makes caching the hash safe.',
+      },
+      {
+        context: 'Building a prompt or a SQL statement',
+        usage:
+          'Assembling a long prompt from retrieved chunks is exactly the builder pattern: append the chunks to a list and join once. Doing it with `+=` in a retrieval loop over a few thousand passages is a measurable, needless cost.',
+      },
+      {
+        context: 'Cleaning scraped text',
+        usage:
+          'Normalising whitespace, stripping accents and casefolding are all operations that return new strings. Chaining five of them over a million rows copies the text five times, which is why pandas users push such work into vectorised `.str` methods or a single pass.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'collections.Counter', role: 'One-line character or token frequency tables, the backbone of anagram, vocabulary and n-gram work.' },
+      { tool: 're (regular expressions)', role: 'Pattern search over strings; a compiled pattern reused in a loop avoids re-parsing the pattern n times.' },
+      { tool: 'Hugging Face tokenizers', role: 'Implements exactly the string algorithms in this unit in Rust, because doing them per-character in Python is too slow at corpus scale.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Building text with `+=` inside a loop',
+        why: 'Each concatenation copies all characters accumulated so far, making the loop O(n^2). The occasional CPython in-place optimisation hides this until a second reference exists, and then it reappears.',
+        fix: 'Append pieces to a list and call `"".join(parts)` once, or write directly to a file or `io.StringIO` handle.',
+      },
+      {
+        mistake: 'Expecting a string method to modify the string',
+        why: 'Strings are immutable, so `s.upper()` returns a new string and leaves `s` untouched. Calling it without assigning is a silent no-op.',
+        fix: 'Always capture the result: `s = s.upper()`. If you find yourself wanting in-place edits, build a list of characters and join at the end.',
+      },
+      {
+        mistake: 'Assuming one character is one byte',
+        why: 'A Python `str` holds code points; UTF-8 encodes many of them in two to four bytes. Slicing encoded bytes by a character count corrupts multi-byte characters.',
+        fix: 'Do all slicing on `str`, and encode only at input and output boundaries. Specify the encoding explicitly in `open()` rather than relying on the platform default.',
+      },
+      {
+        mistake: 'Testing membership with `s.find(sub) != -1` and then searching again',
+        why: 'It scans the string twice for no reason, and `find` returning 0 for a match at the start trips up truthiness checks.',
+        fix: 'Use `if sub in s` for a boolean test, and `idx = s.find(sub)` followed by `if idx != -1` when you need the position.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'Why is building a string with += in a loop slow, and what is the standard fix?',
+        answer:
+          'Strings are immutable, so each concatenation allocates a new object and copies every character accumulated so far. Over n pieces that is 1 + 2 + ... + n copies, which is O(n^2). The fix is to append the pieces to a list — amortised O(1) each — and call "".join(parts) once, which allocates exactly one final string and copies each character exactly once, giving O(total length). CPython sometimes resizes in place when the string has a single reference, which can hide the problem in toy benchmarks, but it is an implementation detail and disappears as soon as another reference exists.',
+        followUp:
+          'A strong answer notes that the same quadratic trap appears as repeated `pd.concat` or list `+` and generalises the principle: never repeatedly copy a growing accumulator.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Give two ways to test whether two strings are anagrams and compare their complexity.',
+        answer:
+          'Sorting both and comparing is O(n log n) time and O(n) space, and it is one readable line: sorted(a) == sorted(b). Counting character frequencies with a dictionary or Counter is O(n) time and O(min(n, alphabet)) space, and it also lets you answer follow-ups like "which characters differ" without a second pass. For a fixed alphabet the count table is constant sized, so counting is strictly better asymptotically; for short words the sort is fast enough and easier to read. I would write the Counter version and say why, because the interviewer is testing whether you notice that sorting is doing more work than the question requires.',
+        followUp:
+          'The usual follow-up is grouping a list of words into anagram classes, where the sorted string becomes a dictionary key — a nice example of paying O(n log n) deliberately to obtain a hashable canonical form.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'A text-preprocessing job for 20 million documents is CPU-bound in Python. Where would you look first?',
+        answer:
+          'First at accidental quadratic behaviour: string accumulation with +=, repeated `re.compile` inside the loop, or membership tests against a list of stopwords instead of a set. Those are single-line fixes with order-of-magnitude effects. Next at the number of passes: five chained normalisation calls copy the text five times, so combining them into one translation table or one compiled regular expression cuts both allocations and traversals. Then at the boundary: decoding once into str and staying there, rather than repeatedly encoding and decoding. Only after that would I reach for multiprocessing or a Rust-backed tokeniser, because parallelising quadratic code just buys you a constant factor on top of the wrong algorithm.',
+        followUp:
+          'Mentioning `str.translate` with a precomputed table, or batching through a compiled regular expression, shows practical familiarity rather than textbook recall.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'What is the time complexity of `"".join(s[i] for i in range(len(s) - 1, -1, -1))` compared with `s[::-1]`, and which would you use?',
+        hint: 'Both must produce n characters. Where does the constant factor differ?',
+        solution:
+          'Both are O(n) time and O(n) space — you cannot reverse n characters in less than linear time, and the result is a new string of length n either way. The difference is constant factor and clarity: `s[::-1]` runs entirely in C with one allocation, while the join version drives a Python-level generator and is several times slower. Use `s[::-1]`. The asymptotic tie is a useful reminder that Big-O does not rank implementations within a class; measurement and readability do.',
+      },
+      {
+        prompt: 'Write a function that returns the first non-repeating character of a string, or None. State its complexity.',
+        hint: 'Count first, then scan in the original order — two passes, not nested loops.',
+        solution:
+          'from collections import Counter\n\ndef first_unique(s):\n    counts = Counter(s)\n    for ch in s:\n        if counts[ch] == 1:\n            return ch\n    return None\n\nThe first pass builds the table in O(n); the second scans in original order and stops at the first count of one, also O(n). Total is O(n) time and O(min(n, alphabet)) space. The naive alternative — for each character, count its occurrences in the whole string — is O(n^2), and spotting that the count table can be built once is the entire point of the question.',
+      },
+      {
+        prompt: 'A colleague writes `text = text.replace(a, b)` for 40 different replacement pairs over a 5 MB document. What is the cost, and how would you improve it?',
+        hint: 'How many times is the document traversed and copied?',
+        solution:
+          'Each `replace` scans and copies the entire document, so 40 replacements means 40 full passes and 40 allocations of roughly 5 MB: O(40n) time and 200 MB of churn. For single-character replacements, `str.translate` with a table built by `str.maketrans` does the whole job in one pass. For multi-character patterns, compile one alternation regular expression, `re.compile("|".join(map(re.escape, keys)))`, and use `pattern.sub(lambda m: mapping[m.group()], text)` — again one pass. Both turn O(kn) into O(n) where k is the number of rules, and the improvement is easy to demonstrate with timeit.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DSA-004-q1',
+        type: 'mcq',
+        concept: 'cost of concatenation',
+        prompt: 'What is the total time complexity of building a string by concatenating n pieces of constant length in a loop?',
+        options: ['O(n^2)', 'O(n)', 'O(n log n)', 'O(1) amortised'],
+        answerIndex: 0,
+        explanation:
+          'Each concatenation copies everything accumulated so far, so the copies total 1 + 2 + ... + n = O(n^2). Collecting the pieces in a list and joining once is O(n).',
+      },
+      {
+        id: 'DSA-004-q2',
+        type: 'code-output',
+        language: 'python',
+        concept: 'immutability',
+        prompt: 'What does this print?',
+        code: `s = "hello"
+s.upper()
+print(s)`,
+        options: ['hello', 'HELLO', 'None', 'It raises AttributeError'],
+        answerIndex: 0,
+        explanation:
+          'Strings are immutable, so `upper()` returns a new string and discards it here because the result is not assigned. `s` is unchanged. Writing `s = s.upper()` is required.',
+      },
+      {
+        id: 'DSA-004-q3',
+        type: 'truefalse',
+        concept: 'characters versus bytes',
+        prompt: 'For any Python string s, len(s) always equals len(s.encode("utf-8")).',
+        answer: false,
+        explanation:
+          'Only for pure ASCII. UTF-8 uses two to four bytes for other code points, so "café" has length 4 as a string but 5 as UTF-8 bytes. Slicing bytes by a character count can split a character in half.',
+      },
+      {
+        id: 'DSA-004-q4',
+        type: 'multi',
+        concept: 'string operation costs',
+        prompt: 'Which of these operations on a string of length n are O(n) or worse? Select all that apply.',
+        options: ['`s[500]`', '`s + t`', '`sorted(s)`', '`len(s)`', '`s.replace("a", "b")`'],
+        answerIndices: [1, 2, 4],
+        explanation:
+          'Indexing and len are O(1) because position is arithmetic and length is stored. Concatenation and replace both build a new string of size n, and sorting is O(n log n).',
+      },
+      {
+        id: 'DSA-004-q5',
+        type: 'fill',
+        concept: 'string builder',
+        prompt: 'Which string method should you call on a list of pieces to assemble them in linear time?',
+        answers: ['join', 'str.join', '"".join', 'join()'],
+        explanation:
+          '`"".join(parts)` walks the list once to compute the total length, allocates exactly one string, and copies each character once — linear in the output size.',
+      },
+      {
+        id: 'DSA-004-q6',
+        type: 'explain',
+        concept: 'why immutability is a feature',
+        prompt: 'Explain what immutability buys us, given that it makes editing text more awkward.',
+        rubric: [
+          'Says an immutable object can be shared without defensive copying',
+          'Says the hash can be computed once and cached, making strings usable as dict keys and set members',
+          'Acknowledges the cost: every edit allocates, and naive accumulation is quadratic',
+        ],
+        sampleAnswer:
+          'Because a string can never change, anyone holding a reference to it is safe: you can pass it to a function, store it in a cache and use it in two data structures at once with no risk that someone else edits it underneath you, and with no need to copy defensively. It also means the hash is fixed for the object\'s lifetime, so it can be computed once and cached, which is exactly what makes strings usable as dictionary keys and set members — and dictionary lookup by string key is everywhere, from vocabularies to configuration. The price is that every apparent edit allocates a new object, so accumulating text with += in a loop is quadratic and you must use the join pattern instead.',
+        explanation:
+          'The marking point is recognising immutability as a deliberate trade that buys hashability and safe sharing, not as a limitation the language forgot to remove.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Why is `s += x` in a loop O(n^2)?', back: 'Strings are immutable, so each concatenation copies everything accumulated so far. Use a list plus `"".join()` for O(n).' },
+      { front: 'Cost of `s[a:b]`?', back: 'O(b - a): slicing allocates and copies a new string. Slicing is not free just because it is one line.' },
+      { front: 'Anagram check: counting versus sorting', back: 'Counter is O(n) time, O(alphabet) space; sorting is O(n log n) time, O(n) space. Counting wins asymptotically, sorting reads better.' },
+      { front: 'Two-pointer palindrome versus `s == s[::-1]`', back: 'Both O(n) time, but two pointers use O(1) space and can exit early; the slice allocates a full reversed copy.' },
+      { front: 'What makes strings usable as dict keys?', back: 'Immutability: the hash can never change after creation, so it is computed once and cached.' },
+      { front: 'Why can len(s) differ from len(s.encode("utf-8"))?', back: 'len(str) counts code points; UTF-8 uses one to four bytes per code point, so non-ASCII text has more bytes than characters.' },
+    ],
+
+    challenge: {
+      title: 'A word-frequency report from raw text',
+      brief:
+        'Write a function that takes a block of raw text and returns the ten most common words, normalised to lowercase with punctuation stripped, together with their counts. Build the report string with the join pattern, not with repeated concatenation. Then time your function on a text repeated to about 5 MB, and add a short note stating the time and space complexity of each stage — normalisation, splitting, counting and report building.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Normalisation happens in a single pass, using str.translate or one compiled regular expression',
+        'Counting uses a dictionary or Counter, not nested loops over the word list',
+        'The final report is assembled with "".join or "\\n".join',
+        'The note states the complexity of each stage, including the space held by the count table',
+      ],
+      starterCode: 'import re\nfrom collections import Counter\n\ndef top_words(text, k=10):\n    # normalise once, split, count, then build the report with join\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone who writes Python daily why their loop that builds a report string is slow, and what immutability has to do with it.',
+      mustCover: [
+        'A string cannot be modified after creation, so every apparent edit allocates a new string',
+        'Concatenating in a loop copies the whole accumulated string each time, giving quadratic total work',
+        'The fix is to append pieces to a list and join once, which is linear in the output size',
+        'Immutability is not an accident: it is what makes strings safe to share and usable as dictionary keys',
+      ],
+      bonusSignals: ['gives the 1 + 2 + ... + n argument explicitly', 'mentions that the CPython in-place optimisation is unreliable', 'connects the pattern to list + and pd.concat in loops'],
+      sampleExplanation:
+        'A Python string can never be changed once it exists. When you write report = report + line, Python does not extend the old string — it allocates a brand-new one and copies every character of the old one into it, plus the new line. On the first pass that is trivial; on the ten-thousandth pass you are copying ten thousand lines\' worth of text to add one more. Add those copies up and you get 1 + 2 + 3 + ... + n, which is proportional to n squared, and that is why the loop crawls. Collect the lines in a list instead: appending to a list copies nothing, and "\\n".join(lines) at the end walks the pieces once, works out the exact final size, allocates once and copies each character a single time. Immutability is worth this inconvenience, because it means a string you hold can never be altered by someone else, and its hash never changes — which is precisely what lets strings be dictionary keys.',
+    },
+
+    masteryRequirements: { understoodScore: 0.7, proficientScore: 0.85, practiceRequired: 2, teachRequired: true },
+  },
+
+  {
+    id: 'DSA-005',
+    domain: 'DSA',
+    module: 'Linear Structures',
+    topic: 'Pointer-linked sequences',
+    title: 'Linked Lists',
+    slug: 'linked-lists',
+    difficulty: 3,
+    estimatedMinutes: 40,
+    prerequisites: ['DSA-003'],
+    related: ['DSA-002', 'DSA-003', 'DSA-004'],
+    tags: ['linked-list', 'pointers', 'nodes', 'reversal', 'two-pointer'],
+
+    learningObjectives: [
+      'Describe a node-and-pointer structure and explain why it has no random access',
+      'Insert and delete at the head, tail and middle of a singly linked list and give the cost of each',
+      'Reverse a singly linked list iteratively with three pointers, and explain the invariant that makes it work',
+      'Choose honestly between a linked list and a dynamic array for a given access pattern',
+    ],
+
+    terminology: [
+      {
+        term: 'Node',
+        definition:
+          'A small object holding a value plus one or more references to other nodes. In a singly linked list each node has `value` and `next`.',
+        simple: 'A box containing a thing and an arrow pointing to the next box.',
+      },
+      {
+        term: 'Head and tail',
+        definition:
+          'The head is the first node and the only entry point to the list; the tail is the last node, whose `next` is None. Losing the head reference loses the entire list.',
+        simple: 'The front of the chain and the back of it.',
+      },
+      {
+        term: 'Singly versus doubly linked',
+        definition:
+          'A singly linked node points only forward; a doubly linked node also points back. Doubly linked costs one extra reference per node but allows O(1) deletion given only the node itself.',
+        simple: 'Arrows in one direction, or arrows in both.',
+      },
+      {
+        term: 'Dummy (sentinel) node',
+        definition:
+          'A placeholder node placed before the real head so that insertion and deletion need no special case for an empty list or for the first element.',
+        simple: 'A blank first box so the front is never a special case.',
+      },
+      {
+        term: 'Pointer chasing',
+        definition:
+          'Following references from node to node. Because nodes are scattered in memory, each hop is likely to be a cache miss, which is why linked lists lose badly to arrays in practice.',
+        simple: 'Hopping from box to box, with the computer having to fetch each box fresh.',
+      },
+    ],
+
+    simpleExplanation:
+      "An array keeps its elements side by side, which is why you can jump straight to any one of them. A linked list does the opposite: each element sits wherever memory happens to have room, and carries an arrow pointing to the next one. To find the fifth element you must start at the front and follow four arrows, so reaching an element is no longer instant — it costs as much as the distance you travel. In exchange, you get something arrays are bad at: once you are standing at a spot, inserting or removing an element is just a matter of re-pointing a couple of arrows, with nothing to shuffle along. That makes linked lists the natural shape for things that are constantly being spliced, and it makes them the internal machinery of structures you use every day, like a deque or an LRU cache. But be honest about the trade: because the boxes are scattered, the processor cannot prefetch them, so for straightforward scanning an array wins by a large constant factor even where the complexity looks identical.",
+
+    whyItExists:
+      'Arrays demand one unbroken block of memory, so growing them means copying and inserting in the middle means shifting. Linked lists give up random access to buy O(1) splicing anywhere you already stand, and they never need to relocate existing elements.',
+
+    analogy: {
+      scenario:
+        "Picture a treasure hunt through a town. Each clue is hidden in a different place and tells you only where the next clue is. To reach the seventh clue there is no shortcut: you must visit the first six. But if you decide to add a new stop between clue three and clue four, you do not have to rewrite the whole hunt — you write one new clue pointing to the old clue four, and change clue three to point at your new one. Two edits, no matter how long the hunt is.",
+      mapping: [
+        { from: 'One hidden clue', to: 'A node holding a value and a next reference' },
+        { from: 'The instruction on the clue telling you where to go next', to: 'The `next` pointer' },
+        { from: 'Having to visit clues 1 to 6 to reach clue 7', to: 'O(n) access by position — no random access' },
+        { from: 'Splicing in a new stop by rewriting two clues', to: 'O(1) insertion once you hold the preceding node' },
+        { from: 'Losing the first clue and the hunt being over', to: 'Losing the head reference makes the whole list unreachable and garbage-collected' },
+      ],
+      bridge:
+        'The hunt makes the asymmetry concrete: finding a position is expensive because information about location lives only in the chain, while editing is cheap because nothing physically moves. An array is the reverse — positions are free because they are arithmetic, edits are costly because elements must shift. Every difference between the two structures follows from where the position information lives.',
+      limitations:
+        'The analogy under-sells the memory cost. Each clue needs a reference as well as a value, so a singly linked list of integers in CPython uses several times the memory of a list, and a doubly linked one more still. It also hides the cache effect, which is usually a bigger practical penalty than the extra bytes.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Insert and delete by re-pointing arrows',
+        caption: 'Add and remove nodes and watch which references change and which do not.',
+        widget: 'linked-list',
+      },
+      {
+        kind: 'compare',
+        title: 'Dynamic array versus singly linked list',
+        caption: 'Neither is better; they are good at different things.',
+        left: {
+          heading: 'Dynamic array (Python list)',
+          points: [
+            'Index access O(1) by address arithmetic',
+            'Append O(1) amortised, insert or delete in the middle O(n)',
+            'Contiguous memory: excellent cache behaviour, a few bytes per element',
+            'Occasional O(n) resize spike when capacity is exceeded',
+          ],
+        },
+        right: {
+          heading: 'Singly linked list',
+          points: [
+            'Index access O(n): you must walk from the head',
+            'Insert or delete O(1) once you hold the preceding node',
+            'Scattered memory: a likely cache miss per hop, plus a reference per node',
+            'No resizing ever — nodes are allocated one at a time',
+          ],
+        },
+      },
+      {
+        kind: 'flow',
+        title: 'Deleting the node after a given node',
+        caption: 'Three steps, and none of them touches any other element.',
+        steps: [
+          { label: 'Stand at `prev`', detail: 'You must already hold the node before the one you intend to remove — this is why deletion by value is O(n) but deletion given prev is O(1).' },
+          { label: 'Read `victim = prev.next`', detail: 'Grab a reference to the node being unlinked before you overwrite anything.' },
+          { label: 'Re-point `prev.next = victim.next`', detail: 'The chain now skips the victim entirely. This single assignment is the deletion.' },
+          { label: 'Optionally clear `victim.next = None`', detail: 'Helps garbage collection and prevents a stale reference walking back into the live list.' },
+          { label: 'Nothing else moves', detail: 'No element shifts position, unlike the O(n) shuffle a list would perform.' },
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'A singly linked list is a sequence represented as a chain of nodes, each holding a value and a reference to its successor, terminated by a null reference; the structure is identified by a reference to its head. Access to the element at position i is O(i), while insertion or deletion adjacent to a held node is O(1) since it requires only a constant number of reference assignments and no relocation of other elements.',
+
+    math: {
+      intuition:
+        'The cost model is simple: every operation costs the distance you had to travel plus a constant amount of re-pointing. Searching averages half the list, so it is linear; editing once you have arrived is free of n entirely. Memory per element is the value plus one reference for singly linked, two for doubly linked, which is why the structure is wasteful for small values.',
+      formulas: [
+        {
+          latex: 'T_{\\text{access}}(i) = O(i), \\qquad T_{\\text{search}}(n) = O(n), \\qquad T_{\\text{splice}} = O(1)',
+          name: 'Linked list cost model',
+          meaning: 'Travel is linear in distance; editing after arrival is constant.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'i', meaning: 'Position being accessed, counted from the head' },
+            { symbol: 'n', meaning: 'Number of nodes in the list' },
+            { symbol: 'T_{\\text{splice}}', meaning: 'Cost of inserting or deleting given the adjacent node reference' },
+          ],
+        },
+        {
+          latex: 'M_{\\text{singly}} = n(v + p), \\qquad M_{\\text{doubly}} = n(v + 2p)',
+          name: 'Memory overhead of linking',
+          meaning: 'Every node pays for its pointers, which is the hidden constant-factor cost of the structure.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'v', meaning: 'Bytes for the stored value or its reference' },
+            { symbol: 'p', meaning: 'Bytes per pointer — 8 on a 64-bit build, plus Python object overhead of roughly 48 bytes per node' },
+            { symbol: 'n', meaning: 'Number of nodes' },
+          ],
+        },
+      ],
+    },
+
+    workedExample: {
+      title: 'Reversing 1 -> 2 -> 3 -> 4 with three pointers',
+      setup:
+        'Reverse a singly linked list in place. Maintain prev (head of the already-reversed part), curr (the node being processed) and nxt (a saved reference so the chain is not lost). Start with prev = None, curr = node(1). The invariant is: everything before curr has already been reversed and is reachable from prev.',
+      steps: [
+        { label: 'Start', detail: 'prev = None, curr = 1 -> 2 -> 3 -> 4. Nothing reversed yet.' },
+        { label: 'Iteration 1', detail: 'nxt = 2. Set 1.next = prev = None. prev = 1, curr = 2. Reversed part: 1. Remaining: 2 -> 3 -> 4.' },
+        { label: 'Iteration 2', detail: 'nxt = 3. Set 2.next = 1. prev = 2, curr = 3. Reversed part: 2 -> 1. Remaining: 3 -> 4.' },
+        { label: 'Iteration 3', detail: 'nxt = 4. Set 3.next = 2. prev = 3, curr = 4. Reversed part: 3 -> 2 -> 1. Remaining: 4.' },
+        { label: 'Iteration 4', detail: 'nxt = None. Set 4.next = 3. prev = 4, curr = None. Reversed part: 4 -> 3 -> 2 -> 1. Remaining: nothing.' },
+        { label: 'Loop ends', detail: 'curr is None, so the loop exits. Return prev, which is node 4 — the new head.' },
+        { label: 'Why nxt is essential', detail: 'The assignment curr.next = prev destroys the only reference to the rest of the list. Saving nxt first is what prevents losing the tail — omit it and you get a one-element list.' },
+        { label: 'Pointer count', detail: 'Each of the n iterations performs exactly three assignments, independent of n.', latex: 'T(n) = 3n + c = O(n)' },
+      ],
+      conclusion:
+        'Time complexity is O(n): each node is visited exactly once and each visit does constant work. Space complexity is O(1) auxiliary — three references, regardless of list length. This beats the obvious alternative of copying values into a Python list, reversing it and writing them back, which is also O(n) time but O(n) space. The recursive formulation is elegant but costs O(n) stack space and raises RecursionError beyond about a thousand nodes, so the iterative three-pointer version is the one to produce in an interview.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'A singly linked list with the operations that matter',
+        runnable: true,
+        code: `class Node:
+    __slots__ = ("value", "next")          # trims per-node memory noticeably
+    def __init__(self, value, nxt=None):
+        self.value, self.next = value, nxt
+
+class LinkedList:
+    def __init__(self):
+        self.head = None
+        self._size = 0
+
+    def push_front(self, value):           # O(1)
+        self.head = Node(value, self.head)
+        self._size += 1
+
+    def find(self, value):                 # O(n): must walk the chain
+        node = self.head
+        while node and node.value != value:
+            node = node.next
+        return node
+
+    def remove(self, value):               # O(n) to locate, O(1) to unlink
+        prev, node = None, self.head
+        while node and node.value != value:
+            prev, node = node, node.next
+        if node is None:
+            return False
+        if prev is None:
+            self.head = node.next          # removing the head
+        else:
+            prev.next = node.next          # the whole deletion: one assignment
+        self._size -= 1
+        return True
+
+    def __iter__(self):
+        node = self.head
+        while node:
+            yield node.value
+            node = node.next
+
+ll = LinkedList()
+for v in (3, 2, 1):
+    ll.push_front(v)
+print(list(ll))
+ll.remove(2)
+print(list(ll), len(list(ll)))`,
+        output: `[1, 2, 3]
+[1, 3] 2`,
+        explanation:
+          'Notice the asymmetry that defines the structure: `push_front` is O(1) because the head is the one position you already hold, while `remove` spends O(n) finding the node and then O(1) actually removing it. The `prev is None` branch is the special case a dummy head node would eliminate. `__slots__` matters here because a list of ten thousand nodes otherwise carries ten thousand instance dictionaries.',
+      },
+      {
+        language: 'python',
+        title: 'Iterative reversal and the two-pointer middle-finding trick',
+        runnable: true,
+        code: `def reverse(head):                 # O(n) time, O(1) space
+    prev, curr = None, head
+    while curr:
+        nxt = curr.next            # save it: the next line destroys this link
+        curr.next = prev
+        prev, curr = curr, nxt
+    return prev
+
+def middle(head):                  # slow/fast pointers: one pass, O(1) space
+    slow = fast = head
+    while fast and fast.next:
+        slow, fast = slow.next, fast.next.next
+    return slow
+
+def has_cycle(head):               # Floyd's algorithm: O(n) time, O(1) space
+    slow = fast = head
+    while fast and fast.next:
+        slow, fast = slow.next, fast.next.next
+        if slow is fast:
+            return True
+    return False
+
+def to_list(head):
+    out, node = [], head
+    while node:
+        out.append(node.value)
+        node = node.next
+    return out
+
+head = Node(1, Node(2, Node(3, Node(4, Node(5)))))
+print(middle(head).value)
+head = reverse(head)
+print(to_list(head))
+print(has_cycle(head))`,
+        output: `3
+[5, 4, 3, 2, 1]
+False`,
+        explanation:
+          'The slow/fast pattern is the linked-list equivalent of binary search: because fast moves twice as quickly, it reaches the end after n/2 steps of slow, which therefore lands on the middle. The same two pointers detect a cycle, since in a loop the fast pointer gains one position per step on the slow one and must eventually collide with it. Both are O(n) time and O(1) space, and both are impossible to express as cleanly on an array — which is a fair answer to "when is a linked list actually nice to work with?".',
+      },
+      {
+        language: 'python',
+        title: 'Where linked lists actually live in production Python',
+        runnable: true,
+        code: `from collections import deque, OrderedDict
+
+dq = deque([1, 2, 3])
+dq.appendleft(0)      # O(1): impossible in O(1) on a list
+dq.append(4)
+print(dq, dq.popleft(), dq.pop())
+
+# An LRU cache is a hash map plus a doubly linked list of recency order
+cache = OrderedDict()
+def get(key):
+    if key not in cache:
+        return None
+    cache.move_to_end(key)          # O(1): unlink and relink two pointers
+    return cache[key]
+
+for k, v in [("a", 1), ("b", 2), ("c", 3)]:
+    cache[k] = v
+get("a")
+print(list(cache.keys()))           # 'a' has moved to the most-recent end`,
+        output: `deque([0, 1, 2, 3, 4]) 0 4
+['b', 'c', 'a']`,
+        explanation:
+          'You will rarely hand-roll a linked list in Python, but you will use them constantly through other people\'s. `deque` is a doubly linked list of fixed-size blocks, which is why both ends are O(1). `OrderedDict.move_to_end` is O(1) precisely because recency order is a doubly linked list: promoting an entry unlinks a node and relinks it at the end, with no shifting. `functools.lru_cache` is built on exactly this combination of hash map for lookup and linked list for order.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'LRU caches in inference services',
+        usage:
+          'Caching recent model outputs or embeddings requires O(1) lookup plus O(1) recency updates. The standard implementation is a hash map to nodes of a doubly linked list, which is what `functools.lru_cache` and most Redis-style eviction policies do.',
+      },
+      {
+        context: 'Replay buffers in reinforcement learning',
+        usage:
+          'A bounded buffer that discards the oldest transition as new ones arrive is a queue. `collections.deque(maxlen=N)` gives O(1) appends and O(1) eviction at the far end, which a Python list cannot.',
+      },
+      {
+        context: 'Undo history and streaming pipelines',
+        usage:
+          'Editors and dataflow systems keep operations in a doubly linked chain so a step can be spliced out or a branch inserted without rewriting the surrounding sequence.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'collections.deque', role: 'The production answer whenever you need O(1) work at both ends — queues, sliding windows, replay buffers.' },
+      { tool: 'functools.lru_cache', role: 'Hash map plus linked recency order; understanding the node structure explains why its operations are all O(1).' },
+      { tool: 'PyTorch autograd', role: 'The backward graph is a linked structure of nodes referencing their inputs, traversed once during backpropagation.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Overwriting `curr.next` before saving the rest of the list',
+        why: 'The next reference is the only route to the remaining nodes; reassigning it first makes everything after the current node unreachable and immediately garbage.',
+        fix: 'Always save `nxt = curr.next` before modifying `curr.next`. This is the single most common bug in linked-list code.',
+      },
+      {
+        mistake: 'Forgetting the empty-list and single-node cases',
+        why: 'Code written for the general case often dereferences `head.next` or assumes a previous node exists, raising AttributeError on an empty or one-element list.',
+        fix: 'Use a dummy sentinel node before the head so insertion and deletion have no special case, and test explicitly with lists of length 0, 1 and 2.',
+      },
+      {
+        mistake: 'Reaching for a linked list because "insertion is O(1)"',
+        why: 'Insertion is O(1) only once you already hold the adjacent node. Finding that node is O(n), and in a pointer-chasing scan a linked list is typically several times slower than a contiguous array of the same length.',
+        fix: 'Use a list unless you genuinely need O(1) edits at positions you already hold, or O(1) operations at both ends — and then use `deque` rather than writing your own.',
+      },
+      {
+        mistake: 'Writing recursive traversals over long lists',
+        why: 'One stack frame per node means O(n) space and RecursionError past CPython\'s default limit of about 1,000 frames.',
+        fix: 'Write the loop. Iteration over a linked list is naturally a while loop and uses O(1) space.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Reverse a singly linked list. Walk through your pointers and state the complexity.',
+        answer:
+          'Keep three references: prev starting at None, curr starting at head, and nxt saved inside the loop. On each iteration save nxt = curr.next, set curr.next = prev to flip the link, then advance prev = curr and curr = nxt. When curr becomes None, prev is the new head. The invariant is that everything before curr is already reversed and reachable from prev. It is O(n) time because each node is touched once, and O(1) auxiliary space because only three references exist regardless of length. The critical detail is saving nxt before overwriting curr.next — skip it and you sever the list after the first node.',
+        followUp:
+          'A common follow-up is reversing only a sublist between positions m and n, which is the same loop plus a dummy head node so the boundary cases stay uniform.',
+      },
+      {
+        level: 'intermediate',
+        question: 'How do you detect a cycle in a linked list in O(1) space, and why does it work?',
+        answer:
+          'Floyd\'s tortoise and hare: advance a slow pointer one node and a fast pointer two nodes per iteration. If the list ends, fast hits None and there is no cycle. If there is a cycle, both pointers eventually enter it, and since fast gains exactly one position on slow per iteration, the gap shrinks by one each step and must reach zero, so they meet. It is O(n) time and O(1) space. The alternative is a set of visited nodes, which is also O(n) time but O(n) space; the two-pointer version is preferred precisely because it uses constant memory.',
+        followUp:
+          'Strong candidates continue to finding the cycle entry point: reset one pointer to the head and advance both one step at a time, and they meet at the start of the loop.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'When would you actually choose a linked list over an array in a production Python system?',
+        answer:
+          'Almost never directly, and that honesty is part of the answer. The cases that survive scrutiny are: a queue or bounded buffer needing O(1) work at both ends, where `collections.deque` is the right tool; an LRU or recency structure where an entry must be promoted in O(1) without shifting, which is a hash map plus a doubly linked list; and intrusive lists inside allocators or schedulers where an element must be unlinked in O(1) from a position it already knows. For anything you will scan, index or slice, a list or a NumPy array wins by a large constant factor because of cache locality, even where the complexity looks identical. The reason to understand linked lists is that they are the internal machinery of deque, OrderedDict and graph adjacency structures.',
+        followUp:
+          'Mentioning the cache-miss-per-hop cost, rather than only the asymptotics, is what distinguishes a practitioner from someone reciting a textbook.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Write a function that returns the k-th node from the end of a singly linked list in one pass with O(1) extra space.',
+        hint: 'Start a second pointer k nodes ahead and advance both together.',
+        solution:
+          'def kth_from_end(head, k):\n    lead = head\n    for _ in range(k):\n        if lead is None:\n            return None\n        lead = lead.next\n    trail = head\n    while lead:\n        lead, trail = lead.next, trail.next\n    return trail\n\nOnce lead is k nodes ahead, the gap between the two pointers never changes, so when lead falls off the end trail is exactly k from the end. Time is O(n) with a single traversal, space is O(1). The two-pass alternative — count the length, then walk n - k nodes — is equally valid and equally O(n); the interviewer is checking whether you can maintain a fixed offset invariant.',
+      },
+      {
+        prompt: 'Merge two sorted singly linked lists into one sorted list without allocating new nodes. What is the complexity?',
+        hint: 'A dummy head node removes every special case about which list contributes the first element.',
+        solution:
+          'def merge(a, b):\n    dummy = Node(None)\n    tail = dummy\n    while a and b:\n        if a.value <= b.value:\n            tail.next, a = a, a.next\n        else:\n            tail.next, b = b, b.next\n        tail = tail.next\n    tail.next = a or b\n    return dummy.next\n\nTime is O(n + m), since each node is relinked exactly once, and auxiliary space is O(1) — only the dummy and two references, with no new nodes allocated. The `tail.next = a or b` line attaches whatever remains of the non-exhausted list in constant time, which is something an array merge cannot do without copying. This is also the merge step of merge sort, which is why linked lists can be merge-sorted with O(1) auxiliary space while arrays cannot.',
+      },
+      {
+        prompt: 'Explain precisely why `list.insert(0, x)` is O(n) but `deque.appendleft(x)` is O(1), in terms of memory layout.',
+        hint: 'What has to physically move in each case?',
+        solution:
+          'A Python list is one contiguous block with element i at base + i * 8. Inserting at index 0 means every existing element must occupy a slot one higher, so n pointers are physically copied — O(n), and the copy happens on every call. A deque is a doubly linked list of fixed-size blocks with a head block that has spare room at its left end; appendleft writes into that spare slot, or allocates one new block and links it in with a constant number of pointer assignments. Nothing existing moves, so the cost is O(1) regardless of length. The general principle: contiguity makes positions arithmetic but makes edits expensive, and linking makes edits cheap but makes positions expensive.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DSA-005-q1',
+        type: 'mcq',
+        concept: 'access cost',
+        prompt: 'What is the time complexity of accessing the 500th element of a singly linked list with 1,000 nodes?',
+        options: ['O(n)', 'O(1)', 'O(log n)', 'O(n log n)'],
+        answerIndex: 0,
+        explanation:
+          'There is no address arithmetic to exploit, so you must follow 500 next pointers from the head. Access by position is linear in the position, hence O(n) in the worst case.',
+      },
+      {
+        id: 'DSA-005-q2',
+        type: 'order',
+        concept: 'reversal algorithm',
+        prompt: 'Put the body of the iterative reversal loop in the correct order.',
+        items: ['nxt = curr.next', 'curr.next = prev', 'prev = curr', 'curr = nxt'],
+        explanation:
+          'Saving nxt must come first: the second statement overwrites the only reference to the rest of the list. Advancing prev before curr matters too, since curr is needed to set prev.',
+      },
+      {
+        id: 'DSA-005-q3',
+        type: 'truefalse',
+        concept: 'insertion cost',
+        prompt: 'Inserting into the middle of a singly linked list is O(1) in all circumstances.',
+        answer: false,
+        explanation:
+          'The splice itself is O(1), but only once you hold the preceding node. Reaching that node by position or by value is O(n), so insertion by value is linear overall.',
+      },
+      {
+        id: 'DSA-005-q4',
+        type: 'debug',
+        language: 'python',
+        concept: 'losing the rest of the list',
+        prompt: 'This reversal returns a list containing only one node. What is wrong?',
+        code: `prev, curr = None, head
+while curr:
+    curr.next = prev
+    prev = curr
+    curr = curr.next`,
+        options: [
+          'curr.next is overwritten before the rest of the list is saved, so `curr = curr.next` reads the already-reassigned pointer',
+          'prev should be initialised to head rather than None',
+          'The loop condition should be `while curr.next`',
+          'The list must be doubly linked for reversal to work',
+        ],
+        answerIndex: 0,
+        explanation:
+          'After `curr.next = prev`, the node no longer points forward, so the final line walks backwards into the reversed part. Saving `nxt = curr.next` first, before the reassignment, fixes it.',
+      },
+      {
+        id: 'DSA-005-q5',
+        type: 'match',
+        concept: 'structure selection',
+        prompt: 'Match each requirement to the structure that satisfies it best.',
+        pairs: [
+          { left: 'O(1) append and pop at both ends', right: 'collections.deque (doubly linked blocks)' },
+          { left: 'O(1) access by index', right: 'Python list (dynamic array)' },
+          { left: 'O(1) promotion of an entry to most-recent', right: 'Hash map plus doubly linked list (LRU)' },
+          { left: 'Contiguous numeric data for fast arithmetic', right: 'NumPy array' },
+        ],
+        explanation:
+          'Structure choice follows access pattern: arithmetic addressing for indexing, linked nodes for cheap splicing, and a hash map wherever lookup by key must be constant.',
+      },
+      {
+        id: 'DSA-005-q6',
+        type: 'explain',
+        concept: 'array versus linked list trade-off',
+        prompt: 'A colleague proposes replacing a list with a linked list "because insertion is O(1)". Respond.',
+        rubric: [
+          'Points out that insertion is O(1) only when the adjacent node is already held, and locating it is O(n)',
+          'Mentions the practical cost: pointer chasing causes cache misses and extra memory per node',
+          'Names the cases where linking genuinely wins, such as operations at both ends or O(1) recency promotion',
+        ],
+        sampleAnswer:
+          'The O(1) claim is conditional: splicing costs a couple of pointer assignments, but only once you are standing at the right node, and getting there means walking from the head, which is O(n). Unless the code already holds a reference to the insertion point, the whole operation is linear, exactly like list.insert. On top of that, nodes are scattered in memory, so each hop tends to cost a cache miss and every node carries a pointer plus per-object overhead — in CPython that is several times the memory of a list. The cases where linking genuinely wins are operations at both ends, for which deque already exists, and structures like an LRU cache where a node held by a hash map must be promoted in constant time. If neither applies, keeping the list is the faster and simpler choice.',
+        explanation:
+          'The examinable judgement is that asymptotics are necessary but not sufficient: the conditional nature of the O(1) and the cache behaviour both have to appear.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Why is there no random access in a linked list?', back: 'Nodes are scattered in memory and reachable only through next pointers, so position i costs i hops — there is no address arithmetic.' },
+      { front: 'The three pointers in iterative reversal', back: 'prev, curr and nxt. Save nxt before flipping curr.next = prev, then advance prev and curr. O(n) time, O(1) space.' },
+      { front: 'What is a dummy head node for?', back: 'It removes the special case for an empty list or an operation at the first position, so insertion and deletion code stays uniform.' },
+      { front: 'Floyd\'s cycle detection', back: 'Slow moves one node, fast moves two. If they meet there is a cycle; if fast hits None there is not. O(n) time, O(1) space.' },
+      { front: 'Which real Python structures are linked lists?', back: '`collections.deque` (doubly linked blocks) and the recency order inside `OrderedDict` and `functools.lru_cache`.' },
+      { front: 'Insertion in a linked list is O(1) — when?', back: 'Only when you already hold the adjacent node. Finding it first is O(n).' },
+    ],
+
+    challenge: {
+      title: 'An LRU cache from first principles',
+      brief:
+        'Implement an LRU cache with capacity k supporting get(key) and put(key, value), both in O(1), using a dictionary mapping keys to nodes of a doubly linked list that holds recency order. On get, unlink the node and relink it at the most-recent end. On put beyond capacity, evict the node at the least-recent end. Add an assertion-based test that exercises eviction order, and write two sentences justifying why every operation is O(1).',
+      language: 'python',
+      acceptanceCriteria: [
+        'get and put both perform a constant number of pointer assignments, with no traversal',
+        'Eviction removes the least recently used key, proven by a test with at least five operations',
+        'Sentinel head and tail nodes are used so no branch is needed for empty or single-entry cases',
+        'The justification names both the hash map lookup and the constant-time unlink and relink',
+      ],
+      starterCode: 'class Node:\n    __slots__ = ("key", "value", "prev", "next")\n    def __init__(self, key=None, value=None):\n        self.key, self.value = key, value\n        self.prev = self.next = None\n\nclass LRUCache:\n    def __init__(self, capacity):\n        self.cap = capacity\n        self.map = {}\n        self.head, self.tail = Node(), Node()   # sentinels\n        self.head.next, self.tail.prev = self.tail, self.head\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone who is comfortable with Python lists what a linked list is, what it is good at, and why they have probably never needed to write one.',
+      mustCover: [
+        'Each node holds a value plus a reference to the next node, so elements need not be adjacent in memory',
+        'There is no random access: reaching position i costs i hops',
+        'Insertion and deletion are O(1) once you hold the adjacent node, because nothing shifts',
+        'The practical cost is cache misses and per-node memory, which is why arrays usually win in Python',
+      ],
+      bonusSignals: ['mentions deque and lru_cache as real uses', 'explains the saved-next-pointer step in reversal', 'is honest that the O(1) insertion claim is conditional'],
+      sampleExplanation:
+        'A linked list stores each element in its own little box that also holds an arrow to the next box. Because the boxes are not side by side, there is no way to jump straight to the fifth one — you start at the front and follow four arrows. That is the cost. The benefit is that once you are standing somewhere, inserting or deleting is just re-pointing two arrows: nothing else in the structure moves, whereas a Python list has to shift every element after the insertion point. In practice you have probably never written one, and that is reasonable. Scattered boxes mean the processor cannot prefetch, so scanning a linked list is several times slower than scanning a list of the same length, and every node costs extra memory for its arrow. Where the idea does earn its keep is inside things you already use: deque gets O(1) at both ends this way, and an LRU cache promotes an entry to most-recent in constant time by unlinking one node and relinking it, which no array can do.',
+    },
+
+    masteryRequirements: { understoodScore: 0.7, proficientScore: 0.85, practiceRequired: 2, teachRequired: true },
+  },
+
+  {
+    id: 'DSA-006',
+    domain: 'DSA',
+    module: 'Linear Structures',
+    topic: 'Restricted-access containers',
+    title: 'Stacks and Queues',
+    slug: 'stacks-and-queues',
+    difficulty: 3,
+    estimatedMinutes: 35,
+    prerequisites: ['DSA-003', 'DSA-005'],
+    related: ['DSA-003', 'DSA-004', 'DSA-005'],
+    tags: ['stack', 'queue', 'deque', 'lifo', 'fifo', 'monotonic-stack'],
+
+    learningObjectives: [
+      'Explain LIFO and FIFO discipline and give a problem that each one solves naturally',
+      'Implement a stack with a Python list and a queue with collections.deque, and justify both choices on complexity grounds',
+      'Use a stack to validate nested structure and to evaluate expressions',
+      'Recognise the monotonic stack pattern and explain why it is O(n) despite its inner loop',
+    ],
+
+    terminology: [
+      {
+        term: 'Stack (LIFO)',
+        definition:
+          'A container where the last item added is the first removed. Operations are push, pop and peek, all O(1) at the same end.',
+        simple: 'A pile of plates: you take from the top.',
+      },
+      {
+        term: 'Queue (FIFO)',
+        definition:
+          'A container where the first item added is the first removed. Operations are enqueue at one end and dequeue at the other, both O(1) with the right structure.',
+        simple: 'A line at a ticket desk: first in, first served.',
+      },
+      {
+        term: 'Deque',
+        definition:
+          'A double-ended queue supporting O(1) append and pop at both ends. `collections.deque` implements one over a doubly linked list of blocks.',
+        simple: 'A line you can join or leave from either end.',
+      },
+      {
+        term: 'Call stack',
+        definition:
+          'The runtime\'s own stack of function frames. Every function call pushes a frame and every return pops one, which is why recursion depth is bounded.',
+        simple: 'The computer\'s own pile of unfinished jobs.',
+      },
+      {
+        term: 'Monotonic stack',
+        definition:
+          'A stack whose contents are kept sorted in one direction by popping violating elements on push. It answers "next greater element" style questions in O(n) total.',
+        simple: 'A pile you keep tidy by throwing out anything smaller before adding the new item.',
+      },
+    ],
+
+    simpleExplanation:
+      "Stacks and queues are containers that deliberately give up flexibility. A list lets you touch any position; a stack insists that you only ever add and remove at one end, and a queue insists that you add at one end and remove at the other. That sounds like a downside until you notice how often the restriction matches the problem. When you are tracking things that must be undone in reverse order — open brackets, nested function calls, the path you took into a maze — the last thing you opened is always the first thing you must close, and that is exactly a stack. When you are processing things in the order they arrived — jobs in a print queue, nodes discovered while exploring a network — the first thing in should be the first thing out, and that is a queue. Because both restrict where you may touch, both can be implemented so every operation is constant time, and because the discipline matches the problem, the resulting code is usually shorter and harder to get wrong than the equivalent with an unrestricted list.",
+
+    whyItExists:
+      'Many problems have a natural processing order that is either strictly reverse-of-arrival or strictly order-of-arrival. Encoding that order in the data structure makes the code match the problem, guarantees O(1) operations, and removes a whole class of index-juggling bugs.',
+
+    analogy: {
+      scenario:
+        "Think of two trays in an office. The first is a spike of the old-fashioned kind: paperwork is pushed down onto it and only the sheet on top can be lifted off, so the most recently filed item is the first one you deal with. The second is a pipe: envelopes are pushed in at the left and drop out at the right, so they emerge in exactly the order they arrived. Neither tray lets you reach into the middle, and that is deliberate. The spike is what you want when handling interruptions — finish the thing you just started before returning to what it interrupted. The pipe is what you want when fairness matters, because nobody who arrived later can get served first.",
+      mapping: [
+        { from: 'The spike where only the top sheet is reachable', to: 'A stack: push and pop at the same end, LIFO' },
+        { from: 'The pipe with an in end and an out end', to: 'A queue: enqueue at the back, dequeue at the front, FIFO' },
+        { from: 'Not being able to reach into the middle', to: 'The restricted interface that guarantees O(1) operations' },
+        { from: 'Handling an interruption and returning to what it interrupted', to: 'The call stack, and recursive or nested processing' },
+        { from: 'Serving people in arrival order', to: 'Breadth-first search, task scheduling, buffering' },
+      ],
+      bridge:
+        'The restriction is the feature. Because you may only touch one designated end, the implementation never has to shift or search, so every operation is a constant number of steps. And because the discipline mirrors the problem\'s natural order, choosing the right one of the two often turns a fiddly index-tracking loop into six obvious lines — which is why "which of these two do I need?" is a genuinely useful first question when facing a traversal problem.',
+      limitations:
+        'The analogy suggests the two are interchangeable containers. They are not: swapping a stack for a queue in a graph traversal changes depth-first into breadth-first and changes the answer, which is the subject of two later units.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Push, pop, enqueue, dequeue',
+        caption: 'Run the same sequence of values through a stack and a queue and compare the output order.',
+        widget: 'stack-queue',
+      },
+      {
+        kind: 'compare',
+        title: 'Stack versus queue',
+        caption: 'Same operations count, opposite ordering discipline.',
+        left: {
+          heading: 'Stack — LIFO',
+          points: [
+            'push and pop at the same end, both O(1)',
+            'Python: a plain list with append and pop',
+            'Natural for nesting, undo, backtracking, expression parsing',
+            'Reverses the order of whatever passes through it',
+          ],
+        },
+        right: {
+          heading: 'Queue — FIFO',
+          points: [
+            'enqueue at the back, dequeue at the front, both O(1)',
+            'Python: collections.deque with append and popleft',
+            'Natural for scheduling, buffering, level-by-level traversal',
+            'Preserves the order of whatever passes through it',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Choosing an implementation in Python',
+        columns: ['Need', 'Use', 'Why not the alternative'],
+        rows: [
+          ['Stack', '`list` with `append` / `pop`', 'Both are O(1) at the end; deque works too but adds overhead for no benefit'],
+          ['Queue', '`collections.deque` with `append` / `popleft`', '`list.pop(0)` is O(n), making the whole loop O(n^2)'],
+          ['Bounded buffer', '`deque(maxlen=n)`', 'Evicts from the far end automatically in O(1); a list would need an O(n) slice'],
+          ['Priority order', '`heapq`', 'A queue serves by arrival, not by priority — that is a heap, covered later'],
+          ['Thread-safe queue', '`queue.Queue`', '`deque` is atomic for single appends but not for check-then-act sequences across threads'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'A stack is an abstract data type supporting push(x), pop() and peek() under a last-in-first-out discipline, where pop returns the most recently pushed element not yet removed. A queue supports enqueue(x) and dequeue() under first-in-first-out discipline, where dequeue returns the least recently enqueued element not yet removed. Both admit implementations in which every operation runs in O(1) worst-case or amortised time and the container occupies O(n) space.',
+
+    math: {
+      intuition:
+        'The interesting piece of arithmetic here is not the O(1) operations but the monotonic stack. It contains a while loop inside a for loop, which looks quadratic, yet the total work is linear — because each element is pushed exactly once and popped at most once, so the inner loop can execute at most n times across the whole run, not n times per iteration. This is amortised analysis again, in a different disguise.',
+      formulas: [
+        {
+          latex: 'T_{\\text{push}} = T_{\\text{pop}} = T_{\\text{peek}} = O(1)',
+          name: 'Stack and queue operation costs',
+          meaning: 'The restricted interface is what guarantees constant time: nothing is searched and nothing is shifted.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'T_{\\text{push}}', meaning: 'Cost of adding an element — amortised O(1) on a dynamic array, worst case O(1) on a deque' },
+            { symbol: 'T_{\\text{pop}}', meaning: 'Cost of removing from the designated end' },
+          ],
+        },
+        {
+          latex: '\\text{total inner iterations} \\le n \;\\Rightarrow\; T_{\\text{monotonic}}(n) = O(n)',
+          name: 'Why a monotonic stack is linear',
+          meaning: 'Each element enters the stack once and leaves once, bounding all inner-loop work by n across the entire algorithm.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'n', meaning: 'Number of elements processed' },
+            { symbol: '\\text{total inner iterations}', meaning: 'The sum of all pops over the whole run, not per outer iteration' },
+          ],
+        },
+      ],
+      derivation: [
+        'Consider the outer loop over n elements, each of which is pushed exactly once.',
+        'The inner while loop only ever pops elements that are already on the stack.',
+        'An element can be popped at most once, because it is never pushed again.',
+        'Therefore the total number of inner iterations across the whole algorithm is at most n.',
+        'Total work is n pushes plus at most n pops plus n constant-time comparisons: O(n).',
+        'The worst case for any single outer iteration is still O(n) pops, which is why this must be argued by amortisation rather than by inspecting one iteration.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Validating nested brackets with a stack, character by character',
+      setup:
+        'Check whether "{[()]}" is correctly nested. Push every opening bracket; on a closing bracket, pop and verify the pair matches. The string is balanced only if every pop matches and the stack is empty at the end. n = 6.',
+      steps: [
+        { label: 'Read "{"', detail: 'Opening bracket: push it. Stack: ["{"].' },
+        { label: 'Read "["', detail: 'Opening bracket: push. Stack: ["{", "["].' },
+        { label: 'Read "("', detail: 'Opening bracket: push. Stack: ["{", "[", "("].' },
+        { label: 'Read ")"', detail: 'Closing bracket: pop "(" and check it is the partner of ")". It is. Stack: ["{", "["].' },
+        { label: 'Read "]"', detail: 'Closing bracket: pop "[", which matches "]". Stack: ["{"].' },
+        { label: 'Read "}"', detail: 'Closing bracket: pop "{", which matches "}". Stack: [].' },
+        { label: 'End of string', detail: 'The stack is empty, so every opening bracket was closed in the right order. Return True.' },
+        { label: 'Failure mode A', detail: 'For "{[}]", reading "}" pops "[", which is not its partner — mismatch detected immediately, in O(1).' },
+        { label: 'Failure mode B', detail: 'For "{[", the loop finishes with the stack holding two unclosed brackets, so the final emptiness check returns False. Omitting that check is the most common bug in this problem.' },
+        { label: 'Failure mode C', detail: 'For ")", the first closing bracket finds an empty stack, so popping must be guarded — otherwise IndexError.' },
+      ],
+      conclusion:
+        'Time complexity is O(n): each character is examined once and performs at most one push and one pop, each O(1). Space complexity is O(n) in the worst case, reached by a string of n opening brackets such as "((((((", which are all on the stack simultaneously. No other structure solves this as cleanly, because the defining property of correct nesting — the most recently opened bracket must close first — is precisely LIFO discipline. This is why stacks appear in every parser, every JSON reader and every compiler.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Stack and queue, with the trap in between',
+        runnable: true,
+        code: `from collections import deque
+import time
+
+stack = []                 # a list IS a stack: append/pop are O(1)
+for x in [1, 2, 3]:
+    stack.append(x)
+print("stack pops:", stack.pop(), stack.pop())
+
+queue = deque()            # deque IS a queue: append/popleft are O(1)
+for x in [1, 2, 3]:
+    queue.append(x)
+print("queue pops:", queue.popleft(), queue.popleft())
+
+n = 200_000
+start = time.perf_counter()
+q = list(range(n))
+while q:
+    q.pop(0)               # O(n) per call -> O(n^2) overall
+list_time = time.perf_counter() - start
+
+start = time.perf_counter()
+d = deque(range(n))
+while d:
+    d.popleft()            # O(1) per call -> O(n) overall
+deque_time = time.perf_counter() - start
+print(f"list as queue {list_time:.3f}s   deque as queue {deque_time:.3f}s")`,
+        output: `stack pops: 3 2
+queue pops: 1 2
+list as queue 3.612s   deque as queue 0.012s`,
+        explanation:
+          'The stack is free: a Python list already does exactly the right thing at its end. The queue is where people go wrong, because `pop(0)` looks symmetrical with `pop()` but shifts every remaining element. This single substitution is the most common performance bug in hand-written breadth-first search, and it turns an O(V + E) traversal into an O(V^2 + E) one.',
+      },
+      {
+        language: 'python',
+        title: 'Bracket validation and expression evaluation',
+        runnable: true,
+        code: `def is_balanced(s):
+    pairs = {")": "(", "]": "[", "}": "{"}
+    stack = []
+    for ch in s:
+        if ch in "([{":
+            stack.append(ch)
+        elif ch in pairs:
+            if not stack or stack.pop() != pairs[ch]:
+                return False
+    return not stack           # unclosed brackets remain -> False
+
+def eval_rpn(tokens):
+    """Reverse Polish notation: '3 4 + 2 *' -> 14."""
+    stack = []
+    ops = {"+": lambda a, b: a + b, "-": lambda a, b: a - b,
+           "*": lambda a, b: a * b, "/": lambda a, b: int(a / b)}
+    for t in tokens:
+        if t in ops:
+            b, a = stack.pop(), stack.pop()    # order matters for - and /
+            stack.append(ops[t](a, b))
+        else:
+            stack.append(int(t))
+    return stack.pop()
+
+print(is_balanced("{[()]}"), is_balanced("{[}]"), is_balanced("{["))
+print(eval_rpn(["3", "4", "+", "2", "*"]))`,
+        output: `True False False
+14`,
+        explanation:
+          'Both functions are O(n) time and O(n) space, and both rely on the same insight: the element you need next is always the most recent one you have not yet consumed. Note the two guards in `is_balanced` — `not stack` catches a closing bracket with nothing open, and `return not stack` catches openings that were never closed. Note also the `b, a = stack.pop(), stack.pop()` ordering in the evaluator: operands come off in reverse, which is the bug that makes subtraction and division silently wrong if you get it the wrong way round.',
+      },
+      {
+        language: 'python',
+        title: 'Monotonic stack: next greater element in one pass',
+        runnable: true,
+        code: `def next_greater(nums):
+    """For each element, the next element to its right that is larger."""
+    result = [-1] * len(nums)
+    stack = []                       # holds indices, values decreasing
+    for i, x in enumerate(nums):
+        while stack and nums[stack[-1]] < x:
+            result[stack.pop()] = x  # x is the answer for that waiting index
+        stack.append(i)
+    return result
+
+nums = [2, 1, 2, 4, 3]
+print(next_greater(nums))
+
+# Trace: i=0 push 0. i=1 push 1. i=2 pop 1 (1<2) -> result[1]=2, push 2.
+# i=3 pop 2 and 0 (both <4) -> result[2]=4, result[0]=4, push 3.
+# i=4 push 4. Stack leftovers 3 and 4 keep their -1.`,
+        output: `[4, 2, 4, -1, -1]`,
+        explanation:
+          'The nested while loop makes this look quadratic, but each index is pushed exactly once and popped at most once, so the total pops across the whole run are bounded by n: the algorithm is O(n) time and O(n) space. The stack holds indices whose answers are still unknown, in decreasing value order, which is why the invariant is called monotonic. This pattern solves a surprising range of problems — daily temperatures, largest rectangle in a histogram, stock spans — and recognising it is worth far more than memorising any one of them.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'The Python interpreter itself',
+        usage:
+          'Every function call pushes a frame onto the call stack and every return pops one; the traceback you read after an exception is that stack printed out, innermost frame last.',
+      },
+      {
+        context: 'Data loading in PyTorch',
+        usage:
+          'A DataLoader with workers puts prepared batches on a FIFO queue while the training loop consumes from the other end, so GPU work overlaps with CPU preprocessing. The queue depth is the `prefetch_factor` knob.',
+      },
+      {
+        context: 'Tokenisers and JSON parsers',
+        usage:
+          'Any parser for a nested format keeps a stack of open constructs. The error "unexpected end of input" is literally the observation that the stack was not empty when the input ran out.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'collections.deque', role: 'The correct queue in Python, and a bounded buffer via maxlen — the default choice for BFS frontiers and sliding windows.' },
+      { tool: 'queue.Queue / multiprocessing.Queue', role: 'Thread- and process-safe FIFO queues used to decouple producers from consumers in data pipelines.' },
+      { tool: 'Celery / RabbitMQ', role: 'Distributed task queues: the same FIFO discipline, with the queue living on another machine and surviving restarts.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Using `list.pop(0)` as a queue',
+        why: 'Removing from the front shifts all remaining elements, so each dequeue is O(n) and a full traversal becomes O(n^2). On 200,000 items that is seconds instead of milliseconds.',
+        fix: 'Use `collections.deque` with `popleft()`. If you are writing BFS, this is the single most important line to get right.',
+      },
+      {
+        mistake: 'Popping without checking that the stack is non-empty',
+        why: 'A closing bracket or an operator arriving with an empty stack raises IndexError, which surfaces as a crash on malformed input rather than a clean False.',
+        fix: 'Guard with `if not stack: return False` before popping, and treat an unexpected empty stack as an input validity signal rather than an exception.',
+      },
+      {
+        mistake: 'Forgetting the final emptiness check in bracket matching',
+        why: 'A string of only opening brackets never triggers a mismatch, so the loop completes and the function wrongly returns True.',
+        fix: 'End with `return not stack`. Anything left on the stack was opened and never closed.',
+      },
+      {
+        mistake: 'Assuming a monotonic stack must be quadratic because it has a nested loop',
+        why: 'Counting loop nesting rather than total operations gives the wrong answer; the inner loop is bounded across the whole run, not per outer iteration.',
+        fix: 'Count how many times each element can be pushed and popped. If it is once each, the algorithm is linear no matter how the loops are nested.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'How would you implement a queue in Python, and why not with a list?',
+        answer:
+          'With collections.deque: append to add at the back and popleft to remove from the front, both O(1) worst case because a deque is a doubly linked list of fixed-size blocks and neither end requires shifting. A list can serve as a queue only by using pop(0), which shifts every remaining element left and is therefore O(n) per dequeue, making a full drain O(n^2). A list is the right choice for a stack, though, since append and pop at the end are both O(1) amortised. If the queue crosses threads or processes, use queue.Queue instead, because deque operations are only individually atomic and a check-then-pop sequence is not.',
+        followUp:
+          'A good follow-up is implementing a queue using two stacks, where amortised O(1) dequeue comes from only transferring when the output stack is empty.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Explain the monotonic stack pattern and prove it is O(n).',
+        answer:
+          'You keep a stack of elements whose answers are still pending, maintained in sorted order in one direction. When a new element arrives, you pop every stacked element that the new one resolves — for next-greater, everything smaller than it — and record the answer for each, then push the new element. The proof of linearity is an amortisation argument: each element is pushed exactly once and can be popped at most once, so the total number of inner-loop iterations over the entire run is bounded by n, even though a single outer iteration can pop O(n) items. Total work is therefore O(n) time and O(n) space. It solves next greater element, daily temperatures, stock span and largest rectangle in a histogram with the same skeleton.',
+        followUp:
+          'Being asked to adapt it to next smaller element tests whether the candidate understood the invariant or memorised the comparison direction.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Where does queueing show up in a machine-learning serving system, and what does queue depth tell you?',
+        answer:
+          'Requests arriving faster than the model can serve them wait in a FIFO queue in front of the inference workers, and batching systems deliberately hold requests briefly to assemble a larger batch for GPU efficiency. Queue depth is the key observability signal: a stable depth means arrival rate matches service rate, while a monotonically growing depth means the system is saturated and latency will rise without bound regardless of how much buffering you add, since a queue converts an overload into latency rather than removing it. The practical responses are to shed load, to cap the queue and fail fast, or to add capacity — and the batching knob is a direct latency-for-throughput trade of exactly the kind this domain keeps returning to.',
+        followUp:
+          'Mentioning Little\'s law — average latency equals queue length divided by throughput — connects the data structure to capacity planning.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Implement a queue using two stacks with amortised O(1) dequeue. Explain why it is amortised rather than worst case.',
+        hint: 'Push onto an inbox stack; only move everything to an outbox when the outbox is empty.',
+        solution:
+          'class Queue:\n    def __init__(self):\n        self.inbox, self.outbox = [], []\n    def enqueue(self, x):\n        self.inbox.append(x)\n    def dequeue(self):\n        if not self.outbox:\n            while self.inbox:\n                self.outbox.append(self.inbox.pop())\n        return self.outbox.pop()\n\nReversing the inbox into the outbox restores arrival order. A single dequeue can cost O(n) when it triggers a transfer, but each element is moved between the stacks exactly once in its lifetime, so over any sequence of k operations the total work is O(k): amortised O(1). It is not worst-case O(1) precisely because that one transfer is unavoidable and linear when it happens — the same distinction as dynamic array resizing.',
+      },
+      {
+        prompt: 'Given daily temperatures [73, 74, 75, 71, 69, 72, 76], return for each day how many days you must wait for a warmer temperature. State the complexity.',
+        hint: 'Keep a stack of indices whose answers are still unknown, with decreasing temperatures.',
+        solution:
+          'def daily_temperatures(t):\n    res = [0] * len(t)\n    stack = []\n    for i, x in enumerate(t):\n        while stack and t[stack[-1]] < x:\n            j = stack.pop()\n            res[j] = i - j\n        stack.append(i)\n    return res\n\nThe answer is [1, 1, 4, 2, 1, 1, 0]. It is the monotonic stack with the result recorded as an index difference instead of a value. Time is O(n) because each index is pushed and popped at most once; space is O(n) for the stack, which in the worst case of a strictly decreasing sequence holds every index. The brute-force alternative scans forward from every day and is O(n^2).',
+      },
+      {
+        prompt: 'A colleague reports that their breadth-first search over a 100,000-node graph takes several minutes. What is the most likely single-line cause?',
+        hint: 'What structure are they most likely using for the frontier?',
+        solution:
+          'They are almost certainly using a list with `frontier.pop(0)` as the queue. Each dequeue shifts every remaining element, so with a frontier that can hold tens of thousands of nodes, the traversal degrades from O(V + E) to something closer to O(V^2 + E). Replacing the list with `collections.deque` and `pop(0)` with `popleft()` restores linear behaviour and typically takes the runtime from minutes to well under a second. The second candidate, if that is not it, is a `visited` list instead of a `visited` set, which makes every membership test O(V).',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DSA-006-q1',
+        type: 'mcq',
+        concept: 'choosing a queue implementation',
+        prompt: 'Which is the correct way to implement a FIFO queue in Python?',
+        options: [
+          '`collections.deque` with `append` and `popleft`',
+          'A list with `append` and `pop(0)`',
+          'A list with `insert(0, x)` and `pop()`',
+          'A set, adding and removing arbitrary elements',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Both deque ends are O(1). The two list-based options each perform an O(n) shift on every operation, turning a linear traversal into a quadratic one. A set has no ordering at all.',
+      },
+      {
+        id: 'DSA-006-q2',
+        type: 'code-output',
+        language: 'python',
+        concept: 'LIFO versus FIFO',
+        prompt: 'What does this print?',
+        code: `from collections import deque
+s, q = [], deque()
+for x in [1, 2, 3]:
+    s.append(x); q.append(x)
+print(s.pop(), q.popleft())`,
+        options: ['3 1', '1 3', '3 3', '1 1'],
+        answerIndex: 0,
+        explanation:
+          'The stack returns the last value pushed (3) and the queue returns the first value enqueued (1). That single difference is the whole distinction between LIFO and FIFO.',
+      },
+      {
+        id: 'DSA-006-q3',
+        type: 'truefalse',
+        concept: 'monotonic stack complexity',
+        prompt: 'An algorithm with a while loop nested inside a for loop must be at least O(n^2).',
+        answer: false,
+        explanation:
+          'Only if the inner loop can run O(n) times per outer iteration. In a monotonic stack each element is pushed once and popped at most once, bounding all inner iterations by n across the whole run — so it is O(n).',
+      },
+      {
+        id: 'DSA-006-q4',
+        type: 'debug',
+        language: 'python',
+        concept: 'bracket validation edge case',
+        prompt: 'This returns True for the input "(((", which is wrong. What is missing?',
+        code: `def is_balanced(s):
+    stack = []
+    for ch in s:
+        if ch == "(":
+            stack.append(ch)
+        elif ch == ")":
+            if not stack:
+                return False
+            stack.pop()
+    return True`,
+        options: [
+          'The final line should be `return not stack`, since unclosed brackets remain on it',
+          'The stack should be a deque rather than a list',
+          '`stack.append(ch)` should push the closing bracket instead',
+          'The loop should iterate over the string in reverse',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Nothing ever detects openings that were never closed. Returning `not stack` requires the stack to be empty at the end, which is the other half of the balance condition.',
+      },
+      {
+        id: 'DSA-006-q5',
+        type: 'match',
+        concept: 'matching structure to problem',
+        prompt: 'Match each problem to the discipline that fits it naturally.',
+        pairs: [
+          { left: 'Validating nested brackets', right: 'Stack (LIFO)' },
+          { left: 'Shortest path in an unweighted graph', right: 'Queue (FIFO)' },
+          { left: 'Undo history in an editor', right: 'Stack (LIFO)' },
+          { left: 'Buffering batches between a loader and a trainer', right: 'Queue (FIFO)' },
+        ],
+        explanation:
+          'Anything whose natural order is reverse-of-arrival — nesting, undo, backtracking — is a stack. Anything that must preserve arrival order — fairness, level-by-level exploration, buffering — is a queue.',
+      },
+      {
+        id: 'DSA-006-q6',
+        type: 'explain',
+        concept: 'why restricted interfaces help',
+        prompt: 'Why is it useful to reach for a stack or a queue rather than just using a list and tracking indices yourself?',
+        rubric: [
+          'Says the restricted interface guarantees O(1) operations because nothing is searched or shifted',
+          'Says the discipline matches the problem\'s natural processing order, making the code shorter and less error-prone',
+          'Gives an example where the choice of discipline changes the algorithm, such as DFS versus BFS',
+        ],
+        sampleAnswer:
+          'Restricting where you may add and remove is what makes every operation constant time: nothing has to be searched for and nothing has to shift. Beyond the complexity, the restriction encodes the problem. If the rule is "the most recently opened thing must be closed first", a stack enforces that for you, and the bracket-matching code becomes six obvious lines instead of an index-juggling loop with off-by-one risks. The choice between the two is not cosmetic either: running a graph traversal with a stack gives depth-first order and with a queue gives breadth-first order, and only the queue version finds shortest paths in an unweighted graph. Choosing the discipline is choosing the algorithm.',
+        explanation:
+          'The point being assessed is that the data structure carries the ordering rule, so picking the right one is a design decision rather than a container preference.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Stack versus queue in one line', back: 'Stack is last-in-first-out (push/pop at one end); queue is first-in-first-out (add at back, remove at front).' },
+      { front: 'Correct Python stack and queue', back: 'Stack: a list with append/pop. Queue: collections.deque with append/popleft. Never list.pop(0).' },
+      { front: 'Two checks bracket validation needs', back: 'Guard against popping an empty stack, and require the stack to be empty at the end (`return not stack`).' },
+      { front: 'Why is a monotonic stack O(n)?', back: 'Each element is pushed once and popped at most once, so total inner-loop work is bounded by n across the whole run.' },
+      { front: 'What is the call stack?', back: 'The interpreter\'s own LIFO stack of function frames; a traceback is that stack printed, and RecursionError is it overflowing.' },
+      { front: 'deque(maxlen=n) does what?', back: 'Keeps a bounded buffer: appending past the limit evicts from the opposite end in O(1). Ideal for replay buffers and rolling windows.' },
+    ],
+
+    challenge: {
+      title: 'A tiny expression evaluator',
+      brief:
+        'Write an evaluator for arithmetic expressions given as strings, supporting +, -, *, / and parentheses with correct precedence, using two stacks: one for numbers and one for operators. Handle multi-digit numbers and arbitrary whitespace. Include tests for "2 + 3 * 4", "(2 + 3) * 4" and a malformed input such as "2 + (3", which must fail cleanly rather than raise IndexError, and state the time and space complexity of your solution.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Precedence is handled by comparing operators against the operator stack, not by string rewriting',
+        'Parentheses are matched using the stack, and unmatched ones produce a clear error',
+        'Multi-digit numbers and whitespace are parsed correctly',
+        'The write-up states O(n) time and O(n) space with a one-sentence justification',
+      ],
+      starterCode: 'PRECEDENCE = {"+": 1, "-": 1, "*": 2, "/": 2}\n\ndef evaluate(expr):\n    numbers, operators = [], []\n    # scan the expression once, pushing and resolving as precedence requires\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone the difference between a stack and a queue, and help them decide which one a given problem needs.',
+      mustCover: [
+        'A stack removes the most recently added item; a queue removes the oldest',
+        'Both restrict access to designated ends, which is what makes every operation O(1)',
+        'Stacks fit nesting, undo and backtracking; queues fit arrival-order processing and level-by-level exploration',
+        'In Python, use a list for a stack and collections.deque for a queue, because list.pop(0) is O(n)',
+      ],
+      bonusSignals: ['notes that swapping the two turns DFS into BFS', 'mentions the call stack as a real stack', 'gives the bracket-matching example'],
+      sampleExplanation:
+        'A stack is a pile: you add to the top and you take from the top, so the last thing in is the first thing out. A queue is a line: you join at the back and you are served from the front, so the first thing in is the first thing out. Both refuse to let you reach into the middle, and that refusal is what makes them fast — there is never anything to search for or shift along, so every operation costs the same tiny amount. Choosing between them is really choosing an order of work. If the problem is about nesting — closing brackets, undoing edits, retreating out of a dead end — the thing you need next is always the most recent one, so it is a stack. If the problem is about handling things in the order they arrived, or exploring a network one ring at a time, it is a queue. One practical warning for Python: a list makes a perfect stack, but using it as a queue with pop(0) is slow, because removing from the front shifts everything else along. Use collections.deque for queues.',
+    },
+
+    masteryRequirements: { understoodScore: 0.7, proficientScore: 0.85, practiceRequired: 2, teachRequired: true },
+  },
+];

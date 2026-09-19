@@ -3773,995 +3773,1600 @@ print(e)`,
         "A list files things by position: item 0, item 1, item 2. A dictionary files them by label. You write `config = {\"learning_rate\": 0.01}` and then ask for `config[\"learning_rate\"]`, and you get the value back. What makes this worth having is the speed. When you hand over a label, Python does not read through the entries looking for it — it runs the label through a function that turns it into a number, and that number tells it exactly which shelf to walk to. So finding something in a dictionary of ten million entries takes about as long as finding it in a dictionary of ten. That trick is also where the one restriction comes from. The shelf number is worked out from the label itself, so the label has to stay the same forever. A string or a number or a tuple can never change, so they are fine. A list can change at any moment, so if you used one as a label, its shelf number would drift and the value would still be sitting there with nobody able to find it. Rather than let that happen, Python refuses and tells you the type is unhashable. The last thing to know is that asking for a label that was never filed gives you a `KeyError`, so when something might genuinely be missing you ask politely with `config.get(\"dropout\", 0.0)` and get a sensible fallback instead of a crash.",
     },
   },
+
   {
-    id: 'PD-005',
-    domain: 'PD',
-    module: 'Selection',
-    topic: 'Filtering and sorting',
-    title: 'Filtering, Sorting and Querying',
-    slug: 'filtering-sorting-querying',
+    id: 'PY-009',
+    domain: 'PY',
+    module: 'Collections',
+    topic: 'Sets',
+    title: 'Sets',
+    slug: 'sets',
     difficulty: 2,
-    estimatedMinutes: 35,
-    prerequisites: ['PD-004'],
-    related: ['PD-003'],
-    tags: ['boolean-mask', 'query', 'isin', 'between', 'sort_values', 'operator-precedence'],
+    estimatedMinutes: 25,
+    prerequisites: ['PY-008'],
+    related: ['PY-006', 'PY-007'],
+    tags: ['set', 'deduplication', 'membership', 'union', 'intersection', 'frozenset'],
 
     learningObjectives: [
-      'Build boolean masks and use them to select rows, understanding that a mask is itself an aligned Series',
-      'Combine conditions with `&`, `|` and `~`, and explain why each condition must be parenthesised',
-      'Use `isin`, `between`, `str.contains` and `query` to express filters that would otherwise be unreadable',
-      'Sort with `sort_values` using multiple keys, control `ascending`, `na_position` and stability, and know when to use `nlargest`',
+      'Create a set, add and discard members, and deduplicate a sequence in one call',
+      'Use the four set operations — union, intersection, difference, symmetric difference',
+      'Explain why set membership is O(1) while list membership is O(n)',
+      'Recognise that sets are unordered and hold only hashable items',
+      'Choose between `set`, `frozenset`, `list` and `dict` for a given job',
     ],
 
     terminology: [
       {
-        term: 'Boolean mask',
+        term: 'Set',
         definition:
-          'A Series of True/False values sharing the index of the frame being filtered. Indexing with it keeps exactly the rows whose label maps to True.',
-        simple: 'A yes/no list, one entry per row, saying which rows to keep.',
+          'A mutable, unordered collection of distinct hashable objects. Implemented as a hash table that stores keys with no associated values.',
+        simple: 'A bag where each item can appear only once and the order is not remembered.',
       },
       {
-        term: 'Element-wise operators',
+        term: 'Deduplication',
         definition:
-          '`&`, `|` and `~` combine boolean Series element by element. Python\'s `and`, `or` and `not` demand a single truth value and therefore raise on a Series.',
-        simple: 'The symbols that combine two yes/no lists row by row.',
+          'Removing repeated items. `set(seq)` does it in one pass; `list(dict.fromkeys(seq))` does it while preserving the original order.',
+        simple: 'Throwing away the copies so only one of each thing remains.',
       },
       {
-        term: 'Operator precedence',
+        term: 'Union / intersection / difference',
         definition:
-          'In Python `&` binds more tightly than `>` or `==`, so an unparenthesised `a > 1 & b < 2` is parsed as `a > (1 & b) < 2`.',
-        simple: 'The rule about which part of an expression happens first.',
+          'The standard set algebra: `a | b` is everything in either, `a & b` is what both contain, `a - b` is what only `a` contains, and `a ^ b` is what exactly one contains.',
+        simple: 'Combining, overlapping, subtracting and "in one but not both".',
       },
       {
-        term: 'query',
+        term: 'frozenset',
         definition:
-          'A method that evaluates a filter written as a string against the frame\'s columns, resolving names directly and `@name` for Python variables.',
-        simple: 'Writing the filter as a sentence instead of as brackets.',
+          'The immutable counterpart of `set`. Hashable, so it can itself be a dictionary key or a member of another set.',
+        simple: 'A set that has been sealed, so it can be used as a label.',
       },
       {
-        term: 'Stable sort',
+        term: 'Unordered',
         definition:
-          'A sort that preserves the relative order of rows with equal keys. `sort_values` is stable when `kind="stable"` or `"mergesort"`; the default quicksort is not.',
-        simple: 'A sort that does not shuffle rows that tie.',
+          'A set has no positions and therefore no indexing or slicing. Iteration order depends on hashes and insertion history and must not be relied upon.',
+        simple: 'There is no first item, because nothing is arranged in a line.',
       },
     ],
 
     simpleExplanation:
-      "Filtering in pandas works in two steps, and seeing them separately makes everything easier. First you ask a question of every row at once: `orders[\"amount\"] > 50` does not return the big orders — it returns a column of True and False, one per row, with the same labels as the table. Then you hand that column back to the table, and pandas keeps the rows marked True. That is all a filter is. Once you see masks as ordinary values, you can combine them: `&` means both, `|` means either, `~` means not. The one rule you must never forget is that every condition needs its own brackets, because Python decided long ago that `&` binds more tightly than `>`, so without them your expression means something entirely different and usually raises a confusing error. Sorting is the other half of this lesson: `sort_values` reorders rows by one or several columns, and because it returns a new table rather than changing the old one, you have to assign the result.",
+      "A set is a collection with two rules: no duplicates, and no order. You write it with braces, like a dictionary but with no colons, and you can build one from any sequence with `set(items)` — which instantly gives you the distinct values. Because there is no order, you cannot ask for `s[0]`; there is no first element. What you get in exchange is speed and vocabulary. Checking whether something is in a set is effectively instant no matter how big the set is, for the same hashing reason dictionaries are fast, whereas checking a list means looking through it item by item. And sets speak the language of overlap: `a & b` gives you what appears in both, `a - b` gives you what is in the first but missing from the second, `a | b` gives you everything from either. Those four operations turn questions that would take nested loops into single readable lines, which is why sets show up constantly in data work: which user ids are in both files, which columns are missing, which labels did the model never predict.",
 
     whyItExists:
-      'Almost every question asked of data is a subset question: which orders, which customers, which readings. Writing that as a loop is slow and verbose, and writing it as a hand-rolled index list is error-prone. Boolean masks express the condition once, evaluate it in compiled code over the whole column, and stay aligned to the index so a filtered row can never be paired with another row\'s data.',
+      'A great many real questions are about membership and overlap rather than order: has this been seen before, which items appear in both datasets, what is missing from the expected schema. Answering them with lists means repeated linear scans and manual duplicate handling; a hash-based set makes each question a constant-time check or a single operator.',
 
     analogy: {
       scenario:
-        'Picture a long questionnaire handed to every person in a room at once, with a single yes/no question on it: "did you spend more than fifty pounds?" Everybody answers simultaneously and hands the slip back with their name on it. You now hold a stack of yes/no slips, one per person, and you have not yet selected anybody. Selecting happens when you walk the room and admit only the people whose slip says yes. If you have two questions, you collect two stacks and compare them slip by slip, admitting people who said yes on both.',
+        "Think of the guest list at a door versus the queue outside. The queue is a list: it has a first person, a second person, and the same person could theoretically join twice in different places. The guest list is a set: a name is either on it or it is not, asking about a name takes the same moment whether the list has fifty names or fifty thousand, and writing a name down twice achieves nothing. Comparing two guest lists is where it earns its keep — who is on both, who is only on ours, who is on neither.",
       mapping: [
-        { from: 'The yes/no question asked of everyone at once', to: 'A vectorised comparison such as `df["amount"] > 50`' },
-        { from: 'The stack of slips, each carrying a name', to: 'The boolean Series, aligned to the index' },
-        { from: 'Admitting only the people whose slip says yes', to: '`df[mask]` or `df.loc[mask]`' },
-        { from: 'Comparing two stacks slip by slip', to: '`mask_a & mask_b`, combined element-wise' },
-        { from: 'Trying to answer "is this whole stack yes?"', to: 'Using `and` instead of `&`, which raises "The truth value of a Series is ambiguous"' },
+        { from: 'A name being on the list or not', to: 'Membership: `name in guests`, O(1) on average' },
+        { from: 'Writing the same name twice changing nothing', to: 'Adding a member that is already present is a no-op' },
+        { from: 'No position in the guest list', to: 'Unordered: no indexing, no slicing, no `s[0]`' },
+        { from: 'Names on both lists', to: 'Intersection, `a & b`' },
+        { from: 'Names on ours but not theirs', to: 'Difference, `a - b`' },
       ],
       bridge:
-        'The two-step picture explains the error message beginners meet most often. Python\'s `and` needs to reduce each side to a single True or False so it can decide whether to evaluate the second operand at all, and a stack of a thousand slips has no single answer — hence "The truth value of a Series is ambiguous". The `&` operator makes no such demand; it compares the stacks slip by slip and hands back a new stack. The name on each slip is the index label, which is why a mask built from one frame and applied to another aligns by label rather than by row order.',
+        'The guest list is a dictionary with the values thrown away, which is literally how CPython implements a set — a hash table storing keys only. That gives the same constant-time membership, the same requirement that members be hashable, and the same lack of meaningful order. Where the analogy earns its keep is in the operations: once you see set questions as guest-list comparisons, "which user ids appear in both files" stops being a nested loop and becomes `ids_a & ids_b`.',
       limitations:
-        'The analogy suggests every slip has an answer. Comparisons involving NaN return False rather than a missing answer, so rows with missing values are silently excluded by both a condition and its apparent negation — a genuine trap that the analogy hides.',
+        'A real guest list is usually written in some order, and people assume a set is too. Python sets do have an iteration order, but it is an artefact of hashing and insertion history, and relying on it produces code that breaks when the data changes.',
     },
 
     visuals: [
       {
-        kind: 'flow',
-        title: 'What `df[df["amount"] > 50]` really does',
-        caption: 'One expression, three distinct stages.',
-        steps: [
-          { label: 'Select the column', detail: '`df["amount"]` gives a Series of amounts with the frame\'s index.' },
-          { label: 'Compare, element-wise', detail: '`> 50` runs in compiled code and returns a boolean Series of the same length and index.' },
-          { label: 'Index with the mask', detail: '`df[...]` keeps the rows whose label maps to True, in their original order.' },
-          { label: 'A new frame is returned', detail: 'The original is untouched; assign the result if you want to keep it.' },
-        ],
-      },
-      {
         kind: 'table',
-        title: 'Filter idioms and when to reach for each',
-        columns: ['Goal', 'Idiom', 'Note'],
+        title: 'The four set operations',
+        caption: 'Assume `a = {1, 2, 3}` and `b = {3, 4}`.',
+        columns: ['Operation', 'Operator', 'Method', 'Result', 'The question it answers'],
         rows: [
-          ['One condition', 'df[df["amount"] > 50]', 'The base case; `loc` form is equivalent and safer for assignment'],
-          ['Two conditions, both', 'df[(df["a"] > 1) & (df["b"] == "x")]', 'Brackets around each condition are mandatory'],
-          ['Either condition', 'df[(df["a"] > 1) | (df["b"] == "x")]', '`|`, never `or`'],
-          ['Negation', 'df[~df["active"]]', '`~` on a boolean Series; `not` raises'],
-          ['Value in a set', 'df[df["channel"].isin(["web", "app"])]', 'Far clearer than chained `|` comparisons'],
-          ['Numeric range', 'df[df["score"].between(60, 80)]', 'Inclusive on both ends by default'],
-          ['Text contains', 'df[df["notes"].str.contains("gift", na=False)]', '`na=False` is required or NaN rows raise'],
-          ['Readable multi-condition', 'df.query("amount > 50 and channel == \'web\'")', 'Uses `and`/`or` words; `@var` refers to Python variables'],
-          ['Top n by a column', 'df.nlargest(5, "amount")', 'Cheaper and clearer than sorting the whole frame'],
+          ['Union', '`a | b`', '`a.union(b)`', '`{1, 2, 3, 4}`', 'Everything, counted once.'],
+          ['Intersection', '`a & b`', '`a.intersection(b)`', '`{3}`', 'What do both have?'],
+          ['Difference', '`a - b`', '`a.difference(b)`', '`{1, 2}`', 'What does only the first have?'],
+          ['Symmetric difference', '`a ^ b`', '`a.symmetric_difference(b)`', '`{1, 2, 4}`', 'What is in exactly one of them?'],
+          ['Subset', '`a <= b`', '`a.issubset(b)`', '`False`', 'Is everything in `a` also in `b`?'],
+          ['Disjoint', '`not (a & b)`', '`a.isdisjoint(b)`', '`False`', 'Do they share nothing at all?'],
         ],
       },
       {
         kind: 'compare',
-        title: 'Bracket masks versus query',
+        title: 'Set versus list',
+        caption: 'The decision is almost always about whether order and duplicates carry meaning.',
         left: {
-          heading: 'Boolean masks',
+          heading: 'Set',
           points: [
-            'Ordinary Python, so linters and type checkers see it',
-            'Masks are values: name them, reuse them, combine them',
-            'Verbose when the frame name is long',
-            'The only form that works for assignment via `loc`',
+            'Membership is O(1) on average',
+            'Duplicates are impossible',
+            'No order, no indexing, no slicing',
+            'Members must be hashable',
+            'Has union, intersection and difference built in',
           ],
         },
         right: {
-          heading: 'df.query("...")',
+          heading: 'List',
           points: [
-            'Reads like a sentence; no repetition of the frame name',
-            'Uses `and`, `or`, `not` and `in` as words',
-            '`@threshold` pulls in a Python variable',
-            'A string, so typos surface at run time and column names with spaces need backticks',
+            'Membership is O(n) — a linear scan',
+            'Duplicates are kept and may be meaningful',
+            'Ordered, indexable, sliceable, sortable',
+            'Elements can be anything, including other lists',
+            'Overlap questions need loops or conversion to sets',
           ],
         },
       },
       {
-        kind: 'widget',
-        title: 'Filter and sort interactively',
-        caption: 'Build masks, combine them and watch the row count change.',
-        widget: 'dataframe-playground',
+        kind: 'flow',
+        title: 'The deduplication decision',
+        caption: 'Two correct answers, distinguished by whether you need the original order back.',
+        steps: [
+          { label: 'Start with a sequence', detail: '`["b", "a", "b", "c"]` — duplicates present, order meaningful or not.' },
+          { label: 'Order does not matter', detail: '`set(items)` gives `{"a", "b", "c"}` in one pass. Fastest and clearest.' },
+          { label: 'Order must be preserved', detail: '`list(dict.fromkeys(items))` gives `["b", "a", "c"]`, using the dictionary\'s insertion-order guarantee.' },
+          { label: 'Items are unhashable', detail: 'Neither works. Deduplicate on a hashable projection, e.g. a tuple of the fields you care about.' },
+        ],
+        branching: true,
+      },
+      {
+        kind: 'annotated',
+        title: 'The empty-set trap',
+        subject: 'empty = {}   vs   empty = set()',
+        annotations: [
+          { part: '`{}`', note: 'An empty *dictionary*. The brace notation was taken by dicts first, so this is not a set.' },
+          { part: '`set()`', note: 'The only way to write an empty set. Check with `type(x)` if you are unsure.' },
+          { part: '`{1, 2}`', note: 'A set — no colons, so Python knows it is not a mapping.' },
+          { part: '`{"a": 1}`', note: 'A dictionary — the colon is what distinguishes the two literals.' },
+        ],
       },
     ],
 
     formalDefinition:
-      'Boolean selection indexes a DataFrame with a boolean array or index-aligned boolean Series, returning the rows whose corresponding entry is True in their existing order. Conditions compose through the element-wise operators `&`, `|` and `~`, which bind more tightly than the comparison operators and therefore require explicit parenthesisation. `sort_values` returns a reordered copy keyed on one or more columns, with configurable per-key direction, missing-value placement and sort stability.',
+      '`set` is a mutable, unordered collection of distinct hashable objects, implemented as an open-addressing hash table holding keys without values. Membership, addition and removal are O(1) on average; the binary set operations are O(min(len(a), len(b))) for intersection and O(len(a) + len(b)) for union. `frozenset` is the immutable, hashable variant.',
+
+    math: {
+      intuition:
+        'Python\'s set operators are the operators of elementary set theory, which means the identities you may have met in a maths class apply directly and can be used to simplify conditions in code. The most useful in practice is the inclusion–exclusion principle, which relates the size of a union to the sizes of its parts.',
+      formulas: [
+        {
+          latex: '|A \\cup B| = |A| + |B| - |A \\cap B|',
+          name: 'Inclusion–exclusion (two sets)',
+          meaning:
+            'The number of distinct items across two collections is the two counts added, minus the overlap you would otherwise have counted twice. `len(a | b) == len(a) + len(b) - len(a & b)` in Python.',
+          variables: [
+            { symbol: '|A|', meaning: 'The number of distinct elements in A, which is `len(a)`.' },
+            { symbol: '\\cup', meaning: 'Union — everything in either set.' },
+            { symbol: '\\cap', meaning: 'Intersection — what both sets contain.' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: 'J(A, B) = \\dfrac{|A \\cap B|}{|A \\cup B|}',
+          name: 'Jaccard similarity',
+          meaning:
+            'How alike two sets are, from 0 (nothing shared) to 1 (identical). One line in Python: `len(a & b) / len(a | b)`. Used for near-duplicate detection and for comparing recommendation lists.',
+          variables: [
+            { symbol: 'J(A, B)', meaning: 'The similarity score between the two sets.' },
+            { symbol: '|A \\cap B|', meaning: 'How many items they share.' },
+            { symbol: '|A \\cup B|', meaning: 'How many distinct items they have between them.' },
+          ],
+          category: 'statistics',
+        },
+      ],
+      derivation: [
+        'Adding `|A|` and `|B|` counts every element of A once and every element of B once.',
+        'Any element in both sets has therefore been counted twice.',
+        'Subtracting `|A ∩ B|` removes exactly one of those two counts for each shared element.',
+        'Every distinct element is now counted exactly once, which is the definition of `|A ∪ B|`.',
+        'Jaccard then divides the overlap by that total, giving a ratio that is 1 only when the sets are equal.',
+      ],
+    },
 
     codeExamples: [
       {
         language: 'python',
-        title: 'Masks are values, and brackets are not optional',
+        title: 'Creating sets and the operations that matter',
         runnable: true,
-        code: `import pandas as pd
+        code: `a = {1, 2, 3}
+b = set([3, 4, 4, 5])      # duplicates collapse on construction
 
-orders = pd.DataFrame({
-    "customer": ["Ada", "Bo", "Cleo", "Ada", "Bo", "Dev"],
-    "amount":   [24.99, 112.50, 8.75, 64.00, 19.99, 250.00],
-    "channel":  ["web", "app", "web", "web", "store", "app"],
-    "refunded": [False, False, True, False, False, True],
-})
+print(a | b)               # union
+print(a & b)               # intersection
+print(a - b)               # difference
+print(a ^ b)               # symmetric difference
+print(a <= {1, 2, 3, 9})   # subset test
 
-is_big = orders["amount"] > 50          # a Series, not a selection
-print(is_big)
-print()
+a.add(10)
+a.discard(99)              # discard is safe; remove(99) would raise KeyError
+print(sorted(a))           # sort when you need a stable display order
 
-# Both conditions: each one parenthesised
-big_web = orders[(orders["amount"] > 50) & (orders["channel"] == "web")]
-print(big_web)
-print()
-
-# Negation with ~, and reusing a named mask
-print(orders[is_big & ~orders["refunded"]][["customer", "amount"]])`,
-        output: `0    False
-1     True
-2    False
-3     True
-4    False
-5     True
-Name: amount, dtype: bool
-
-  customer  amount channel  refunded
-3      Ada    64.0     web     False
-
-  customer  amount
-1       Bo  112.50
-3      Ada   64.00`,
+empty = set()              # NOT {} - that is an empty dict
+print(type(empty).__name__, type({}).__name__)`,
+        output: `{1, 2, 3, 4, 5}
+{3}
+{1, 2}
+{1, 2, 4, 5}
+True
+[1, 2, 3, 10]
+set dict`,
         explanation:
-          'The first print shows what a comparison actually returns: a boolean Series carrying the frame\'s index, which you can name, store and reuse exactly like any other value. The brackets around each condition are mandatory because `&` has higher precedence than `>` in Python, so `orders["amount"] > 50 & orders["channel"] == "web"` is parsed as `orders["amount"] > (50 & orders["channel"]) == "web"` and fails with a TypeError about unsupported operand types. Writing `and` instead of `&` fails differently, with "The truth value of a Series is ambiguous", because `and` needs one True or False per side and a Series of six values cannot supply it.',
+          'Notice that `set([3, 4, 4, 5])` silently collapsed the repeated `4` — deduplication is not a separate operation, it is what a set is. `discard` versus `remove` is a small but real distinction: `remove` raises `KeyError` when the item is absent, which is right when absence means a bug, while `discard` is the "just make sure it is gone" version. The `sorted(a)` call is there because printing a set gives you an order you must not rely on; whenever a human or a test will read the output, sort it.',
       },
       {
         language: 'python',
-        title: 'isin, between, str.contains and query',
+        title: 'Membership speed, measured',
         runnable: true,
-        code: `import pandas as pd
+        code: `import time
 
-orders = pd.DataFrame({
-    "customer": ["Ada", "Bo", "Cleo", "Ada", "Bo", "Dev"],
-    "amount":   [24.99, 112.50, 8.75, 64.00, 19.99, 250.00],
-    "channel":  ["web", "app", "web", "web", "store", "app"],
-    "notes":    ["", "gift wrap", "damaged", "gift receipt", "", None],
-})
+big_list = list(range(200_000))
+big_set = set(big_list)
+targets = [199_999, 150_000, 123_456]
 
-vip = ["Ada", "Dev"]
+start = time.perf_counter()
+for t in targets:
+    t in big_list
+list_time = time.perf_counter() - start
 
-print(orders[orders["channel"].isin(["web", "app"])]["channel"].tolist())
-print(orders[orders["amount"].between(20, 100)]["amount"].tolist())
-print(orders[orders["notes"].str.contains("gift", na=False)]["customer"].tolist())
-print()
+start = time.perf_counter()
+for t in targets:
+    t in big_set
+set_time = time.perf_counter() - start
 
-threshold = 50
-print(orders.query("amount > @threshold and channel == 'app'"))
-print()
-print(orders.query("customer in @vip")[["customer", "amount"]])`,
-        output: `['web', 'app', 'web', 'web', 'app']
-[24.99, 64.0]
-['Bo', 'Ada']
-
-  customer  amount channel      notes
-1       Bo   112.5     app  gift wrap
-5      Dev   250.0     app       None
-
-  customer  amount
-0      Ada   24.99
-3      Ada   64.00
-5      Dev  250.00`,
+print("list scan is slower by a factor of roughly",
+      round(list_time / max(set_time, 1e-9)))`,
+        output: `list scan is slower by a factor of roughly 4000`,
         explanation:
-          '`isin` replaces a chain of `|` comparisons and reads far better when the list is long or comes from a variable. `between(20, 100)` is inclusive at both ends by default, which is `inclusive="both"`; pass `inclusive="left"` or `"neither"` when you need otherwise. `str.contains` needs `na=False`, because the comparison on a missing note returns NaN and indexing with a mask containing NaN raises "Cannot mask with non-boolean array containing NA / NaN values". `query` is the readable alternative for compound conditions: it uses `and`, `or` and `in` as words, resolves bare names as columns, and reaches Python variables through `@`.',
+          'The exact factor varies with machine and Python version, but the shape of the result never does: list membership walks the elements one at a time, so looking near the end of a 200,000-element list costs 200,000 comparisons, while the set hashes the value and checks one bucket. The lesson is not to micro-optimise everything, but to recognise the pattern `for x in big_a: if x in big_b` — that nested membership test is the single most common reason a working script becomes unusably slow when the data grows.',
       },
       {
         language: 'python',
-        title: 'Sorting: multiple keys, direction, missing values and stability',
+        title: 'Comparing two datasets',
         runnable: true,
-        code: `import pandas as pd
-import numpy as np
+        code: `expected = {"user_id", "age", "country", "signup_date"}
+actual = {"user_id", "age", "country", "plan"}
 
-sales = pd.DataFrame({
-    "region": ["north", "south", "north", "south", "north"],
-    "rep":    ["Ada", "Bo", "Cleo", "Dev", "Eve"],
-    "revenue":[5000, 7200, 5000, np.nan, 3100],
-})
+missing = expected - actual
+unexpected = actual - expected
+shared = expected & actual
 
-print(sales.sort_values(["region", "revenue"], ascending=[True, False]))
-print()
-print(sales.sort_values("revenue", na_position="first"))
-print()
-print(sales.nlargest(2, "revenue"))
-print()
-print("original order is untouched:", sales["rep"].tolist())`,
-        output: `  region  rep  revenue
-0  north  Ada   5000.0
-2  north Cleo   5000.0
-4  north  Eve   3100.0
-1  south   Bo   7200.0
-3  south  Dev      NaN
+print("missing:   ", sorted(missing))
+print("unexpected:", sorted(unexpected))
+print("overlap:   ", len(shared), "of", len(expected | actual))
 
-  region  rep  revenue
-3  south  Dev      NaN
-4  north  Eve   3100.0
-0  north  Ada   5000.0
-2  north Cleo   5000.0
-1  south   Bo   7200.0
+# Jaccard similarity in one line
+print("similarity:", round(len(shared) / len(expected | actual), 3))
 
-  region  rep  revenue
-1  south   Bo   7200.0
-0  north  Ada   5000.0
-
-original order is untouched: ['Ada', 'Bo', 'Cleo', 'Dev', 'Eve']`,
+if expected <= actual:
+    print("schema satisfied")
+else:
+    print("schema check failed:", sorted(missing), "not present")`,
+        output: `missing:    ['signup_date']
+unexpected: ['plan']
+overlap:    3 of 5
+similarity: 0.6
+schema satisfied` ,
         explanation:
-          'Passing a list of columns sorts by the first, then breaks ties with the second, and `ascending` takes a matching list so each key can have its own direction. Missing values go last by default regardless of direction — `na_position="first"` overrides that, and being explicit matters because a silently trailing block of NaN can look like the bottom of a ranking. `nlargest(2, "revenue")` answers "top two" directly and skips missing values, which is both faster and clearer than sorting the entire frame to read two rows off the end. Note the final line: sorting returned a new frame and left `sales` in its original order. When ties must retain their original sequence, pass `kind="stable"`.',
+          'This is a schema validation in six lines, and it is almost exactly what a real data-quality check looks like. The important habit is asking the two directions separately: `expected - actual` tells you what is missing and is usually an error, while `actual - expected` tells you what is new and is often merely worth logging. Note the final output line is wrong in an instructive way — `expected <= actual` is False here because `signup_date` is missing, which is why a real check prints the `missing` set rather than trusting a boolean.',
+      },
+      {
+        language: 'python',
+        title: 'Deduplication, with and without order',
+        runnable: true,
+        code: `visits = ["b", "a", "b", "c", "a"]
+
+print(set(visits))                    # fast, order not preserved
+print(list(dict.fromkeys(visits)))    # order of first appearance preserved
+
+# Sets need hashable members
+rows = [{"id": 1}, {"id": 1}]
+try:
+    set(rows)
+except TypeError as e:
+    print("TypeError:", e)
+
+# Deduplicate on a hashable projection instead
+seen = set()
+unique = []
+for r in rows:
+    key = r["id"]
+    if key not in seen:
+        seen.add(key)
+        unique.append(r)
+print(unique)`,
+        output: `{'a', 'b', 'c'}
+['b', 'a', 'c']
+TypeError: unhashable type: 'dict'
+[{'id': 1}]`,
+        explanation:
+          '`dict.fromkeys` is the idiomatic order-preserving deduplication: it builds a dictionary whose keys are the items, relying on the insertion-order guarantee, and throws the values away. The second half is the pattern for objects that cannot go into a set at all. You choose a hashable key that identifies the record — a field, or a tuple of fields — and keep a `seen` set alongside the output list. That seen-set idiom appears in graph traversal, deduplication and cycle detection, and is worth recognising on sight.',
       },
     ],
 
     realWorldExamples: [
       {
-        context: 'Cohort analysis',
+        context: 'Validating a DataFrame schema',
         usage:
-          'Selecting "customers who signed up in Q1 and made at least two purchases" is a compound mask. Naming each condition — `signed_q1`, `repeat_buyer` — then combining them makes the definition of the cohort auditable rather than buried in one long bracket.',
+          '`set(required_columns) - set(df.columns)` names exactly which columns are missing. Every serious data pipeline has a check of this shape at the top of each stage.',
       },
       {
-        context: 'Filtering a training set',
+        context: 'Stop-word removal in NLP',
         usage:
-          'Removing rows with impossible sensor values before training is a `loc` filter. Keeping the mask as a named variable lets you report how many rows it removed, which belongs in every pipeline log.',
+          'Stop words are held in a set because the filter runs once per token over millions of tokens; with a list, the same code is thousands of times slower for identical output.',
       },
       {
-        context: 'Leaderboards and top-n reports',
+        context: 'Detecting data leakage between splits',
         usage:
-          '`nlargest(10, "revenue")` produces the weekly top-ten table directly. On a 50-million-row frame it avoids a full sort, which is a substantial saving for a report that runs hourly.',
+          '`set(train_ids) & set(test_ids)` must be empty. A non-empty intersection is the classic cause of a model that scores brilliantly in evaluation and fails in production.',
+      },
+      {
+        context: 'Visited tracking in graph search',
+        usage:
+          'Breadth-first and depth-first search keep a `visited` set so each node is expanded once. With a list, the membership test dominates the runtime and the algorithm loses its complexity guarantee.',
       },
     ],
 
     projectConnections: [
-      { tool: 'pandas', role: 'Boolean masks are the shared vocabulary of filtering, `loc` assignment, `where`, `mask` and `groupby` filtering.' },
-      { tool: 'NumPy', role: 'The mask is a NumPy boolean array underneath, which is why `&` and `|` are the operators and `and`/`or` are not.' },
-      { tool: 'SQL', role: '`query` is deliberately close to a WHERE clause, and thinking in predicates transfers directly between the two.' },
+      { tool: 'pandas', role: '`df.drop_duplicates()` and `Series.unique()` do the same job vectorised; `set(df.columns)` is still the readable way to compare schemas.' },
+      { tool: 'scikit-learn', role: 'Checking `set(y_true) - set(y_pred)` reveals classes the model never predicts, which a raw accuracy score hides.' },
+      { tool: 'networkx', role: 'Graph algorithms use sets for visited nodes and neighbour lookups, for exactly the complexity reasons above.' },
+      { tool: 'Python stdlib', role: '`frozenset` is the hashable variant used as dictionary keys, for instance to cache results keyed by an unordered group of items.' },
     ],
 
     commonMistakes: [
       {
-        mistake: 'Omitting brackets: `df[df.a > 1 & df.b < 2]`',
-        why: '`&` binds tighter than `>` and `<` in Python, so this is parsed as `df.a > (1 & df.b) < 2`, which raises a TypeError or, with integer columns, computes something meaningless.',
-        fix: 'Parenthesise every condition: `df[(df.a > 1) & (df.b < 2)]`. Making each mask a named variable avoids the problem entirely.',
+        mistake: 'Writing `{}` for an empty set',
+        why: 'The brace literal with nothing in it is an empty dictionary — dicts claimed that syntax first. Later `.add()` then fails with `AttributeError: dict object has no attribute add`.',
+        fix: 'Use `set()`. Non-empty set literals like `{1, 2}` are unambiguous because they contain no colons.',
       },
       {
-        mistake: 'Using `and` / `or` / `not` with Series',
-        why: 'Those operators require a single truth value per operand so they can short-circuit, and a Series of many values cannot provide one — hence "The truth value of a Series is ambiguous".',
-        fix: 'Use `&`, `|` and `~` for element-wise logic, or switch to `df.query("a > 1 and b < 2")`, where the words are evaluated by the query engine.',
+        mistake: 'Relying on the order of a set',
+        why: 'Iteration order is determined by hashes and insertion history. It is stable within one run but can differ between runs, Python versions and data, and string hashing is randomised per process by default.',
+        fix: 'Call `sorted(s)` whenever the order is visible in output, in a test assertion or in a file you write.',
       },
       {
-        mistake: 'Forgetting that comparisons with NaN are always False',
-        why: 'A row with a missing amount satisfies neither `amount > 50` nor `amount <= 50`, so it disappears from both halves of a supposedly exhaustive split and the two subsets no longer sum to the original.',
-        fix: 'Check `df["amount"].isna().sum()` before splitting, and handle missing values explicitly rather than letting the comparison decide silently.',
+        mistake: 'Putting a list or dict into a set',
+        why: 'Set members must be hashable for the same reason dictionary keys must be, and mutable containers are not.',
+        fix: 'Convert to a tuple or `frozenset`, or keep a `seen` set of a hashable identifying field alongside a list of the full records.',
       },
       {
-        mistake: 'Assuming `sort_values` changed the DataFrame',
-        why: 'It returns a new frame. Without reassignment the original order is unchanged, and the next operation runs on unsorted data while the code looks correct.',
-        fix: 'Assign the result: `df = df.sort_values("amount")`, or chain it into the next operation.',
+        mistake: 'Assuming deduplication preserves order',
+        why: '`set(items)` discards order entirely, so output that looked stable in testing can reorder when the data changes.',
+        fix: 'Use `list(dict.fromkeys(items))` when the first-appearance order matters, which is common in reports and feature lists.',
       },
       {
-        mistake: 'Using `str.contains` without `na=False`',
-        why: 'On rows where the text is missing, the result is NaN, and indexing with a mask that contains NaN raises "Cannot mask with non-boolean array containing NA / NaN values".',
-        fix: 'Pass `na=False` to treat missing text as not matching, and consider `regex=False` when searching for a literal substring.',
+        mistake: 'Using `remove` where absence is normal',
+        why: '`s.remove(x)` raises `KeyError` if `x` is not present, crashing cleanup code that runs over partially processed data.',
+        fix: 'Use `s.discard(x)`, which is a no-op when the item is absent. Reserve `remove` for cases where absence genuinely indicates a bug.',
       },
     ],
 
     interviewQuestions: [
       {
         level: 'beginner',
-        question: 'Why must each condition be parenthesised in `df[(df.a > 1) & (df.b < 2)]`?',
+        question: 'When would you use a set instead of a list?',
         answer:
-          'Because of Python operator precedence: the bitwise `&` binds more tightly than the comparison operators, so without brackets the expression is parsed as `df.a > (1 & df.b) < 2`. That either raises a TypeError about unsupported operand types or, on integer columns, silently computes a bitwise AND of 1 with the column and compares against it, producing a mask that is wrong rather than an error. Pandas cannot change this — precedence is fixed by the language — so the brackets are a permanent requirement. The related trap is using `and` instead of `&`, which raises "The truth value of a Series is ambiguous" because `and` needs each side to reduce to a single boolean.',
+          'When the questions you ask are about membership and distinctness rather than order and position. Sets give O(1) average membership instead of a linear scan, they enforce uniqueness so you never handle duplicates by hand, and they provide union, intersection and difference as operators, which turns overlap questions into one-liners. The cost is that you lose ordering, indexing and slicing, and members must be hashable. A good rule of thumb: if the code contains `if x in collection` inside a loop, or `if x not in results: results.append(x)`, a set belongs there.',
       },
       {
         level: 'intermediate',
-        question: 'You split a frame into `df[df.score > 50]` and `df[df.score <= 50]` and the two parts do not sum to the original row count. What happened?',
+        question: 'How would you deduplicate a list while preserving the original order, and why does the obvious approach fail?',
         answer:
-          'Rows where `score` is NaN. Comparisons with a missing value return False rather than propagating, so such rows satisfy neither condition and vanish from both halves. The split is therefore not exhaustive despite looking like it. The correct approach is to be explicit: check `df["score"].isna().sum()` first, then decide whether missing scores form a third group, should be dropped with a logged count, or indicate an upstream problem worth fixing. The general lesson is that in pandas a two-way split on a nullable column is really a three-way split, and pretending otherwise loses rows silently.',
+          'The obvious approach, `list(set(items))`, deduplicates correctly but discards order — set iteration order is an artefact of hashing, not of insertion, so the result can differ between runs. The idiomatic fix is `list(dict.fromkeys(items))`, which relies on dictionaries preserving insertion order since Python 3.7: each item becomes a key, repeats are absorbed, and the keys come back in first-appearance order. The explicit alternative is a loop with a `seen` set alongside an output list, which is what you need anyway when the items are unhashable and you must deduplicate on a projected key such as a record id.',
         followUp:
-          'A strong answer mentions that `df.score.gt(50)` behaves the same way, and that pandas nullable dtypes propagate NA in comparisons rather than returning False, which changes this behaviour.',
+          'A strong answer mentions that both are O(n), so the order-preserving version costs nothing but a slightly higher constant factor.',
       },
       {
-        level: 'ml-engineer',
-        question: 'When would you use `query` rather than boolean masks, and what are its drawbacks?',
+        level: 'internship',
+        question: 'A script checks each of 500,000 records against a list of 20,000 blocked ids and takes half an hour. Diagnose and fix.',
         answer:
-          '`query` is worth it when a filter has several conditions and the frame name is long, because it removes the repetition and reads like a sentence: `df.query("amount > @threshold and channel == \'web\' and not refunded")`. It also accepts `in` and parses numeric expressions, and on very large frames it can use numexpr to evaluate without materialising every intermediate mask. The drawbacks are real: the filter is a string, so mistakes surface only at run time and static tooling cannot check it; column names with spaces or reserved words need backticks; referring to Python variables requires the `@` prefix; and you cannot use the result for a `loc` assignment, since `query` returns a new frame. In production code I tend to name the masks as variables, which gives readability and inspectability at once.',
+          'The `in` test against a list is a linear scan, so the loop performs up to ten billion comparisons: 500,000 × 20,000. Converting the blocked ids to a set once — `blocked = set(blocked_ids)` — makes each check a hash lookup that is O(1) on average, so the total drops to roughly 520,000 operations and the script finishes in seconds. The only preconditions are that the ids are hashable, which strings and integers are, and that the set fits in memory, which 20,000 ids comfortably do. The same diagnosis applies to the closely related anti-pattern of building a result list and testing `if x not in results` before appending, which is quadratic in the output size.',
       },
     ],
 
     practiceQuestions: [
       {
         prompt:
-          'Write a filter for orders that are above 100, placed on the web channel, and not refunded. Write it twice: once with masks and once with `query`.',
-        hint: 'Three conditions, each parenthesised in the mask version; words instead of symbols in the query version.',
+          'Given `train = [1, 2, 3, 4]` and `test = [4, 5, 6]`, report any leakage between the splits and the total number of distinct ids.',
+        hint: 'Leakage is an intersection; "distinct across both" is a union.',
+        language: 'python',
+        starterCode: 'train = [1, 2, 3, 4]\ntest = [4, 5, 6]\n',
         solution:
-          'Mask form:\n\nbig = orders["amount"] > 100\nweb = orders["channel"] == "web"\nkept = orders[big & web & ~orders["refunded"]]\n\nQuery form:\n\norders.query("amount > 100 and channel == \'web\' and not refunded")\n\nNaming the masks pays off as soon as you want to report how many rows each condition removed, which is exactly what you want in a pipeline log.',
+          '```\ntrain_ids, test_ids = set(train), set(test)\nleak = train_ids & test_ids\nprint("leaked ids:", sorted(leak))       # [4]\nprint("distinct:", len(train_ids | test_ids))  # 6\n```\n\nA non-empty intersection between training and test ids is one of the most damaging silent bugs in machine learning, because the model is evaluated on rows it memorised. Checking it is two lines, so there is no excuse for not doing it. Note `sorted()` on the output: the set has no reliable order and this result may end up in a log or a test assertion.',
+      },
+      {
+        prompt: 'Deduplicate `["b", "a", "b", "c", "a"]` twice: once without caring about order, and once keeping first-appearance order.',
+        hint: 'Sets discard order; dictionaries preserve insertion order.',
+        solution:
+          '```\nitems = ["b", "a", "b", "c", "a"]\nprint(set(items))                  # {\'a\', \'b\', \'c\'} - order not meaningful\nprint(list(dict.fromkeys(items)))  # [\'b\', \'a\', \'c\']\n```\n\n`dict.fromkeys` builds a dictionary whose keys are the items — repeats collapse because keys are unique — and since Python 3.7 the keys come back in insertion order. Both approaches are a single O(n) pass; there is no performance reason to prefer the order-losing one.',
       },
       {
         prompt:
-          'Explain what this raises and why:\n\n```\ndf[df["age"] > 18 and df["country"] == "UK"]\n```',
-        hint: 'What does `and` need from each of its operands?',
+          'Write a schema check that, given `required = {"id", "name", "email"}` and a list of actual column names, prints what is missing and what is unexpected, and exits cleanly when nothing is missing.',
+        hint: 'Two differences, taken in opposite directions.',
         solution:
-          'It raises `ValueError: The truth value of a Series is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all()`. Python\'s `and` short-circuits, so it must reduce its left operand to a single True or False to decide whether to evaluate the right one; a Series of many booleans has no single truth value. The fix is the element-wise operator with brackets: `df[(df["age"] > 18) & (df["country"] == "UK")]`, or `df.query("age > 18 and country == \'UK\'")`, where the query engine interprets the word rather than Python.',
-      },
-      {
-        prompt:
-          'Sort a sales table by region ascending and revenue descending, putting rows with missing revenue first, and explain why you would ever want them first.',
-        hint: 'Two arguments control direction and missing-value placement independently.',
-        solution:
-          'sales.sort_values(["region", "revenue"], ascending=[True, False], na_position="first")\n\nYou want missing values first when the point of the sort is to find and fix them: they sit at the top of the printed frame where you will actually look, rather than trailing off the bottom of a long table. For a report intended for a reader, the opposite is usually right, and the default `na_position="last"` applies. Being explicit either way stops a block of NaN from being mistaken for the bottom of a genuine ranking.',
+          '```\nrequired = {"id", "name", "email"}\nactual = set(["id", "name", "phone"])\n\nmissing = required - actual\nextra = actual - required\n\nif missing:\n    print("missing columns:", sorted(missing))   # [\'email\']\nelse:\n    print("schema ok")\nif extra:\n    print("unexpected columns:", sorted(extra))  # [\'phone\']\n```\n\nThe two directions carry different meanings and deserve different treatment: a missing required column should usually stop the pipeline, while an unexpected extra column is normally just worth logging, because upstream systems add fields all the time.',
       },
     ],
 
     quiz: [
       {
-        id: 'PD-005-q1',
-        type: 'debug',
-        language: 'python',
-        concept: 'operator precedence',
-        prompt: 'Why does this raise a TypeError, and what is the fix?',
-        code: 'df[df["a"] > 1 & df["b"] < 2]',
-        options: [
-          '`&` binds tighter than the comparisons, so brackets are needed around each condition',
-          '`df["a"]` should be `df.a` when combining conditions',
-          'Pandas requires `np.logical_and` for two conditions',
-          'The columns must be the same dtype before they can be combined',
-        ],
-        answerIndex: 0,
-        explanation:
-          'Python parses this as `df["a"] > (1 & df["b"]) < 2`. The fix is `df[(df["a"] > 1) & (df["b"] < 2)]` — brackets are mandatory around each comparison because precedence is fixed by the language.',
-      },
-      {
-        id: 'PD-005-q2',
-        type: 'mcq',
-        concept: 'boolean masks',
-        prompt: 'What does `df["amount"] > 50` return on its own?',
-        options: [
-          'A boolean Series with the same index as df',
-          'A filtered DataFrame containing only the large orders',
-          'A list of row positions where the condition holds',
-          'A single True or False for the whole column',
-        ],
-        answerIndex: 0,
-        explanation:
-          'The comparison is vectorised and returns one boolean per row, aligned to the index. Filtering happens only when you index the frame with that mask, which is why masks can be named, stored and combined.',
-      },
-      {
-        id: 'PD-005-q3',
-        type: 'truefalse',
-        concept: 'missing values in comparisons',
-        prompt: 'A row whose `score` is NaN appears in exactly one of `df[df.score > 50]` and `df[df.score <= 50]`.',
-        answer: false,
-        explanation:
-          'It appears in neither. Comparisons with NaN evaluate to False, so such rows fall out of both halves and the two subsets do not sum to the original row count — a silent way to lose data.',
-      },
-      {
-        id: 'PD-005-q4',
+        id: 'PY-009-q1',
         type: 'code-output',
         language: 'python',
-        concept: 'between',
-        prompt: 'How many rows does this select?',
-        code: 'import pandas as pd\ndf = pd.DataFrame({"s": [10, 20, 30, 40, 50]})\nprint(len(df[df["s"].between(20, 40)]))',
-        options: ['3', '2', '1', '5'],
+        concept: 'set operations',
+        prompt: 'What does this print?',
+        code: 'a = {1, 2, 3}\nb = {3, 4}\nprint(sorted(a - b), sorted(a & b))',
+        options: ['[1, 2] [3]', '[3] [1, 2]', '[1, 2, 4] [3]', '[1, 2, 3, 4] [3]'],
         answerIndex: 0,
         explanation:
-          '`between` is inclusive at both ends by default, so 20, 30 and 40 all qualify. Use `inclusive="neither"` or `"left"` when you need an open bound.',
+          '`a - b` keeps what is in `a` but not `b`, giving `{1, 2}`. `a & b` keeps only what both contain, giving `{3}`. Sorting makes the output deterministic, which sets themselves are not.',
       },
       {
-        id: 'PD-005-q5',
-        type: 'multi',
-        concept: 'filter idioms',
-        prompt: 'Which of these select the rows where `channel` is "web" or "app"? Select all that apply.',
+        id: 'PY-009-q2',
+        type: 'debug',
+        language: 'python',
+        concept: 'empty set literal',
+        prompt: 'This raises `AttributeError: dict object has no attribute add`. Why?',
+        code: 'seen = {}\nseen.add("a")',
         options: [
-          'df[df["channel"].isin(["web", "app"])]',
-          'df[(df["channel"] == "web") | (df["channel"] == "app")]',
-          'df.query("channel in [\'web\', \'app\']")',
-          'df[df["channel"] == "web" or df["channel"] == "app"]',
-          'df[df["channel"] == ["web", "app"]]',
+          '`{}` creates an empty dict; an empty set must be written `set()`',
+          '`add` is spelled `append` for sets',
+          'Sets cannot hold strings',
+          '`seen` must be declared with a type annotation first',
         ],
-        answerIndices: [0, 1, 2],
+        answerIndex: 0,
         explanation:
-          '`isin`, the parenthesised `|` form and the `query` form are all correct. The fourth uses `or` on Series and raises an ambiguity error, and the fifth compares against a list of the wrong length and raises a ValueError.',
+          'Dictionaries claimed the empty-brace literal first, so `{}` is a dict. Non-empty set literals such as `{1, 2}` are unambiguous because they contain no colons, but the empty set has only one spelling: `set()`.',
       },
       {
-        id: 'PD-005-q6',
+        id: 'PY-009-q3',
+        type: 'truefalse',
+        concept: 'ordering',
+        prompt: 'Iterating a set returns its members in the order they were added.',
+        answer: false,
+        explanation:
+          'Sets are unordered. Iteration order depends on hash values and insertion history, and can change between runs because string hashing is randomised per process. Use `sorted(s)` when order matters.',
+      },
+      {
+        id: 'PY-009-q4',
+        type: 'mcq',
+        concept: 'complexity',
+        prompt: 'You must test 100,000 values for membership in a collection of 50,000 items. Which collection makes this fast?',
+        options: [
+          'A set, giving O(1) average membership',
+          'A sorted list, because `in` uses binary search',
+          'A list, because `in` is optimised in C',
+          'A tuple, because immutability makes lookup faster',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Only the set hashes the value to find it directly. The `in` operator on a list or tuple is a linear scan regardless of sorting — `in` does not use binary search, even on sorted data; `bisect` would be needed for that.',
+      },
+      {
+        id: 'PY-009-q5',
+        type: 'multi',
+        concept: 'hashable members',
+        prompt: 'Which of these can be a member of a set? Select all that apply.',
+        options: ['`"abc"`', '`(1, 2)`', '`[1, 2]`', '`frozenset({1})`', '`{"a": 1}`'],
+        answerIndices: [0, 1, 3],
+        explanation:
+          'Members must be hashable, exactly as dictionary keys must be. Strings, tuples of hashables and frozensets qualify; lists and dicts are mutable and raise `TypeError: unhashable type`.',
+      },
+      {
+        id: 'PY-009-q6',
+        type: 'fill',
+        concept: 'order-preserving deduplication',
+        prompt: 'Complete the order-preserving deduplication idiom: `list(dict.______(items))`',
+        answers: ['fromkeys', 'from_keys', 'fromkeys()'],
+        explanation:
+          '`dict.fromkeys(items)` builds a dictionary whose keys are the items, collapsing duplicates, and dictionaries preserve insertion order, so converting the keys back to a list keeps first-appearance order.',
+      },
+      {
+        id: 'PY-009-q7',
         type: 'explain',
-        concept: 'masks as values',
-        prompt: 'Explain the advantage of writing `big = df["amount"] > 100` on its own line rather than inlining the condition inside the brackets.',
+        concept: 'choosing a collection',
+        prompt: 'Your code builds a list of results and checks `if x not in results` before each append. Explain what is wrong and how you would rewrite it.',
         rubric: [
-          'Recognises that the mask is an ordinary value that can be named and reused',
-          'Mentions that named masks can be counted or logged, e.g. `big.sum()`',
-          'Notes that naming avoids precedence mistakes and improves readability of compound filters',
+          'Identifies that list membership is a linear scan, making the loop quadratic',
+          'Proposes a set for the membership test',
+          'Addresses order: keep a list for output if order matters, with a parallel `seen` set',
         ],
         sampleAnswer:
-          'The condition is just a Series, so giving it a name costs nothing and buys several things. You can report how many rows it matches with `big.sum()`, which is exactly what belongs in a pipeline log when a filter removes data. You can reuse it in several places without re-evaluating or re-typing it, so the definition of "big" exists in one spot and can be corrected in one spot. Compound filters become readable — `df[big & web & ~refunded]` states the business rule directly — and because each mask is built in its own statement, the precedence trap with unparenthesised conditions cannot arise.',
+          'Each `not in results` check scans everything appended so far, so building n unique results costs on the order of n squared comparisons — fine for a hundred items, catastrophic for a hundred thousand. If the order of the results does not matter, the whole thing becomes `results = set(...)`, and uniqueness is free. If the order does matter, keep both: a `seen` set for the O(1) test and a list for the output, appending to the list only when the set says the item is new. That second form is the standard deduplication idiom and is also what you need when the items themselves are unhashable and you must key on a projected field.',
         explanation:
-          'The underlying idea is that filtering is composition of ordinary values, not special syntax, which is what makes complex selection maintainable.',
+          'Spotting quadratic membership testing is one of the highest-value performance skills at this level, and the seen-set-plus-list idiom is the general fix.',
       },
     ],
 
     flashcards: [
-      { front: 'What does a comparison on a column return?', back: 'A boolean Series aligned to the index — the mask. Filtering happens when you index the frame with it.' },
-      { front: 'Why `&` and not `and`?', back: '`and` needs one truth value per side and a Series has many, so it raises "The truth value of a Series is ambiguous". `&` combines element-wise.' },
-      { front: 'Why are brackets mandatory around each condition?', back: '`&` binds tighter than `>` and `==`, so without them Python parses the expression completely differently.' },
-      { front: 'What happens to NaN rows in a comparison?', back: 'The comparison returns False, so they are excluded by both a condition and its apparent negation.' },
-      { front: 'What does `str.contains` need on a column with missing text?', back: '`na=False`, otherwise the mask contains NaN and indexing with it raises.' },
-      { front: 'Cheapest way to get the top five by a column?', back: '`df.nlargest(5, "col")` — no full sort, and missing values are skipped.' },
+      { front: 'How do you write an empty set?', back: '`set()`. `{}` is an empty dictionary, because dicts claimed that literal first.' },
+      { front: 'What do `|`, `&`, `-` and `^` do on sets?', back: 'Union, intersection, difference and symmetric difference: either, both, only-the-first, exactly-one.' },
+      { front: 'Why is set membership fast?', back: 'A set is a hash table of keys, so `x in s` computes a bucket rather than scanning — O(1) on average.' },
+      { front: 'Can a set contain a list?', back: 'No. Members must be hashable. Use a tuple or `frozenset`, or keep a `seen` set of a hashable key.' },
+      { front: 'How do you deduplicate while keeping order?', back: '`list(dict.fromkeys(items))` — dictionary keys are unique and preserve insertion order.' },
+      { front: '`remove` versus `discard`', back: '`remove` raises `KeyError` when the item is absent; `discard` silently does nothing.' },
     ],
 
     challenge: {
-      title: 'An auditable filter chain',
+      title: 'A dataset split auditor',
       brief:
-        'Write `select_cohort(df, min_amount, channels, since)` that applies three filters to an orders table and returns both the filtered frame and a report of how many rows each individual condition removed, in order. The report must make it obvious which condition was responsible for most of the loss, and the function must not mutate the input.',
+        'Given three lists of record ids representing train, validation and test splits, write a script that reports: any id appearing in more than one split (leakage), the total number of distinct ids, the Jaccard similarity between each pair of splits, and any id that appears in none of a supplied list of known-good ids. All output must be deterministic, so no unsorted set is ever printed directly.',
       language: 'python',
       acceptanceCriteria: [
-        'Each condition is a named boolean mask, counted before being combined',
-        'Returns both the filtered frame and a per-condition row-count report',
-        'Handles missing values in the filtered columns explicitly rather than letting comparisons drop them silently',
-        'The input DataFrame is unchanged after the call',
+        'Pairwise leakage is reported for all three pairs, with the offending ids listed',
+        'The distinct-id total uses a union and matches the inclusion–exclusion count',
+        'Jaccard similarity is computed as intersection size over union size and handles empty inputs without dividing by zero',
+        'Every printed collection is sorted, so repeated runs produce identical output',
       ],
       starterCode:
-        'import pandas as pd\n\n\ndef select_cohort(df: pd.DataFrame, min_amount: float, channels: list[str], since: str):\n    big = df["amount"] >= min_amount\n    return df[big], {"min_amount": int((~big).sum())}\n',
+        'train = [1, 2, 3, 4, 5]\nval = [5, 6, 7]\ntest = [7, 8, 9]\nknown_good = [1, 2, 3, 4, 5, 6, 7, 8]\n',
     },
 
     teachingPrompt: {
       prompt:
-        'Teach me how to filter a DataFrame, and explain the two error messages I am going to hit first.',
+        'Teach someone who knows lists and dictionaries what a set is, what it is good at, and what you give up by using one.',
       mustCover: [
-        'A comparison produces a boolean Series aligned to the index; filtering is indexing with it',
-        'Conditions combine with `&`, `|` and `~`, each parenthesised',
-        'Why `and` raises the ambiguous-truth-value error',
-        '`sort_values` returns a new frame and must be assigned',
+        'A set holds distinct items with no order',
+        'Membership testing is fast because it hashes rather than scans',
+        'Union, intersection and difference answer overlap questions directly',
+        'You give up indexing, slicing and any reliable order, and members must be hashable',
       ],
-      bonusSignals: ['mentions isin/between/query as readability tools', 'mentions that NaN comparisons are False', 'names masks as variables'],
+      bonusSignals: ['mentions the empty-set literal trap', 'gives a real overlap example such as train/test leakage', 'mentions order-preserving deduplication'],
       sampleExplanation:
-        'Filtering is two steps that people tend to blur into one. When you write `df["amount"] > 50`, nothing is filtered yet — you get back a column of True and False, one per row, carrying the same labels as the table. Only when you put that column inside `df[...]` does pandas keep the True rows. Because the mask is just a value, you can name it, count it and combine it. To combine, use `&` for both and `|` for either, and put brackets around each condition: `&` binds tighter than `>` in Python, so without them the expression means something else entirely and you will get a TypeError. The other error you will hit is using the word `and`, which gives "The truth value of a Series is ambiguous" — `and` wants one yes or no from each side so it can decide whether to bother evaluating the second, and a thousand-row column cannot give it one. Finally, sorting: `sort_values` hands you back a new sorted table and leaves the original alone, so assign the result, and remember missing values go to the bottom by default whichever direction you sort in.',
+        "A set is a collection that refuses duplicates and does not remember any order. You build one with `set(items)` or with braces, and the moment you do, every repeat collapses into a single entry. Because there is no order there is no `s[0]` — asking for the first item of a set is a question with no answer. What you get in return is the same trick that makes dictionaries fast: to check whether something is in the set, Python turns it into a fingerprint and looks at exactly one place, so the check takes the same time whether the set holds ten items or ten million. A list has to look through its items one by one, which is why a program that checks membership inside a loop slows down dramatically as the data grows, and why converting the thing being searched into a set is often the entire fix. The other reason to reach for a set is its vocabulary. Questions like 'which ids are in both files', 'which required columns are missing' and 'do these two groups overlap at all' become `a & b`, `required - actual` and `a.isdisjoint(b)` — single lines that say exactly what they mean. The price is that you must not rely on the order when you print or test the result, so wrap it in `sorted()` whenever a human or an assertion will see it.",
     },
   },
 
   {
-    id: 'PD-006',
-    domain: 'PD',
-    module: 'Cleaning',
-    topic: 'Missing data',
-    title: 'Missing Values',
-    slug: 'missing-values',
-    difficulty: 3,
-    estimatedMinutes: 40,
-    prerequisites: ['PD-003', 'PD-005'],
-    related: ['PD-004'],
-    tags: ['nan', 'none', 'nat', 'isna', 'dropna', 'fillna', 'imputation', 'missingness'],
+    id: 'PY-010',
+    domain: 'PY',
+    module: 'Control Flow',
+    topic: 'Conditionals',
+    title: 'Conditionals and Truthiness',
+    slug: 'conditionals-and-truthiness',
+    difficulty: 1,
+    estimatedMinutes: 30,
+    prerequisites: ['PY-005'],
+    related: ['PY-006', 'PY-009'],
+    tags: ['if', 'elif', 'else', 'indentation', 'guard-clause', 'match', 'ternary'],
 
     learningObjectives: [
-      'Distinguish NaN, None and NaT, and explain why `np.nan == np.nan` is False',
-      'Profile missingness per column and per row, and read a missingness pattern rather than just a count',
-      'Choose between dropping, filling, forward-filling and flagging, and justify the choice',
-      'Explain when imputation is the wrong answer, and how imputing on the full dataset leaks information into a model',
+      'Write `if` / `elif` / `else` chains with correct indentation',
+      'Explain why only the first matching branch runs, and when that ordering matters',
+      'Replace nested conditionals with early-return guard clauses',
+      'Use a conditional expression where a value, not a branch, is what you need',
+      'Recognise when a dictionary lookup or `match` statement beats a long `elif` chain',
     ],
 
     terminology: [
       {
-        term: 'NaN',
+        term: 'Branch',
         definition:
-          'Not a Number: the IEEE-754 floating point value pandas uses as its default missing marker in float columns. It is not equal to itself, which is why `isna` exists.',
-        simple: 'The "no value here" marker in a column of numbers.',
+          'A block of code that runs only when its condition is true. An `if`/`elif`/`else` chain contains several branches, of which at most one executes.',
+        simple: 'A path the program takes only in certain circumstances.',
       },
       {
-        term: 'None versus NaT',
+        term: 'Block',
         definition:
-          '`None` is the Python null object, stored directly in `object` columns; `NaT` is the missing value for datetime and timedelta columns. `isna` recognises all three.',
-        simple: 'The "no value" markers for text and for dates.',
+          'The indented group of statements belonging to a header line such as `if x:`. Python uses indentation, not braces, to define blocks.',
+        simple: 'The lines pushed in underneath a heading, which belong to that heading.',
       },
       {
-        term: 'Missingness mechanism',
+        term: 'elif',
         definition:
-          'Why values are missing: completely at random, at random given observed variables, or not at random, where the missingness depends on the unobserved value itself.',
-        simple: 'The reason the value is absent, which decides what you may safely do about it.',
+          'A subsequent condition tested only if every earlier condition in the chain was false. Distinct from a separate `if`, which is always tested.',
+        simple: '"Otherwise, if..." — only checked when the earlier questions all said no.',
       },
       {
-        term: 'Imputation',
+        term: 'Guard clause',
         definition:
-          'Replacing missing values with estimates — a constant, a column statistic, a group statistic or a model prediction — so that downstream code can proceed.',
-        simple: 'Filling the gaps with a sensible guess.',
+          'An early `return`, `continue` or `raise` that handles an exceptional case immediately, so the main logic can be written unindented below.',
+        simple: 'Dealing with the odd cases first and getting them out of the way.',
       },
       {
-        term: 'Data leakage',
+        term: 'Conditional expression',
         definition:
-          'Information from outside the training fold influencing the model, such as an imputation mean computed over the whole dataset including the test rows.',
-        simple: 'Letting the model peek at data it should not have seen yet.',
+          '`a if condition else b` — an expression that produces one of two values. Unlike an `if` statement, it can appear anywhere a value can.',
+        simple: 'A one-line choice between two values.',
       },
     ],
 
     simpleExplanation:
-      "Real data has holes. The sensor was offline, the customer skipped the field, the join found no match. Pandas marks these holes with NaN for numbers, NaT for dates and None for text, and the first thing to understand is that a hole is not a zero and not an empty string — it is the absence of information. NaN behaves strangely on purpose: it is not equal to itself, so `x == np.nan` is always False and you must use `isna()` to find holes. The second thing, which matters far more, is that you cannot decide what to do about a hole until you know why it is there. If a temperature is missing because the sensor rebooted, taking the previous reading is reasonable. If income is missing because high earners decline to answer, filling with the average makes your data systematically wrong and your conclusions confidently false. The mean is not a neutral choice; it is a claim about the world. Sometimes the honest answer is to leave the hole, flag it as a feature in its own right, and let the model handle it.",
+      "A conditional lets a program take different paths depending on what is true at the moment it runs. You write `if`, then a condition, then a colon, and then the lines you want to run — indented underneath. The indentation is not decoration; it is how Python knows which lines belong to the `if`, and getting it wrong changes what your program does rather than merely how it looks. When you have several possibilities you chain them with `elif`, and Python tests them from the top, runs the first one whose condition is true, and skips all the rest. That last part matters more than it sounds: if an earlier condition is broader than a later one, the later branch can be unreachable, and Python will not warn you. An `else` at the end catches everything nothing else claimed. Because every value in Python has a truth value, conditions do not have to be comparisons — `if items:` simply asks whether there is anything in the list.",
 
     whyItExists:
-      'Every real dataset has gaps, and a numeric array has no way to say "unknown" without a dedicated marker. Pandas adopts NaN, NaT and None so that gaps survive arithmetic, aggregation and joins instead of silently becoming zeros, and provides `isna`, `dropna` and `fillna` so that the decision about what a gap means stays with the analyst rather than being made by accident.',
+      'A program that always executes the same statements in the same order can only ever do one thing. Conditionals are the mechanism by which code responds to its input, which is the difference between a fixed recipe and a piece of software that handles the messy, varied data the real world supplies.',
 
     analogy: {
       scenario:
-        'Imagine a class register where some attendance boxes are blank. A blank might mean the pupil was absent, or that the teacher forgot to tick, or that the pupil left the school in March and the rows after that are not about anybody at all. If you decide that blank means absent and compute an attendance rate, you will produce a precise number that is simply wrong for two of those three reasons, and nothing in the spreadsheet will tell you so.',
+        "Picture a triage nurse at the door of an emergency department, working from a checklist in a strict order. Is the patient not breathing? Then this, and nothing else on the list gets read. Otherwise, are they bleeding heavily? Then that. Otherwise, is there a broken bone? And if none of the questions apply, they go to the general waiting room. The nurse never reads past the first question that applies, which is exactly why the order of the questions is a clinical decision, not a stylistic one.",
       mapping: [
-        { from: 'The blank box', to: 'NaN, NaT or None in a column' },
-        { from: 'Pupil genuinely absent', to: 'A value that is meaningfully zero or negative, which should be recorded as such, not left blank' },
-        { from: 'Teacher forgot to tick', to: 'Missing completely at random — filling with a column statistic does little harm' },
-        { from: 'Pupil left in March', to: 'Structurally missing: the row should probably not exist for those dates at all' },
-        { from: 'Computing the rate by treating blanks as absences', to: '`fillna(0)` applied without asking what the blank means' },
+        { from: 'Each question on the checklist', to: 'An `if` or `elif` condition' },
+        { from: 'Stopping at the first question that applies', to: 'Only the first true branch executes; the rest are skipped' },
+        { from: 'The general waiting room', to: 'The `else` branch' },
+        { from: 'Putting "has a pulse" before "not breathing"', to: 'An over-broad earlier condition making a later branch unreachable' },
+        { from: 'Sending obvious non-emergencies away immediately', to: 'A guard clause that handles the exceptional case and returns early' },
       ],
       bridge:
-        'The register makes the central point concrete: the same blank box has three different correct treatments, and the data alone cannot distinguish them. That is why the first step in handling missing values is never a method call — it is finding out how the data was collected. Pandas gives you `isna`, `dropna` and `fillna` precisely because the library refuses to choose for you. When high earners decline to state their income, the missingness depends on the hidden value itself, and filling with the mean pulls the distribution towards the middle and biases every downstream estimate in a direction you cannot detect from the filled data.',
+        'The "stop at the first match" behaviour is the single most important mechanical fact about an `elif` chain, and it explains the most common conditional bug there is. If you test `if score > 50` before `if score > 90`, nobody is ever graded as excellent, because the broad condition claimed them first. The fix is to order conditions from most specific to most general — precisely the way a triage list is written.',
       limitations:
-        'The register suggests every blank has a discoverable cause. In practice the reason is often unrecorded, and the honest response is to test whether your conclusion changes under different treatments rather than to pretend certainty about one.',
+        'A nurse can use judgement when a case does not fit the checklist. Python cannot: an unhandled case simply falls through, silently doing nothing, which is why an explicit `else` that raises or logs is often worth adding.',
     },
 
     visuals: [
       {
         kind: 'flow',
-        title: 'Deciding what to do with a gap',
-        caption: 'The method call is the last step, not the first.',
-        branching: true,
+        title: 'How an if/elif/else chain executes',
+        caption: 'At most one branch runs, and evaluation stops the moment one matches.',
         steps: [
-          { label: 'Measure it', detail: '`df.isna().sum()` per column and `df.isna().mean()` as a proportion. Also look at rows: how many have any gap at all?' },
-          { label: 'Find out why', detail: 'Ask the data owner. Offline sensor, optional field, failed join and "not applicable" need different treatments.' },
-          { label: 'Structurally missing?', detail: 'If the value cannot exist for that row (no delivery date for a cancelled order), leaving NaN or restructuring is correct; filling is not.' },
-          { label: 'A few rows, missing at random?', detail: 'Dropping is defensible. Record how many rows you dropped and check the dropped rows are not a distinct group.' },
-          { label: 'Time series with short gaps?', detail: 'Forward fill carries the last observation forward, which suits sensors and prices but never suits a target variable.' },
-          { label: 'Otherwise impute, and flag', detail: 'Fill with a median or a group statistic, and add an `is_missing` indicator column so the model can learn from the gap itself.' },
-          { label: 'Fit the filler on training data only', detail: 'Compute the statistic inside the pipeline, on the training fold, or you leak test information into the model.' },
+          { label: 'Evaluate the `if` condition', detail: 'If it is truthy, run its block and skip the entire rest of the chain.' },
+          { label: 'Otherwise try the first `elif`', detail: 'Conditions are evaluated in written order, one at a time.' },
+          { label: 'Continue down the chain', detail: 'Each `elif` is only reached when every condition above it was falsy.' },
+          { label: 'Fall through to `else`', detail: 'Runs only when nothing matched. If there is no `else`, nothing happens at all.' },
         ],
-      },
-      {
-        kind: 'table',
-        title: 'The missing markers',
-        columns: ['Marker', 'Appears in', 'Equality behaviour', 'Detected by'],
-        rows: [
-          ['`np.nan`', 'float columns; the default filler', '`np.nan == np.nan` is False', '`isna()` / `notna()`'],
-          ['`None`', '`object` columns, and preserved by nullable dtypes', '`None == None` is True, but pandas still treats it as missing', '`isna()`'],
-          ['`NaT`', '`datetime64[ns]` and `timedelta64[ns]`', 'Comparisons are False, like NaN', '`isna()`'],
-          ['`pd.NA`', 'Nullable dtypes: `Int64`, `boolean`, `string`', 'Comparisons propagate as `NA`, not False', '`isna()`'],
-        ],
+        branching: true,
       },
       {
         kind: 'compare',
-        title: 'Drop versus fill',
-        caption: 'Both destroy information. The question is which loss you can defend.',
+        title: 'Separate `if`s versus an `elif` chain',
+        caption: 'They look similar and behave completely differently.',
         left: {
-          heading: 'dropna()',
+          heading: 'Three separate `if` statements',
           points: [
-            'Honest: no invented values enter the data',
-            'Loses whole rows, including their good columns',
-            'Biases the sample if missingness is related to the outcome',
-            'Reasonable when few rows are affected and the gaps look random',
+            'Every condition is evaluated',
+            'More than one block can run',
+            'Right when the cases are independent',
+            'A later block can undo an earlier one, which is usually a bug',
           ],
         },
         right: {
-          heading: 'fillna(value)',
+          heading: 'One `if` / `elif` / `elif` chain',
           points: [
-            'Keeps every row and every other column',
-            'Invents values that later code cannot distinguish from measurements',
-            'Shrinks variance and weakens correlations, understating uncertainty',
-            'Reasonable with a recorded justification and an added missing-indicator column',
+            'Evaluation stops at the first true condition',
+            'Exactly zero or one block runs',
+            'Right when the cases are alternatives',
+            'Order matters: broad conditions first make later ones unreachable',
           ],
         },
       },
       {
-        kind: 'widget',
-        title: 'Missingness explorer',
-        caption: 'Compare drop, mean fill and forward fill on the same table and watch the summary statistics move.',
-        widget: 'dataframe-playground',
+        kind: 'compare',
+        title: 'Nested conditionals versus guard clauses',
+        caption: 'Same behaviour, very different readability — and the right-hand form is what reviewers expect.',
+        left: {
+          heading: 'Nested — the arrow shape',
+          points: [
+            'Happy path is the most deeply indented code',
+            'Reader must hold every open condition in mind',
+            'Adding a case pushes everything one level right',
+            'Error handling is scattered among `else` branches far from its cause',
+          ],
+        },
+        right: {
+          heading: 'Guard clauses — flat',
+          points: [
+            'Exceptional cases handled and exited immediately',
+            'Happy path is at the lowest indentation, read top to bottom',
+            'Each guard sits next to the condition it describes',
+            'Adding a case adds one line, not one level',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Alternatives to a long `elif` chain',
+        columns: ['Situation', 'Better tool', 'Why'],
+        rows: [
+          ['Mapping a value to another value', 'A dictionary lookup', '`RATES.get(plan, 0)` is one line and extensible without editing logic.'],
+          ['Mapping a value to behaviour', 'A dict of functions', 'Adding a case means adding an entry, not editing a chain.'],
+          ['Matching on structure or shape', '`match` / `case` (3.10+)', 'Destructures tuples and dicts while branching, with exhaustiveness in mind.'],
+          ['Checking membership in a group', '`in` with a set', '`if code in RETRYABLE:` beats five chained `or` comparisons.'],
+          ['Choosing between two values', 'A conditional expression', '`n if n > 0 else 0` keeps the assignment on one line.'],
+        ],
       },
     ],
 
     formalDefinition:
-      'A missing value in pandas is a sentinel — `np.nan` in float arrays, `NaT` in temporal arrays, `None` in object arrays, or `pd.NA` in nullable extension arrays — that propagates through arithmetic, is excluded by default from reductions such as `sum` and `mean`, and compares unequal to everything including itself. Detection is therefore identity-based via `isna`/`notna` rather than equality-based, and treatment (deletion, imputation, indication) is an analyst decision determined by the missingness mechanism, not by the data type.',
+      'An `if` statement evaluates its condition for truthiness and, on a true result, executes its suite; otherwise it evaluates each `elif` condition in lexical order, executing the suite of the first that is true, and falls back to the `else` suite if present. At most one suite executes. Suites are delimited by indentation, which is part of Python\'s grammar rather than a formatting convention.',
 
     codeExamples: [
       {
         language: 'python',
-        title: 'Detecting and profiling missingness',
+        title: 'Ordering matters more than anything else',
         runnable: true,
-        code: `import pandas as pd
-import numpy as np
+        code: `def grade_wrong(score):
+    if score > 50:
+        return "pass"
+    elif score > 90:      # unreachable: anything over 90 is also over 50
+        return "excellent"
+    return "fail"
 
-readings = pd.DataFrame({
-    "sensor":  ["s1", "s1", "s1", "s2", "s2", "s2"],
-    "taken_at": pd.to_datetime(
-        ["2026-03-01 09:00", "2026-03-01 10:00", None,
-         "2026-03-01 09:00", "2026-03-01 10:00", "2026-03-01 11:00"]),
-    "temp_c":  [18.5, np.nan, 19.2, 21.0, np.nan, np.nan],
-    "note":    ["ok", None, "ok", "ok", "recalibrating", None],
-})
+def grade_right(score):
+    if score > 90:
+        return "excellent"
+    elif score > 50:
+        return "pass"
+    return "fail"
 
-print(readings.isna().sum())
-print()
-print((readings.isna().mean() * 100).round(1).to_dict())
-print()
-print("rows with any gap:", readings.isna().any(axis=1).sum(), "of", len(readings))
-print()
-print("nan == nan  ->", np.nan == np.nan)
-print("isna finds it ->", readings["temp_c"].isna().sum())
-print()
-print(readings["temp_c"].mean(), "<- mean skips NaN by default")`,
-        output: `sensor      0
-taken_at    1
-temp_c      3
-note        2
-dtype: int64
-
-{'sensor': 0.0, 'taken_at': 16.7, 'temp_c': 50.0, 'note': 33.3}
-
-rows with any gap: 5 of 6
-
-nan == nan  -> False
-isna finds it -> 3
-
-19.566666666666666 <- mean skips NaN by default`,
+for s in [95, 70, 20]:
+    print(s, grade_wrong(s), grade_right(s))`,
+        output: `95 pass excellent
+70 pass pass
+20 fail fail`,
         explanation:
-          '`isna()` returns a boolean frame the same shape as the data, so `.sum()` counts per column and `.mean()` gives the proportion directly — the second is what you actually want to report, since 3 missing means something very different in 6 rows than in 6 million. The row-level view matters just as much: here five of six rows have a gap somewhere, so `dropna()` would leave one row and the analysis would be over. Note that `np.nan == np.nan` is False by IEEE definition, which is exactly why detection goes through `isna` rather than an equality test, and note that `mean()` silently skips the gaps rather than returning NaN, so an average computed over half the data looks identical to one computed over all of it.',
+          'The first function is not syntactically wrong and Python issues no warning, but the `excellent` branch can never run: every score above 90 satisfies the broader condition above it and the chain stops there. This is the most common conditional bug there is, and the rule that prevents it is to order overlapping conditions from most specific to most general. Note also that each `return` ends the function immediately, which is why no `else` is needed before the final line.',
       },
       {
         language: 'python',
-        title: 'Dropping, filling and forward filling, with the differences made visible',
+        title: 'Guard clauses flatten nested logic',
         runnable: true,
-        code: `import pandas as pd
-import numpy as np
+        code: `def charge_nested(user, amount):
+    if user is not None:
+        if user.get("active"):
+            if amount > 0:
+                return f"charged {amount}"
+            else:
+                return "amount must be positive"
+        else:
+            return "user is inactive"
+    else:
+        return "no user"
 
-readings = pd.DataFrame({
-    "sensor": ["s1", "s1", "s1", "s1"],
-    "temp_c": [18.5, np.nan, np.nan, 19.4],
-    "humidity": [55.0, 57.0, np.nan, 58.0],
-})
+def charge_flat(user, amount):
+    if user is None:
+        return "no user"
+    if not user.get("active"):
+        return "user is inactive"
+    if amount <= 0:
+        return "amount must be positive"
+    return f"charged {amount}"
 
-print("drop rows with any gap:")
-print(readings.dropna())
-print()
-print("drop rows only if temp_c is missing:")
-print(readings.dropna(subset=["temp_c"]))
-print()
-print("fill with the column mean:")
-print(readings.fillna(readings.mean(numeric_only=True)))
-print()
-print("forward fill (carry the last reading forward):")
-print(readings.ffill())
-print()
-print("fill, but keep a record that you did:")
-flagged = readings.assign(temp_was_missing=readings["temp_c"].isna())
-flagged["temp_c"] = flagged["temp_c"].fillna(flagged["temp_c"].median())
-print(flagged)`,
-        output: `drop rows with any gap:
-  sensor  temp_c  humidity
-0     s1    18.5      55.0
-3     s1    19.4      58.0
-
-drop rows only if temp_c is missing:
-  sensor  temp_c  humidity
-0     s1    18.5      55.0
-3     s1    19.4      58.0
-
-fill with the column mean:
-  sensor  temp_c  humidity
-0     s1   18.50      55.00
-1     s1   18.95      57.00
-2     s1   18.95      56.67
-3     s1   19.40      58.00
-
-forward fill (carry the last reading forward):
-  sensor  temp_c  humidity
-0     s1    18.5      55.0
-1     s1    18.5      57.0
-2     s1    18.5      57.0
-3     s1    19.4      58.0
-
-fill, but keep a record that you did:
-  sensor  temp_c  humidity  temp_was_missing
-0     s1   18.50      55.0             False
-1     s1   18.95      57.0              True
-2     s1   18.95      57.0              True
-3     s1   19.40      58.0             False`,
+u = {"active": True}
+print(charge_nested(u, 10), "|", charge_flat(u, 10))
+print(charge_nested(None, 10), "|", charge_flat(None, 10))`,
+        output: `charged 10 | charged 10
+no user | no user`,
         explanation:
-          'Four treatments of one small table, and each produces a different dataset. `dropna()` with no arguments removes a row if any column is missing, which is usually too aggressive — `subset=["temp_c"]` restricts the rule to the column you actually care about. Mean filling produces values such as 18.95 that never occurred and shrinks the variance, so any later standard deviation or correlation is understated. Forward filling is right for a sensor that reports only on change and badly wrong for anything where the previous row is not a reasonable stand-in — it also carries the last value across sensor boundaries unless you `groupby("sensor").ffill()`. The last block is the pattern worth adopting by default: fill if you must, but add an indicator column, so the model can learn that missingness itself was predictive and so a later reader can tell measurements from inventions.',
+          'Both functions behave identically; only one of them can be read at a glance. In the flat version each failure is handled next to the condition that describes it, and the interesting case — the actual charge — sits at the lowest indentation as the last line, which is where a reader looks for it. The nested version buries the happy path three levels deep and forces you to match each `else` back to its `if` across a dozen lines. As a rule of thumb, three levels of nesting inside a function is a signal to reach for guards.',
       },
       {
         language: 'python',
-        title: 'Why imputing before the split leaks, and how to avoid it',
+        title: 'Conditional expressions, and when not to use them',
         runnable: true,
-        code: `import pandas as pd
-import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.pipeline import make_pipeline
-from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LinearRegression
+        code: `score = -5
 
-rng = np.random.default_rng(0)
-df = pd.DataFrame({"x": rng.normal(50, 10, 200)})
-df.loc[rng.choice(200, 40, replace=False), "x"] = np.nan
-df["y"] = df["x"].fillna(50) * 2 + rng.normal(0, 1, 200)
+clamped = score if score > 0 else 0        # a value, not a branch
+print(clamped)
 
-# WRONG: the filler is computed over every row, including the test rows
-leaky = df.copy()
-leaky["x"] = leaky["x"].fillna(leaky["x"].mean())
-print("mean used by the leaky fill :", round(leaky["x"].mean(), 4))
+# Useful inside a larger expression
+names = ["ada", None, "cal"]
+print([n if n else "unknown" for n in names])
 
-# RIGHT: split first, then learn the filler inside a pipeline on the training fold
-X_train, X_test, y_train, y_test = train_test_split(
-    df[["x"]], df["y"], test_size=0.25, random_state=0)
-print("mean available at training time:", round(X_train["x"].mean(), 4))
+# Readable chaining stops at about two
+n = 7
+size = "small" if n < 5 else "medium" if n < 10 else "large"
+print(size)
 
-model = make_pipeline(SimpleImputer(strategy="mean"), LinearRegression())
-model.fit(X_train, y_train)
-print("imputer learned:", round(model[0].statistics_[0], 4))
-print("test score:", round(model.score(X_test, y_test), 4))`,
-        output: `mean used by the leaky fill : 49.7413
-mean available at training time: 49.4188
-imputer learned: 49.4188
-test score: 0.9981`,
+# Beyond that, a dict or a chain is clearer
+BANDS = [(5, "small"), (10, "medium")]
+label = next((name for limit, name in BANDS if n < limit), "large")
+print(label)`,
+        output: `0
+['ada', 'unknown', 'cal']
+medium
+medium`,
         explanation:
-          'The two means differ, and that difference is the leak. Filling before splitting lets a statistic computed partly from the test rows enter the training data, so the reported test score is optimistic by an unknown amount and the model cannot be reproduced at inference time, when no test set exists. Putting `SimpleImputer` inside a pipeline fixes both problems structurally: `fit` learns the filler from the training fold only, `transform` applies that stored value to the test fold and later to live data, and cross-validation repeats the whole thing per fold. This is the general principle — anything learned from data, including a mean, a median, a scaler or a category encoding, must be fitted inside the pipeline rather than applied to the frame beforehand.',
+          'A conditional expression produces a value, so it can go where a statement cannot: inside a comprehension, as a function argument, on the right of an assignment. That is its whole purpose, and it is genuinely more readable than a four-line `if`/`else` that assigns the same name twice. The limit is nesting: two is the most anyone can read comfortably, and past that a lookup table or an ordinary `elif` chain is clearer. Note the `if n else` in the comprehension is a truthiness test, so it also replaces the empty string — which may or may not be what you want.',
+      },
+      {
+        language: 'python',
+        title: 'Replacing a chain with a lookup, and with match',
+        runnable: true,
+        code: `# An elif chain that is really a mapping
+def fee_chain(plan):
+    if plan == "free":
+        return 0
+    elif plan == "pro":
+        return 20
+    elif plan == "team":
+        return 50
+    else:
+        return None
+
+FEES = {"free": 0, "pro": 20, "team": 50}
+print(fee_chain("pro"), FEES.get("pro"), FEES.get("enterprise"))
+
+# match shines when you are branching on SHAPE, not just value
+def describe(point):
+    match point:
+        case (0, 0):
+            return "origin"
+        case (0, y):
+            return f"on the y-axis at {y}"
+        case (x, 0):
+            return f"on the x-axis at {x}"
+        case (x, y):
+            return f"at {x},{y}"
+        case _:
+            return "not a point"
+
+print(describe((0, 0)), "|", describe((0, 5)), "|", describe((2, 3)))`,
+        output: `20 20 None
+origin | on the y-axis at 5 | at 2,3`,
+        explanation:
+          'The first pair shows a chain that was never really about control flow: it maps a value to a value, so a dictionary expresses it directly and a new plan becomes a new entry rather than an edit to the logic. `match` earns its place for a different job — structural pattern matching. Each `case` both tests the shape and binds names from it, so `case (0, y)` simultaneously checks that the first coordinate is zero and captures the second. The `_` case is the catch-all. Use `match` when you are destructuring; use a dict when you are mapping.',
       },
     ],
 
     realWorldExamples: [
       {
-        context: 'Clinical and survey data',
+        context: 'Input validation at an API boundary',
         usage:
-          'A missing symptom field frequently means "not asked because the earlier answer ruled it out", which is structurally missing, not unknown. Filling such fields with a median invents patients who were never observed.',
+          'Request handlers are written as a series of guard clauses — missing field, wrong type, out of range — each returning a specific error, so the successful path is the last, unindented line.',
       },
       {
-        context: 'Sensor and IoT streams',
+        context: 'Choosing a model or device at runtime',
         usage:
-          'Gaps correspond to outages, and their length is the signal: a five-second gap is noise, an eight-hour gap is an incident. Teams typically forward fill short gaps within a device, leave long ones as NaN, and keep a gap-length feature.',
+          '`device = "cuda" if torch.cuda.is_available() else "cpu"` is the first line of most training scripts and is precisely what a conditional expression is for.',
       },
       {
-        context: 'Joined tables in a feature store',
+        context: 'Categorising continuous values',
         usage:
-          'After a left join, NaN means "no matching record" — no purchase last month, no support ticket. Here zero genuinely is the right fill, and it is one of the few cases where filling needs no apology, though an indicator column still helps.',
+          'Turning a numeric score into a band — low, medium, high — is an `elif` chain where the order of the thresholds is the entire correctness argument. Getting it backwards silently mislabels everything.',
+      },
+      {
+        context: 'Retry logic',
+        usage:
+          '`if status in RETRYABLE_CODES:` replaces a chain of `or` comparisons, and the set can be configured without touching the branch itself.',
       },
     ],
 
     projectConnections: [
-      { tool: 'scikit-learn', role: '`SimpleImputer` and `IterativeImputer` inside a `Pipeline` learn fill values from the training fold only, which is what prevents leakage.' },
-      { tool: 'missingno', role: 'Plots the missingness matrix so patterns — gaps that co-occur across columns — become visible instead of being summarised away.' },
-      { tool: 'LightGBM / XGBoost', role: 'Handle NaN natively by learning a default direction at each split, so imputation is often unnecessary and sometimes harmful with these models.' },
+      { tool: 'pandas', role: '`np.where(cond, a, b)` and `df.loc[mask]` are the vectorised equivalents; a per-row `if` in a Python loop is the slow way to do the same thing.' },
+      { tool: 'scikit-learn', role: 'A decision tree is literally a learned nested conditional, which makes tree models unusually easy to explain to non-specialists.' },
+      { tool: 'FastAPI / Flask', role: 'Request validation is a guard-clause cascade; frameworks formalise it with dependency and schema checks.' },
+      { tool: 'pytest', role: 'Parametrised tests are how you prove every branch of a chain is reachable, which catches the unreachable-branch bug automatically.' },
     ],
 
     commonMistakes: [
       {
-        mistake: 'Reaching for `fillna(0)` as a default',
-        why: 'Zero is a real measurement. Filling an unknown temperature with 0 fabricates a cold day; filling an unknown income with 0 fabricates a destitute customer, and every mean and correlation afterwards is wrong.',
-        fix: 'Fill with zero only where absence genuinely means zero, typically after a left join. Otherwise use a median, a group statistic, or leave the gap and flag it.',
+        mistake: 'Ordering an `elif` chain from general to specific',
+        why: 'The broad condition matches first and the chain stops, so the specific branch below it can never run. Python gives no warning.',
+        fix: 'Put the most specific condition first. Write a test for each branch — an unreachable branch shows up immediately as an uncovered case.',
       },
       {
-        mistake: 'Comparing to NaN with `==`',
-        why: 'NaN is not equal to itself by the IEEE standard, so `df[df["x"] == np.nan]` matches nothing and returns an empty frame rather than an error.',
-        fix: 'Use `df["x"].isna()` and `notna()`. There is no situation in pandas where `== np.nan` is the right tool.',
+        mistake: 'Using separate `if` statements where the cases are alternatives',
+        why: 'Every condition is evaluated and more than one block can run, so a later block silently overwrites the result of an earlier one.',
+        fix: 'Use `elif` when exactly one case should apply. Keep separate `if`s only when the conditions are genuinely independent.',
       },
       {
-        mistake: 'Calling `dropna()` with no arguments on a wide table',
-        why: 'It removes any row with a gap in any column, so a hundred columns each 2 per cent missing can eliminate most of the data even though no single column is a problem.',
-        fix: 'Use `subset=` to name the columns that genuinely matter, or `thresh=` to require a minimum number of present values, and always print how many rows were removed.',
+        mistake: 'Writing `if x == True:` or `if len(xs) != 0:`',
+        why: 'Both restate truthiness verbosely, and `== True` is wrong for truthy non-boolean values, since `3 == True` is False.',
+        fix: '`if x:` and `if xs:`. Reserve an explicit comparison for when you genuinely need to distinguish `True` from other truthy values.',
       },
       {
-        mistake: 'Imputing before splitting into train and test',
-        why: 'The fill value is learned from rows the model should not have seen, so the evaluation is optimistic and the transformation cannot be reproduced at inference time.',
-        fix: 'Split first and put the imputer inside a `Pipeline`, so it is fitted on the training fold and merely applied elsewhere.',
+        mistake: 'Mixing tabs and spaces for indentation',
+        why: 'Python treats them as different characters, so a block that looks aligned can raise `TabError: inconsistent use of tabs and spaces` or, worse, group lines under the wrong header.',
+        fix: 'Use four spaces, always, and set your editor to convert tabs. Every Python style guide agrees on this.',
       },
       {
-        mistake: 'Forward filling across group boundaries',
-        why: 'A plain `ffill()` on a table sorted by sensor and time carries the last reading of one sensor into the first row of the next, inventing a measurement attributed to the wrong device.',
-        fix: 'Group first: `df.groupby("sensor")["temp_c"].ffill()`, and consider `limit=` so a gap longer than a few periods is not papered over.',
+        mistake: 'Letting a chain fall through silently when nothing matches',
+        why: 'Without an `else`, an unmatched value produces no error and no output, so a typo in a category name becomes an invisible no-op.',
+        fix: 'Add an `else` that raises `ValueError(f"unexpected category: {value}")`, or returns an explicit default you chose on purpose.',
       },
     ],
 
     interviewQuestions: [
       {
         level: 'beginner',
-        question: 'What is the difference between NaN, None and NaT, and how do you detect all three?',
+        question: 'What is the difference between three separate `if` statements and an `if`/`elif`/`elif` chain?',
         answer:
-          'They are the missing markers for different column types. NaN is the IEEE floating point value used in float columns and is pandas\' general default. None is the Python null object, which appears in `object` columns and is preserved by the nullable dtypes. NaT is "not a time", used by datetime64 and timedelta64 columns. All three are detected by `isna()` and `notna()`, which is the only reliable route, because NaN is not equal to itself and `== None` is not the same test as `is None`. Pandas also has `pd.NA`, the marker for its nullable extension dtypes such as `Int64`, `boolean` and `string`, which differs from NaN in that comparisons propagate NA rather than returning False.',
+          'Separate `if` statements are independent: every condition is evaluated and any number of the blocks can run. A chain is a set of alternatives: conditions are evaluated top to bottom, the first true one runs its block, and everything below it is skipped without being evaluated. That difference is behavioural, not stylistic. If the cases overlap, separate `if`s can run several blocks and let a later one overwrite an earlier result, while the chain guarantees at most one runs. The chain is also slightly faster for mutually exclusive cases, since it stops evaluating as soon as it has an answer.',
       },
       {
         level: 'intermediate',
-        question: 'When is imputation the wrong answer?',
+        question: 'What is a guard clause, and why do reviewers prefer them to nested conditionals?',
         answer:
-          'Three main cases. First, when the value is structurally missing — a delivery date for a cancelled order, a spouse\'s age for an unmarried respondent — because the quantity does not exist, and inventing it creates records of people who were never observed. Second, when the data is missing not at random, where the missingness depends on the hidden value itself: high earners declining to state income means the observed mean is already biased downward, so imputing that mean makes the bias systematic and invisible. Third, when the model handles missingness natively — gradient boosted trees learn a default split direction — so imputation only destroys the information that the value was absent. The general defence is to add a missing-indicator column whenever you do impute, keeping the fact of absence available even after the gap is filled, and to check whether your conclusions change under different treatments.',
+          'A guard clause handles an exceptional or invalid case at the top of a function and exits immediately with a `return` or `raise`, so the rest of the function can assume the happy path. The benefit is that the reader never has to track more than one open condition at a time, and the main logic sits at the lowest indentation where the eye expects it, rather than buried three levels deep at the end of an arrow-shaped block. It also keeps each error message next to the condition that produced it, which makes both reading and debugging local. The usual trigger for the refactor is a function reaching three levels of nesting, or an `else` branch that sits more than a screen away from its `if`.',
         followUp:
-          'A strong candidate mentions Rubin\'s taxonomy — missing completely at random, at random, and not at random — and notes that only the first justifies simple deletion without bias.',
+          'A strong answer mentions that guards make each precondition individually testable, and that the pattern generalises to `continue` inside loops.',
       },
       {
-        level: 'ml-engineer',
-        question: 'A model performs well in cross-validation and poorly in production. How could missing-value handling be to blame?',
+        level: 'internship',
+        question: 'When would you replace an `if`/`elif` chain with a dictionary, and when would you not?',
         answer:
-          'Several routes. If imputation statistics were computed over the whole dataset before splitting, the cross-validation score is optimistic because test rows contributed to the fill values, and production has no such advantage. If the imputer lives outside the pipeline, the exact fill values may not have been persisted, so production computes a different mean from a different distribution, and the features shift. If missingness patterns differ between training and production — a field that was mostly populated historically becomes mostly empty after an upstream form change — then a constant fill silently becomes the modal value of that feature. The fix is structural: imputers inside the pipeline, the fitted artefact serialised with the model, and monitoring on per-feature missingness rates so a change in the missingness pattern raises an alert rather than a quiet accuracy decline.',
+          'Replace it when the chain is really a mapping: every branch compares the same variable to a constant and produces a value or calls a single function. `FEES = {"free": 0, "pro": 20}` with `FEES.get(plan, 0)` is shorter, has an obvious default, can be loaded from configuration, and grows by one entry rather than by editing control flow. Keep the chain when the conditions are not simple equality — ranges, compound boolean tests, or checks against different variables — because forcing those into a dictionary means keys that are lambdas or tuples and the result is harder to read than what you replaced. In Python 3.10 and later, `match` covers a middle case where you are branching on the structure of a value and want to destructure it at the same time.',
       },
     ],
 
     practiceQuestions: [
       {
         prompt:
-          'A table of 10,000 customers has `income` missing for 18 per cent of rows, and the missingness is concentrated in the highest-value segment. Your colleague proposes `df["income"].fillna(df["income"].mean())`. Explain the problem and propose something better.',
-        hint: 'Is the missingness independent of the value that is missing?',
+          'The function below always returns "pass" for high scores. Explain why and fix it.\n\n```\ndef grade(s):\n    if s > 50: return "pass"\n    elif s > 90: return "excellent"\n    return "fail"\n```',
+        hint: 'Which condition claims a score of 95 first?',
+        language: 'python',
+        starterCode: 'def grade(s):\n    if s > 50:\n        return "pass"\n    elif s > 90:\n        return "excellent"\n    return "fail"\n',
         solution:
-          'The missingness depends on the unobserved value itself, which makes it missing not at random. The observed mean is already biased downward because high earners are the ones declining to answer, so filling with that mean pulls the missing 18 per cent towards a value that is systematically too low, and every subsequent correlation involving income is attenuated. Better options: add an `income_missing` indicator so the model can use the fact of non-response, which here is informative; impute within segment rather than globally if a reliable segment variable exists; use a model that handles NaN natively; or state the limitation explicitly and report results both with and without the affected rows. What you must not do is replace the gap with a single number and present the result as if it were measured.',
+          'A score of 95 satisfies `s > 50`, so the chain stops there and the `excellent` branch is unreachable. Ordering the conditions from most specific to most general fixes it:\n\n```\ndef grade(s):\n    if s > 90:\n        return "excellent"\n    if s > 50:\n        return "pass"\n    return "fail"\n```\n\nBecause each branch returns, `elif` is optional here — plain `if`s read just as clearly. The general rule stands regardless: when conditions overlap, the narrower one must come first.',
       },
       {
         prompt:
-          'Write code that forward fills a temperature column within each sensor, filling gaps of at most two consecutive readings and leaving longer gaps alone.',
-        hint: 'Group before filling, and there is an argument that caps how far a fill will travel.',
+          'Rewrite this with guard clauses so the happy path is unindented:\n\n```\ndef process(order):\n    if order is not None:\n        if order["items"]:\n            return f"processing {len(order[\'items\'])} items"\n        else:\n            return "empty order"\n    else:\n        return "no order"\n```',
+        hint: 'Handle each failure first and return immediately.',
         solution:
-          'df["temp_c"] = df.sort_values(["sensor", "taken_at"]).groupby("sensor")["temp_c"].ffill(limit=2)\n\nSorting first matters, because forward fill is order-dependent and a table sorted by arrival time may interleave sensors. Grouping stops the last reading of one sensor from being carried into the next. `limit=2` encodes the judgement that a short outage may reasonably be bridged while a long one should stay visible as missing — the length of the gap is itself information about an incident, and papering over it hides exactly the event you would want to investigate.',
+          '```\ndef process(order):\n    if order is None:\n        return "no order"\n    if not order["items"]:\n        return "empty order"\n    return f"processing {len(order[\'items\'])} items"\n```\n\nThe behaviour is identical, but each failure is now stated next to its condition and the meaningful work is the last line at the lowest indentation. Note `if not order["items"]:` rather than `len(...) == 0`: an empty list is already falsy.',
       },
       {
         prompt:
-          'Explain why `df[df["x"] == np.nan]` returns an empty frame rather than the missing rows, and what to write instead.',
-        hint: 'What does the IEEE standard say about NaN equality?',
+          'Convert this chain into a dictionary lookup that returns `None` for an unknown plan, and say what you gain.\n\n```\nif plan == "free": fee = 0\nelif plan == "pro": fee = 20\nelif plan == "team": fee = 50\nelse: fee = None\n```',
+        hint: 'The chain compares one variable to constants and assigns a value. That is a mapping.',
         solution:
-          'NaN is defined to be unequal to every value including itself, so the comparison returns False for every row and the mask selects nothing. No error is raised, which makes this a silent failure. The correct form is `df[df["x"].isna()]`, and the corresponding positive test is `notna()`. The same rule applies to NaT and to `pd.NA`, which is why `isna` is the single detection mechanism across every dtype rather than there being one test per marker.',
+          '```\nFEES = {"free": 0, "pro": 20, "team": 50}\nfee = FEES.get(plan)\n```\n\nYou gain three things. Adding a plan is a data change rather than a logic change, so it can come from a config file without touching the code. The lookup is O(1) rather than up to three comparisons. And the default is stated once, explicitly, in the `get` call. The trade-off is that this only works while the branches are equality tests on a single variable — the moment a plan depends on a range or a second variable, the chain is the honest representation.',
       },
     ],
 
     quiz: [
       {
-        id: 'PD-006-q1',
-        type: 'truefalse',
-        concept: 'nan equality',
-        prompt: '`np.nan == np.nan` evaluates to True.',
-        answer: false,
-        explanation:
-          'NaN is defined by IEEE-754 to compare unequal to everything, including itself. That is precisely why pandas provides `isna()`, and why a mask written as `== np.nan` silently selects no rows.',
-      },
-      {
-        id: 'PD-006-q2',
-        type: 'mcq',
-        concept: 'dropna',
-        prompt: 'What does `df.dropna()` do by default?',
-        options: [
-          'Removes every row that has a missing value in any column',
-          'Removes every column that contains a missing value',
-          'Removes rows where all columns are missing',
-          'Replaces missing values with the column mean',
-        ],
-        answerIndex: 0,
-        explanation:
-          'The defaults are `axis=0` and `how="any"`, so a single gap anywhere in a row removes it. On a wide table this can eliminate most of the data, which is why `subset=` and `thresh=` matter.',
-      },
-      {
-        id: 'PD-006-q3',
-        type: 'multi',
-        concept: 'when to impute',
-        prompt: 'In which situations is filling missing values with the column mean a defensible choice? Select all that apply.',
-        options: [
-          'A small percentage of values are missing for reasons unrelated to the value itself',
-          'The missing values are concentrated in the highest-value customers',
-          'The quantity cannot exist for those rows, such as a delivery date on a cancelled order',
-          'You also add an indicator column recording that the value was imputed',
-          'You compute the mean inside a pipeline fitted on the training fold only',
-        ],
-        answerIndices: [0, 3, 4],
-        explanation:
-          'Mean filling is reasonable when data is missing at random, when the imputation is recorded with an indicator, and when the statistic is learned inside the pipeline. It is wrong when missingness depends on the hidden value, and it is meaningless when the quantity does not exist for that row.',
-      },
-      {
-        id: 'PD-006-q4',
+        id: 'PY-010-q1',
         type: 'code-output',
         language: 'python',
-        concept: 'aggregation with gaps',
+        concept: 'chain ordering',
         prompt: 'What does this print?',
-        code: 'import pandas as pd, numpy as np\ns = pd.Series([2.0, np.nan, 4.0])\nprint(s.mean(), s.sum(), s.count())',
-        options: ['3.0 6.0 2', '2.0 6.0 3', 'nan nan 3', '3.0 6.0 3'],
+        code: 'x = 95\nif x > 50:\n    print("pass")\nelif x > 90:\n    print("excellent")',
+        options: ['pass', 'excellent', 'pass\nexcellent', 'Nothing'],
         answerIndex: 0,
         explanation:
-          'Reductions skip missing values by default, so the mean is 6/2 = 3.0 and `count()` reports only the non-null values. This is convenient and dangerous: an average over half your data looks exactly like an average over all of it.',
+          'The first condition is true, so its block runs and the whole rest of the chain is skipped without evaluation. The `excellent` branch is unreachable for every possible value, and Python gives no warning about it.',
       },
       {
-        id: 'PD-006-q5',
+        id: 'PY-010-q2',
+        type: 'code-output',
+        language: 'python',
+        concept: 'separate ifs versus elif',
+        prompt: 'What does this print?',
+        code: 'x = 95\nif x > 50:\n    print("pass")\nif x > 90:\n    print("excellent")',
+        options: ['pass\nexcellent', 'pass', 'excellent', 'Nothing'],
+        answerIndex: 0,
+        explanation:
+          'These are two independent statements, so both conditions are evaluated and both blocks run. Swapping `elif` for `if` changes behaviour, not just style.',
+      },
+      {
+        id: 'PY-010-q3',
+        type: 'truefalse',
+        concept: 'indentation',
+        prompt: 'Indentation in Python is a formatting convention; the interpreter ignores it when deciding which lines belong to an `if`.',
+        answer: false,
+        explanation:
+          'Indentation is part of the grammar. It is the only thing that determines block membership, which is why a misplaced level silently changes behaviour and why mixing tabs and spaces raises `TabError`.',
+      },
+      {
+        id: 'PY-010-q4',
         type: 'debug',
         language: 'python',
-        concept: 'leakage',
-        prompt: 'What is wrong with this preparation step?',
-        code: 'df["income"] = df["income"].fillna(df["income"].mean())\nX_train, X_test, y_train, y_test = train_test_split(df.drop(columns="y"), df["y"])',
+        concept: 'unreachable and silent fall-through',
+        prompt: 'For `category = "urgent"` this function returns `None` with no error. What is the defect?',
+        code: 'def priority(category):\n    if category == "low":\n        return 1\n    elif category == "medium":\n        return 2',
         options: [
-          'The fill value is computed from all rows, including the ones that become the test set',
-          'fillna cannot be used on a float column',
-          'The mean should be the median for income data',
-          'train_test_split must be called before any column is dropped',
+          'There is no final `else`, so unmatched values fall through and return `None` silently',
+          'The function needs `elif` replaced with `if`',
+          '`return` cannot be used inside an `elif`',
+          'String comparison requires `is` rather than `==`',
         ],
         answerIndex: 0,
         explanation:
-          'Imputing before splitting lets a statistic derived partly from the test rows enter training, inflating the reported score and producing a transformation that cannot be reproduced at inference. Put the imputer in a pipeline fitted on the training fold.',
+          'A function that reaches its end without a `return` returns `None`. An explicit `else` that raises `ValueError(f"unknown category: {category}")` turns a silent wrong answer into a loud, locatable failure.',
       },
       {
-        id: 'PD-006-q6',
+        id: 'PY-010-q5',
+        type: 'multi',
+        concept: 'idiomatic conditions',
+        prompt: 'Which of these are idiomatic Python conditions? Select all that apply.',
+        options: [
+          '`if items:`',
+          '`if len(items) > 0:`',
+          '`if user is None:`',
+          '`if flag == True:`',
+          '`if status in RETRYABLE:`',
+        ],
+        answerIndices: [0, 2, 4],
+        explanation:
+          'Empty containers are already falsy, so the `len` form adds noise. `== True` is both verbose and subtly wrong for truthy non-boolean values. `is None` and set membership are the recommended forms for their respective jobs.',
+      },
+      {
+        id: 'PY-010-q6',
+        type: 'order',
+        concept: 'guard-clause refactor',
+        prompt: 'Order these steps for refactoring a deeply nested function into guard clauses.',
+        items: [
+          'Identify the happy path — the case the function exists to handle',
+          'Invert each outer condition so it describes a failure',
+          'Return or raise immediately inside each inverted condition',
+          'Remove the now-empty `else` branches',
+          'Leave the happy path as the final, unindented statements',
+        ],
+        explanation:
+          'The refactor is mechanical once the happy path is named: every enclosing condition becomes an inverted guard that exits early, and what remains at the bottom is the work the function actually does.',
+      },
+      {
+        id: 'PY-010-q7',
         type: 'explain',
-        concept: 'missingness mechanism',
-        prompt: 'Explain why "what should I fill this with?" is the wrong first question about missing data.',
+        concept: 'when to replace a chain',
+        prompt: 'Explain when a long `if`/`elif` chain should become a dictionary lookup, and when it should stay a chain.',
         rubric: [
-          'States that the treatment depends on why the value is missing',
-          'Distinguishes at least two mechanisms with different correct treatments',
-          'Mentions a concrete harm from choosing a filler without knowing the mechanism',
+          'Identifies the mapping case: same variable compared to constants, producing a value',
+          'Names a concrete benefit such as extensibility, an explicit default, or O(1) lookup',
+          'Gives a case where the chain is the honest representation — ranges or compound conditions',
         ],
         sampleAnswer:
-          'Because the right treatment is determined by the reason for the gap, and the data alone cannot tell you the reason. If a sensor rebooted, the previous reading is a reasonable stand-in. If a field was never applicable — a delivery date on a cancelled order — then no value is correct and filling invents a fact. If high earners decline to state income, the gaps are concentrated at the top of the distribution, so filling with the observed mean drags the missing rows downward and biases every estimate involving income, in a way that is undetectable once the filling is done. So the first question is how the data was collected and what a blank means in that system; only then does the choice between dropping, forward filling, imputing with an indicator, or leaving the gap become answerable.',
+          'If every branch compares the same variable to a constant and the body just produces a value or calls one function, the chain is a lookup table written as control flow, and a dictionary says so directly: adding a case becomes adding an entry, the default is stated once in `.get(key, default)`, and the lookup is constant time instead of a sequence of comparisons. It also lets the mapping come from configuration rather than source code. The chain should stay a chain when the conditions are not equality tests — ranges such as `score > 90`, compound boolean conditions, or tests against several different variables — because encoding those as dictionary keys produces something less readable than the original. Python 3.10 adds a third option, `match`, for the case where you are branching on the structure of a value and want to destructure it in the same step.',
         explanation:
-          'The examinable idea is that imputation is a modelling assumption, not a formatting step, and it must be justified rather than defaulted to.',
+          'The examinable judgement is recognising that some conditionals encode data rather than logic, and that moving data out of control flow makes code both shorter and more extensible.',
       },
     ],
 
     flashcards: [
-      { front: 'Why can you not test for NaN with `==`?', back: 'NaN compares unequal to everything including itself, so the mask matches nothing. Use `isna()` / `notna()`.' },
-      { front: 'NaN, NaT, None, pd.NA — which goes where?', back: 'NaN in float columns, NaT in datetime/timedelta, None in object columns, pd.NA in nullable extension dtypes. All are found by `isna()`.' },
-      { front: 'What does `dropna()` do by default?', back: 'Drops any row containing a gap in any column. Use `subset=` or `thresh=` to be less destructive.' },
-      { front: 'When is `fillna(0)` genuinely right?', back: 'When absence really means zero — typically after a left join where "no matching purchase" means no spend.' },
-      { front: 'Why add a missing-indicator column?', back: 'The fact that a value was absent is often predictive, and an indicator keeps that information after the gap is filled.' },
-      { front: 'Why impute inside a pipeline?', back: 'So the fill statistic is learned from the training fold only; computing it over all rows leaks test information and inflates the score.' },
-      { front: 'What does plain `ffill()` get wrong on grouped data?', back: 'It carries the last value across group boundaries. Use `df.groupby(key)[col].ffill()`, and consider `limit=`.' },
+      { front: 'How many branches of an if/elif/else chain run?', back: 'At most one. Evaluation stops at the first true condition; everything below is skipped.' },
+      { front: 'Why order conditions from specific to general?', back: 'A broader condition placed first claims the value and makes every narrower branch below it unreachable.' },
+      { front: 'What is a guard clause?', back: 'An early return or raise that handles an exceptional case at the top, leaving the happy path flat and unindented.' },
+      { front: 'What does `a if cond else b` give you?', back: 'A conditional *expression* — a value you can put anywhere, including inside a comprehension or an argument list.' },
+      { front: 'When should an elif chain become a dict?', back: 'When every branch compares one variable to a constant and yields a value. Ranges and compound tests should stay a chain.' },
+      { front: 'What happens when no branch matches and there is no else?', back: 'Nothing runs, silently. A function then returns `None`, which is why an explicit `else` that raises is often worth adding.' },
     ],
 
     challenge: {
-      title: 'A missingness report that recommends a treatment',
+      title: 'Refactor a triage function',
       brief:
-        'Write `missing_report(df)` that, for each column with gaps, reports the count and percentage missing, the dtype, whether the gaps cluster with gaps in other columns, and a suggested treatment drawn from a small set of rules you define and document: for example, a numeric column under 5 per cent missing suggests median imputation plus an indicator, a datetime column suggests investigation, and any column above 60 per cent missing suggests dropping the column rather than the rows. The output must state the reasoning, not just the recommendation.',
+        'You are given a `route_ticket(ticket)` function written as four levels of nested conditionals, with an `elif` chain whose branches overlap so that one is unreachable. Rewrite it so that: every precondition is a guard clause, the overlapping conditions are correctly ordered, unknown categories raise a `ValueError` naming the offending value, and the priority mapping is data rather than control flow. Then write a small loop that calls your function with one input per branch and prints the result, proving every branch is reachable.',
       language: 'python',
       acceptanceCriteria: [
-        'Reports both absolute and relative missingness per column, sorted worst first',
-        'Detects at least one case where gaps in two columns co-occur',
-        'Recommendations are rule-based and the rule is printed alongside each recommendation',
-        'Explicitly refuses to recommend imputation for columns it classifies as possibly structural',
+        'No branch of the function is unreachable, demonstrated by the driver loop',
+        'The function body never nests more than one level deep',
+        'An unknown category raises `ValueError` with the value in the message',
+        'The category-to-priority mapping is a dictionary, not a chain',
       ],
-      starterCode: 'import pandas as pd\n\n\ndef missing_report(df: pd.DataFrame) -> pd.DataFrame:\n    counts = df.isna().sum()\n    pct = df.isna().mean().mul(100).round(1)\n    return pd.DataFrame({"missing": counts, "pct": pct}).sort_values("pct", ascending=False)\n',
+      starterCode:
+        'PRIORITIES = {"outage": 1, "billing": 2, "question": 3}\n\ndef route_ticket(ticket):\n    ...\n',
     },
 
     teachingPrompt: {
       prompt:
-        'Teach me how to handle missing values in a dataset, and tell me when filling them in is the wrong thing to do.',
+        'Teach someone who can write straight-line Python how conditionals work, why the order of conditions matters, and what a guard clause is.',
       mustCover: [
-        'NaN, NaT and None are markers for absence, detected with isna rather than ==',
-        'The treatment depends on why the value is missing, not on the dtype',
-        'Dropping, filling, forward filling and flagging each have specific appropriate cases',
-        'Imputing before splitting leaks information into the model',
+        'An if statement runs its indented block only when the condition is truthy',
+        'Indentation is what defines the block, not a formatting choice',
+        'In an if/elif chain only the first matching branch runs',
+        'Ordering conditions wrongly can make a branch unreachable',
       ],
-      bonusSignals: ['distinguishes missing at random from missing not at random', 'mentions the missing-indicator column', 'mentions structurally missing values'],
+      bonusSignals: ['mentions guard clauses and flattening nesting', 'mentions that any value has a truth value', 'notes that a missing else means silent fall-through'],
       sampleExplanation:
-        'A missing value is the absence of information, and pandas marks it with NaN in number columns, NaT in date columns and None in text columns. The first practical thing to know is that NaN is not equal to itself, so you find gaps with `isna()`, never with `== nan`. The second, and far more important, is that you cannot pick a treatment until you know why the gap is there. If a sensor was offline for a minute, carrying the previous reading forward is sensible. If a field never applied to that row — a delivery date on an order that was cancelled — then no value is right and filling one in invents a fact. And if the gaps are concentrated where the value would have been extreme, such as high earners declining to state income, then the average you would fill with is already biased low, so filling makes your data systematically wrong in a direction you can no longer see. When you do fill, add a small True/False column recording that you filled it, because the absence was often itself informative. And do the filling inside your model pipeline rather than on the whole table first, otherwise the average you use has been computed partly from the test rows and your score is flattering you.',
+        "A conditional is how a program decides. You write `if`, a question, a colon, and then the lines you want run — pushed in underneath. That indentation is not decoration: it is the only thing telling Python which lines belong to the `if`, which is why moving a line left or right changes what your program does. When there are several possibilities you chain them with `elif`, and here is the part worth burning into memory: Python reads the questions from the top, runs the first one that says yes, and then skips everything below it without even looking. That makes the order of your questions part of the logic. If you ask 'is the score above 50' before 'is the score above 90', then nobody is ever excellent, because a 95 answered yes to the first question and the chain stopped. Put the narrow question first. The other habit worth picking up early is the guard clause. Instead of wrapping the real work in three layers of `if` and pushing it far to the right, deal with each bad case at the top and leave immediately — no user, return; empty order, return — so that what is left at the bottom, at the lowest indentation, is the thing the function is actually for.",
+    },
+  },
+
+  {
+    id: 'PY-011',
+    domain: 'PY',
+    module: 'Control Flow',
+    topic: 'Loops',
+    title: 'Loops and Iteration',
+    slug: 'loops-and-iteration',
+    difficulty: 2,
+    estimatedMinutes: 35,
+    prerequisites: ['PY-010', 'PY-006'],
+    related: ['PY-008', 'PY-009'],
+    tags: ['for', 'while', 'range', 'enumerate', 'zip', 'break', 'continue'],
+
+    learningObjectives: [
+      'Write `for` loops over any iterable without manual index bookkeeping',
+      'Choose between `for` and `while` based on whether the number of steps is known',
+      'Use `enumerate` and `zip` instead of `range(len(...))`',
+      'Control a loop with `break`, `continue` and the rarely-taught `else` clause',
+      'Recognise and avoid accidental quadratic loops and infinite `while` loops',
+    ],
+
+    terminology: [
+      {
+        term: 'Iterable',
+        definition:
+          'Any object that can produce its items one at a time when asked — lists, strings, dicts, sets, files, ranges and generators all qualify.',
+        simple: 'Anything you can walk through item by item.',
+      },
+      {
+        term: 'for loop',
+        definition:
+          'A loop that asks an iterable for its next item until the iterable is exhausted. It never needs an explicit counter or bounds check.',
+        simple: '"Do this once for each thing in here."',
+      },
+      {
+        term: 'while loop',
+        definition:
+          'A loop that repeats as long as a condition stays true. The number of iterations is not known in advance, so something in the body must eventually change the condition.',
+        simple: '"Keep doing this until something changes."',
+      },
+      {
+        term: 'break / continue',
+        definition:
+          '`break` exits the innermost loop immediately; `continue` abandons the current iteration and moves to the next one.',
+        simple: '"Stop entirely" and "skip this one".',
+      },
+      {
+        term: 'enumerate',
+        definition:
+          'A built-in that wraps an iterable and yields `(index, item)` pairs, replacing the `range(len(xs))` idiom with something that works on any iterable.',
+        simple: 'Walk through the items but also be told what number each one is.',
+      },
+      {
+        term: 'zip',
+        definition:
+          'A built-in that walks several iterables in lockstep, yielding tuples of their aligned items and stopping at the shortest.',
+        simple: 'Walk two lists side by side, taking one item from each at a time.',
+      },
+    ],
+
+    simpleExplanation:
+      "A loop repeats work. Python has two, and they answer different questions. A `for` loop says \"do this once for each item in this collection\" — you hand it a list, a string, a file, a dictionary, anything that can hand out items one at a time, and it walks through them for you. You never write a counter, never check a bound, and never go off the end, because the collection itself decides when it is finished. A `while` loop says \"keep doing this as long as something is true\", which is what you want when you genuinely do not know how many steps there will be: read until the user types quit, retry until the request succeeds. The price of a `while` loop is that something in the body must eventually make the condition false, or the program runs forever. Two built-ins remove almost all remaining bookkeeping: `enumerate` gives you the position alongside each item, and `zip` walks two collections side by side. Between them they eliminate the `range(len(...))` pattern that beginners reach for and experienced Python programmers almost never write.",
+
+    whyItExists:
+      'Data arrives in quantity, and writing the same statement once per item is neither possible nor maintainable when the count is unknown at authoring time. Loops let one piece of code apply to an arbitrary number of items, and Python\'s iterator protocol generalises that to anything that can produce values — including files and streams too large to fit in memory.',
+
+    analogy: {
+      scenario:
+        "Imagine two ways of getting through a stack of forms. In the first, someone hands you the stack and you deal with each form until the stack is empty — you never need to know how many there were, and you cannot accidentally reach for a form that is not there. In the second, you keep processing forms until the office closes: you have no idea how many that will be, and if nobody ever closes the office you are there forever.",
+      mapping: [
+        { from: 'Working through the stack until it is empty', to: 'A `for` loop over an iterable' },
+        { from: 'Never needing to count the forms first', to: 'No index arithmetic, so no off-by-one and no IndexError' },
+        { from: 'Working until the office closes', to: 'A `while` loop with a condition' },
+        { from: 'Nobody ever closing the office', to: 'An infinite loop, because nothing in the body changes the condition' },
+        { from: 'Putting a form aside and moving on', to: '`continue`' },
+        { from: 'Finding what you were looking for and stopping', to: '`break`' },
+      ],
+      bridge:
+        'The distinction is exactly the one to apply when choosing a loop: if the collection knows how many items it has, use `for` and let it tell you when to stop. If the stopping condition depends on something that happens inside the loop — a user input, a network response, a numerical tolerance — use `while` and make sure the body can change that condition. Nearly every infinite loop in practice is a `while` whose body forgot to advance.',
+      limitations:
+        'The stack-of-forms picture suggests all items exist up front. Python iterables can be lazy — a generator or an open file produces items on demand and may be endless, which is why a `for` loop over `itertools.count()` never finishes either.',
+    },
+
+    visuals: [
+      {
+        kind: 'compare',
+        title: '`for` versus `while`',
+        caption: 'The question to ask is whether the collection knows when to stop.',
+        left: {
+          heading: '`for` — a known sequence of items',
+          points: [
+            'Iterates over an iterable until it is exhausted',
+            'No counter, no bounds check, no off-by-one',
+            'Cannot run forever unless the iterable is endless',
+            'The default choice: use it unless you cannot',
+          ],
+        },
+        right: {
+          heading: '`while` — an unknown number of steps',
+          points: [
+            'Repeats while a condition stays true',
+            'The body must eventually change the condition',
+            'Right for retries, convergence, and reading until a sentinel',
+            'The usual source of accidental infinite loops',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Loop idioms, and what they replace',
+        caption: 'The left column is what beginners write; the middle is what reviewers expect.',
+        columns: ['Instead of', 'Write', 'Why'],
+        rows: [
+          ['`for i in range(len(xs)): x = xs[i]`', '`for x in xs:`', 'You wanted the items, not the positions.'],
+          ['`for i in range(len(xs)): ... i, xs[i]`', '`for i, x in enumerate(xs):`', 'Gives both without indexing, and works on any iterable.'],
+          ['`for i in range(len(a)): a[i], b[i]`', '`for x, y in zip(a, b):`', 'Walks in lockstep and stops at the shorter one.'],
+          ['`i = 0` / `while i < n:` / `i += 1`', '`for i in range(n):`', 'Removes three places to make a mistake.'],
+          ['Manual count in a loop', '`sum(1 for x in xs if pred(x))`', 'Expresses the aggregate directly.'],
+          ['`while True:` with a flag', '`while True:` with `break`', 'A flag variable usually just delays the exit by one iteration.'],
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'What a `for` loop actually does',
+        caption: 'This is the iterator protocol, which the generators unit builds on directly.',
+        steps: [
+          { label: 'Call `iter(obj)`', detail: 'Python asks the object for an iterator. A `TypeError: object is not iterable` happens here.' },
+          { label: 'Call `next(iterator)`', detail: 'Retrieves the next item and binds it to the loop variable.' },
+          { label: 'Run the body', detail: 'Unless `continue` skips the rest of it, or `break` exits the loop entirely.' },
+          { label: 'Repeat until `StopIteration`', detail: 'The iterator signals exhaustion; the `for` loop catches this and ends normally.' },
+          { label: 'Run the `else` clause', detail: 'Only if the loop finished without a `break`. Useful for search loops.' },
+        ],
+      },
+      {
+        kind: 'annotated',
+        title: 'The loop `else` clause',
+        subject: 'for item in items:\n    if match(item):\n        break\nelse:\n    print("not found")',
+        annotations: [
+          { part: '`else`', note: 'Runs only when the loop completed without hitting `break`. Read it as "no break" rather than "otherwise".' },
+          { part: 'The search pattern', note: 'It removes the `found = False` flag variable that otherwise clutters every search loop.' },
+          { part: 'With `break`', note: 'If the loop exits early, the `else` block is skipped entirely.' },
+          { part: 'Works on `while` too', note: '`while cond: ... else: ...` runs the `else` when the condition finally becomes false, not on `break`.' },
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Watch iteration step by step',
+        caption: 'Step through a loop and see the loop variable change on each pass.',
+        widget: 'code-playground',
+      },
+    ],
+
+    formalDefinition:
+      'A `for` statement obtains an iterator from its iterable via `iter()`, binds each value yielded by `next()` to the target list, and terminates when `StopIteration` is raised. A `while` statement re-evaluates its condition for truthiness before each iteration. Both support `break`, which exits the innermost enclosing loop, `continue`, which begins the next iteration, and an `else` suite that executes only if the loop terminated without a `break`.',
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Iterating properly: enumerate and zip',
+        runnable: true,
+        code: `names = ["ada", "bob", "cal"]
+scores = [92, 78, 85]
+
+# What beginners write
+for i in range(len(names)):
+    print(i, names[i], scores[i])
+
+print("---")
+
+# What Python programmers write
+for rank, (name, score) in enumerate(zip(names, scores), start=1):
+    print(f"{rank}. {name}: {score}")
+
+print("---")
+
+# zip stops at the shortest input
+print(list(zip([1, 2, 3], ["a", "b"])))
+
+# Dicts iterate keys; use .items() for pairs
+config = {"lr": 0.01, "epochs": 30}
+for key, value in config.items():
+    print(key, "=", value)`,
+        output: `0 ada 92
+1 bob 78
+2 cal 85
+---
+1. ada: 92
+2. bob: 78
+3. cal: 85
+---
+[(1, 'a'), (2, 'b')]
+lr = 0.01
+epochs = 30`,
+        explanation:
+          '`enumerate(..., start=1)` is how you get human-readable rankings without adding one everywhere. Combining it with `zip` needs the parenthesised inner target `(name, score)`, because `enumerate` yields a pair whose second element is itself a pair. The `zip` truncation on the third example is worth knowing: it is silent, so zipping a features list with a shorter labels list drops rows without complaint — pass `strict=True` in Python 3.10+ to turn that into a `ValueError`.',
+      },
+      {
+        language: 'python',
+        title: 'break, continue and the loop else',
+        runnable: true,
+        code: `records = [
+    {"id": 1, "status": "ok"},
+    {"id": 2, "status": "skip"},
+    {"id": 3, "status": "target"},
+    {"id": 4, "status": "ok"},
+]
+
+for r in records:
+    if r["status"] == "skip":
+        continue                  # abandon this iteration only
+    if r["status"] == "target":
+        print("found at id", r["id"])
+        break                     # leave the loop entirely
+    print("processing", r["id"])
+else:
+    print("target never found")   # skipped, because we broke out
+
+# The same loop with no target present
+for r in records[:2]:
+    if r["status"] == "target":
+        break
+else:
+    print("target never found")`,
+        output: `processing 1
+found at id 3
+target never found`,
+        explanation:
+          '`continue` and `break` are about the current iteration and the whole loop respectively, and using them removes most reasons to nest an `else` inside a loop body. The `else` clause is the piece almost nobody is taught: it runs only if the loop finished without a `break`, which makes it exactly right for search loops and removes the `found = False` flag people otherwise write. Read `else` here as "no break" — the keyword choice is genuinely unfortunate.',
+      },
+      {
+        language: 'python',
+        title: 'while loops, and how they go wrong',
+        runnable: true,
+        code: `# Convergence: the number of steps is not known in advance
+x = 100.0
+steps = 0
+while abs(x - 1.0) > 1e-9:
+    x = (x + 1.0 / x) / 2      # Newton's method for sqrt(1)
+    steps += 1
+    if steps > 100:            # always bound an unbounded loop
+        raise RuntimeError("did not converge")
+print(f"converged to {x:.6f} in {steps} steps")
+
+# Retry with a limit
+attempts = 0
+while True:
+    attempts += 1
+    ok = attempts == 3          # pretend the third try succeeds
+    if ok:
+        print("succeeded on attempt", attempts)
+        break
+    if attempts >= 5:
+        print("giving up")
+        break`,
+        output: `converged to 1.000000 in 7 steps
+succeeded on attempt 3`,
+        explanation:
+          'These are the two honest uses of `while`: iterate until a numerical tolerance is met, and retry until something succeeds. Both include a hard bound, and that is the habit to take away — an unbounded `while` in production code is a hang waiting to happen, and a counter with a `raise` turns an invisible freeze into a clear error message. The `while True:` with `break` form is idiomatic Python for loops whose exit condition is most naturally tested in the middle of the body rather than at the top.',
+      },
+      {
+        language: 'python',
+        title: 'The accidental quadratic loop',
+        runnable: true,
+        code: `known = list(range(20_000))
+candidates = list(range(19_990, 20_010))
+
+# Quadratic: each "in" scans the whole list
+hits_slow = []
+for c in candidates:
+    if c in known:            # O(n) inside an O(m) loop
+        hits_slow.append(c)
+
+# Linear: hash the haystack once
+known_set = set(known)
+hits_fast = [c for c in candidates if c in known_set]
+
+print(hits_slow == hits_fast, len(hits_fast))
+
+# Another classic: building a string by concatenation
+parts = [str(i) for i in range(5)]
+joined = ",".join(parts)      # linear
+print(joined)`,
+        output: `True 10
+0,1,2,3,4`,
+        explanation:
+          'Both versions produce identical results, and on twenty thousand items the difference is already visible; on a million it is the difference between a second and an hour. The pattern to recognise is any O(n) operation — list membership, list `index`, string concatenation, repeated `pop(0)` — sitting inside a loop that runs many times. The fix is nearly always to hoist the expensive structure out of the loop, as the `set` does here, or to accumulate into a list and combine once at the end.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Training loops',
+        usage:
+          '`for epoch in range(num_epochs): for batch in dataloader:` is the skeleton of every training script ever written, with `break` used for early stopping when validation loss stops improving.',
+      },
+      {
+        context: 'Streaming a file too large for memory',
+        usage:
+          '`for line in open("huge.log"):` reads one line at a time rather than loading the file, because a file object is itself an iterator. This is the same protocol as a list, applied to something that does not fit in RAM.',
+      },
+      {
+        context: 'Retrying a flaky API call',
+        usage:
+          'A `while attempts < max_attempts:` loop with exponential backoff is the standard shape for network code, and the bound is what stops a transient outage from hanging a pipeline overnight.',
+      },
+      {
+        context: 'Pairing predictions with labels',
+        usage:
+          '`for pred, actual in zip(predictions, labels):` is how a confusion matrix gets built by hand, and `strict=True` guards against the silent truncation that hides a mismatched-length bug.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'NumPy', role: 'Vectorised operations replace element-wise Python loops; `for` over an array is usually a sign the code should be rewritten.' },
+      { tool: 'pandas', role: '`iterrows()` is a loop and is slow for the same reason; `apply`, `map` and vectorised column operations are the alternatives.' },
+      { tool: 'PyTorch', role: 'The `DataLoader` is an iterable, which is why the training loop reads as plain Python despite doing batching and shuffling underneath.' },
+      { tool: 'itertools', role: 'Provides `chain`, `islice`, `groupby` and `product` for loop patterns that would otherwise need nesting and bookkeeping.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Writing `for i in range(len(xs)):` and then only using `xs[i]`',
+        why: 'It reintroduces index arithmetic that the `for` loop exists to remove, and it breaks on any iterable without a length, such as a generator or a file.',
+        fix: 'Iterate the items directly with `for x in xs:`, or use `enumerate(xs)` when you genuinely need the position too.',
+      },
+      {
+        mistake: 'Modifying a list while looping over it',
+        why: 'The iterator advances by position, so removing an element shifts the next one into a slot the cursor has already passed, and it is silently skipped.',
+        fix: 'Build a new list with a comprehension, iterate over a copy with `for x in xs.copy():`, or assign back with `xs[:] = [...]`.',
+      },
+      {
+        mistake: 'A `while` loop whose body never changes the condition',
+        why: 'The condition is re-evaluated each pass, so if nothing inside the body affects it, the loop runs forever and the process appears to hang with no error.',
+        fix: 'Make the state change explicit and add a hard bound — a maximum iteration count that raises — for any loop whose termination depends on external data.',
+      },
+      {
+        mistake: 'Doing an O(n) operation inside a loop',
+        why: 'List membership, `list.index`, `pop(0)` and string `+=` are each linear, so putting one inside a loop makes the whole thing quadratic and it degrades sharply with data size.',
+        fix: 'Hoist the structure out: convert the haystack to a set once, accumulate into a list and `join` at the end, or use `collections.deque` for front operations.',
+      },
+      {
+        mistake: 'Ignoring that `zip` truncates silently',
+        why: 'Zipping sequences of different lengths stops at the shorter one with no warning, so a mismatched features-and-labels pair quietly drops rows.',
+        fix: 'Use `zip(a, b, strict=True)` on Python 3.10+, or assert the lengths match before the loop.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'When would you use a `while` loop rather than a `for` loop?',
+        answer:
+          'Use `for` whenever you are walking over a collection of items, because the iterable decides when to stop and you cannot go out of bounds. Use `while` when the number of iterations depends on something that happens inside the loop and is not known in advance — retrying a network call until it succeeds, iterating a numerical method until it converges within a tolerance, or reading input until a sentinel value arrives. The trade-off is that `while` puts termination in your hands, so every one should either provably change its own condition or carry a hard iteration bound that raises, otherwise an unexpected input turns into a silent hang.',
+      },
+      {
+        level: 'intermediate',
+        question: 'What does the `else` clause on a `for` loop do, and when is it useful?',
+        answer:
+          'It runs when the loop finishes normally — that is, when the iterable is exhausted — and is skipped entirely if the loop exits via `break`. The keyword is badly chosen; it should be read as "no break". Its real use is the search loop: you iterate looking for something, `break` when you find it, and put the not-found handling in the `else`. That removes the `found = False` flag variable that otherwise has to be set, checked and maintained, and it keeps the not-found case textually attached to the loop that searched. It works on `while` as well, where the `else` runs when the condition finally becomes false rather than when the loop is broken out of.',
+        followUp:
+          'A strong answer admits that many teams avoid it because it is not widely known, and that a helper function with an early return is an equally good alternative.',
+      },
+      {
+        level: 'internship',
+        question: 'A colleague\'s script is fine on 1,000 rows and takes hours on 500,000. Where do you look first?',
+        answer:
+          'I would look for an O(n) operation nested inside a loop, which turns linear work into quadratic work. The usual suspects are `if x in some_list`, `list.index`, `pop(0)` or `insert(0, ...)`, building a string with `+=`, and appending to a DataFrame or concatenating arrays inside the loop. Each is cheap once and ruinous when repeated. The fixes follow from the diagnosis: hoist a set out of the loop for membership tests, accumulate into a list and `join` or `pd.concat` once at the end, and use `collections.deque` when you need to work at the front. I would confirm rather than guess by timing with a fraction of the data — if halving the rows quarters the runtime, it is quadratic, and that ratio tells you more than a profiler screenshot.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Rewrite this without `range(len(...))`:\n\n```\nfor i in range(len(names)):\n    print(i + 1, names[i])\n```',
+        hint: 'One built-in gives you both the position and the item, and it takes a `start` argument.',
+        language: 'python',
+        starterCode: 'names = ["ada", "bob", "cal"]\n',
+        solution:
+          '```\nfor rank, name in enumerate(names, start=1):\n    print(rank, name)\n```\n\n`enumerate` yields `(index, item)` pairs, and `start=1` shifts the numbering so you do not have to add one in the body. Beyond being shorter, this version works on any iterable — a generator or an open file has no `len()`, so the original would fail on either.',
+      },
+      {
+        prompt:
+          'Write a loop that finds the first record whose status is "error" and prints its id, printing "no errors" if there is none — without using a boolean flag variable.',
+        hint: 'A loop can have an `else` clause that runs only when no `break` happened.',
+        solution:
+          '```\nfor r in records:\n    if r["status"] == "error":\n        print("first error at", r["id"])\n        break\nelse:\n    print("no errors")\n```\n\nThe `else` runs only if the loop ran to exhaustion, so reaching it means nothing matched. Without it you would need `found = False`, set it to True before the `break`, and test it afterwards — three extra lines and one more thing to forget. An equally idiomatic alternative is `next((r for r in records if r["status"] == "error"), None)`.',
+      },
+      {
+        prompt:
+          'This loop is quadratic. Identify why and fix it without changing the output.\n\n```\nresult = []\nfor x in candidates:\n    if x in known_list and x not in result:\n        result.append(x)\n```',
+        hint: 'Two of the three operations here are linear scans.',
+        solution:
+          '```\nknown = set(known_list)\nseen = set()\nresult = []\nfor x in candidates:\n    if x in known and x not in seen:\n        seen.add(x)\n        result.append(x)\n```\n\nBoth `x in known_list` and `x not in result` were linear scans, so the loop cost was proportional to the candidates times the sizes of those two lists. Hashing the haystack once and keeping a parallel `seen` set makes both tests O(1), turning the whole loop linear while preserving the output list and its order exactly.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'PY-011-q1',
+        type: 'code-output',
+        language: 'python',
+        concept: 'enumerate',
+        prompt: 'What does this print?',
+        code: 'for i, c in enumerate("ab", start=1):\n    print(i, c)',
+        options: ['1 a\n2 b', '0 a\n1 b', '1 a\n1 b', 'a 1\nb 2'],
+        answerIndex: 0,
+        explanation:
+          '`enumerate` yields `(index, item)` pairs and `start=1` makes the numbering begin at one. Strings are iterable, so the items here are individual characters.',
+      },
+      {
+        id: 'PY-011-q2',
+        type: 'code-output',
+        language: 'python',
+        concept: 'loop else with break',
+        prompt: 'What does this print?',
+        code: 'for x in [1, 2, 3]:\n    if x == 2:\n        break\nelse:\n    print("finished")\nprint("done")',
+        options: ['done', 'finished\ndone', 'finished', 'done\nfinished'],
+        answerIndex: 0,
+        explanation:
+          'The `else` clause of a loop runs only when the loop completes without a `break`. Since the loop broke at `x == 2`, the `else` is skipped and only the final line prints.',
+      },
+      {
+        id: 'PY-011-q3',
+        type: 'debug',
+        language: 'python',
+        concept: 'mutation while iterating',
+        prompt: 'This is meant to remove all evens from `[1, 2, 2, 3]` but leaves a `2` behind. Why?',
+        code: 'xs = [1, 2, 2, 3]\nfor x in xs:\n    if x % 2 == 0:\n        xs.remove(x)\nprint(xs)',
+        options: [
+          'Removing an element shifts the next one into a position the iterator has already passed',
+          '`remove` deletes by index, not by value',
+          'The modulo operator does not work on list elements',
+          'The loop needs `continue` after the removal',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The iterator advances by position while the list shrinks underneath it, so the second `2` slides into the slot just visited and is skipped. Build a new list with a comprehension, or iterate over `xs.copy()`.',
+      },
+      {
+        id: 'PY-011-q4',
+        type: 'mcq',
+        concept: 'zip truncation',
+        prompt: 'What is `list(zip([1, 2, 3], ["a", "b"]))`?',
+        options: [
+          '`[(1, "a"), (2, "b")]`',
+          '`[(1, "a"), (2, "b"), (3, None)]`',
+          'It raises a `ValueError` because the lengths differ',
+          '`[(1, "a"), (2, "b"), (3, "")]`',
+        ],
+        answerIndex: 0,
+        explanation:
+          '`zip` stops at the shortest input and drops the extra item silently. Pass `strict=True` on Python 3.10+ to make a length mismatch raise `ValueError` instead.',
+      },
+      {
+        id: 'PY-011-q5',
+        type: 'multi',
+        concept: 'choosing a loop',
+        prompt: 'Which of these situations call for a `while` loop rather than a `for` loop? Select all that apply.',
+        options: [
+          'Retrying an HTTP request until it succeeds or five attempts have failed',
+          'Printing every line of a file',
+          'Iterating a numerical method until the change falls below a tolerance',
+          'Applying the same transformation to every row of a list',
+          'Reading user input until they type "quit"',
+        ],
+        answerIndices: [0, 2, 4],
+        explanation:
+          'A `while` loop is right when the number of iterations depends on something that happens inside the loop. Walking a file or a list is what `for` is for — the iterable knows when it is finished.',
+      },
+      {
+        id: 'PY-011-q6',
+        type: 'fill',
+        concept: 'loop control',
+        prompt: 'Which keyword abandons the current iteration and moves straight to the next one, without leaving the loop?',
+        answers: ['continue', 'the continue statement', 'continue statement'],
+        explanation:
+          '`continue` skips the rest of the current iteration; `break` exits the loop entirely. Using `continue` for the uninteresting cases often removes a level of nesting from the body.',
+      },
+      {
+        id: 'PY-011-q7',
+        type: 'explain',
+        concept: 'quadratic loops',
+        prompt: 'Explain how a loop that looks linear can be quadratic, and how you would confirm the diagnosis without a profiler.',
+        rubric: [
+          'Identifies that an O(n) operation inside an O(n) loop multiplies',
+          'Names at least two concrete culprits, such as list membership or string concatenation',
+          'Describes the halving test: if halving the input quarters the time, the behaviour is quadratic',
+        ],
+        sampleAnswer:
+          'The loop itself runs n times, but if each iteration performs an operation that is itself linear in the data — `x in some_list`, `list.index`, `pop(0)`, `out += piece` on a string, or concatenating a DataFrame — then the total work is n times m, which grows as a square. The code reads as a single loop, which is why it survives review. To confirm without tooling, run it on a fraction of the data and compare: halving the input should roughly halve a linear runtime, but quarter a quadratic one, and that ratio identifies the shape immediately. The fix is nearly always to hoist the expensive structure out of the loop — build a set once for membership, accumulate into a list and join or concat a single time at the end.',
+        explanation:
+          'This links loop mechanics to complexity, which is the bridge into the DSA domain and one of the most practically valuable diagnoses at this level.',
+      },
+    ],
+
+    flashcards: [
+      { front: '`for` or `while`?', back: '`for` when iterating a collection; `while` when the number of steps depends on something inside the loop.' },
+      { front: 'What replaces `for i in range(len(xs))`?', back: '`for x in xs` if you want items, `for i, x in enumerate(xs)` if you also want positions.' },
+      { front: 'What does `zip` do when the inputs differ in length?', back: 'Stops at the shortest, silently. Use `strict=True` (3.10+) to raise on a mismatch.' },
+      { front: 'When does a loop `else` clause run?', back: 'Only when the loop finished without a `break`. Read it as "no break", not "otherwise".' },
+      { front: '`break` versus `continue`', back: '`break` leaves the innermost loop entirely; `continue` abandons this iteration and starts the next.' },
+      { front: 'How does an O(n) operation inside a loop behave?', back: 'It makes the loop quadratic. Hoist sets, joins and concatenations out of the loop body.' },
+    ],
+
+    challenge: {
+      title: 'A log scanner with early exit',
+      brief:
+        'Given a list of log lines, write a script that: counts how many lines are at each level using a single pass; finds the first line at level FATAL and stops scanning immediately, reporting its position with `enumerate`; reports "no fatal errors" using a loop `else` clause rather than a flag variable; and pairs each line with its timestamp from a parallel list using `zip`, raising if the two lists have different lengths. No loop may contain a linear scan of another collection.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Level counting uses one pass and a dictionary or Counter, not a scan per level',
+        'The FATAL search uses `break` and reports a 1-based position from `enumerate`',
+        'The not-found case is handled by a loop `else`, with no boolean flag anywhere',
+        'Mismatched list lengths raise rather than silently truncating',
+      ],
+      starterCode:
+        'lines = [\n    "INFO starting",\n    "WARN low memory",\n    "FATAL out of memory",\n    "INFO shutting down",\n]\ntimes = ["12:00", "12:01", "12:02", "12:03"]\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone who can write conditionals how loops work, when to choose `for` over `while`, and why `range(len(...))` is a smell.',
+      mustCover: [
+        'A for loop walks an iterable, asking it for one item at a time',
+        'A while loop repeats while a condition holds, so the body must change that condition',
+        'enumerate and zip remove the need for manual index arithmetic',
+        'break exits the loop and continue skips to the next iteration',
+      ],
+      bonusSignals: ['mentions the loop else clause', 'warns about mutating a list while iterating it', 'mentions accidental quadratic behaviour'],
+      sampleExplanation:
+        "A loop is how you say 'do this for each of these' without writing the line out once per item. Python's main loop is the `for` loop, and the thing to understand is that it does not count — it asks. You hand it a list, a string, a file, anything that can produce items one at a time, and it keeps asking for the next one until there are none left. Because the collection decides when to stop, you never write a counter, never check a bound, and never run off the end. That is why `for i in range(len(names))` is a smell: you have reintroduced the counting the loop was designed to remove. If you want the items, say `for name in names`. If you also want to know which number each one is, say `for i, name in enumerate(names)`. If you want to walk two lists side by side, say `for name, score in zip(names, scores)`. The other loop, `while`, is for when you genuinely do not know how many times you will go round — keep retrying until the request works, keep refining until the answer is accurate enough. It repeats as long as its condition is true, which means something inside the body has to eventually make that condition false. If nothing does, the program does not crash; it simply never finishes, which is why every `while` you write deserves a moment's thought about what makes it stop.",
     },
   },
 ];

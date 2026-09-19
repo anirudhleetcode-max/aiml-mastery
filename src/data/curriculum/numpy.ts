@@ -3005,3 +3005,1097 @@ equal? True`,
         'Vectorising means saying what should happen to the whole array rather than walking it yourself: `arr * 2` instead of a loop that doubles one element at a time. The arithmetic is identical, so this is not a cleverer algorithm — both do n multiplications. What changes is everything around the arithmetic. In your loop, every element costs a pointer chase, a type check, a dispatch and a fresh Python object for the result, and that overhead is typically far larger than the multiplication itself. In the array version those costs are paid once for the whole call, leaving a compiled loop over contiguous typed memory that the processor can prefetch and often handle several numbers at a time. In practice that is ten to a hundred times faster. The translation is mechanical once you have seen it: an `if` becomes a mask or `np.where`, a running total becomes `.sum()` or `.cumsum()`, and a scalar function like `math.exp` becomes the ufunc `np.exp`. It is not universal, though. On three elements the overhead of a NumPy call dominates and the loop wins, and when each step genuinely depends on the previous one there is no whole-array form at all — that is when you reach for a built-in like `cumsum`, or compile the honest loop with Numba.',
     },
   },
+
+  {
+    id: 'NP-007',
+    domain: 'NP',
+    module: 'Broadcasting & Vectorisation',
+    topic: 'Broadcasting',
+    title: 'Broadcasting Rules',
+    slug: 'broadcasting-rules',
+    difficulty: 3,
+    estimatedMinutes: 40,
+    prerequisites: ['NP-006'],
+    related: ['NP-002', 'NP-004'],
+    tags: ['broadcasting', 'shapes', 'newaxis', 'ValueError', 'column-vector', 'outer'],
+
+    learningObjectives: [
+      'State the broadcasting rules precisely and apply them to any pair of shapes',
+      'Predict the output shape of an operation, or correctly predict that it will raise',
+      'Read and fix the error message "operands could not be broadcast together with shapes ..."',
+      'Use `np.newaxis` and `reshape` deliberately to make two arrays meet, and avoid the `(n,)` versus `(n, 1)` trap',
+    ],
+
+    terminology: [
+      {
+        term: 'Broadcasting',
+        definition:
+          'The rule set by which NumPy makes arrays of different shapes compatible for element-wise operations, by virtually repeating size-1 axes without copying data.',
+        simple: 'How NumPy lets a small array team up with a big one without you writing it out.',
+      },
+      {
+        term: 'Trailing-dimension alignment',
+        definition:
+          'Shapes are compared from the rightmost axis leftwards, and the shorter shape is padded on the left with axes of length 1.',
+        simple: 'Line the shapes up at the right-hand end, not the left.',
+      },
+      {
+        term: 'Compatible axes',
+        definition:
+          'Two axes broadcast if they are equal, or if one of them is 1. Any other pair is an error — NumPy never resizes a length-3 axis to length 4.',
+        simple: 'Same length, or one of them is a single value that gets reused.',
+      },
+      {
+        term: 'Stretching',
+        definition:
+          'A size-1 axis is reused along its whole length by setting that stride to 0, so no memory is actually duplicated.',
+        simple: 'Reading the same value over and over instead of making copies of it.',
+      },
+      {
+        term: 'np.newaxis',
+        definition:
+          'An alias for `None` used inside brackets to insert a new axis of length 1, turning shape `(n,)` into `(n, 1)` or `(1, n)`.',
+        simple: 'A way to add an extra empty direction so shapes line up how you want.',
+      },
+    ],
+
+    simpleExplanation:
+      "You have already relied on broadcasting without naming it. When you wrote `arr + 1`, the 1 was not turned into an array of a million ones — NumPy simply reused that single value at every position. Broadcasting is the general version of that trick, and it follows a rule you can apply by hand in a few seconds. Write the two shapes down, right-aligned, and pad the shorter one on the left with 1s. Then compare each column: if the two numbers are equal, fine; if one of them is 1, that side is stretched to match the other; if neither is true, NumPy refuses and raises an error. The result takes the larger number from each column. So `(3, 4)` with `(4,)` becomes `(3, 4)` with `(1, 4)`, which works, and each of the three rows gets the same four values added. But `(3, 4)` with `(3,)` right-aligns as `(3, 4)` against `(1, 3)`, and 4 against 3 is neither equal nor 1, so it fails. That is the whole rule, and the entire art is knowing that a one-dimensional array of length n aligns at the right-hand end, which is why it behaves like a row and not like a column.",
+
+    whyItExists:
+      'Element-wise operations need matching shapes, but the useful cases almost never match exactly: subtract a per-column mean from every row, scale each row by its own weight, add a bias vector to a batch of activations. Without broadcasting each of these would require materialising a full-size copy of the small array, wasting memory and bandwidth, or writing an explicit loop. Broadcasting expresses the intent directly and implements it by setting a stride to zero, so nothing is copied at all.',
+
+    analogy: {
+      scenario:
+        'Think of a spreadsheet where you want to apply a discount to a table of prices. If you have one discount per column, you write it in a single row above the table and drag it down: every row uses that same header row. If you have one discount per customer, you write it in a single column beside the table and drag it across. What you never do is take a column of three discounts and try to apply it across four columns of prices — the person asking for that has not decided which direction they meant.',
+      mapping: [
+        { from: 'A single header row dragged down the table', to: 'Shape `(1, 4)` broadcast against `(3, 4)`, stretched along axis 0' },
+        { from: 'A single column dragged across the table', to: 'Shape `(3, 1)` broadcast against `(3, 4)`, stretched along axis 1' },
+        { from: 'Dragging does not duplicate the numbers you typed', to: 'Stretching sets the stride to 0; no memory is copied' },
+        { from: 'Three discounts against four columns', to: 'Shapes `(3,)` and `(3, 4)` — a ValueError, because 3 and 4 are neither equal nor 1' },
+        { from: 'Being asked to decide "down or across?"', to: 'The `(n,)` versus `(n, 1)` decision, made explicit with `np.newaxis`' },
+      ],
+      bridge:
+        'Dragging a formula is broadcasting: the single row or column is reused along the direction it is missing. The part the spreadsheet hides is which direction a bare list of numbers means, and NumPy has to make that unambiguous. Its answer is trailing alignment: a plain `(n,)` array is padded on the left, so it always behaves like a row. If you meant a column you must say so, with `(n, 1)`, and that single decision is behind a large fraction of all NumPy bugs.',
+      limitations:
+        'The spreadsheet picture makes broadcasting look like copying the values out. It is not: a stretched axis has a stride of zero, so the same bytes are read repeatedly. That is why broadcasting is free in memory, and also why an accidental broadcast between `(n, 1)` and `(n,)` can silently produce an n-by-n array large enough to exhaust RAM.',
+    },
+
+    visuals: [
+      {
+        kind: 'ascii',
+        title: 'The rule, applied by hand',
+        caption: 'Right-align, pad with 1s, then compare column by column.',
+        art: `WORKS: (3, 4) + (4,)              WORKS: (3, 4) + (3, 1)
+
+      3   4                             3   4
+          4   <- padded to (1, 4)       3   1
+      -----                             -----
+      3   4   result                    3   4   result
+          ^ 4 == 4                           ^ 1 stretches to 4
+      ^ 1 stretches to 3                 ^ 3 == 3
+
+
+FAILS: (3, 4) + (3,)               WORKS: (3, 1) + (4,)
+
+      3   4                             3   1
+          3   <- padded to (1, 3)           4   <- padded to (1, 4)
+      -----                             -----
+      ?   X   4 vs 3: not equal,        3   4   result (an outer grid)
+              neither is 1                  ^ 1 stretches to 4
+                                        ^ 1 stretches to 3
+ValueError: operands could not be
+broadcast together with shapes (3,4) (3,)`,
+      },
+      {
+        kind: 'table',
+        title: 'Worked shape examples, including the ones that fail',
+        caption: 'Work each row out yourself before reading the result column.',
+        columns: ['Shape A', 'Shape B', 'Result', 'Why'],
+        rows: [
+          ['`(3, 4)`', '`()` scalar', '`(3, 4)`', 'A scalar broadcasts against anything'],
+          ['`(3, 4)`', '`(4,)`', '`(3, 4)`', 'Padded to `(1, 4)`; the 1 stretches to 3'],
+          ['`(3, 4)`', '`(3, 1)`', '`(3, 4)`', '3 matches 3; the 1 stretches to 4'],
+          ['`(3, 4)`', '`(3,)`', 'ValueError', 'Padded to `(1, 3)`; trailing 4 vs 3 is incompatible'],
+          ['`(5, 1)`', '`(1, 4)`', '`(5, 4)`', 'Both axes stretch — this is an outer product grid'],
+          ['`(5,)`', '`(5, 1)`', '`(5, 5)`', 'The classic accident: a row and a column make a matrix'],
+          ['`(2, 3, 4)`', '`(3, 1)`', '`(2, 3, 4)`', 'Padded to `(1, 3, 1)`; two axes stretch'],
+          ['`(2, 3, 4)`', '`(2, 3)`', 'ValueError', 'Trailing 4 vs 3 fails; you probably wanted `(2, 3, 1)`'],
+          ['`(256, 256, 3)`', '`(3,)`', '`(256, 256, 3)`', 'Per-channel scaling of an image'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Broadcast two shapes and see the stretch',
+        caption: 'Set each shape and watch which axes are stretched and which cause an error.',
+        widget: 'broadcasting',
+      },
+      {
+        kind: 'flow',
+        title: 'Diagnosing a broadcasting ValueError',
+        caption: 'The error message already contains both shapes; the work is deciding which one is wrong.',
+        steps: [
+          { label: 'Read both shapes from the message', detail: '"operands could not be broadcast together with shapes (3,4) (3,)" gives you everything you need.' },
+          { label: 'Right-align them on paper', detail: 'Pad the shorter shape on the left with 1s until the lengths match.' },
+          { label: 'Find the offending column', detail: 'Locate the first pair that is neither equal nor contains a 1 — that is the actual disagreement.' },
+          { label: 'Decide which array is wrong', detail: 'Usually a 1-D array meant to be a column: `(3,)` should have been `(3, 1)`.' },
+          { label: 'Fix with newaxis or reshape', detail: '`b[:, np.newaxis]` or `b.reshape(-1, 1)` inserts the missing axis; never silently transpose to make an error go away.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'The `(n,)` versus `(n, 1)` trap',
+        caption: 'Same values, same element count, entirely different broadcasting behaviour.',
+        left: {
+          heading: '`b` with shape `(3,)`',
+          points: [
+            'One-dimensional; `ndim == 1`',
+            'Right-aligns as `(1, 3)` — behaves like a ROW',
+            '`A(3,4) + b` raises a ValueError',
+            '`b + b` gives shape `(3,)`',
+            'Returned by `arr[:, 0]` and by `arr.sum(axis=1)`',
+          ],
+        },
+        right: {
+          heading: '`c` with shape `(3, 1)`',
+          points: [
+            'Two-dimensional; `ndim == 2`',
+            'Already aligned — behaves like a COLUMN',
+            '`A(3,4) + c` works, giving `(3, 4)`',
+            '`b + c` gives shape `(3, 3)`, which is usually a bug',
+            'Produced by `arr[:, 0:1]`, `b[:, np.newaxis]` or `keepdims=True`',
+          ],
+        },
+      },
+    ],
+
+    formalDefinition:
+      'Two shapes broadcast if, when right-aligned and left-padded with 1s to equal length, every pair of corresponding axis lengths is either equal or contains a 1. The result shape takes the maximum of each pair. An axis of length 1 is stretched by setting its stride to 0, so the same memory is read repeatedly and no data is copied. If any pair is neither equal nor contains a 1, NumPy raises `ValueError: operands could not be broadcast together with shapes ...`.',
+
+    math: {
+      intuition:
+        'Broadcasting is a rule about index arithmetic. When an axis has length 1, every index along that axis is mapped to position 0, which is the formal way of saying the value is reused.',
+      formulas: [
+        {
+          latex: "r_k = \\max(a_k, b_k) \\quad \\text{valid iff} \\quad a_k = b_k \;\\lor\; a_k = 1 \;\\lor\; b_k = 1",
+          name: 'The broadcasting rule',
+          meaning: 'Per axis, after right-aligning and left-padding with 1s: the axes must agree or one must be 1, and the result takes the larger.',
+          variables: [
+            { symbol: 'a_k, b_k', meaning: 'Length of axis k in each operand, counting from the right' },
+            { symbol: 'r_k', meaning: 'Length of axis k in the result' },
+            { symbol: '\\lor', meaning: 'Logical or — any one of the three conditions suffices' },
+          ],
+        },
+        {
+          latex: "s_k' = \\begin{cases} 0 & \\text{if } a_k = 1 \\text{ and } r_k > 1 \\\\ s_k & \\text{otherwise} \\end{cases}",
+          name: 'How stretching is implemented',
+          meaning: 'A stretched axis gets a stride of zero, so advancing along it does not move in memory and the same element is read again.',
+          variables: [
+            { symbol: 's_k', meaning: 'Original stride along axis k, in bytes' },
+            { symbol: "s_k'", meaning: 'Stride used during the broadcast operation' },
+            { symbol: 'r_k', meaning: 'Result length along axis k' },
+          ],
+        },
+        {
+          latex: 'z_{ij} = \\frac{x_{ij} - \\mu_j}{\\sigma_j}, \\qquad \\mu \\in \\mathbb{R}^{1 \\times p}, \; X \\in \\mathbb{R}^{n \\times p}',
+          name: 'Standardisation as a broadcast',
+          meaning: 'A per-column mean of shape (p,) right-aligns against (n, p) and is reused down all n rows, which is exactly the formula subtracting the same mu_j from every row.',
+          variables: [
+            { symbol: 'X', meaning: 'Design matrix with n samples and p features' },
+            { symbol: '\\mu_j', meaning: 'Mean of feature j, one number per column' },
+            { symbol: '\\sigma_j', meaning: 'Standard deviation of feature j' },
+            { symbol: 'z_{ij}', meaning: 'Standardised value for sample i, feature j' },
+          ],
+          category: 'statistics',
+        },
+      ],
+      derivation: [
+        'Take X of shape (1000, 5) and mu = X.mean(axis=0) of shape (5,).',
+        'Right-align: (1000, 5) against (5,), which pads to (1, 5).',
+        'Column by column from the right: 5 versus 5 is equal, so fine; 1000 versus 1 contains a 1, so the 1 stretches.',
+        'The result shape is (1000, 5), and the stride along axis 0 of the broadcast mu is 0, so every row reads the same five means.',
+        'Now try to centre rows instead, with a row mean of shape (1000,). Right-aligning gives (1000, 5) against (1, 1000), and 5 versus 1000 fails.',
+        'Turning it into shape (1000, 1) with keepdims or newaxis restores compatibility: 1 stretches to 5, and each row is centred by its own mean.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Computing all pairwise distances without a single loop',
+      setup:
+        'Given `A` with shape `(4, 2)` — four points in the plane — compute the 4x4 matrix of Euclidean distances between every pair. The naive version is a double loop; broadcasting does it in one expression, and the shape reasoning is the whole trick.',
+      steps: [
+        {
+          label: 'State the goal shape',
+          detail: 'The answer is `(4, 4)`: one row per source point, one column per destination point. So somewhere an axis of size 4 must meet another axis of size 4.',
+        },
+        {
+          label: 'Insert an axis to make the points disagree deliberately',
+          detail: '`A[:, None, :]` has shape `(4, 1, 2)` and `A[None, :, :]` has shape `(1, 4, 2)`. The first indexes source points, the second destination points.',
+          latex: 'A \\in \\mathbb{R}^{4\\times 2} \;\\rightarrow\; A_{[:,\\,\\text{None},\\,:]} \\in \\mathbb{R}^{4\\times 1\\times 2}, \\quad A_{[\\text{None},\\,:,\\,:]} \\in \\mathbb{R}^{1\\times 4\\times 2}',
+        },
+        {
+          label: 'Broadcast the subtraction',
+          detail: 'Right-align `(4, 1, 2)` and `(1, 4, 2)`: 2 equals 2, then 1 stretches to 4, then 4 meets 1 which stretches. The difference has shape `(4, 4, 2)` and holds every coordinate difference for every pair.',
+          latex: 'D_{ijk} = A_{ik} - A_{jk}, \\qquad D \\in \\mathbb{R}^{4 \\times 4 \\times 2}',
+        },
+        {
+          label: 'Reduce the coordinate axis away',
+          detail: 'Square, sum over the last axis, take the square root. Summing over axis -1 removes the coordinate axis and leaves `(4, 4)`.',
+          latex: 'd_{ij} = \\sqrt{\\sum_{k} (A_{ik} - A_{jk})^2}',
+        },
+        {
+          label: 'Sanity-check the result',
+          detail: 'The diagonal must be exactly 0, and the matrix must be symmetric. `np.allclose(d, d.T)` and `np.diag(d)` confirm both in one line each.',
+        },
+      ],
+      conclusion:
+        'The expression is `np.sqrt(((A[:, None, :] - A[None, :, :]) ** 2).sum(-1))`. It is one line, has no Python loop, and its correctness is established entirely by shape reasoning: `(4,1,2)` against `(1,4,2)` gives `(4,4,2)`, and summing the last axis gives `(4,4)`. The cost to watch is memory: the intermediate is n by n by d, so for 100,000 points this approach would need terabytes and you would switch to `scipy.spatial.distance` or a chunked loop.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Broadcasting that works, and the shape rule behind each case',
+        runnable: true,
+        code: `import numpy as np
+
+A = np.arange(12).reshape(3, 4)
+row = np.array([10, 20, 30, 40])        # shape (4,)
+col = np.array([[100], [200], [300]])   # shape (3, 1)
+
+print(A + 1)          # scalar broadcasts everywhere
+print(A + row)        # (3,4) + (4,)   -> (3,4), same row added to each row
+print(A + col)        # (3,4) + (3,1)  -> (3,4), same value added along each row
+print((A + row).shape, (A + col).shape)
+
+print(np.broadcast_shapes((5, 1), (1, 4)))
+print(np.broadcast_shapes((2, 3, 4), (3, 1)))`,
+        output: `[[ 1  2  3  4]
+ [ 5  6  7  8]
+ [ 9 10 11 12]]
+[[10 21 32 43]
+ [14 25 36 47]
+ [18 29 40 51]]
+[[100 101 102 103]
+ [204 205 206 207]
+ [308 309 310 311]]
+(3, 4) (3, 4)
+(5, 4)
+(2, 3, 4)`,
+        explanation:
+          '`row` is stretched down the rows because its padded shape `(1, 4)` has a 1 on axis 0; `col` is stretched across the columns because its shape `(3, 1)` has a 1 on axis 1. Neither is copied — the stretched axis simply gets a stride of zero. `np.broadcast_shapes` is the tool to reach for when you want to check a pair of shapes without building the arrays, and it is far quicker than reasoning in your head under pressure.',
+      },
+      {
+        language: 'python',
+        title: 'The failing case, and the (n,) versus (n, 1) trap',
+        runnable: true,
+        code: `import numpy as np
+
+A = np.arange(12).reshape(3, 4)
+wrong = np.array([1, 2, 3])            # shape (3,) - meant as a per-row value
+
+try:
+    A + wrong
+except ValueError as e:
+    print("ValueError:", e)
+
+fixed = wrong[:, np.newaxis]           # shape (3, 1)
+print("fixed shape:", fixed.shape)
+print(A + fixed)
+
+# The silent version of the same confusion
+a = np.arange(5)                       # (5,)
+b = np.arange(5)[:, np.newaxis]        # (5, 1)
+print("a + b shape:", (a + b).shape)   # NOT (5,) - it is a 5x5 grid`,
+        output: `ValueError: operands could not be broadcast together with shapes (3,4) (3,) 
+fixed shape: (3, 1)
+[[ 1  2  3  4]
+ [ 6  7  8  9]
+ [11 12 13 14]]
+a + b shape: (5, 5)
+`,
+        explanation:
+          'The error is the friendly case: NumPy tells you both shapes and refuses. The last two lines are the dangerous case. Adding a `(5,)` to a `(5, 1)` is perfectly legal — one is a row and one is a column, so they broadcast to a 5x5 grid — and no error is raised. On five elements you notice; on a hundred thousand you allocate eighty gigabytes and the process dies. Whenever an operation unexpectedly returns a square result, suspect exactly this.',
+      },
+      {
+        language: 'python',
+        title: 'The everyday uses: scaling, centring and outer grids',
+        runnable: true,
+        code: `import numpy as np
+
+rng = np.random.default_rng(5)
+X = rng.normal(loc=[0, 50, 100], scale=[1, 5, 20], size=(1000, 3))
+
+# Per-column standardisation: (1000,3) with (3,) -> (1000,3)
+Z = (X - X.mean(axis=0)) / X.std(axis=0)
+print("Z means:", Z.mean(axis=0).round(6), "Z stds:", Z.std(axis=0).round(6))
+
+# Per-row normalisation needs keepdims to get (1000,1)
+norms = np.linalg.norm(X, axis=1, keepdims=True)
+print("norms shape:", norms.shape)
+unit = X / norms
+print("row lengths:", np.linalg.norm(unit, axis=1)[:3].round(6))
+
+# An outer grid from two 1-D arrays
+xs = np.linspace(-1, 1, 3)
+ys = np.linspace(0, 1, 2)
+grid = xs[None, :] * ys[:, None]
+print("grid shape:", grid.shape)
+print(grid)`,
+        output: `Z means: [ 0. -0. -0.] Z stds: [1. 1. 1.]
+norms shape: (1000, 1)
+row lengths: [1. 1. 1.]
+grid shape: (2, 3)
+[[-0.  0.  0.]
+ [-1.  0.  1.]]`,
+        explanation:
+          'Column standardisation works with a bare `(3,)` because it right-aligns against the column axis naturally. Row normalisation does not: `np.linalg.norm(X, axis=1)` returns shape `(1000,)`, which would right-align against the column axis of size 3 and fail. `keepdims=True` keeps that axis as length 1, giving `(1000, 1)`, which stretches across the columns exactly as intended. This single asymmetry — columns work by default, rows need keepdims — accounts for an enormous share of real broadcasting errors.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Adding a bias vector in a neural network layer',
+        usage:
+          '`Z = X @ W + b` adds a bias of shape `(units,)` to activations of shape `(batch, units)`. Broadcasting applies the same bias to every sample in the batch with no copy of b.',
+      },
+      {
+        context: 'Normalising image channels',
+        usage:
+          '`(img - mean) / std` with `img` of shape `(H, W, 3)` and per-channel statistics of shape `(3,)` scales each colour channel independently — the standard preprocessing step before a pretrained vision model.',
+      },
+      {
+        context: 'Building a distance or similarity matrix',
+        usage:
+          'k-nearest neighbours and k-means both need all pairwise distances, computed by broadcasting `(n, 1, d)` against `(1, m, d)`. The memory cost of that `(n, m, d)` intermediate is precisely why libraries chunk it.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'scikit-learn', role: '`StandardScaler` stores per-feature means and scales, then applies them by broadcasting at transform time.' },
+      { tool: 'PyTorch', role: 'Tensor broadcasting follows identical rules, so the shape reasoning learned here transfers with no changes.' },
+      { tool: 'pandas', role: 'Subtracting a Series from a DataFrame broadcasts along the matching axis; `axis="index"` exists because the default alignment surprises people.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Using a shape `(n,)` array where a column was intended',
+        why: 'A 1-D array right-aligns, so it behaves as a row of length n. Subtracting per-row values written as `(n,)` from an `(n, p)` matrix either raises, or worse, succeeds by accident when n happens to equal p.',
+        fix: 'Make the intent explicit with `v[:, np.newaxis]`, `v.reshape(-1, 1)` or `keepdims=True` on the reduction that produced it.',
+      },
+      {
+        mistake: 'Accidentally creating an n-by-n array from `(n,)` plus `(n, 1)`',
+        why: 'That combination is valid broadcasting: a row and a column produce a grid. Nothing raises, and for n = 100,000 in float64 the result would need 80 GB.',
+        fix: 'Print shapes before combining arrays from different sources. If a result is unexpectedly square, this is almost always the cause.',
+      },
+      {
+        mistake: 'Trying to transpose your way out of a broadcasting error',
+        why: 'Transposing sometimes makes the error disappear while computing something entirely different — for example centring by the wrong axis — and then the bug is silent rather than loud.',
+        fix: 'Work out on paper which axis should be stretched, then add exactly that axis with `np.newaxis`. Verify with a small example whose answer you know by hand.',
+      },
+      {
+        mistake: 'Assuming broadcasting is free in memory as well as in the operands',
+        why: 'The operands are not copied, but the result is a full materialised array. Broadcasting `(10000, 1)` with `(1, 10000)` allocates 100 million elements even though the inputs are tiny.',
+        fix: 'Compute the result shape before running, using `np.broadcast_shapes`, and multiply by itemsize to see the real cost. Chunk the computation if it is too large.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'State the broadcasting rules, then explain whether `(3, 4)` and `(3,)` broadcast.',
+        answer:
+          'Align the shapes at their rightmost axis and left-pad the shorter with 1s. Then, axis by axis, the lengths must be equal or one of them must be 1, and the result takes the larger of the pair. For `(3, 4)` and `(3,)`, the second pads to `(1, 3)`. Comparing the trailing axes gives 4 against 3, which is neither equal nor contains a 1, so it raises `ValueError: operands could not be broadcast together with shapes (3,4) (3,)`. The intent was almost certainly a per-row value, which requires shape `(3, 1)` — then 3 matches 3 and the 1 stretches to 4.',
+        followUp:
+          'A strong answer volunteers that stretching is implemented as a zero stride, so no data is copied, while the result array is fully materialised.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Why does `X - X.mean(axis=0)` work but `X - X.mean(axis=1)` raise?',
+        answer:
+          'For `X` of shape `(n, p)`, `mean(axis=0)` removes axis 0 and returns shape `(p,)`. Right-aligned against `(n, p)` it becomes `(1, p)`, the p axes match and the 1 stretches down the rows, so every row is centred by the per-column means. `mean(axis=1)` removes axis 1 and returns shape `(n,)`, which right-aligns as `(1, n)` — so its n is compared against p and fails unless they happen to be equal, which is worse because it then silently computes nonsense. The fix is `X.mean(axis=1, keepdims=True)`, giving `(n, 1)`, which stretches across the columns as intended.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'A pairwise-distance computation using broadcasting crashes with a memory error on 200,000 points. Diagnose and fix.',
+        answer:
+          'The broadcast `A[:, None, :] - A[None, :, :]` materialises an intermediate of shape `(n, n, d)`. At n = 200,000 and d = 10 in float64 that is 3.2e11 elements, about 2.6 terabytes, so the crash is expected rather than mysterious. The fix is to avoid materialising all pairs: use the algebraic identity that squared distance equals the sum of squared norms minus twice the Gram matrix, which needs only an `(n, n)` intermediate via a single matrix product; chunk the rows into blocks so only a block by n slab exists at a time; or use a library that does both, such as `sklearn.metrics.pairwise_distances` with its `working_memory` setting, or a spatial index like a KD-tree if only near neighbours are needed. The general habit is to compute the intermediate shape and multiply by itemsize before running anything at scale.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'For each pair, give the result shape or say it raises: (a) `(8, 1, 6)` and `(7, 1)`; (b) `(5, 4)` and `(4,)`; (c) `(5, 4)` and `(5,)`; (d) `(15, 3, 5)` and `(15, 1, 5)`; (e) `(3,)` and `(3, 1)`.',
+        hint: 'Right-align, left-pad with 1s, compare column by column.',
+        solution:
+          '(a) `(8, 7, 6)`. Pad the second to `(1, 7, 1)`: 6 against 1 stretches, 1 against 7 stretches, 8 against 1 stretches.\n(b) `(5, 4)`. Pad to `(1, 4)`: 4 matches, 1 stretches to 5.\n(c) Raises. Pad to `(1, 5)`: trailing 4 against 5 is neither equal nor 1.\n(d) `(15, 3, 5)`. 5 matches, 1 stretches to 3, 15 matches.\n(e) `(3, 3)`. Pad the first to `(1, 3)`: 3 against 1 stretches and 1 against 3 stretches, giving a grid. This is the trap — it does not raise.',
+      },
+      {
+        prompt: 'Write one expression that scales every row of a matrix `X` of shape `(n, p)` so that each row sums to 1, and explain why `keepdims` is needed.',
+        hint: 'What shape does `X.sum(axis=1)` return, and how does it right-align against `(n, p)`?',
+        language: 'python',
+        starterCode: 'import numpy as np\n\nX = np.arange(12, dtype=float).reshape(3, 4)\n',
+        solution:
+          'import numpy as np\n\nX = np.arange(12, dtype=float).reshape(3, 4)\nrow_normalised = X / X.sum(axis=1, keepdims=True)\nprint(row_normalised.sum(axis=1))   # [1. 1. 1.]\n\nWithout `keepdims`, `X.sum(axis=1)` has shape `(3,)`, which right-aligns against the column axis of length 4 and raises. With `keepdims=True` the shape is `(3, 1)`, whose trailing 1 stretches across the four columns so that each row is divided by its own total. The contrast with column normalisation is instructive: `X / X.sum(axis=0)` needs no keepdims, because a `(4,)` already aligns with the column axis.',
+      },
+      {
+        prompt: 'Use broadcasting to build a 10x10 multiplication table from `np.arange(1, 11)`, without any loop, and state the shapes involved.',
+        hint: 'You need one of the operands to be a column and the other a row.',
+        solution:
+          'import numpy as np\nn = np.arange(1, 11)\ntable = n[:, np.newaxis] * n[np.newaxis, :]\nprint(table.shape)   # (10, 10)\nprint(table[2, 3])   # 12, i.e. 3 * 4\n\nThe first operand has shape `(10, 1)` and the second `(10,)`, which pads to `(1, 10)`. Right-aligning gives 1 against 10, which stretches, and 10 against 1, which also stretches, producing `(10, 10)` where element (i, j) is n[i] * n[j]. This is the same mechanism as the accidental n-by-n array — here it is exactly what you want, which is why the mechanism is worth understanding rather than merely avoiding.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'NP-007-q1',
+        type: 'mcq',
+        concept: 'shape rule',
+        prompt: 'What is the result shape of an operation between arrays of shape `(4, 1, 6)` and `(3, 6)`?',
+        options: ['`(4, 3, 6)`', '`(4, 3)`', 'It raises a ValueError', '`(4, 1, 6)`'],
+        answerIndex: 0,
+        explanation:
+          'The second pads to `(1, 3, 6)`. From the right: 6 matches 6; 1 stretches to 3; 4 stretches against 1. The result takes the maximum of each pair, giving `(4, 3, 6)`.',
+      },
+      {
+        id: 'NP-007-q2',
+        type: 'truefalse',
+        concept: 'alignment direction',
+        prompt: 'When broadcasting, NumPy aligns shapes starting from the leftmost axis.',
+        answer: false,
+        explanation:
+          'Alignment starts from the rightmost, trailing axis, and the shorter shape is padded with 1s on the left. That is why a 1-D array behaves like a row rather than a column.',
+      },
+      {
+        id: 'NP-007-q3',
+        type: 'code-output',
+        language: 'python',
+        concept: 'the (n,) vs (n,1) trap',
+        prompt: 'What shape does this print?',
+        code: 'import numpy as np\na = np.arange(6)\nb = np.arange(6)[:, np.newaxis]\nprint((a + b).shape)',
+        options: ['(6, 6)', '(6,)', '(6, 1)', 'It raises a ValueError'],
+        answerIndex: 0,
+        explanation:
+          '`a` pads to `(1, 6)` and `b` is `(6, 1)`, so both axes stretch and the result is a 6x6 grid. This is legal broadcasting and raises nothing, which is what makes it dangerous at scale.',
+      },
+      {
+        id: 'NP-007-q4',
+        type: 'debug',
+        language: 'python',
+        concept: 'fixing a broadcast error',
+        prompt: 'This raises `operands could not be broadcast together with shapes (100,3) (100,)`. What is the correct fix, assuming each row should be divided by its own total?',
+        code: 'import numpy as np\nX = np.ones((100, 3))\nrow_sums = X.sum(axis=1)\nresult = X / row_sums',
+        options: [
+          'Use `X.sum(axis=1, keepdims=True)` so the shape is (100, 1)',
+          'Use `X / row_sums.T`',
+          'Use `X.sum(axis=0)` instead',
+          'Transpose X before dividing',
+        ],
+        answerIndex: 0,
+        explanation:
+          '`keepdims=True` preserves the reduced axis as length 1, giving `(100, 1)`, whose trailing 1 stretches across the three columns. Transposing a 1-D array does nothing, and `axis=0` would compute column totals instead.',
+      },
+      {
+        id: 'NP-007-q5',
+        type: 'multi',
+        concept: 'valid pairs',
+        prompt: 'Which pairs of shapes broadcast successfully? Select all that apply.',
+        options: [
+          '`(3, 4)` and `(1, 4)`',
+          '`(3, 4)` and `(3, 1)`',
+          '`(3, 4)` and `(3,)`',
+          '`(2, 3, 4)` and `(4,)`',
+          '`(2, 3, 4)` and `(2, 4)`',
+        ],
+        answerIndices: [0, 1, 3],
+        explanation:
+          'The first, second and fourth satisfy the rule on every axis. The third fails because trailing 4 meets 3, and the fifth fails because trailing 4 meets 4 but then 3 meets 2.',
+      },
+      {
+        id: 'NP-007-q6',
+        type: 'explain',
+        concept: 'why broadcasting is free',
+        prompt: 'Explain what NumPy actually does to a size-1 axis when it broadcasts, and why the operands cost no extra memory while the result can still be enormous.',
+        rubric: [
+          'Says a stretched axis is given a stride of 0 so the same memory is read repeatedly',
+          'Says no copy of the operand is made',
+          'Says the result array is fully materialised at the broadcast shape',
+        ],
+        sampleAnswer:
+          'When an axis has length 1 and needs to meet a longer axis, NumPy does not duplicate the data. It sets that axis stride to zero, so advancing along it does not move the read position and the same value is used again at every step. That is why adding a shape `(3,)` row to a `(1000000, 3)` matrix costs nothing extra for the row itself. The result, though, is a real array with the full broadcast shape, allocated in memory like any other. So broadcasting a `(10000, 1)` against a `(1, 10000)` reads only 20,000 input values but allocates 100 million output values, which is exactly how a one-line expression can exhaust RAM.',
+        explanation:
+          'The insight worth testing is that broadcasting is cheap on the inputs and not on the output, which is what separates people who use it confidently from people who are surprised by it.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'State the broadcasting rule', back: 'Right-align the shapes, left-pad with 1s, then each axis pair must be equal or contain a 1. The result takes the larger of each pair.' },
+      { front: 'Why does `(3, 4) + (3,)` fail?', back: '`(3,)` pads to `(1, 3)`, so the trailing 4 meets 3 — neither equal nor 1. You wanted `(3, 1)`, via `v[:, np.newaxis]`.' },
+      { front: 'What does `(5,) + (5, 1)` give?', back: 'Shape `(5, 5)`. A row and a column broadcast into a grid; this is legal, silent, and a common cause of memory blowups.' },
+      { front: 'How is a size-1 axis stretched?', back: 'Its stride is set to 0, so the same memory is read repeatedly. The operands are never copied; only the result is materialised.' },
+      { front: 'Why does column standardisation need no keepdims but row normalisation does?', back: '`mean(axis=0)` gives `(p,)`, which right-aligns with the column axis. `mean(axis=1)` gives `(n,)`, which does not — use `keepdims=True` for `(n, 1)`.' },
+      { front: 'How do you check two shapes without building arrays?', back: '`np.broadcast_shapes(a_shape, b_shape)` returns the result shape or raises, which is faster than reasoning under pressure.' },
+    ],
+
+    challenge: {
+      title: 'A broadcasting oracle',
+      brief:
+        'Write `can_broadcast(shape_a, shape_b)` that returns the result shape, or a clear explanation of which axis pair failed, implementing the rule yourself rather than calling `np.broadcast_shapes`. Right-align, pad with 1s, and check each pair. Test it against at least ten shape pairs, including the failing cases `(3, 4)` with `(3,)` and `(2, 3, 4)` with `(2, 3)`, and confirm your answers against NumPy by actually attempting the operation. Finish by reporting, for each successful pair, how many elements the result would hold and how many bytes that is in float64.',
+      language: 'python',
+      acceptanceCriteria: [
+        'The rule is implemented directly, not delegated to a NumPy helper',
+        'Failures name the specific axis pair that is incompatible',
+        'At least ten pairs are tested, including at least two that must fail',
+        'Every answer is cross-checked against what NumPy actually does',
+        'Successful pairs report the result element count and float64 size',
+      ],
+      starterCode: 'import numpy as np\n\ndef can_broadcast(shape_a, shape_b):\n    """Return the broadcast shape, or explain which axis pair fails."""\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach broadcasting to someone who keeps hitting "operands could not be broadcast together". Give them the rule and the single most common cause.',
+      mustCover: [
+        'Shapes are right-aligned and the shorter is left-padded with 1s',
+        'Each axis pair must be equal or contain a 1, and the result takes the larger',
+        'A size-1 axis is stretched with a zero stride, so nothing is copied',
+        'A 1-D `(n,)` array behaves like a row; a column needs `(n, 1)` via newaxis or keepdims',
+      ],
+      bonusSignals: ['works through a failing example explicitly', 'mentions that `(n,) + (n,1)` silently gives an n-by-n grid', 'notes that the result array is still fully allocated'],
+      sampleExplanation:
+        'Write the two shapes down and line them up at the right-hand end, not the left, padding the shorter one with 1s on the left. Now read down each column. If the two numbers are the same, that axis is fine. If one of them is 1, that side gets stretched to match the other. Anything else and NumPy refuses. The result takes the bigger number from each column. So `(3, 4)` with `(4,)` becomes `(3, 4)` against `(1, 4)`: the 4s agree, the 1 stretches to 3, and every row gets the same four values. But `(3, 4)` with `(3,)` becomes `(3, 4)` against `(1, 3)`, and 4 against 3 is neither equal nor 1, so you get the error you keep seeing. That case is almost always someone with a per-row value: they need shape `(3, 1)`, which they get with `v[:, np.newaxis]` or by passing `keepdims=True` to the reduction that produced it. Stretching costs nothing, because NumPy sets that axis stride to zero and rereads the same bytes rather than copying. Two warnings. The result is a real array of the full broadcast shape, so combining a `(10000, 1)` with a `(1, 10000)` allocates a hundred million elements from tiny inputs. And adding a `(5,)` to a `(5, 1)` does not fail — it gives you a 5x5 grid, silently, which is why an unexpectedly square result should always make you check your shapes.',
+    },
+  },
+
+  {
+    id: 'NP-008',
+    domain: 'NP',
+    module: 'Maths on Arrays',
+    topic: 'Reductions and axes',
+    title: 'Aggregation and the axis Argument',
+    slug: 'aggregation-and-axis',
+    difficulty: 3,
+    estimatedMinutes: 35,
+    prerequisites: ['NP-002', 'NP-006'],
+    related: ['NP-005', 'NP-007'],
+    tags: ['sum', 'mean', 'axis', 'keepdims', 'argmax', 'nan', 'reduction'],
+
+    learningObjectives: [
+      'Predict the output shape of any reduction from the input shape and the axis argument',
+      'State and apply the rule that the axis you name is the axis that disappears',
+      'Use `keepdims=True` to preserve shape for subsequent broadcasting',
+      'Choose the right aggregation for the question, including `argmax`, `cumsum` and the NaN-aware variants',
+    ],
+
+    terminology: [
+      {
+        term: 'Reduction',
+        definition:
+          'An operation that combines many values into fewer, such as `sum`, `mean`, `max`, `std` or `any`. It removes one or more axes.',
+        simple: 'Squashing a whole direction down into a single number.',
+      },
+      {
+        term: 'axis',
+        definition:
+          'The argument naming which axis to reduce over. That axis is eliminated from the result; the remaining axes keep their order and lengths.',
+        simple: 'Which direction gets squashed.',
+      },
+      {
+        term: 'keepdims',
+        definition:
+          'When True, the reduced axis is kept with length 1 rather than removed, so the result still broadcasts against the original array.',
+        simple: 'Squash the direction but leave a flat placeholder axis behind, so shapes still line up.',
+      },
+      {
+        term: 'argmax / argmin',
+        definition:
+          'Return the index of the maximum or minimum along an axis rather than the value. `argmax` on a 2-D array with `axis=1` gives one column index per row.',
+        simple: 'Tells you where the biggest value is, not what it is.',
+      },
+      {
+        term: 'NaN-aware aggregation',
+        definition:
+          '`np.nansum`, `np.nanmean` and friends ignore NaN values, whereas the ordinary versions propagate a single NaN to the entire result.',
+        simple: 'Versions that skip missing values instead of poisoning the answer.',
+      },
+    ],
+
+    simpleExplanation:
+      "Once you can build arrays, the next question is always \"summarise this for me\": the average of every column, the largest value in each row, how many rows pass a test. All of those are reductions, and they all take the same argument, `axis`, which is the one genuinely confusing part. People try to remember it as \"axis 0 means columns\" and get it backwards half the time. There is a rule that never fails: the axis you name is the axis that disappears. Start with a table of shape `(3, 4)`. Say `axis=0` and axis 0 is gone, so the answer has shape `(4,)` — four numbers, one per column, each summarising down the three rows. Say `axis=1` and axis 1 is gone, so the answer has shape `(3,)` — three numbers, one per row. Say nothing at all and every axis disappears, leaving a single number. Apply that rule to the shape and you never have to guess. The other thing worth knowing early is `keepdims=True`, which leaves the squashed axis behind as a length-1 stub so the result still lines up with the original for broadcasting.",
+
+    whyItExists:
+      'Analysis is mostly summarisation, and the same summary has to be computable along any direction of an array: down the samples to get per-feature statistics, across the features to get per-sample totals, or over everything at once. A single `axis` argument shared by every reduction means one idea covers `sum`, `mean`, `max`, `std`, `any` and the rest, instead of a different function for every direction.',
+
+    analogy: {
+      scenario:
+        'Picture a spreadsheet of monthly sales: twelve rows for months, five columns for shops. Your manager asks two different questions. "How did each shop do overall?" means collapsing the months away, leaving one number per shop. "How did the company do each month?" means collapsing the shops away, leaving one number per month. The numbers being added are the same in both cases; what changes is which direction gets flattened, and therefore what the answer is a list of.',
+      mapping: [
+        { from: 'Collapsing the twelve months away', to: '`axis=0` on a `(12, 5)` array, giving shape `(5,)`' },
+        { from: 'Collapsing the five shops away', to: '`axis=1` on the same array, giving shape `(12,)`' },
+        { from: 'A single grand total for the year', to: '`arr.sum()` with no axis, giving a scalar of shape `()`' },
+        { from: 'A totals row left in the sheet, still aligned with the columns', to: '`keepdims=True`, giving shape `(1, 5)` so it broadcasts back against the table' },
+        { from: 'Asking which month was best rather than how much', to: '`argmax` instead of `max` — an index rather than a value' },
+      ],
+      bridge:
+        'The manager two questions differ only in which direction is flattened, and that is exactly what `axis` selects. The rule "the named axis disappears" is literally what happens to the spreadsheet: name the month axis and months vanish from the answer, leaving one entry per shop. Read the shape rather than the words and you cannot get it backwards.',
+      limitations:
+        'A spreadsheet has only two directions and obvious labels for them. Real arrays have three or four axes whose meanings are conventions rather than labels — in `(batch, channels, height, width)` nothing in the array itself records which is which, which is why reading the shape tuple carefully is a survival skill.',
+    },
+
+    visuals: [
+      {
+        kind: 'ascii',
+        title: 'The named axis is the axis that disappears',
+        caption: 'Same data, two directions, two shapes of answer.',
+        art: `arr = np.array([[1, 2, 3, 4],          shape (3, 4)
+                [5, 6, 7, 8],
+                [9, 10, 11, 12]])
+
+ axis=0 : collapse DOWN the rows       axis=1 : collapse ACROSS the columns
+                                       
+   1   2   3   4                         1   2   3   4  ->  10
+   5   6   7   8                         5   6   7   8  ->  26
+   9  10  11  12                         9  10  11  12  ->  42
+   |   |   |   |
+   v   v   v   v
+  15  18  21  24
+
+ arr.sum(axis=0) -> [15 18 21 24]      arr.sum(axis=1) -> [10 26 42]
+ shape (4,)   axis 0 is gone           shape (3,)   axis 1 is gone
+
+ arr.sum()              -> 78          shape ()   all axes gone
+ arr.sum(axis=0, keepdims=True) -> [[15 18 21 24]]   shape (1, 4)
+ arr.sum(axis=1, keepdims=True) -> [[10] [26] [42]]  shape (3, 1)`,
+      },
+      {
+        kind: 'table',
+        title: 'Reading off the result shape',
+        caption: 'Cover the last column and work each one out before looking.',
+        columns: ['Input shape', 'Call', 'Result shape', 'One entry per'],
+        rows: [
+          ['`(3, 4)`', '`.sum()`', '`()`', 'The whole array'],
+          ['`(3, 4)`', '`.sum(axis=0)`', '`(4,)`', 'Column'],
+          ['`(3, 4)`', '`.sum(axis=1)`', '`(3,)`', 'Row'],
+          ['`(3, 4)`', '`.sum(axis=1, keepdims=True)`', '`(3, 1)`', 'Row, still 2-D for broadcasting'],
+          ['`(2, 3, 4)`', '`.mean(axis=0)`', '`(3, 4)`', 'Position within a block'],
+          ['`(2, 3, 4)`', '`.mean(axis=2)`', '`(2, 3)`', 'Row of each block'],
+          ['`(2, 3, 4)`', '`.mean(axis=(0, 2))`', '`(3,)`', 'Row index, averaged over blocks and columns'],
+          ['`(32, 224, 224, 3)`', '`.mean(axis=(0, 1, 2))`', '`(3,)`', 'Colour channel, over the whole batch'],
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'Choosing the aggregation the question actually asks for',
+        caption: 'Most axis confusion is really a question that was never stated precisely.',
+        steps: [
+          { label: 'State the answer you want, with units', detail: '"One average per feature" or "one maximum per sample" — say how many numbers you expect.' },
+          { label: 'Count them against the shape', detail: 'One per feature on an `(n, p)` array means p numbers, so the result shape is `(p,)`.' },
+          { label: 'Name the axis that must disappear', detail: 'To go from `(n, p)` to `(p,)`, axis 0 is removed, so `axis=0`.' },
+          { label: 'Decide whether you need it back', detail: 'If the result will be broadcast against the original, add `keepdims=True`.' },
+          { label: 'Check for NaN', detail: 'One NaN poisons an ordinary reduction; use `np.nanmean` and friends when missing data is possible.' },
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Reduce along an axis and watch the shape',
+        caption: 'Pick an axis and see which direction collapses.',
+        widget: 'ndarray-explorer',
+      },
+    ],
+
+    formalDefinition:
+      'A reduction applies a binary operation pairwise along one or more axes, producing an array whose shape is the input shape with those axes removed. For input shape `S` and `axis=k`, the output shape is `S` with entry k deleted; with `keepdims=True` entry k is set to 1 instead. With `axis=None`, the default for most reductions, every axis is removed and the result is a 0-d scalar. For a tuple of axes, all named axes are removed. `argmax` and `argmin` return integer indices along the reduced axis, and for `axis=None` they return an index into the flattened array.',
+
+    math: {
+      intuition:
+        'A reduction is a sum, maximum or similar taken over one subscript while the others are held fixed. Which subscript you sum over is precisely what `axis` names, and the remaining free subscripts are the shape of the answer.',
+      formulas: [
+        {
+          latex: 'c_j = \\sum_{i=0}^{n-1} x_{ij} \\quad (\\text{axis}=0), \\qquad r_i = \\sum_{j=0}^{p-1} x_{ij} \\quad (\\text{axis}=1)',
+          name: 'Reducing a matrix along each axis',
+          meaning: 'Summing over i leaves j free, giving one number per column; summing over j leaves i free, giving one number per row.',
+          variables: [
+            { symbol: 'x_{ij}', meaning: 'Element at row i, column j of an (n, p) array' },
+            { symbol: 'c_j', meaning: 'Column total, a result of shape (p,)' },
+            { symbol: 'r_i', meaning: 'Row total, a result of shape (n,)' },
+          ],
+        },
+        {
+          latex: '\\mu_j = \\frac{1}{n}\\sum_i x_{ij}, \\qquad \\sigma_j = \\sqrt{\\frac{1}{n - \\delta}\\sum_i (x_{ij} - \\mu_j)^2}',
+          name: 'Per-feature mean and standard deviation',
+          meaning: 'Both reduce along the sample axis, leaving one value per feature. The delta is the `ddof` argument, 0 by default in NumPy and 1 in pandas.',
+          variables: [
+            { symbol: '\\mu_j', meaning: 'Mean of feature j, computed as `X.mean(axis=0)`' },
+            { symbol: '\\sigma_j', meaning: 'Standard deviation of feature j, computed as `X.std(axis=0)`' },
+            { symbol: '\\delta', meaning: 'The `ddof` correction: 0 gives the population formula, 1 the sample formula' },
+            { symbol: 'n', meaning: 'Number of samples being reduced over' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\hat{y}_i = \\arg\\max_{k} \; p_{ik}',
+          name: 'Predicted class from a probability matrix',
+          meaning: 'For a matrix of per-class probabilities with one row per sample, taking the argmax along the class axis gives the predicted label for each sample.',
+          variables: [
+            { symbol: 'p_{ik}', meaning: 'Probability that sample i belongs to class k, shape (n, K)' },
+            { symbol: '\\hat{y}_i', meaning: 'Predicted class index for sample i, computed as `p.argmax(axis=1)`, shape (n,)' },
+            { symbol: 'K', meaning: 'Number of classes, the length of the axis being reduced' },
+          ],
+          category: 'classification',
+        },
+      ],
+      derivation: [
+        'Write the element as x with one subscript per axis: for a (3, 4) array, x_ij with i in 0..2 and j in 0..3.',
+        'A reduction sums over one subscript. Summing over i produces a quantity indexed by j alone.',
+        'The free subscripts of the result are exactly the axes that survive, so the result shape is (4,) — which is the rule "the named axis disappears", restated.',
+        'With keepdims, the summed subscript is retained but takes only the value 0, giving shape (1, 4).',
+        'That retained axis is what allows `x - x.mean(axis=1, keepdims=True)` to broadcast: the length-1 axis stretches back to its original length.',
+      ],
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Every reduction, one rule',
+        runnable: true,
+        code: `import numpy as np
+
+arr = np.arange(1, 13).reshape(3, 4)
+print(arr)
+
+print("sum()         ", arr.sum(), np.shape(arr.sum()))
+print("sum(axis=0)   ", arr.sum(axis=0), arr.sum(axis=0).shape)
+print("sum(axis=1)   ", arr.sum(axis=1), arr.sum(axis=1).shape)
+print("mean(axis=0)  ", arr.mean(axis=0))
+print("max(axis=1)   ", arr.max(axis=1))
+print("argmax(axis=1)", arr.argmax(axis=1))
+print("std(axis=0)   ", arr.std(axis=0).round(3))
+print("any(axis=1)   ", (arr > 10).any(axis=1))
+print("count > 6     ", (arr > 6).sum())`,
+        output: `[[ 1  2  3  4]
+ [ 5  6  7  8]
+ [ 9 10 11 12]]
+sum()          78 ()
+sum(axis=0)    [15 18 21 24] (4,)
+sum(axis=1)    [10 26 42] (3,)
+mean(axis=0)   [5. 6. 7. 8.]
+max(axis=1)    [ 4  8 12]
+argmax(axis=1) [3 3 3]
+std(axis=0)    [3.266 3.266 3.266 3.266]
+any(axis=1)    [False False  True]
+count > 6      6`,
+        explanation:
+          'Every call follows the same rule: the named axis vanishes from the shape. Two details are worth pausing on. `argmax(axis=1)` returns column indices — here every row maximum is in the last column, so the answer is `[3, 3, 3]` and not the values `[4, 8, 12]`. And `(arr > 6).sum()` counts rather than adds, because summing a boolean array counts its True entries, which is the standard idiom for "how many satisfy this".',
+      },
+      {
+        language: 'python',
+        title: 'keepdims, and why it exists',
+        runnable: true,
+        code: `import numpy as np
+
+X = np.array([[1.0, 2.0, 3.0],
+              [4.0, 5.0, 6.0]])
+
+print("no keepdims:", X.sum(axis=1).shape)      # (2,)
+print("keepdims   :", X.sum(axis=1, keepdims=True).shape)   # (2, 1)
+
+# Row-normalise: needs (2, 1) to broadcast across 3 columns
+print(X / X.sum(axis=1, keepdims=True))
+
+try:
+    X / X.sum(axis=1)
+except ValueError as e:
+    print("ValueError:", e)
+
+# Column standardisation needs no keepdims: (3,) aligns naturally
+print(((X - X.mean(axis=0)) / X.std(axis=0)).round(3))`,
+        output: `no keepdims: (2,)
+keepdims   : (2, 1)
+[[0.16666667 0.33333333 0.5       ]
+ [0.26666667 0.33333333 0.4       ]]
+ValueError: operands could not be broadcast together with shapes (2,3) (2,) 
+[[-1. -1. -1.]
+ [ 1.  1.  1.]]
+`,
+        explanation:
+          'This is the asymmetry that catches everyone. Reducing along axis 0 leaves a shape that right-aligns with the columns, so it broadcasts back without help. Reducing along axis 1 leaves shape `(n,)`, which right-aligns against the column axis and fails. `keepdims=True` is the fix: it leaves the reduced axis in place with length 1, and a length-1 axis stretches back to its original size. The rule of thumb is that any reduction whose result will be combined with the original array again should use keepdims.',
+      },
+      {
+        language: 'python',
+        title: 'Higher dimensions, tuple axes and NaN',
+        runnable: true,
+        code: `import numpy as np
+
+batch = np.arange(24).reshape(2, 3, 4)
+
+print(batch.sum(axis=0).shape)        # (3, 4) - blocks collapsed
+print(batch.sum(axis=1).shape)        # (2, 4)
+print(batch.sum(axis=2).shape)        # (2, 3)
+print(batch.sum(axis=(0, 2)).shape)   # (3,)
+print(batch.sum(axis=-1).shape)       # (2, 3) - last axis
+
+# Per-channel image statistics over a batch
+imgs = np.zeros((32, 64, 64, 3))
+print("per-channel mean shape:", imgs.mean(axis=(0, 1, 2)).shape)
+
+# A single NaN poisons an ordinary reduction
+vals = np.array([1.0, 2.0, np.nan, 4.0])
+print("mean   :", vals.mean())
+print("nanmean:", np.nanmean(vals))
+print("how many missing:", np.isnan(vals).sum())`,
+        output: `(3, 4)
+(2, 4)
+(2, 3)
+(3,)
+(2, 3)
+per-channel mean shape: (3,)
+mean   : nan
+nanmean: 2.3333333333333335
+how many missing: 1
+`,
+        explanation:
+          'In three or more dimensions the rule is unchanged: delete the named axes from the shape. A tuple of axes deletes several at once, which is how per-channel image statistics are computed — average over batch, height and width, leaving only the channel axis. The NaN behaviour is deliberate rather than a bug: NaN propagates so that silently missing data cannot masquerade as a valid answer. When you genuinely want to skip it, say so with `np.nanmean`, and count what you skipped with `np.isnan(...).sum()`.',
+      },
+      {
+        language: 'python',
+        title: 'argmax, argsort and running totals in practice',
+        runnable: true,
+        code: `import numpy as np
+
+probs = np.array([[0.1, 0.7, 0.2],
+                  [0.6, 0.1, 0.3],
+                  [0.2, 0.3, 0.5]])
+
+pred = probs.argmax(axis=1)
+print("predicted class:", pred)
+print("confidence     :", probs.max(axis=1))
+
+true = np.array([1, 0, 1])
+print("accuracy       :", (pred == true).mean())
+
+print("ranked classes :\\n", np.argsort(-probs, axis=1))
+print("running totals :", np.cumsum([3, 1, 4, 1, 5]))
+print("row cumsum     :\\n", np.cumsum(probs, axis=1).round(2))`,
+        output: `predicted class: [1 0 2]
+confidence     : [0.7 0.6 0.5]
+accuracy       : 0.6666666666666666
+ranked classes :
+ [[1 2 0]
+ [0 2 1]
+ [2 1 0]]
+running totals : [ 3  4  8  9 14]
+row cumsum     :
+ [[0.1 0.8 1. ]
+ [0.6 0.7 1. ]
+ [0.2 0.5 1. ]]
+`,
+        explanation:
+          'Turning a probability matrix into predictions is `argmax(axis=1)`: the class axis disappears, leaving one label per sample. `max(axis=1)` on the same array gives the confidence rather than the label — the pairing of value and index functions is worth internalising. `cumsum` is the exception to the rule that reductions remove an axis: it accumulates along an axis and keeps the shape, which is what you want for running totals and for checking that each row of probabilities sums to 1.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Feature statistics before training',
+        usage:
+          '`X.mean(axis=0)` and `X.std(axis=0)` give one number per feature, which is exactly what `StandardScaler` stores. Getting the axis wrong standardises each sample instead, which quietly destroys the signal.',
+      },
+      {
+        context: 'Turning model outputs into predictions',
+        usage:
+          '`probs.argmax(axis=1)` converts an `(n_samples, n_classes)` probability matrix into `(n_samples,)` labels, and `probs.max(axis=1)` gives the confidence used for thresholding or for flagging uncertain cases.',
+      },
+      {
+        context: 'Image normalisation constants',
+        usage:
+          'The famous ImageNet means `[0.485, 0.456, 0.406]` are per-channel averages computed as `imgs.mean(axis=(0, 1, 2))` over a whole dataset — three axes collapsed, one kept.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'pandas', role: '`df.sum(axis=0)` and `df.mean(axis=1)` follow the same convention, and pandas defaults to skipping NaN where NumPy propagates it.' },
+      { tool: 'scikit-learn', role: 'Scalers, PCA and metric functions are all reductions along the sample axis; the shape conventions come straight from this unit.' },
+      { tool: 'PyTorch', role: 'Uses `dim` where NumPy uses `axis`, with the same meaning and the same `keepdim` option, one letter shorter.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Remembering axis as "0 means columns" and getting it backwards',
+        why: 'The phrasing hides which shape you end up with, so under pressure it is a coin flip. `axis=0` does produce one value per column, but only because axis 0 is the one being removed.',
+        fix: 'Use the shape rule instead: name the axis that disappears. `(n, p)` with `axis=0` gives `(p,)`, full stop. Print the shape when unsure.',
+      },
+      {
+        mistake: 'Forgetting `keepdims=True` when the result is broadcast back',
+        why: 'Reducing along axis 1 gives shape `(n,)`, which right-aligns against the column axis and raises, or silently misbehaves when n happens to equal p.',
+        fix: 'Any reduction whose output will be combined with the original array should carry `keepdims=True`, giving `(n, 1)` which stretches correctly.',
+      },
+      {
+        mistake: 'Letting a single NaN silently ruin an aggregate',
+        why: 'Ordinary reductions propagate NaN by design, so one missing sensor reading turns an entire column mean into `nan`, and downstream code may not check.',
+        fix: 'Use `np.nanmean`, `np.nansum` and friends when missing data is expected, and report `np.isnan(arr).sum()` so the amount skipped is visible rather than hidden.',
+      },
+      {
+        mistake: 'Confusing `max` with `argmax`',
+        why: 'They reduce the same axis but return different things — a value versus a position — and both are plausible-looking integers when the data happens to be integer.',
+        fix: 'Say what you want in words first. "Which class" is `argmax`; "how confident" is `max`. Use `arr[np.arange(n), arr.argmax(axis=1)]` when you need both consistently.',
+      },
+      {
+        mistake: 'Assuming `std` matches the sample standard deviation from a statistics course',
+        why: 'NumPy `std` defaults to `ddof=0`, the population formula, whereas pandas and most statistics texts use `ddof=1`. On small samples the two differ noticeably.',
+        fix: 'Pass `ddof=1` explicitly when you want the unbiased sample estimate, and be aware of the difference when NumPy and pandas results disagree slightly.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'For an array of shape `(100, 5)`, what do `arr.sum(axis=0)` and `arr.sum(axis=1)` return?',
+        answer:
+          'The rule is that the named axis disappears. `axis=0` removes the first axis, so the result has shape `(5,)` — five numbers, each the sum down all 100 rows for one column, which is the per-feature total. `axis=1` removes the second axis, giving shape `(100,)` — one total per row, which is the per-sample total. With no axis at all, every axis is removed and you get a single scalar. Stating it in terms of the resulting shape is far more reliable than trying to remember whether axis 0 "means" rows or columns.',
+        followUp:
+          'A strong answer mentions `keepdims=True` for keeping the reduced axis as length 1 so the result broadcasts back.',
+      },
+      {
+        level: 'intermediate',
+        question: 'What does `keepdims=True` do and when do you need it?',
+        answer:
+          'It keeps the reduced axis in the output with length 1 instead of deleting it, so a reduction of `(n, p)` along axis 1 yields `(n, 1)` rather than `(n,)`. You need it whenever the result will be broadcast back against the original array. Reducing along axis 0 does not need it, because the resulting `(p,)` right-aligns with the column axis naturally, but reducing along axis 1 does: a bare `(n,)` right-aligns against the column axis of length p and raises a broadcasting error, or worse succeeds by accident when n equals p. So `X / X.sum(axis=1, keepdims=True)` normalises each row correctly, while omitting keepdims fails.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'You are computing per-channel mean and standard deviation over a dataset of images shaped `(N, H, W, C)`. How do you write it, and what would you watch out for?',
+        answer:
+          'The channel axis is the only one that survives, so `imgs.mean(axis=(0, 1, 2))` and `imgs.std(axis=(0, 1, 2))`, each giving shape `(C,)`. Three practical concerns. Dtype: if the images are `uint8`, the sum can overflow, so I would cast to `float32` or pass `dtype=np.float64` to the reduction. Memory: for a large dataset the whole array does not fit, so I would accumulate sums and sums of squares per batch and combine at the end, computing the variance as E[x squared] minus E[x] squared, with a note that this formulation loses precision and that a streaming Welford update is the numerically safer option. And scale: statistics computed on 0-255 data are not interchangeable with those computed on 0-1 data, which is a classic silent mismatch between training and inference preprocessing.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'An array has shape `(6, 5, 4)`. Give the result shapes of `.sum(axis=0)`, `.sum(axis=1)`, `.sum(axis=(1, 2))`, `.sum(axis=-1)` and `.sum(axis=1, keepdims=True)`.',
+        hint: 'Delete the named axes from the shape tuple; keepdims replaces them with 1 instead.',
+        solution:
+          '`.sum(axis=0)` -> `(5, 4)`\n`.sum(axis=1)` -> `(6, 4)`\n`.sum(axis=(1, 2))` -> `(6,)`\n`.sum(axis=-1)` -> `(6, 5)`, since -1 is the last axis\n`.sum(axis=1, keepdims=True)` -> `(6, 1, 4)`\n\nEvery one of these is mechanical once you treat axis as "the entry to delete from the shape tuple". Negative axes count from the right exactly as they do in indexing.',
+      },
+      {
+        prompt: 'Given a probability matrix `P` of shape `(n, K)` whose rows sum to 1, write expressions for the predicted class, the confidence in that prediction, and the number of samples predicted as class 0.',
+        hint: 'Two of these reduce the class axis; the third counts a boolean array.',
+        language: 'python',
+        solution:
+          'import numpy as np\npred = P.argmax(axis=1)          # shape (n,), a class index per sample\nconf = P.max(axis=1)             # shape (n,), the winning probability\nn_zero = (pred == 0).sum()       # a single integer count\n\n`argmax` and `max` both remove the class axis, one returning a position and the other a value. The count works because a comparison gives a boolean array and True counts as 1 under summation. If you needed the confidence using explicit indices instead, `P[np.arange(len(P)), pred]` gives the same result and generalises to picking any chosen class.',
+      },
+      {
+        prompt: 'Explain, with shapes, why `X - X.mean(axis=1)` raises for `X` of shape `(100, 5)` but `X - X.mean(axis=0)` does not.',
+        hint: 'Work out the shape of each mean, then right-align it against (100, 5).',
+        solution:
+          '`X.mean(axis=0)` has shape `(5,)`. Right-aligned against `(100, 5)` it pads to `(1, 5)`: 5 matches 5, and the 1 stretches to 100. It works, and centres each column by its own mean.\n\n`X.mean(axis=1)` has shape `(100,)`. Right-aligned it pads to `(1, 100)`, so 100 is compared against the trailing 5 — neither equal nor 1 — and NumPy raises `operands could not be broadcast together with shapes (100,5) (100,)`.\n\nThe fix is `X.mean(axis=1, keepdims=True)`, which gives `(100, 1)` and stretches across the five columns, centring each row by its own mean.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'NP-008-q1',
+        type: 'mcq',
+        concept: 'axis semantics',
+        prompt: 'For an array of shape `(8, 3)`, what shape does `arr.mean(axis=0)` return?',
+        options: ['`(3,)`', '`(8,)`', '`(8, 1)`', '`(1, 3)`'],
+        answerIndex: 0,
+        explanation:
+          'The named axis is removed, so axis 0 of length 8 disappears and the result has shape `(3,)` — one mean per column, computed down the eight rows.',
+      },
+      {
+        id: 'NP-008-q2',
+        type: 'code-output',
+        language: 'python',
+        concept: 'reductions on a matrix',
+        prompt: 'What does this print?',
+        code: 'import numpy as np\na = np.array([[1, 2], [3, 4]])\nprint(a.sum(axis=1))',
+        options: ['[3 7]', '[4 6]', '[10]', '10'],
+        answerIndex: 0,
+        explanation:
+          'Axis 1 is removed, so each row collapses to one number: 1 + 2 = 3 and 3 + 4 = 7. Summing along axis 0 would instead give the column totals `[4 6]`.',
+      },
+      {
+        id: 'NP-008-q3',
+        type: 'truefalse',
+        concept: 'keepdims',
+        prompt: '`arr.sum(axis=1, keepdims=True)` on a `(4, 6)` array returns shape `(4, 1)`.',
+        answer: true,
+        explanation:
+          'With keepdims the reduced axis is retained at length 1 rather than deleted, which is what allows the result to broadcast back against the original `(4, 6)` array.',
+      },
+      {
+        id: 'NP-008-q4',
+        type: 'fill',
+        concept: 'NaN-aware aggregation',
+        prompt: 'Which NumPy function computes a mean while ignoring NaN values?',
+        answers: ['np.nanmean', 'nanmean', 'np.nanmean()'],
+        explanation:
+          'Ordinary `mean` propagates NaN so that missing data cannot hide, whereas `np.nanmean` skips it. The same pattern gives `nansum`, `nanstd`, `nanmax` and `nanmin`.',
+      },
+      {
+        id: 'NP-008-q5',
+        type: 'code-output',
+        language: 'python',
+        concept: 'argmax versus max',
+        prompt: 'What is printed?',
+        code: 'import numpy as np\np = np.array([[0.2, 0.5, 0.3],\n              [0.7, 0.1, 0.2]])\nprint(p.argmax(axis=1))',
+        options: ['[1 0]', '[0.5 0.7]', '[1 2]', '[2 1]'],
+        answerIndex: 0,
+        explanation:
+          '`argmax` returns positions, not values: the largest entry in row 0 is at column 1 and in row 1 at column 0. `p.max(axis=1)` would give the values `[0.5 0.7]`.',
+      },
+      {
+        id: 'NP-008-q6',
+        type: 'match',
+        concept: 'result shapes',
+        prompt: 'For an input of shape `(4, 5, 6)`, match each call to its result shape.',
+        pairs: [
+          { left: '`.sum(axis=0)`', right: '`(5, 6)`' },
+          { left: '`.sum(axis=1)`', right: '`(4, 6)`' },
+          { left: '`.sum(axis=2)`', right: '`(4, 5)`' },
+          { left: '`.sum(axis=(0, 1))`', right: '`(6,)`' },
+          { left: '`.sum()`', right: '`()`' },
+        ],
+        explanation:
+          'In every case the named axes are deleted from the shape tuple and the rest keep their order. With no axis argument, all of them go and a scalar remains.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What is the rule for the axis argument?', back: 'The axis you name is the axis that disappears. `(n, p)` with `axis=0` gives `(p,)`; with `axis=1` gives `(n,)`.' },
+      { front: 'What does `keepdims=True` do?', back: 'Keeps the reduced axis with length 1 instead of deleting it, so the result still broadcasts against the original array.' },
+      { front: 'Why does `X - X.mean(axis=1)` fail on `(n, p)`?', back: 'The mean has shape `(n,)`, which right-aligns against the column axis p. Use `keepdims=True` to get `(n, 1)`.' },
+      { front: '`max` versus `argmax`', back: '`max` returns the largest value along the axis; `argmax` returns its index. Predicting a class is argmax; reporting confidence is max.' },
+      { front: 'What does a single NaN do to `arr.mean()`?', back: 'It propagates, making the whole result NaN. Use `np.nanmean` to skip missing values, and count them with `np.isnan(arr).sum()`.' },
+      { front: 'How do you get per-channel means of images shaped (N, H, W, C)?', back: '`imgs.mean(axis=(0, 1, 2))` — three axes deleted at once, leaving shape `(C,)`.' },
+    ],
+
+    challenge: {
+      title: 'A per-feature summary table',
+      brief:
+        'Given a matrix `X` of shape `(1000, 6)` containing a few deliberately inserted NaN values, produce a small report with one row per feature showing count of valid values, number missing, mean, standard deviation, minimum, maximum and the row index of the maximum. Use NaN-aware reductions where appropriate, use `keepdims` at least once to standardise the matrix afterwards, and confirm that the standardised columns have mean approximately 0 and standard deviation approximately 1. No Python loop over the rows is allowed; a loop over the six features for printing is fine.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Every statistic is computed with an axis-based reduction, not a loop over rows',
+        'NaN values are excluded from the statistics and counted separately',
+        '`keepdims` or an equivalent is used so the standardisation broadcasts correctly',
+        'The report includes `nanargmax` positions, not only values',
+        'A final check prints the standardised column means and standard deviations',
+      ],
+      starterCode: 'import numpy as np\n\nrng = np.random.default_rng(21)\nX = rng.normal(size=(1000, 6))\nX[rng.integers(0, 1000, 12), rng.integers(0, 6, 12)] = np.nan\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Someone keeps guessing whether to use axis=0 or axis=1. Give them a rule that always works, and explain keepdims.',
+      mustCover: [
+        'The axis you name is the axis removed from the shape',
+        'On an `(n, p)` array, axis=0 gives `(p,)` per column and axis=1 gives `(n,)` per row',
+        'No axis argument reduces everything to a scalar',
+        '`keepdims=True` leaves a length-1 axis so the result broadcasts back against the original',
+      ],
+      bonusSignals: ['mentions tuple axes for multi-axis reductions', 'mentions that NaN propagates unless you use the nan- variants', 'distinguishes max from argmax'],
+      sampleExplanation:
+        'Stop thinking of axis 0 as "rows" or "columns" and think of it as the direction that gets deleted. Take a table of shape `(3, 4)`. If you say `axis=0`, axis 0 is gone and the answer has shape `(4,)`: four numbers, one per column, each summarising down the three rows. If you say `axis=1`, axis 1 is gone and the answer has shape `(3,)`: one per row. Say nothing and every axis goes, leaving a single number. That rule scales without modification: on a `(2, 3, 4)` array, `axis=1` leaves `(2, 4)`, and you can pass a tuple like `axis=(0, 2)` to delete several at once, which is exactly how per-channel image statistics are computed. The companion idea is `keepdims=True`, which keeps the deleted axis as a stub of length 1 instead of removing it. You want that whenever the summary is going back into an expression with the original array, because `(n, 1)` stretches across the columns while a bare `(n,)` does not and raises a broadcasting error. Two extras worth knowing: a single NaN turns any ordinary reduction into NaN by design, so use `np.nanmean` when data can be missing; and `max` gives you the value while `argmax` gives you the position, which is the difference between the confidence and the predicted class.',
+    },
+  },

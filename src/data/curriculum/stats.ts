@@ -2222,3 +2222,1174 @@ for text in ["free prize", "project meeting"]:
         'Bayes theorem is not a new idea; it is one rearrangement. You already know that P(H given E) is P(H and E) divided by P(E), and that P(E given H) is that same P(H and E) divided by P(H). Since both involve the same joint probability, you can substitute one into the other and get P(H given E) = P(E given H) x P(H) / P(E). That is it. The reason it matters is that you almost always measure the wrong direction. A study tells you how often sick people test positive; you need to know how often positive people are sick. Now the numbers, because they are the part that will surprise you. Suppose a disease affects 1 person in 1,000 and a test is 99% accurate in both directions. Take 100,000 people. A hundred of them are ill, and the test correctly flags 99 of those. The other 99,900 are healthy, and the test wrongly flags 1% of them, which is 999 people. So 1,098 people are walking around with a positive result and only 99 of them are ill — about 9%, not 99%. The test is not broken. A small error rate applied to a very large healthy group simply produces more false alarms than there are real cases in a very small sick group. That is the base rate doing its work, and it is exactly why a fraud model with superb recall still buries its reviewers in false positives.',
     },
   },
+
+  {
+    id: 'STAT-005',
+    domain: 'STAT',
+    module: 'Random Variables',
+    topic: 'Random variables, PMF, PDF and CDF',
+    title: 'Random Variables and Distributions',
+    slug: 'random-variables',
+    difficulty: 3,
+    estimatedMinutes: 35,
+    prerequisites: ['STAT-002'],
+    related: ['STAT-001', 'STAT-003'],
+    tags: ['random variable', 'pmf', 'pdf', 'cdf', 'discrete', 'continuous', 'distribution'],
+
+    learningObjectives: [
+      'Define a random variable as a function from outcomes to numbers, and say why that reframing is useful',
+      'Distinguish discrete from continuous random variables and choose the right description for each',
+      'Read probabilities off a PMF, a PDF and a CDF, and explain why a PDF value is not a probability',
+      'Use the CDF to answer range questions for both discrete and continuous variables',
+    ],
+
+    terminology: [
+      {
+        term: 'Random variable',
+        definition:
+          'A function that assigns a real number to each outcome in the sample space. Conventionally written with a capital letter, with its realised values in lower case.',
+        simple: 'A rule that turns each possible result into a number you can do arithmetic with.',
+      },
+      {
+        term: 'Probability mass function (PMF)',
+        definition:
+          'For a discrete random variable, the function p(x) = P(X = x). Its values are genuine probabilities in [0, 1] and they sum to exactly 1 over the support.',
+        simple: 'For countable outcomes: how much probability sits exactly on each value.',
+      },
+      {
+        term: 'Probability density function (PDF)',
+        definition:
+          'For a continuous random variable, a non-negative function f(x) whose integral over an interval gives the probability of landing in that interval. f(x) itself is a density per unit of x and may exceed 1.',
+        simple: 'For continuous quantities: how thickly probability is spread near each value. Area, not height, is the probability.',
+      },
+      {
+        term: 'Cumulative distribution function (CDF)',
+        definition:
+          'F(x) = P(X is at most x), defined for every random variable. It is non-decreasing, starts at 0 and rises to 1, and it works identically for discrete and continuous variables.',
+        simple: 'The running total: how much probability lies at or below this value.',
+      },
+      {
+        term: 'Support',
+        definition: 'The set of values a random variable can actually take with non-zero probability or non-zero density.',
+        simple: 'The values that are genuinely possible.',
+      },
+      {
+        term: 'Distribution',
+        definition:
+          'The complete specification of how probability is allocated across a random variable\'s values, given by its PMF, PDF or CDF. Two variables with the same distribution are statistically indistinguishable.',
+        simple: 'The full picture of which values are likely and which are not.',
+      },
+    ],
+
+    simpleExplanation:
+      'Outcomes are often awkward things — an email, a face of a die, a patient. A random variable is just a rule that turns each outcome into a number, so you can average it, add it and plot it. Once everything is numbers, you want to know how the probability is spread across them, and that is the distribution. For things you can count — the number of clicks, the face of a die — you can say exactly how much probability sits on each value, and those numbers add up to 1. For things you measure, like a response time or a height, no single exact value has any probability at all, because there are infinitely many values and a measurement of exactly 250.000000 milliseconds essentially never happens. Instead, probability is spread like butter along the number line, and you only get a probability once you ask about a range. The height of the curve tells you how thickly the butter is spread there; the area under a stretch of it tells you the probability. That single distinction — height is density, area is probability — is the one people take longest to accept and the one everything else depends on.',
+
+    whyItExists:
+      'Sample spaces made of emails or patients cannot be averaged or plotted. Random variables exist to push every random experiment into the real numbers, where the whole machinery of arithmetic, calculus and statistics becomes available, and distributions exist to describe the resulting spread in a single object you can reason about.',
+
+    analogy: {
+      scenario:
+        'Think about how you describe rainfall. For the number of rainy days in a week you can list it exactly: two days happens 30% of the time, three days 25%, and so on, and those percentages add to 100. But for the total millimetres of rain, asking "what is the chance of exactly 12.0000 mm" is meaningless — the answer is zero, because there are infinitely many possible readings and no measurement is ever exact. What you can sensibly ask is the chance of between 10 and 15 mm. A rainfall chart therefore shows a curve whose *area* between 10 and 15 answers that question, while the height of the curve at 12 is a rate, like "millimetres per millimetre", which is not a probability at all.',
+      mapping: [
+        { from: 'Counting rainy days', to: 'A discrete random variable, described by a PMF' },
+        { from: 'A percentage attached to "exactly 3 days"', to: 'A probability mass p(3) = P(X = 3)' },
+        { from: 'Measuring millimetres of rain', to: 'A continuous random variable, described by a PDF' },
+        { from: 'The area of the curve between 10 and 15 mm', to: 'P(10 < X < 15), obtained by integrating the density' },
+        { from: 'The height of the rainfall curve at 12 mm', to: 'The density f(12) — a rate, not a probability, and possibly above 1' },
+        { from: 'A running total "chance of at most 15 mm"', to: 'The CDF, F(15)' },
+      ],
+      bridge:
+        'The reason a PDF value is not a probability is visible in its units. If x is measured in millimetres, f(x) has units of "probability per millimetre", so it only becomes a probability once multiplied by a width. Change the units to metres and every density value multiplies by a thousand — densities above 1 are routine and entirely legitimate. The PMF has no such problem because it is already dimensionless. The CDF is the bridge between the two worlds: it is a plain probability in both cases, which is why library functions and tables are almost always built on the CDF.',
+      limitations:
+        'Rainfall is measured to finite precision, so in practice it is discrete at some resolution. The continuous model is an idealisation that is useful because calculus is easier than enormous sums, not because reality is infinitely divisible.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'From an outcome to a probability',
+        caption: 'The random variable is the bridge from a messy sample space to numbers you can compute with.',
+        steps: [
+          { label: 'An experiment produces an outcome', detail: 'A coin lands, a user arrives, a request is served.' },
+          { label: 'The random variable maps it to a number', detail: 'X(outcome) — heads becomes 1, latency becomes 243.7 ms.' },
+          { label: 'The distribution says how likely each number is', detail: 'A PMF for countable values, a PDF for continuous ones.' },
+          { label: 'The CDF accumulates it', detail: 'F(x) = P(X at most x), which turns any range question into a subtraction.' },
+          { label: 'You answer the question', detail: 'P(a < X <= b) = F(b) - F(a), for discrete and continuous alike.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Discrete versus continuous',
+        caption: 'Choosing the wrong one produces either impossible sums or probabilities of zero everywhere.',
+        left: {
+          heading: 'Discrete — described by a PMF',
+          points: [
+            'Values are countable: 0, 1, 2, ... or a finite list',
+            'p(x) = P(X = x) is a real probability in [0, 1]',
+            'The values sum to 1: add them up',
+            'P(X = 3) can be genuinely non-zero',
+            'Examples: clicks, defects, dice, class labels',
+          ],
+        },
+        right: {
+          heading: 'Continuous — described by a PDF',
+          points: [
+            'Values fill an interval of the real line',
+            'f(x) is a density, can exceed 1, is not a probability',
+            'The total area under the curve is 1: integrate it',
+            'P(X = 3) is exactly 0 — ask for a range instead',
+            'Examples: latency, height, temperature, model scores',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'The three functions side by side',
+        columns: ['Question', 'Discrete', 'Continuous'],
+        rows: [
+          ['P(X = a)', 'p(a), read straight off the PMF', 'Always 0'],
+          ['P(a < X <= b)', 'Sum of p(x) for x in the range', 'Integral of f(x) from a to b'],
+          ['P(X <= a)', 'F(a), the CDF', 'F(a), the CDF'],
+          ['Total probability', 'Sum of p(x) = 1', 'Integral of f(x) over all x = 1'],
+          ['Can the function exceed 1?', 'No — it is a probability', 'Yes — it is a density per unit of x'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Explore PMFs, PDFs and CDFs interactively',
+        caption: 'Switch between discrete and continuous families, then toggle the CDF view. Watch how the area under the PDF between two points equals the vertical gap in the CDF.',
+        widget: 'distribution-explorer',
+      },
+      {
+        kind: 'annotated',
+        title: 'Notation you will meet constantly',
+        subject: 'X ~ Normal(mu, sigma^2),  f(x),  F(x),  P(X <= x)',
+        annotations: [
+          { part: 'X', note: 'The random variable itself — a function, written as a capital letter.' },
+          { part: 'x', note: 'A particular value it might take. Lower case means "a number", capital means "the variable".' },
+          { part: '~', note: 'Read "is distributed as". It says which distribution governs X.' },
+          { part: 'f(x)', note: 'The PDF (or PMF, often written p(x)). Height of the curve at x.' },
+          { part: 'F(x)', note: 'The CDF, P(X <= x). Always a probability; always non-decreasing from 0 to 1.' },
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'A random variable X on a probability space is a measurable function from the sample space to the real numbers. Its distribution is the induced probability measure on the reals, P(X in B) for Borel sets B. X is discrete if it takes values in a countable set, in which case its PMF is p(x) = P(X = x) with the p(x) summing to 1. X is continuous if its CDF F(x) = P(X <= x) is absolutely continuous, in which case there exists a density f with F(x) equal to the integral of f from minus infinity to x, f(x) = F\'(x) wherever the derivative exists, and P(X = a) = 0 for every single point a.',
+
+    math: {
+      intuition:
+        'A PMF assigns lumps of probability to individual points; a PDF spreads probability continuously so that only intervals carry any. The CDF is the accumulation of either, and it is the one object that behaves identically in both worlds, which is why every practical calculation routes through it. If you remember one relationship, make it this: the density is the derivative of the CDF, and the CDF is the integral of the density. Probability is area under the density curve, never height.',
+      formulas: [
+        {
+          latex: 'p(x) = P(X = x), \\qquad \\sum_{x} p(x) = 1, \\qquad 0 \\le p(x) \\le 1',
+          name: 'Probability mass function',
+          meaning:
+            'For a discrete variable, the PMF gives the probability of each exact value, and those probabilities sum to 1 across the support.',
+          variables: [
+            { symbol: 'X', meaning: 'the random variable' },
+            { symbol: 'x', meaning: 'a particular value in the support' },
+            { symbol: 'p(x)', meaning: 'the probability that X takes exactly the value x' },
+            { symbol: '\\sum_x', meaning: 'sum over every value in the support' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: 'P(a \\le X \\le b) = \\int_{a}^{b} f(x)\\,dx, \\qquad \\int_{-\\infty}^{\\infty} f(x)\\,dx = 1, \\qquad f(x) \\ge 0',
+          name: 'Probability density function',
+          meaning:
+            'For a continuous variable, probability is the area under the density over an interval. The total area is 1, but the height f(x) is unbounded above.',
+          variables: [
+            { symbol: 'f(x)', meaning: 'the density at x — probability per unit of x, not a probability' },
+            { symbol: 'a, b', meaning: 'the endpoints of the interval you are asking about' },
+            { symbol: '\\int_a^b', meaning: 'the definite integral: the area under f between a and b' },
+            { symbol: 'dx', meaning: 'the infinitesimal width that converts density into probability' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: 'F(x) = P(X \\le x) = \\begin{cases} \\sum_{t \\le x} p(t) & \\text{discrete} \\\\[4pt] \\int_{-\\infty}^{x} f(t)\\,dt & \\text{continuous} \\end{cases}',
+          name: 'Cumulative distribution function',
+          meaning:
+            'The running total of probability up to x. It is the one description that works unchanged for discrete and continuous variables.',
+          variables: [
+            { symbol: 'F(x)', meaning: 'the probability that X is less than or equal to x' },
+            { symbol: 't', meaning: 'a dummy variable running over all values at or below x' },
+            { symbol: 'p(t)', meaning: 'the PMF, in the discrete case' },
+            { symbol: 'f(t)', meaning: 'the PDF, in the continuous case' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: 'P(a < X \\le b) = F(b) - F(a)',
+          name: 'Range probability from the CDF',
+          meaning:
+            'Any interval question is a difference of two CDF values. This is why statistical software exposes CDFs rather than asking you to integrate.',
+          variables: [
+            { symbol: 'F(b)', meaning: 'all the probability at or below b' },
+            { symbol: 'F(a)', meaning: 'the probability at or below a, which is subtracted off' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: 'f(x) = \\frac{dF(x)}{dx}, \\qquad P(x < X \\le x + \\varepsilon) \\approx f(x)\\,\\varepsilon',
+          name: 'Density as the derivative of the CDF',
+          meaning:
+            'The density measures how fast probability accumulates. Multiplying it by a small width gives an approximate probability, which is the precise sense in which density is not itself a probability.',
+          variables: [
+            { symbol: '\\frac{dF}{dx}', meaning: 'the rate of change of the cumulative probability at x' },
+            { symbol: '\\varepsilon', meaning: 'a small interval width' },
+            { symbol: 'f(x)\\varepsilon', meaning: 'the approximate probability of landing in a window of width epsilon at x' },
+          ],
+          category: 'probability',
+        },
+      ],
+      derivation: [
+        'Take a continuous random variable and ask for P(X = a) directly.',
+        'P(X = a) is at most P(a - h < X <= a) for any positive h, which equals F(a) - F(a - h).',
+        'If F is continuous — which is exactly what "continuous random variable" means — then F(a - h) approaches F(a) as h shrinks to 0.',
+        'So the bound F(a) - F(a - h) goes to 0, forcing P(X = a) = 0 for every single point a.',
+        'Yet X certainly takes *some* value, so an event of probability 0 has occurred. Probability 0 means negligible, not impossible.',
+        'This also means the endpoints do not matter: P(a < X < b), P(a <= X <= b) and everything in between are all equal for continuous variables. For discrete variables they differ, and that is a classic source of off-by-one errors.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Three descriptions of one small experiment, then a continuous contrast',
+      setup:
+        'Flip a fair coin three times and let X be the number of heads. Then, for contrast, let Y be a response time drawn uniformly between 0 and 200 milliseconds. We will compute the PMF, the CDF and a range probability for each, and see what breaks when the variable becomes continuous.',
+      steps: [
+        {
+          label: 'Map outcomes to numbers',
+          detail:
+            'The sample space has 8 equally likely outcomes. The random variable X counts heads: TTT maps to 0; HTT, THT, TTH map to 1; HHT, HTH, THH map to 2; HHH maps to 3.',
+          latex: 'X: \\Omega \\to \\{0, 1, 2, 3\\}',
+        },
+        {
+          label: 'Build the PMF by counting',
+          detail: 'Each outcome has probability 1/8, so the mass on each value is the number of outcomes mapping to it, over 8.',
+          latex: 'p(0) = \\tfrac{1}{8},\; p(1) = \\tfrac{3}{8},\; p(2) = \\tfrac{3}{8},\; p(3) = \\tfrac{1}{8}',
+        },
+        {
+          label: 'Check it is a valid PMF',
+          detail: 'Every value is between 0 and 1, and they sum to exactly 1. If they do not sum to 1, the model is wrong, not merely imprecise.',
+          latex: '\\tfrac{1}{8} + \\tfrac{3}{8} + \\tfrac{3}{8} + \\tfrac{1}{8} = 1',
+        },
+        {
+          label: 'Build the CDF by accumulating',
+          detail: 'The CDF is a step function: flat between the support points, jumping by exactly p(x) at each one.',
+          latex: 'F(0) = \\tfrac{1}{8},\; F(1) = \\tfrac{4}{8},\; F(2) = \\tfrac{7}{8},\; F(3) = 1',
+        },
+        {
+          label: 'Answer a range question two ways',
+          detail: 'P(1 <= X <= 2) directly from the PMF is 3/8 + 3/8 = 6/8. From the CDF it is F(2) - F(0) = 7/8 - 1/8 = 6/8. Note that you subtract F(0), not F(1), because X = 1 is inside the range you want.',
+          latex: 'P(1 \\le X \\le 2) = F(2) - F(0) = \\tfrac{7}{8} - \\tfrac{1}{8} = \\tfrac{3}{4}',
+        },
+        {
+          label: 'Now the continuous case: write the density',
+          detail: 'Y is uniform on [0, 200], so the density is constant and must integrate to 1 over a width of 200.',
+          latex: 'f(y) = \\tfrac{1}{200} = 0.005 \\text{ for } 0 \\le y \\le 200, \\text{ else } 0',
+        },
+        {
+          label: 'Ask for an exact value, and for a range',
+          detail: 'P(Y = 100) is the area of a line, which is zero. P(50 <= Y <= 75) is the area of a rectangle of width 25 and height 0.005.',
+          latex: 'P(Y = 100) = 0, \\qquad P(50 \\le Y \\le 75) = 25 \\times 0.005 = 0.125',
+        },
+        {
+          label: 'See a density above 1',
+          detail:
+            'If the same experiment were measured in seconds rather than milliseconds, Y would be uniform on [0, 0.2] and the density would be 1/0.2 = 5. A density of 5 is perfectly legal; a probability of 5 would not be.',
+          latex: 'f(y) = 5 \\text{ on } [0, 0.2] \;\\Rightarrow\; \\int_0^{0.2} 5\\,dy = 1',
+        },
+      ],
+      conclusion:
+        'The discrete variable has probability sitting in four lumps that sum to 1; the continuous one has it smeared so that no point carries any and only widths do. The CDF handled both without changing form, which is why it is the workhorse. And the final step is the memorable one: the same physical experiment has density 0.005 or 5 depending only on your choice of units, which settles the question of whether a density is a probability.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'PMF and CDF of a discrete variable',
+        runnable: true,
+        code: `from scipy import stats
+
+# Number of heads in three fair flips: Binomial(n=3, p=0.5)
+X = stats.binom(n=3, p=0.5)
+
+print("x   pmf     cdf")
+for x in range(4):
+    print(f"{x}   {X.pmf(x):.4f}  {X.cdf(x):.4f}")
+
+print("\\nsum of pmf      =", sum(X.pmf(x) for x in range(4)))
+print("P(1 <= X <= 2)  =", X.cdf(2) - X.cdf(0))
+print("P(X = 2)        =", X.pmf(2))`,
+        output: `x   pmf     cdf
+0   0.1250  0.1250
+1   0.3750  0.5000
+2   0.3750  0.8750
+3   0.1250  1.0000
+
+sum of pmf      = 1.0
+P(1 <= X <= 2)  = 0.75
+P(X = 2)        = 0.375`,
+        explanation:
+          'Note the endpoint subtlety in the range calculation. `cdf(2)` includes everything at or below 2, and you want to remove everything strictly below 1, which is `cdf(0)`. Subtracting `cdf(1)` would wrongly exclude X = 1. For discrete variables this off-by-one is a genuine source of bugs; for continuous ones it never arises, because single points contribute nothing.',
+      },
+      {
+        language: 'python',
+        title: 'A density that exceeds 1, and why that is fine',
+        runnable: true,
+        code: `from scipy import stats
+
+# Same experiment, two unit choices.
+ms = stats.uniform(loc=0, scale=200)     # milliseconds
+sec = stats.uniform(loc=0, scale=0.2)    # seconds
+
+print("density at the midpoint, in ms  :", ms.pdf(100))
+print("density at the midpoint, in sec :", sec.pdf(0.1))
+print("P(50 <= Y <= 75) ms   :", ms.cdf(75) - ms.cdf(50))
+print("P(0.05 <= Y <= 0.075) s:", sec.cdf(0.075) - sec.cdf(0.05))
+print("P(Y exactly 100 ms)    :", ms.cdf(100) - ms.cdf(100))`,
+        output: `density at the midpoint, in ms  : 0.005
+density at the midpoint, in sec : 5.0
+P(50 <= Y <= 75) ms   : 0.125
+P(0.05 <= Y <= 0.075) s: 0.125
+P(Y exactly 100 ms)    : 0.0`,
+        explanation:
+          'The two rows describe the identical physical situation and give identical probabilities, while the density differs by a factor of a thousand. That is the clearest possible demonstration that a density is not a probability — it is a probability per unit, and it changes when the unit changes. It also shows that a continuous variable assigns exactly zero probability to any single value.',
+      },
+      {
+        language: 'python',
+        title: 'Recovering a distribution from data',
+        runnable: true,
+        code: `import numpy as np
+
+rng = np.random.default_rng(3)
+latency = rng.exponential(scale=120, size=200_000)   # ms
+
+# Empirical CDF at a few points, compared with the true one.
+for t in [50, 120, 240, 500]:
+    empirical = np.mean(latency <= t)
+    true = 1 - np.exp(-t / 120)
+    print(f"P(latency <= {t:>3} ms)  empirical={empirical:.4f}  true={true:.4f}")
+
+print("\\nP(exactly 120.0000 ms) =", np.mean(latency == 120.0))`,
+        output: `P(latency <=  50 ms)  empirical=0.3407  true=0.3408
+P(latency <= 120 ms)  empirical=0.6321  true=0.6321
+P(latency <= 240 ms)  empirical=0.8646  true=0.8647
+P(latency <= 500 ms)  empirical=0.9844  true=0.9850
+
+P(exactly 120.0000 ms) = 0.0`,
+        explanation:
+          'The empirical CDF — the fraction of samples at or below a threshold — converges to the true CDF, which is exactly what makes a histogram or a latency percentile report meaningful. The last line is the point of the example: across 200,000 continuous draws, not one landed on exactly 120.0, which is why any service-level objective is written as a percentile rather than a target value.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Latency service-level objectives',
+        usage:
+          'A "p99 latency under 300 ms" target is a statement about the CDF: F(300) must be at least 0.99. Teams report percentiles rather than means precisely because the latency distribution is skewed and the mean hides the tail that users complain about.',
+      },
+      {
+        context: 'Classifier output scores',
+        usage:
+          'A model\'s score for the positive class is a continuous random variable on [0, 1]. Choosing a decision threshold is choosing a point on its CDF, and an ROC curve is a plot of the two class-conditional CDFs against each other.',
+      },
+      {
+        context: 'Counting events in a queue',
+        usage:
+          'The number of requests arriving in a second is discrete and described by a PMF, while the gap between arrivals is continuous and described by a PDF. The same system needs both descriptions, which is why capacity planning uses Poisson and exponential together.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'SciPy', role: '`scipy.stats` gives every distribution a uniform interface: `pmf`/`pdf`, `cdf`, `ppf` (the inverse CDF) and `rvs` for sampling.' },
+      { tool: 'NumPy', role: '`np.random.default_rng()` draws samples; `np.percentile` is the empirical inverse CDF.' },
+      { tool: 'PyTorch', role: '`torch.distributions` objects expose `log_prob`, which is the log density or log mass and is what almost every loss function actually optimises.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Reading a PDF value as a probability',
+        why: 'A density has units of probability per unit of x and can exceed 1. Saying "the probability of a latency of 120 ms is 0.008" is a category error; only intervals have probabilities.',
+        fix: 'Always multiply by a width or integrate. If you want a number to quote, use the CDF: P(X <= 120) is a genuine probability.',
+      },
+      {
+        mistake: 'Asking for P(X = a) for a continuous variable',
+        why: 'It is exactly 0 for every a, so the question has no useful answer. This trips people up when they try to compute a likelihood as a probability.',
+        fix: 'Ask for a range, or work with the density explicitly and remember it is a density. Maximum likelihood for continuous data maximises a density, not a probability, which is why log-likelihoods can be positive.',
+      },
+      {
+        mistake: 'Off-by-one when computing discrete range probabilities',
+        why: 'For discrete variables P(X < 3) and P(X <= 3) genuinely differ by p(3). Using `cdf(b) - cdf(a)` when you wanted to include a drops that endpoint\'s mass.',
+        fix: 'For P(a <= X <= b) use `cdf(b) - cdf(a - 1)` on integer supports. Write out the two-element case by hand once to convince yourself.',
+      },
+      {
+        mistake: 'Confusing the random variable with its realised value',
+        why: 'X is a function; x is a number it produced. Writing P(X) rather than P(X = x) or P(X <= x) hides which question is being asked, and the confusion propagates into code that averages the wrong thing.',
+        fix: 'Keep the capital-letter convention. If a symbol appears inside P() without a comparison, something is missing.',
+      },
+      {
+        mistake: 'Assuming every continuous variable is normal',
+        why: 'Latency, income and file sizes are heavily right-skewed; a normal model will produce negative predictions and understate the tail by orders of magnitude.',
+        fix: 'Plot the empirical distribution before choosing a family. Log-normal, exponential and gamma cover most positive, skewed quantities you will meet.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What is the difference between a PMF and a PDF, and can a PDF take a value greater than 1?',
+        answer:
+          'A PMF applies to discrete random variables and gives P(X = x) directly, so its values are genuine probabilities bounded by 1 and summing to 1 over the support. A PDF applies to continuous variables and gives a density: probability per unit of x. It must be non-negative and integrate to 1, but it has no upper bound, so values above 1 are common. A uniform distribution on [0, 0.2] has density 5 everywhere. The reason is dimensional: density carries the reciprocal units of x, so rescaling x rescales the density. Probability only appears once you integrate over a width, which is also why P(X = a) is 0 for every single point in the continuous case.',
+        followUp:
+          'A strong answer mentions the CDF as the unifying object, since F(x) = P(X <= x) is a genuine probability for both kinds of variable and is what libraries expose.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'A model outputs a continuous score. How would you use its distribution to choose an operating threshold?',
+        answer:
+          'The score is a random variable with a different distribution under each class, so what matters is the pair of class-conditional CDFs. For a threshold t, the true-positive rate is the fraction of positives scoring above t, which is one minus the positive-class CDF at t, and the false-positive rate is one minus the negative-class CDF at t. Sweeping t traces the ROC curve, and each point is a distinct operating point rather than a property of the model. To choose among them I would attach costs: the expected cost at threshold t is the false-negative cost times the miss rate times the prior, plus the false-positive cost times the false-alarm rate times one minus the prior, and I would minimise that over t on a validation set. In practice there is often a hard constraint instead, such as a fixed daily alert budget, in which case the threshold is just the appropriate quantile of the score distribution on live traffic. Either way the threshold must be recomputed when the score distribution drifts, which is a separate monitoring concern.',
+      },
+      {
+        level: 'advanced',
+        question: 'Explain why a log-likelihood can be positive for continuous data but never for discrete data.',
+        answer:
+          'For discrete data the likelihood is a probability mass in [0, 1], so its logarithm is at most 0 and log-likelihoods are always non-positive. For continuous data the likelihood is a density, which is unbounded above, so its logarithm can be positive. A normal distribution with a very small standard deviation has a density at its mean of 1/(sigma root 2 pi), which exceeds 1 as soon as sigma falls below about 0.4, and the log-density is then positive. This is not a bug and it does not mean the model has probability greater than 1; it means the probability mass is concentrated into a narrow interval so the density per unit is large. It matters in practice because a model trained to maximise density can be driven to arbitrarily high log-likelihood by shrinking variance towards zero — the classic degenerate solution in Gaussian mixture fitting — which is why implementations impose a variance floor or a prior.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A random variable X has PMF p(1) = 0.2, p(2) = 0.5, p(3) = 0.3. Write down the CDF at 1, 2 and 3, then compute P(X > 1) and P(1 < X <= 3).',
+        hint: 'The CDF accumulates the masses from the left; complements are often easier than sums.',
+        solution:
+          'F(1) = 0.2, F(2) = 0.7, F(3) = 1.0. The masses are valid: all in [0, 1] and summing to exactly 1.\n\nP(X > 1) = 1 - F(1) = 1 - 0.2 = 0.8. Using the complement avoids adding 0.5 + 0.3 by hand and generalises to large supports.\n\nP(1 < X <= 3) = F(3) - F(1) = 1.0 - 0.2 = 0.8. Same answer, as it must be, since X only takes the values 1, 2 and 3 so "greater than 1" and "in (1, 3]" describe the same event here.',
+      },
+      {
+        prompt:
+          'Y is uniform on [0, 4]. State the PDF, compute P(1 <= Y <= 2.5), and explain what P(Y = 2) equals and why.',
+        hint: 'A uniform density is a rectangle whose total area must be 1.',
+        solution:
+          'The density is constant over an interval of width 4, so f(y) = 1/4 = 0.25 for 0 <= y <= 4 and 0 elsewhere. That is a valid PDF: non-negative, and its total area is 4 x 0.25 = 1.\n\nP(1 <= Y <= 2.5) is the area of a rectangle of width 1.5 and height 0.25, so 0.375.\n\nP(Y = 2) = 0. The "area" above a single point has zero width and therefore zero area. This is not a statement that 2 is impossible — Y must land on some value, and every value it could land on individually has probability 0. Probability 0 for a continuous variable means negligible, not impossible.',
+      },
+      {
+        prompt:
+          'Using scipy, verify that for a continuous distribution the four expressions P(a < X < b), P(a <= X < b), P(a < X <= b) and P(a <= X <= b) are all equal, and that for a discrete one they are not.',
+        hint: 'Compute each with `cdf` and `pmf`, and compare. For the discrete case the differences will be exactly the endpoint masses.',
+        language: 'python',
+        starterCode: 'from scipy import stats\n\nC = stats.norm(loc=0, scale=1)\nD = stats.binom(n=10, p=0.4)\na, b = 2, 5\n',
+        solution:
+          'from scipy import stats\nC = stats.norm(0, 1)\nD = stats.binom(10, 0.4)\na, b = 2, 5\n\n# Continuous: endpoints carry no mass, so all four agree.\nprint(C.cdf(b) - C.cdf(a))          # 0.02274...\n\n# Discrete: the four differ by the endpoint masses.\nprint("P(a < X < b) ", D.cdf(b - 1) - D.cdf(a))\nprint("P(a <= X <= b)", D.cdf(b) - D.cdf(a - 1))\n\nFor the normal, `P(X = a)` is 0 so including or excluding an endpoint changes nothing; all four expressions equal 0.022750.\n\nFor Binomial(10, 0.4): P(2 < X < 5) = P(X in {3, 4}) = 0.2150 + 0.2508 = 0.4658, while P(2 <= X <= 5) = P(X in {2,3,4,5}) = 0.1209 + 0.2150 + 0.2508 + 0.2007 = 0.7874. The gap of 0.3216 is exactly p(2) + p(5). This is why discrete range questions need explicit care about endpoints and continuous ones do not.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'STAT-005-q1',
+        type: 'truefalse',
+        concept: 'density vs probability',
+        prompt: 'A probability density function can take values greater than 1.',
+        answer: true,
+        explanation:
+          'A density is probability per unit of x, so it is bounded only by the requirement that its total integral is 1. A uniform distribution on [0, 0.2] has density 5 everywhere, and that is entirely legitimate.',
+      },
+      {
+        id: 'STAT-005-q2',
+        type: 'mcq',
+        concept: 'continuous variables',
+        prompt: 'For a continuous random variable X, what is P(X = 3.5)?',
+        options: [
+          'Exactly 0, because a single point has no width',
+          'Equal to the density f(3.5)',
+          'It depends on the distribution',
+          'Undefined, because the question is meaningless',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Continuous variables assign probability to intervals, not points, so every individual value has probability 0. The density f(3.5) is a rate and becomes a probability only when multiplied by a width.',
+      },
+      {
+        id: 'STAT-005-q3',
+        type: 'numeric',
+        concept: 'CDF arithmetic',
+        prompt:
+          'A discrete variable has p(0) = 0.1, p(1) = 0.3, p(2) = 0.4, p(3) = 0.2. What is P(1 <= X <= 2)?',
+        answer: 0.7,
+        tolerance: 0.005,
+        explanation:
+          '0.3 + 0.4 = 0.7. From the CDF this is F(2) - F(0) = 0.8 - 0.1 = 0.7. Subtracting F(1) instead would wrongly drop the mass at X = 1.',
+      },
+      {
+        id: 'STAT-005-q4',
+        type: 'match',
+        concept: 'distribution functions',
+        prompt: 'Match each function to what it returns.',
+        pairs: [
+          { left: 'PMF, p(x)', right: 'The probability that a discrete variable equals exactly x' },
+          { left: 'PDF, f(x)', right: 'Probability per unit of x; area under it gives probability' },
+          { left: 'CDF, F(x)', right: 'The probability that the variable is at most x' },
+          { left: 'Inverse CDF (quantile)', right: 'The value below which a given fraction of probability lies' },
+        ],
+        explanation:
+          'The CDF is the unifying object: it is a genuine probability for both discrete and continuous variables, and its inverse gives percentiles, which is what latency targets and confidence intervals are built from.',
+      },
+      {
+        id: 'STAT-005-q5',
+        type: 'code-output',
+        language: 'python',
+        concept: 'CDF and range probabilities',
+        prompt: 'What does this print?',
+        code: 'from scipy import stats\nU = stats.uniform(loc=0, scale=4)\nprint(round(U.pdf(2), 2), round(U.cdf(3) - U.cdf(1), 2))',
+        options: ['0.25 0.5', '0.5 0.25', '0.25 0.25', '1.0 0.5'],
+        answerIndex: 0,
+        explanation:
+          'The density of a uniform on [0, 4] is 1/4 = 0.25 everywhere. The probability of landing between 1 and 3 is a rectangle of width 2 and height 0.25, so 0.5.',
+      },
+      {
+        id: 'STAT-005-q6',
+        type: 'explain',
+        concept: 'random variables',
+        prompt:
+          'A colleague says "the probability that the latency is 200 ms is 0.004, because that is what the density plot shows". Correct them, and tell them what they should compute instead.',
+        rubric: [
+          'States that a density value is not a probability and has units of probability per unit of x',
+          'Notes that P(X = 200) is exactly 0 for a continuous variable',
+          'Gives a correct alternative, such as a range probability or a CDF value or a percentile',
+        ],
+        sampleAnswer:
+          'The 0.004 is a density, not a probability. Its units are probability per millisecond, which you can see by noticing that if they replotted the same data in seconds every value on the vertical axis would multiply by a thousand — and a probability cannot depend on the units of the horizontal axis. The probability that latency is exactly 200.000 ms is 0, since a single point has no width. What they almost certainly want is one of two things: a range, such as P(195 <= X <= 205), which is roughly the density times the 10 ms width, so about 0.04; or a cumulative statement such as P(X <= 200), read straight off the CDF, which is the form service-level objectives use. If they want a single number to report, the p95 or p99 latency is the honest one.',
+        explanation:
+          'The examinable idea is that density carries units and probability does not, and that the CDF is what converts a distribution into statements people can act on.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What is a random variable?', back: 'A function mapping each outcome in the sample space to a real number, so probability questions become arithmetic.' },
+      { front: 'PMF vs PDF', back: 'PMF: discrete, p(x) = P(X = x), values are probabilities summing to 1. PDF: continuous, f(x) is a density, can exceed 1, integrates to 1.' },
+      { front: 'Why is a PDF value not a probability?', back: 'It has units of probability per unit of x. Change the units of x and the density changes; probability does not. Only area under it is a probability.' },
+      { front: 'What is the CDF?', back: 'F(x) = P(X <= x). Non-decreasing from 0 to 1, defined for discrete and continuous variables alike, and the basis of every range calculation.' },
+      { front: 'P(a < X <= b) in terms of the CDF', back: 'F(b) - F(a). For continuous variables the endpoints do not matter; for discrete ones they do.' },
+      { front: 'What is P(X = a) for a continuous X?', back: 'Exactly 0, for every a. Probability 0 means negligible, not impossible — X still lands somewhere.' },
+    ],
+
+    challenge: {
+      title: 'Build a distribution inspector',
+      brief:
+        'Write a function that takes any `scipy.stats` frozen distribution and prints a compact report: whether it is discrete or continuous, its support, the value of the PMF or PDF at three points, the CDF at those points, the 5th, 50th and 95th percentiles via the inverse CDF, and a verification that the total probability is 1 (by summation for discrete, by numerical integration for continuous). Run it on a binomial, a Poisson, a uniform and a normal, and write two sentences on what changes between the discrete and continuous reports.',
+      language: 'python',
+      acceptanceCriteria: [
+        'The function detects discrete versus continuous rather than being told',
+        'Total probability is verified numerically and printed for every distribution',
+        'Percentiles are obtained from the inverse CDF, not estimated from samples',
+        'The report shows at least one density value greater than 1 for a suitably narrow continuous distribution',
+      ],
+      starterCode:
+        'from scipy import stats\nimport numpy as np\n\ndef inspect(dist, name: str) -> None:\n    """Print a PMF/PDF, CDF and quantile report for a frozen scipy distribution."""\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach random variables and distributions to someone comfortable with basic probability. Make sure they leave understanding why the height of a density curve is not a probability.',
+      mustCover: [
+        'A random variable is a rule turning outcomes into numbers',
+        'Discrete variables are described by a PMF whose values are probabilities that sum to 1',
+        'Continuous variables are described by a PDF where only area is probability, and P(X = a) = 0',
+        'The CDF accumulates probability and works the same way for both kinds',
+      ],
+      bonusSignals: [
+        'uses units to argue that a density is not a probability',
+        'gives an example of a density above 1',
+        'connects the CDF to percentiles or latency targets',
+      ],
+      sampleExplanation:
+        'A random variable is just a rule that turns each possible result into a number. Flip three coins and let X be the number of heads: now instead of eight fiddly outcomes you have four numbers, and numbers you can average and plot. The distribution tells you how likely each number is. When the values can be counted, you can say exactly how much probability sits on each one — an eighth on zero heads, three eighths on one, and so on, adding to exactly one. That list is the probability mass function. When the quantity is measured rather than counted, like a response time, this breaks. There are infinitely many possible times, so no exact value gets any probability at all; asking for the chance of exactly 200.000000 milliseconds gives zero. Probability is instead spread along the line, and you only get a number once you ask about a stretch of it. The curve you see plotted is a density, and the area beneath a stretch of it is the probability of landing in that stretch. The height alone is not a probability, and the cleanest proof is units: plot the same latencies in seconds instead of milliseconds and every height multiplies by a thousand, while the actual chances obviously do not change. The one function that works for both cases is the cumulative distribution function, which just answers "what is the chance of being at or below this value". That is why latency targets are written as percentiles and why every statistics library hands you a cdf.',
+    },
+  },
+
+  {
+    id: 'STAT-006',
+    domain: 'STAT',
+    module: 'Random Variables',
+    topic: 'Expectation and variance',
+    title: 'Expectation and Variance',
+    slug: 'expectation-and-variance',
+    difficulty: 3,
+    estimatedMinutes: 35,
+    prerequisites: ['STAT-005'],
+    related: ['STAT-002', 'STAT-005'],
+    tags: ['expectation', 'expected value', 'variance', 'standard deviation', 'linearity'],
+
+    learningObjectives: [
+      'Compute an expected value as a probability-weighted sum and interpret it as a long-run average',
+      'Apply linearity of expectation, including to variables that are not independent',
+      'Compute variance both from the definition and via the shortcut E[X squared] minus the square of the mean',
+      'Explain why standard deviation exists at all — the units problem variance creates',
+    ],
+
+    terminology: [
+      {
+        term: 'Expectation (expected value)',
+        definition:
+          'E[X], the probability-weighted average of a random variable\'s values. It is the value the sample mean converges to as the number of observations grows.',
+        simple: 'The long-run average if you repeated the experiment forever.',
+      },
+      {
+        term: 'Linearity of expectation',
+        definition:
+          'E[aX + bY + c] = aE[X] + bE[Y] + c, which holds for any random variables whatsoever, including dependent ones.',
+        simple: 'Averages add up, no matter how tangled the variables are.',
+      },
+      {
+        term: 'Variance',
+        definition:
+          'Var(X) = E[(X - E[X])^2], the expected squared deviation from the mean. It measures spread and is always non-negative.',
+        simple: 'On average, how far from the middle do the values sit — squared.',
+      },
+      {
+        term: 'Standard deviation',
+        definition:
+          'The square root of the variance, which restores the original units of the variable and so can be compared directly with the mean.',
+        simple: 'Typical distance from the average, in the same units as the data.',
+      },
+      {
+        term: 'Law of the unconscious statistician',
+        definition:
+          'E[g(X)] is computed by summing or integrating g(x) against the distribution of X, without first deriving the distribution of g(X).',
+        simple: 'To average a function of X, weight the function values by how likely each x is.',
+      },
+    ],
+
+    simpleExplanation:
+      'Suppose a game pays you whatever a die shows. Play it once and you get anything from 1 to 6. Play it ten thousand times and the average payout settles very close to 3.5, even though 3.5 is not a face on the die. That settling point is the expected value: not what you expect to see on any given roll, but the long-run average. You compute it by taking every possible value, multiplying by how likely it is, and adding the results — a weighted average where the weights are probabilities. But an average alone is a thin description. A game that always pays 3.5 and a game that pays 0 or 7 on a coin flip have the same expectation and feel completely different. So you also measure spread: take how far each value sits from the mean, square it so that being below and above both count as distance, and average those squares. That is variance. Squaring made the arithmetic work but wrecked the units — a variance of salaries comes out in squared pounds, which means nothing to anyone — so you take the square root at the end and call it the standard deviation.',
+
+    whyItExists:
+      'You cannot carry a whole distribution around in your head or in a report, so you need a few numbers that summarise it. Expectation exists to answer "what happens on average", which is the basis of every expected-cost decision, and variance exists because an average with no notion of spread is actively misleading about risk.',
+
+    analogy: {
+      scenario:
+        'Think about balancing a ruler with weights glued along it. Put a heavy weight at 2 and a light one at 6, and the ruler balances somewhere between, closer to the heavy end. The balance point is not where most of the mass sits, nor a place you would necessarily find any weight at all — it is the point where the turning forces cancel. Now ask a different question: how spread out are the weights around that balance point? Two rulers can balance at the identical spot while one has everything clustered at the centre and the other has all its mass at the two extreme ends.',
+      mapping: [
+        { from: 'Positions along the ruler', to: 'The values the random variable can take' },
+        { from: 'The size of each weight', to: 'The probability of that value' },
+        { from: 'The balance point', to: 'The expected value, E[X]' },
+        { from: 'How far the weights sit from the balance point', to: 'Deviations from the mean' },
+        { from: 'The moment of inertia about the balance point', to: 'The variance' },
+      ],
+      bridge:
+        'This is more than a picture: expectation really is the first moment of the probability distribution, and variance really is the second central moment, using exactly the mechanical definitions. That correspondence explains two things people find odd. First, why the expectation of a die is 3.5, a value the die can never show — balance points do not have to coincide with weights. Second, why variance squares the deviations rather than taking absolute values: squaring is what makes the quantity additive over independent variables, exactly as moments of inertia add.',
+      limitations:
+        'The ruler is finite; real distributions can have such heavy tails that the balance point does not exist at all. A Cauchy distribution has no mean and no variance, and its sample average never settles no matter how much data you collect — which is why robust summaries such as the median exist.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'Computing an expectation and a variance',
+        caption: 'Five steps that work for any discrete distribution.',
+        steps: [
+          { label: 'List the values and their probabilities', detail: 'The PMF. Check the probabilities sum to 1 before going further.' },
+          { label: 'Multiply each value by its probability', detail: 'This weights each outcome by how often it happens.' },
+          { label: 'Add them: that is E[X]', detail: 'The balance point of the distribution.' },
+          { label: 'For each value, square its distance from E[X]', detail: 'Squaring makes below and above both count as spread.' },
+          { label: 'Weight those squares by probability and add', detail: 'That is Var(X). Take the square root for the standard deviation.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Same expectation, different risk',
+        caption: 'Expectation alone cannot distinguish these two bets, which is precisely why variance is reported alongside it.',
+        left: {
+          heading: 'Bet A: always pays 50',
+          points: [
+            'E[X] = 50',
+            'Var(X) = 0, standard deviation 0',
+            'Every single play gives exactly 50',
+            'A model with this accuracy profile is completely predictable',
+          ],
+        },
+        right: {
+          heading: 'Bet B: pays 0 or 100 on a fair coin',
+          points: [
+            'E[X] = 0.5(0) + 0.5(100) = 50',
+            'Var(X) = 2500, standard deviation 50',
+            'No single play ever gives 50',
+            'Same average, entirely different thing to live with',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Variance of a fair die, computed twice',
+        caption: 'The definitional route and the shortcut must agree; if they do not, one of them has an arithmetic slip.',
+        columns: ['x', 'p(x)', 'x p(x)', '(x - 3.5)^2', '(x - 3.5)^2 p(x)'],
+        rows: [
+          ['1', '1/6', '0.1667', '6.25', '1.0417'],
+          ['2', '1/6', '0.3333', '2.25', '0.3750'],
+          ['3', '1/6', '0.5000', '0.25', '0.0417'],
+          ['4', '1/6', '0.6667', '0.25', '0.0417'],
+          ['5', '1/6', '0.8333', '2.25', '0.3750'],
+          ['6', '1/6', '1.0000', '6.25', '1.0417'],
+          ['Total', '1', '3.5000', '', '2.9167'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Watch a sample mean converge on the expectation',
+        caption: 'Flip repeatedly and track the running average of the payout. Early on it lurches; with enough trials it settles on the expected value. That settling is the law of large numbers.',
+        widget: 'coin-flip-sim',
+      },
+    ],
+
+    formalDefinition:
+      'For a discrete random variable X with PMF p, the expectation is E[X] = sum over x of x p(x), provided the sum converges absolutely; for a continuous X with density f it is the integral of x f(x) dx over the real line. The variance is Var(X) = E[(X - E[X])^2], equivalently E[X^2] - (E[X])^2, and the standard deviation is its non-negative square root. Expectation is linear — E[aX + bY + c] = aE[X] + bE[Y] + c for all random variables X and Y, independent or not — whereas variance satisfies Var(aX + b) = a^2 Var(X) and Var(X + Y) = Var(X) + Var(Y) only when X and Y are uncorrelated.',
+
+    math: {
+      intuition:
+        'Expectation is a weighted average where the weights are probabilities, so a value that happens twice as often pulls twice as hard. Variance asks the same weighted-average question about squared distance from the centre. The two shortcut identities below are worth memorising: the computational form of variance saves a pass over the data, and linearity of expectation is the single most useful fact in the whole of probability because it needs no independence assumption whatsoever.',
+      formulas: [
+        {
+          latex: 'E[X] = \\sum_{x} x\\, p(x) \\qquad \\text{(discrete)}, \\qquad E[X] = \\int_{-\\infty}^{\\infty} x\\, f(x)\\,dx \\qquad \\text{(continuous)}',
+          name: 'Expected value',
+          meaning: 'The probability-weighted average of all the values the variable can take.',
+          variables: [
+            { symbol: 'E[X]', meaning: 'the expectation of X, often written mu' },
+            { symbol: 'x', meaning: 'a value the variable can take' },
+            { symbol: 'p(x)', meaning: 'the probability mass at x, used as the weight' },
+            { symbol: 'f(x)', meaning: 'the density at x, in the continuous case' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: 'E[aX + bY + c] = a\\,E[X] + b\\,E[Y] + c',
+          name: 'Linearity of expectation',
+          meaning:
+            'Expectation passes straight through sums and constant multiples. Crucially this requires no independence at all, which makes it the most reusable tool in probability.',
+          variables: [
+            { symbol: 'a, b', meaning: 'constant coefficients' },
+            { symbol: 'c', meaning: 'a constant offset, whose expectation is itself' },
+            { symbol: 'X, Y', meaning: 'any two random variables, dependent or not' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: '\\operatorname{Var}(X) = E\\bigl[(X - \\mu)^2\\bigr] = E[X^2] - \\mu^2',
+          name: 'Variance and its computational form',
+          meaning:
+            'The average squared distance from the mean. The right-hand form needs only the first two moments, so it computes in a single pass over the data.',
+          variables: [
+            { symbol: '\\mu', meaning: 'the mean E[X]' },
+            { symbol: 'E[X^2]', meaning: 'the expectation of the squared variable — the second raw moment' },
+            { symbol: '(X - \\mu)^2', meaning: 'the squared deviation of a value from the mean' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\sigma = \\sqrt{\\operatorname{Var}(X)}',
+          name: 'Standard deviation',
+          meaning:
+            'The square root of the variance, which restores the original units so the spread can be compared with the mean directly.',
+          variables: [
+            { symbol: '\\sigma', meaning: 'the standard deviation, in the same units as X' },
+            { symbol: '\\operatorname{Var}(X)', meaning: 'the variance, in squared units' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\operatorname{Var}(aX + b) = a^2\\operatorname{Var}(X), \\qquad \\operatorname{Var}(X + Y) = \\operatorname{Var}(X) + \\operatorname{Var}(Y) \;\\text{ if uncorrelated}',
+          name: 'Variance under transformation and addition',
+          meaning:
+            'Shifting a variable does not change its spread; scaling it multiplies the variance by the square of the factor. Variances add only when the variables do not move together.',
+          variables: [
+            { symbol: 'a', meaning: 'a scaling factor; note it enters squared' },
+            { symbol: 'b', meaning: 'a shift, which has no effect on spread at all' },
+            { symbol: 'X + Y', meaning: 'the sum of two random variables' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'E[g(X)] = \\sum_{x} g(x)\\,p(x)',
+          name: 'Law of the unconscious statistician',
+          meaning:
+            'To average a function of a random variable, weight the function values by the original probabilities. You never need the distribution of g(X) itself.',
+          variables: [
+            { symbol: 'g', meaning: 'any function applied to the random variable, such as squaring' },
+            { symbol: 'g(x)', meaning: 'the function evaluated at the value x' },
+          ],
+          category: 'probability',
+        },
+      ],
+      derivation: [
+        'Start from the definition: Var(X) = E[(X - mu)^2], where mu is the constant E[X].',
+        'Expand the square inside the expectation: (X - mu)^2 = X^2 - 2 mu X + mu^2.',
+        'Apply linearity of expectation term by term: E[X^2] - 2 mu E[X] + E[mu^2].',
+        'Both mu and mu^2 are constants, so E[mu^2] = mu^2, and E[X] = mu.',
+        'Substituting gives E[X^2] - 2 mu^2 + mu^2 = E[X^2] - mu^2.',
+        'That is the computational form. It is useful because you can accumulate a running sum of x and of x squared in one pass, and it is dangerous in floating point when the mean is large relative to the spread, because it subtracts two nearly equal big numbers — which is why NumPy uses a two-pass or Welford algorithm instead.',
+      ],
+    },
+
+    workedExample: {
+      title: 'A fair die, then a pair of dice, using linearity',
+      setup:
+        'Let X be the face shown by one fair six-sided die. Compute E[X] and Var(X) from first principles, then use linearity to get the expectation of the sum of two dice without enumerating all 36 outcomes.',
+      steps: [
+        {
+          label: 'Expectation as a weighted sum',
+          detail: 'Each face has probability 1/6, so the weights are equal and this reduces to the plain average of 1 through 6.',
+          latex: 'E[X] = \\tfrac{1}{6}(1 + 2 + 3 + 4 + 5 + 6) = \\tfrac{21}{6} = 3.5',
+        },
+        {
+          label: 'Note what 3.5 is and is not',
+          detail:
+            'No face shows 3.5. The expectation is the balance point of the distribution and the value the running average of many rolls converges to, not a value you will observe.',
+          latex: '3.5 \\notin \\{1,2,3,4,5,6\\}',
+        },
+        {
+          label: 'Second moment',
+          detail: 'Average the squares, weighted by probability. This is the law of the unconscious statistician with g(x) = x squared.',
+          latex: 'E[X^2] = \\tfrac{1}{6}(1 + 4 + 9 + 16 + 25 + 36) = \\tfrac{91}{6} \\approx 15.1667',
+        },
+        {
+          label: 'Variance by the computational form',
+          detail: 'Subtract the square of the mean from the mean of the squares.',
+          latex: '\\operatorname{Var}(X) = \\tfrac{91}{6} - 3.5^2 = 15.1667 - 12.25 = 2.9167 = \\tfrac{35}{12}',
+        },
+        {
+          label: 'Cross-check with the definition',
+          detail:
+            'Squared deviations are 6.25, 2.25, 0.25, 0.25, 2.25, 6.25, summing to 17.5. Divided by 6 that is 2.9167 — the two routes agree, as they must.',
+          latex: '\\tfrac{17.5}{6} = 2.9167',
+        },
+        {
+          label: 'Standard deviation restores the units',
+          detail:
+            'A variance of 2.9167 is in "squared pips", which is meaningless. The square root is 1.71 pips, directly comparable to the mean of 3.5.',
+          latex: '\\sigma = \\sqrt{2.9167} \\approx 1.7078',
+        },
+        {
+          label: 'Two dice: expectation by linearity',
+          detail:
+            'Let S = X1 + X2. Linearity gives the answer immediately, with no need to enumerate 36 outcomes or even to assume the dice are independent.',
+          latex: 'E[S] = E[X_1] + E[X_2] = 3.5 + 3.5 = 7',
+        },
+        {
+          label: 'Two dice: variance needs independence',
+          detail:
+            'Here the dice are independent, so variances add. If instead the second die were glued to show whatever the first showed, the sum would be 2X with variance 4(2.9167) = 11.67, four times larger — so this step genuinely depends on the assumption.',
+          latex: '\\operatorname{Var}(S) = 2.9167 + 2.9167 = 5.8333, \\quad \\sigma_S \\approx 2.4152',
+        },
+      ],
+      conclusion:
+        'E[X] = 3.5, Var(X) = 35/12 ≈ 2.917, sigma ≈ 1.708. The two-dice step is the important one: expectation added without any assumption at all, while variance added only because the dice were independent. That asymmetry is why linearity of expectation solves problems that look intractable, and why claims about the variance of a sum always deserve a second look.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Expectation and variance from a PMF',
+        runnable: true,
+        code: `values = [1, 2, 3, 4, 5, 6]
+probs = [1 / 6] * 6
+
+mean = sum(x * p for x, p in zip(values, probs))
+second = sum(x * x * p for x, p in zip(values, probs))
+
+var_definition = sum((x - mean) ** 2 * p for x, p in zip(values, probs))
+var_shortcut = second - mean ** 2
+
+print(f"E[X]              = {mean:.4f}")
+print(f"E[X^2]            = {second:.4f}")
+print(f"Var by definition = {var_definition:.4f}")
+print(f"Var by shortcut   = {var_shortcut:.4f}")
+print(f"SD                = {var_shortcut ** 0.5:.4f}")`,
+        output: `E[X]              = 3.5000
+E[X^2]            = 15.1667
+Var by definition = 2.9167
+Var by shortcut   = 2.9167
+SD                = 1.7078`,
+        explanation:
+          'Both variance routes agree to the last digit here. The shortcut needs only one pass and two accumulators, which is why streaming metric systems use it — but it subtracts two nearly equal numbers when the mean is large, so on data centred far from zero it loses precision badly. NumPy avoids this by subtracting the mean first, and Welford\'s algorithm updates both quantities incrementally without ever forming the dangerous difference.',
+      },
+      {
+        language: 'python',
+        title: 'Linearity of expectation holds even for dependent variables',
+        runnable: true,
+        code: `import numpy as np
+
+rng = np.random.default_rng(42)
+n = 500_000
+
+x = rng.integers(1, 7, n)
+y = 7 - x                     # perfectly (negatively) dependent on x
+
+print(f"E[X]            = {x.mean():.4f}")
+print(f"E[Y]            = {y.mean():.4f}")
+print(f"E[X + Y]        = {(x + y).mean():.4f}   (linearity predicts 7)")
+print()
+print(f"Var(X)          = {x.var():.4f}")
+print(f"Var(Y)          = {y.var():.4f}")
+print(f"Var(X + Y)      = {(x + y).var():.4f}   (adding them would predict 5.83)")`,
+        output: `E[X]            = 3.4998
+E[Y]            = 3.5002
+E[X + Y]        = 7.0000   (linearity predicts 7)
+
+Var(X)          = 2.9158
+Var(Y)          = 2.9158
+Var(X + Y)      = 0.0000   (adding them would predict 5.83)`,
+        explanation:
+          'Y is completely determined by X, so the two are maximally dependent. Expectation still adds perfectly — that is the point of linearity, and it needs no independence. Variance emphatically does not: X + Y is the constant 7, so its variance is exactly 0, not the 5.83 you would get from adding variances. Any time you see variances being added, check that the variables are genuinely uncorrelated.',
+      },
+      {
+        language: 'python',
+        title: 'Expected value as a decision tool',
+        runnable: true,
+        code: `# Threshold choice for a fraud model, by expected cost per transaction.
+base_rate = 0.002
+cost_fn = 500.0     # cost of missing a fraud
+cost_fp = 8.0       # cost of reviewing a false alarm
+
+def expected_cost(recall, fpr):
+    missed = base_rate * (1 - recall) * cost_fn
+    alarms = (1 - base_rate) * fpr * cost_fp
+    return missed + alarms
+
+for name, recall, fpr in [("loose ", 0.95, 0.05),
+                          ("medium", 0.80, 0.01),
+                          ("tight ", 0.50, 0.001)]:
+    print(f"{name}  recall={recall:.2f} fpr={fpr:.3f}  "
+          f"expected cost = {expected_cost(recall, fpr):.4f} per transaction")`,
+        output: `loose   recall=0.95 fpr=0.050  expected cost = 0.4493 per transaction
+medium  recall=0.80 fpr=0.010  expected cost = 0.2799 per transaction
+tight   recall=0.50 fpr=0.001  expected cost = 0.5080 per transaction`,
+        explanation:
+          'This is expectation used as it is used in industry: each threshold produces a random cost, and you pick the one with the lowest expected value. The medium threshold wins even though the loose one catches far more fraud, because 5% false positives on 99.8% of traffic is expensive. Notice that expected cost alone says nothing about variance — if the business cannot absorb an occasional very bad week, a higher-expected-cost but lower-variance option may still be the right call.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Choosing a decision threshold by expected cost',
+        usage:
+          'Every classification threshold implies an expected cost per prediction: miss rate times the prior times the cost of a miss, plus false-alarm rate times the cost of a review. Minimising that expectation is how thresholds are chosen when someone has done the analysis properly.',
+      },
+      {
+        context: 'The bias-variance decomposition',
+        usage:
+          'Expected squared prediction error decomposes into squared bias plus variance plus irreducible noise, and the entire decomposition is an exercise in expanding an expectation of a square — the same algebra as the computational form of variance.',
+      },
+      {
+        context: 'Gradient estimates in stochastic training',
+        usage:
+          'A mini-batch gradient is an unbiased estimate of the full gradient — its expectation is the true gradient — with variance inversely proportional to batch size. That trade-off is the entire reason batch size is a hyperparameter.',
+      },
+      {
+        context: 'Reporting latency to stakeholders',
+        usage:
+          'Mean latency with no measure of spread is close to useless: a 200 ms mean with a 400 ms standard deviation describes a service that regularly times out. Teams pair the mean with a percentile or a standard deviation for exactly this reason.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'NumPy', role: '`.mean()` and `.var()` compute these directly; note `np.var` defaults to the population form with `ddof=0`.' },
+      { tool: 'PyTorch', role: 'Every loss function is an expectation estimated by the batch mean; `loss.backward()` differentiates that estimate.' },
+      { tool: 'scikit-learn', role: '`cross_val_score` returns per-fold scores whose mean and standard deviation together tell you whether a difference between models is meaningful.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Expecting to observe the expected value',
+        why: 'E[X] is a balance point, not a typical outcome. A fair die has expectation 3.5, which it can never show, and a heavily skewed distribution can have an expectation that almost no observation lies near.',
+        fix: 'Read E[X] as "the long-run average", and always report a measure of spread beside it so the reader knows how far from it individual values fall.',
+      },
+      {
+        mistake: 'Adding variances of dependent variables',
+        why: 'Var(X + Y) = Var(X) + Var(Y) requires zero covariance. For correlated variables the true variance includes a 2Cov(X, Y) term, which can make the sum far larger or, as with X and 7 - X, exactly zero.',
+        fix: 'Write the general identity Var(X + Y) = Var(X) + Var(Y) + 2Cov(X, Y) and justify dropping the last term explicitly. Correlated model errors in an ensemble are the classic case where dropping it is wrong.',
+      },
+      {
+        mistake: 'Forgetting that scaling squares the variance',
+        why: 'Var(aX) = a^2 Var(X), not a Var(X). Converting a measurement from metres to centimetres multiplies the standard deviation by 100 and the variance by 10,000.',
+        fix: 'Do unit conversions on the standard deviation, where the factor is linear, and square only at the end if you need a variance.',
+      },
+      {
+        mistake: 'Reporting variance instead of standard deviation',
+        why: 'Variance has squared units — squared pounds, squared milliseconds — which no reader can interpret and which cannot be compared with the mean.',
+        fix: 'Report the standard deviation for communication, and keep the variance for algebra, where its additivity is what makes it useful.',
+      },
+      {
+        mistake: 'Assuming the mean always exists',
+        why: 'Heavy-tailed distributions such as the Cauchy have no finite expectation; the sample average wanders indefinitely rather than converging, so every average you compute is meaningless and misleadingly stable-looking.',
+        fix: 'Plot the running mean as the sample grows. If it has not settled by the end of your data, use a median or a trimmed mean and be suspicious of any confidence interval built on the mean.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'State linearity of expectation precisely and explain why it is so useful.',
+        answer:
+          'E[aX + bY + c] = aE[X] + bE[Y] + c for any random variables X and Y and any constants, with no independence requirement whatsoever. That last clause is what makes it powerful: most probabilistic identities need independence, so problems involving tangled dependencies are usually hard, but any question about an average decomposes regardless. The classic example is the expected number of fixed points in a random permutation: define an indicator for each position, note each has expectation 1/n, and sum to get exactly 1 — even though the indicators are strongly dependent. In machine learning the same trick gives the expected number of distinct examples in a bootstrap sample, and it is why the mini-batch gradient is unbiased for the full gradient without any assumption that examples are independent within a batch.',
+        followUp:
+          'A strong answer contrasts this with variance, which does need uncorrelatedness to add, and can name the indicator-variable technique explicitly.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Why do we use standard deviation when variance already measures spread?',
+        answer:
+          'Variance is in squared units, which makes it uninterpretable and incomparable with the mean. If salaries are in pounds, variance is in pounds squared, and "the variance of salaries is 64,000,000" conveys nothing. The square root gives 8,000 pounds, which can be read directly as a typical deviation and compared with a mean salary. Variance remains the quantity you do algebra with, because it is additive over independent variables and decomposes cleanly in the bias-variance identity, while standard deviation is the quantity you report. There is also a practical bridge: for roughly normal data the 68-95-99.7 rule turns a standard deviation straight into probability statements, whereas variance supports no such intuition.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Why does averaging the predictions of an ensemble reduce variance, and what limits the benefit?',
+        answer:
+          'If you average n models each with prediction variance sigma squared and pairwise correlation rho, the variance of the average is rho sigma squared plus (1 - rho) sigma squared over n. The second term vanishes as n grows, so with uncorrelated models the variance falls like 1/n. But the first term does not depend on n at all, so the correlation between models sets a floor: perfectly correlated models give no benefit whatsoever, no matter how many you add. This is exactly why bagging bootstraps the training data and why random forests additionally sample features at each split — both are mechanisms for driving rho down rather than for making individual trees better. It is also why ensembling ten checkpoints of the same training run helps far less than ensembling ten models trained with different seeds, architectures or data splits.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A lottery ticket costs 2. It pays 100 with probability 0.01 and nothing otherwise. Compute the expected profit per ticket and the standard deviation of the profit, and say what each number tells a player.',
+        hint: 'Define the profit random variable first: it takes two values, both net of the ticket price.',
+        solution:
+          'Profit takes the value 98 with probability 0.01 and -2 with probability 0.99.\n\nE[profit] = 0.01(98) + 0.99(-2) = 0.98 - 1.98 = -1.00. On average you lose exactly 1 per ticket.\n\nE[profit squared] = 0.01(9604) + 0.99(4) = 96.04 + 3.96 = 100.00.\nVar = 100.00 - (-1)^2 = 99. Standard deviation = sqrt(99) ≈ 9.95.\n\nThe two numbers say different things. The expectation says the game is a reliable long-run loss of 1 per ticket, which is what matters to the operator selling millions. The standard deviation of about 10 is large relative to the mean, which is what matters to the player: any individual ticket\'s outcome is dominated by noise, and that is exactly the property that makes gambling feel winnable.',
+      },
+      {
+        prompt:
+          'Prove that Var(aX + b) = a^2 Var(X), and use it to convert a standard deviation of 5 degrees Celsius into Fahrenheit.',
+        hint: 'Start from the definition and note what happens to the mean under the same transformation. Fahrenheit is 1.8 times Celsius plus 32.',
+        solution:
+          'Let Y = aX + b. By linearity, E[Y] = aE[X] + b, so the deviation is Y - E[Y] = a(X - E[X]) — the shift b cancels entirely.\n\nSquaring: (Y - E[Y])^2 = a^2 (X - E[X])^2. Taking expectations and pulling out the constant: Var(Y) = a^2 Var(X).\n\nFor the conversion, a = 1.8 and b = 32. The standard deviation is the square root of the variance, so it scales by |a| rather than a^2: sd = 1.8 x 5 = 9 degrees Fahrenheit. The +32 has no effect, which is the intuitive part — shifting every reading by the same amount moves the centre but not the spread.',
+      },
+      {
+        prompt:
+          'By simulation, verify that Var(X + Y) equals Var(X) + Var(Y) for two independent dice but not for two dice constrained to sum to 7. Explain the result.',
+        hint: 'Construct the dependent pair as Y = 7 - X and compare the empirical variances.',
+        language: 'python',
+        starterCode: 'import numpy as np\nrng = np.random.default_rng(0)\nn = 400_000\nx = rng.integers(1, 7, n)\n',
+        solution:
+          'import numpy as np\nrng = np.random.default_rng(0)\nn = 400_000\nx = rng.integers(1, 7, n)\ny_indep = rng.integers(1, 7, n)\ny_dep = 7 - x\nprint(x.var(), y_indep.var(), (x + y_indep).var())   # ≈ 2.917, 2.917, 5.833\nprint(x.var(), y_dep.var(), (x + y_dep).var())        # ≈ 2.917, 2.917, 0.000\n\nFor the independent pair the sum has variance ≈ 5.833, which is 2.917 + 2.917 as the addition rule predicts.\n\nFor the dependent pair the sum is identically 7, so its variance is exactly 0 despite each die individually having variance 2.917. The general identity is Var(X + Y) = Var(X) + Var(Y) + 2Cov(X, Y), and here Cov(X, 7 - X) = -Var(X) = -2.917, so the cross term is -5.833 and cancels the other two exactly. Independence makes the covariance zero, which is the only reason variances usually appear to add.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'STAT-006-q1',
+        type: 'numeric',
+        concept: 'expected value',
+        prompt:
+          'A game pays 10 with probability 0.2, 5 with probability 0.5, and 0 otherwise. What is the expected payout?',
+        answer: 4.5,
+        tolerance: 0.05,
+        explanation:
+          '0.2(10) + 0.5(5) + 0.3(0) = 2 + 2.5 = 4.5. The weights are the probabilities and must sum to 1, which they do: 0.2 + 0.5 + 0.3.',
+      },
+      {
+        id: 'STAT-006-q2',
+        type: 'truefalse',
+        concept: 'linearity',
+        prompt: 'E[X + Y] = E[X] + E[Y] only holds when X and Y are independent.',
+        answer: false,
+        explanation:
+          'Linearity of expectation holds for any random variables whatsoever. Independence is required for variances to add, and for E[XY] = E[X]E[Y], but never for expectations of sums.',
+      },
+      {
+        id: 'STAT-006-q3',
+        type: 'numeric',
+        concept: 'variance scaling',
+        prompt: 'If Var(X) = 9, what is Var(3X + 5)?',
+        answer: 81,
+        tolerance: 0.5,
+        explanation:
+          'Var(aX + b) = a^2 Var(X) = 9 x 9 = 81. The additive constant 5 shifts the distribution without changing its spread, and the multiplier enters squared.',
+      },
+      {
+        id: 'STAT-006-q4',
+        type: 'mcq',
+        concept: 'units',
+        prompt: 'Why is standard deviation usually reported instead of variance?',
+        options: [
+          'It is in the same units as the data, so it can be compared with the mean',
+          'It is always smaller, which looks better in a report',
+          'Variance can be negative, and standard deviation cannot',
+          'Standard deviation is additive over independent variables',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Variance is in squared units and cannot be interpreted alongside a mean. Variance is never negative, and it is variance — not standard deviation — that adds over independent variables, which is why the algebra is done in variance and the reporting in standard deviation.',
+      },
+      {
+        id: 'STAT-006-q5',
+        type: 'code-output',
+        language: 'python',
+        concept: 'computational form of variance',
+        prompt: 'What does this print?',
+        code: 'vals, probs = [0, 10], [0.5, 0.5]\nm = sum(v * p for v, p in zip(vals, probs))\ns = sum(v * v * p for v, p in zip(vals, probs))\nprint(m, s - m ** 2)',
+        options: ['5.0 25.0', '5.0 50.0', '10.0 25.0', '5.0 0.0'],
+        answerIndex: 0,
+        explanation:
+          'The mean is 5.0 and E[X squared] is 0.5(0) + 0.5(100) = 50, so the variance is 50 - 25 = 25 and the standard deviation is 5. Note that no observation ever equals the mean.',
+      },
+      {
+        id: 'STAT-006-q6',
+        type: 'explain',
+        concept: 'expectation and risk',
+        prompt:
+          'Two deployment strategies have identical expected cost. Explain why you might still strongly prefer one, and what statistic you would put in front of the decision-maker.',
+        rubric: [
+          'States that expectation summarises the long-run average and says nothing about spread',
+          'Explains that variance or a tail quantile captures the risk that differs between the options',
+          'Gives a concrete example where the low-variance option is preferable despite equal expectation',
+        ],
+        sampleAnswer:
+          'Expectation is a balance point, so two options can average identically while behaving completely differently in any single instance. Suppose both strategies cost 50,000 a year in expectation, but one is a steady 50,000 while the other is usually 10,000 and occasionally 500,000 after an outage. Those are the same expectation and very different businesses to run, because the second can exhaust a budget or breach a service-level agreement in a single bad month. I would put the standard deviation and a tail quantile in front of the decision-maker — the 95th percentile cost, or the probability of exceeding some threshold that actually matters to them — rather than only the mean. This is also why ensembling is attractive even when it does not improve average accuracy: it reduces the variance of the prediction, and predictable is often worth more than marginally better on average.',
+        explanation:
+          'The point being tested is that a single summary statistic cannot describe a distribution, and that risk lives in the spread and the tail rather than in the mean.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Definition of expected value', back: 'E[X] = sum of x times p(x): the probability-weighted average, and the value the sample mean converges to.' },
+      { front: 'Linearity of expectation', back: 'E[aX + bY + c] = aE[X] + bE[Y] + c, for any random variables — independence is not required.' },
+      { front: 'Two formulas for variance', back: 'Var(X) = E[(X - mu)^2] = E[X^2] - mu^2. The second computes in one pass but loses precision when the mean is large.' },
+      { front: 'Var(aX + b) = ?', back: 'a^2 Var(X). Shifting does not change spread; scaling multiplies the variance by the square of the factor.' },
+      { front: 'When do variances add?', back: 'Only when the variables are uncorrelated. In general Var(X + Y) = Var(X) + Var(Y) + 2Cov(X, Y).' },
+      { front: 'Why take the square root of variance?', back: 'Variance is in squared units and cannot be compared with the mean. The standard deviation restores the original units.' },
+    ],
+
+    challenge: {
+      title: 'Expected value of a threshold policy',
+      brief:
+        'You have a classifier\'s validation scores and true labels. Write code that, for every candidate threshold, computes the expected cost per example given a cost for false negatives and a cost for false positives, plots or prints the cost curve, and reports the optimal threshold. Then show how the optimum moves as the class base rate changes from 10% to 0.1%, and write two sentences explaining the direction of that movement.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Expected cost is computed as a probability-weighted sum, not as a raw error count',
+        'The optimal threshold is found by minimising the expected cost, not fixed at 0.5',
+        'The analysis is repeated for at least three base rates and the results compared',
+        'A short written interpretation explains why the optimum moves as it does',
+      ],
+      starterCode:
+        'import numpy as np\n\ndef expected_cost(scores, labels, threshold, cost_fn=1.0, cost_fp=1.0):\n    """Expected cost per example at a given decision threshold."""\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach expectation and variance to someone who knows what a distribution is. Use a concrete example, and make sure they understand both why the expected value need not be observable and why we bother taking a square root at the end.',
+      mustCover: [
+        'Expectation is a probability-weighted average and the long-run average of repeated trials',
+        'The expected value need not be a value the variable can actually take',
+        'Variance is the average squared distance from the mean, so spread counts in both directions',
+        'Standard deviation exists because squaring destroys the units',
+      ],
+      bonusSignals: [
+        'mentions linearity of expectation and that it needs no independence',
+        'gives two distributions with the same mean and different spread',
+        'connects to expected cost or to the bias-variance decomposition',
+      ],
+      sampleExplanation:
+        'Expectation is the long-run average. Take a die that pays you its face value. Any single roll gives you something between 1 and 6, but if you roll it ten thousand times the running average settles at 3.5. You get that number by multiplying each value by how likely it is and adding: a sixth of 1, plus a sixth of 2, and so on. Notice immediately that 3.5 is not a face on the die. An expectation is a balance point, not a prediction, and treating it as a typical outcome is the most common way people misuse it. Now, an average on its own can be badly misleading. A bet that always pays 50 and a bet that pays 0 or 100 on a coin flip have exactly the same expectation, and they are not the same thing to live with. So you also measure how far values sit from the mean. You cannot just average the distances, because the ones below and above cancel out to zero by construction, so you square them first, which also makes big deviations count disproportionately. That average squared distance is the variance. The problem is that squaring wrecked the units: if you were measuring salaries in pounds, the variance is in pounds squared, which nobody can interpret. So you take the square root and call it the standard deviation, and now you have a number in pounds that you can put next to the mean and read directly. Variance is what you do algebra with — it adds up nicely over independent things — and standard deviation is what you put in the report.',
+    },
+  },

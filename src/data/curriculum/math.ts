@@ -2511,3 +2511,1607 @@ with bias -1.0: 0.0`,
         'Picture two people pushing a box. If they push the same way their efforts reinforce each other; if one pushes north and the other east neither helps the other; if they push directly against each other nothing moves. The dot product is one number that tells you which of those you have. You get it by an almost insultingly simple recipe: line the two lists of numbers up, multiply the entries that face each other, and add the results. Large and positive means the two arrows agree, zero means they are at right angles and share nothing, negative means they fight. Machine learning cannot stop using it. A neuron holds a list of importances, one per input, and its score is exactly that multiply-and-add against the incoming values. A search engine holds a vector per document and ranks them by how much each agrees with your query. If you divide the answer by both lengths you get cosine similarity, which throws away how big the two things are and keeps only which way they point — which is what you want when comparing a short note to a long article on the same subject.',
     },
   },
+
+  {
+    id: 'MATH-006',
+    domain: 'MATH',
+    module: 'Matrices',
+    topic: 'The dual view of a matrix',
+    title: 'Matrices as Data and as Functions',
+    slug: 'matrices-as-data-and-functions',
+    difficulty: 3,
+    estimatedMinutes: 35,
+    prerequisites: ['MATH-003', 'MATH-004'],
+    related: ['MATH-005'],
+    tags: ['matrix', 'linear-transformation', 'design-matrix', 'basis', 'geometry'],
+
+    learningObjectives: [
+      'Read a matrix as a table of data and say what its rows and columns mean',
+      'Read the same matrix as a function that moves every point in space',
+      'Predict what a matrix does geometrically by looking at where it sends the basis vectors',
+      'Explain why the dual view is what makes linear algebra useful to machine learning rather than merely tidy',
+    ],
+
+    terminology: [
+      {
+        term: 'Matrix',
+        definition:
+          'A rectangular array of numbers with m rows and n columns, written A ∈ ℝ^(m×n).',
+        simple: 'A grid of numbers.',
+      },
+      {
+        term: 'Design matrix',
+        definition:
+          'The data reading of a matrix: rows are examples and columns are features. This is the shape every scikit-learn estimator expects.',
+        simple: 'A spreadsheet where each row is one thing you measured.',
+      },
+      {
+        term: 'Linear transformation',
+        definition:
+          'A function T with T(u + v) = T(u) + T(v) and T(αv) = αT(v). Every such function on ℝⁿ is multiplication by some matrix, and every matrix defines one.',
+        simple: 'A way of moving every point in space that keeps grid lines straight, evenly spaced and the origin fixed.',
+      },
+      {
+        term: 'Basis vector',
+        definition:
+          'One of the vectors e₁ = [1,0], e₂ = [0,1] (and so on) that define the coordinate axes. Every vector is a weighted sum of them.',
+        simple: 'One step along one axis.',
+      },
+      {
+        term: 'Column space',
+        definition:
+          'The set of all vectors you can reach as weighted combinations of the matrix’s columns — equivalently, everything the transformation can output.',
+        simple: 'Everywhere the matrix can send you.',
+      },
+    ],
+
+    simpleExplanation:
+      'A matrix is a grid of numbers, and there are two completely different ways to look at that grid, both correct at once. The first is boring and familiar: it is a spreadsheet. Each row is one house, one customer, one photograph; each column is one thing you measured about them. Nothing mysterious. The second reading is stranger and far more powerful. Take the same grid and treat it as a set of instructions for rearranging space itself. Imagine graph paper with the origin pinned in place. The matrix says where the point one step east should end up, and where the point one step north should end up, and once you know those two things you know where every other point goes, because everything else is just a combination of those two steps. Stretch, squash, rotate, shear, flip, flatten — all of it is encoded in those few numbers. The remarkable thing is that these are the same object. A matrix is simultaneously a table you can store and a motion you can perform, and almost everything interesting in machine learning comes from switching between the two readings.',
+
+    whyItExists:
+      'Data needs a container and transformations need a representation, and it turns out one object serves both purposes. Writing a linear transformation as a grid of numbers makes it storable, composable and differentiable, while writing data as a grid makes an entire dataset a single object a transformation can be applied to in one operation. That coincidence is what lets a neural network layer be expressed as one matrix multiply and executed on hardware built for exactly that.',
+
+    analogy: {
+      scenario:
+        'A currency exchange board at an airport lists, for each foreign currency, how many pounds one unit is worth. You can read the board as pure information — today euros are 0.85, dollars are 0.79 — and that is a table. But you can also read it as a machine: hand it a wallet containing some euros and some dollars and it returns a single pound amount. The very same numbers that were a table of facts are also a recipe for converting.',
+      mapping: [
+        { from: 'The printed board of rates', to: 'The matrix as stored data' },
+        { from: 'Handing over a wallet and receiving pounds', to: 'The matrix acting as a function on a vector' },
+        { from: 'The rate for euros specifically', to: 'The column of the matrix showing where the euro basis vector lands' },
+        { from: 'Converting into pounds, then pounds into yen', to: 'Composing two transformations by multiplying their matrices' },
+        { from: 'A currency the board values at zero', to: 'A direction that the transformation collapses to nothing' },
+      ],
+      bridge:
+        'The exchange board makes the dual view concrete: one set of numbers, read as facts or read as an action. The reason this matters in machine learning is that a layer’s weight matrix is exactly this. It is stored and updated as data — you can print it, save it to disk, decay it — while at inference time it is an action performed on every incoming activation vector.',
+      limitations:
+        'Currency conversion maps many inputs to a single number, so the board is really a 1×n matrix. It also cannot express rotation or anything with negative rates, so the analogy captures the dual reading but not the geometric richness of a general transformation.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Watch a matrix move the plane',
+        caption: 'Change the four numbers and see grid lines stretch, rotate, shear or collapse.',
+        widget: 'matrix-transform',
+      },
+      {
+        kind: 'compare',
+        title: 'The same grid, two readings',
+        left: {
+          heading: 'As data',
+          points: [
+            'Rows are examples, columns are features',
+            'Shape (n_samples, n_features)',
+            'A row means "one house"; a column means "all the areas"',
+            'You index it, slice it, standardise it',
+          ],
+        },
+        right: {
+          heading: 'As a function',
+          points: [
+            'Columns say where each basis vector lands',
+            'Shape (n_outputs, n_inputs) for y = Ax',
+            'Multiplying by it moves every point in space at once',
+            'You compose it, invert it, decompose it into eigenvectors',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Reading a 2x2 matrix from its columns',
+        caption: 'Column one is where [1,0] lands; column two is where [0,1] lands. Everything else follows.',
+        columns: ['Matrix', 'e₁ = [1,0] goes to', 'e₂ = [0,1] goes to', 'Geometric effect'],
+        rows: [
+          ['[[2,0],[0,3]]', '[2,0]', '[0,3]', 'Stretch 2x horizontally, 3x vertically'],
+          ['[[0,-1],[1,0]]', '[0,1]', '[-1,0]', 'Rotate 90 degrees anticlockwise'],
+          ['[[1,1],[0,1]]', '[1,0]', '[1,1]', 'Shear: the top of the square slides right'],
+          ['[[1,0],[0,0]]', '[1,0]', '[0,0]', 'Flatten onto the x-axis — information destroyed'],
+          ['[[-1,0],[0,1]]', '[-1,0]', '[0,1]', 'Reflect across the vertical axis'],
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'How a matrix acts on a vector',
+        caption: 'The column picture, which is the one worth internalising.',
+        steps: [
+          { label: 'Write x in terms of the basis', detail: 'x = [3, 2] means 3 steps along e₁ plus 2 steps along e₂.' },
+          { label: 'Look up where each basis vector lands', detail: 'The columns of A are exactly those destinations.' },
+          { label: 'Combine with the same weights', detail: 'Ax = 3·(first column) + 2·(second column).' },
+          { label: 'Read off the result', detail: 'Matrix–vector multiplication is a weighted sum of the columns, nothing more.' },
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'A matrix A ∈ ℝ^(m×n) is a doubly indexed family of scalars A_ij for 1 ≤ i ≤ m, 1 ≤ j ≤ n. It defines a linear map T_A : ℝⁿ → ℝᵐ by T_A(x) = Ax, and conversely every linear map between finite-dimensional spaces is represented by a unique matrix once bases are fixed. The j-th column of A is T_A(e_j), the image of the j-th standard basis vector, and the column space col(A) = {Ax : x ∈ ℝⁿ} is the image of the map.',
+
+    math: {
+      intuition:
+        'Forget formulas for a moment and hold one picture: a matrix tells you where the basis vectors go, and that is enough to know where everything goes. In two dimensions, if you know that the point one step east ends up at [2, 1] and the point one step north ends up at [−1, 3], then the point [3, 2] — which is three easts and two norths — must end up at three copies of [2, 1] plus two copies of [−1, 3]. Nothing else is needed. The columns of the matrix are literally those destinations, sitting there in plain sight. Once you see matrix–vector multiplication as a weighted sum of columns rather than as a row-by-row dot-product ritual, most of linear algebra stops being arbitrary.',
+      formulas: [
+        {
+          latex: 'A = \\begin{bmatrix} a_{11} & a_{12} \\\\ a_{21} & a_{22} \\end{bmatrix}, \\qquad A e_1 = \\begin{bmatrix} a_{11} \\\\ a_{21} \\end{bmatrix}, \\quad A e_2 = \\begin{bmatrix} a_{12} \\\\ a_{22} \\end{bmatrix}',
+          name: 'The columns are the images of the basis vectors',
+          meaning:
+            'The first column is where [1,0] lands; the second is where [0,1] lands. Reading a matrix column by column tells you what it does.',
+          variables: [
+            { symbol: 'A', meaning: 'The 2×2 matrix' },
+            { symbol: 'a_{ij}', meaning: 'The entry in row i, column j' },
+            { symbol: 'e_1', meaning: 'The first standard basis vector, [1, 0]' },
+            { symbol: 'e_2', meaning: 'The second standard basis vector, [0, 1]' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: 'A\\mathbf{x} = x_1\\mathbf{a}_1 + x_2\\mathbf{a}_2 + \\cdots + x_n\\mathbf{a}_n',
+          name: 'The column picture of Ax',
+          meaning:
+            'Matrix–vector multiplication is a weighted sum of the matrix’s columns, with the components of x as the weights.',
+          variables: [
+            { symbol: 'A', meaning: 'The matrix, with columns a₁ … aₙ' },
+            { symbol: '\\mathbf{x}', meaning: 'The input vector' },
+            { symbol: 'x_j', meaning: 'The j-th component of x, used as the weight on column j' },
+            { symbol: '\\mathbf{a}_j', meaning: 'The j-th column of A, a vector in ℝᵐ' },
+            { symbol: 'n', meaning: 'Number of columns, which must equal the length of x' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '(A\\mathbf{x})_i = \\sum_{j=1}^{n} A_{ij}x_j',
+          name: 'The row picture of Ax',
+          meaning:
+            'Each output component is the dot product of one row of A with x. Useful when you want to know what a single output unit computes.',
+          variables: [
+            { symbol: '(A\\mathbf{x})_i', meaning: 'The i-th component of the output vector' },
+            { symbol: 'A_{ij}', meaning: 'The entry of A in row i, column j' },
+            { symbol: 'x_j', meaning: 'The j-th component of the input' },
+            { symbol: 'n', meaning: 'Number of input components summed over' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: 'T(\\alpha\\mathbf{u} + \\beta\\mathbf{v}) = \\alpha T(\\mathbf{u}) + \\beta T(\\mathbf{v})',
+          name: 'Linearity',
+          meaning:
+            'The defining property. Scaling and adding before the transformation gives the same result as after it, which is why grid lines stay straight and evenly spaced.',
+          variables: [
+            { symbol: 'T', meaning: 'The transformation' },
+            { symbol: '\\mathbf{u}, \\mathbf{v}', meaning: 'Any two input vectors' },
+            { symbol: '\\alpha, \\beta', meaning: 'Any two scalars' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\mathbf{h} = \\phi(W\\mathbf{x} + \\mathbf{b}), \\qquad W \\in \\mathbb{R}^{d_{\\text{out}} \\times d_{\\text{in}}}',
+          name: 'A dense layer as a transformation',
+          meaning:
+            'The weight matrix maps the input space into the output space, the bias shifts it, and the activation bends it. Training reshapes the transformation.',
+          variables: [
+            { symbol: '\\mathbf{h}', meaning: 'The layer’s output activations' },
+            { symbol: 'W', meaning: 'The weight matrix; its shape fixes input and output dimensionality' },
+            { symbol: '\\mathbf{x}', meaning: 'The input vector to the layer' },
+            { symbol: '\\mathbf{b}', meaning: 'The bias vector, one per output unit' },
+            { symbol: '\\phi', meaning: 'The elementwise nonlinearity' },
+            { symbol: 'd_{\\text{in}}, d_{\\text{out}}', meaning: 'Input and output dimensionality' },
+          ],
+          category: 'deep-learning',
+        },
+      ],
+      derivation: [
+        'Why is knowing where the basis vectors go enough? Take any x in ℝ² and write it in the standard basis: x = x₁e₁ + x₂e₂.',
+        'Apply the transformation: T(x) = T(x₁e₁ + x₂e₂).',
+        'Use additivity: T(x) = T(x₁e₁) + T(x₂e₂).',
+        'Use homogeneity: T(x) = x₁T(e₁) + x₂T(e₂).',
+        'So T(x) depends on the input only through x₁ and x₂, and on the transformation only through the two vectors T(e₁) and T(e₂).',
+        'Store those two destination vectors side by side as the columns of a matrix A, and the formula above is exactly Ax = x₁a₁ + x₂a₂.',
+        'This is why a linear transformation on ℝⁿ needs only n vectors to specify it completely, and why the matrix has exactly n columns. Linearity is doing all the work: it is the reason a finite grid of numbers can describe what happens to infinitely many points.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Predicting what a matrix does without multiplying anything',
+      setup:
+        'Consider A = [[0, −1], [1, 0]] and the point x = [3, 2]. We will read A geometrically from its columns first, then confirm by arithmetic.',
+      steps: [
+        { label: 'Read column one', detail: 'The first column is [0, 1], so e₁ = [1,0] (one step east) is sent to [0,1] (one step north). East becomes north.' },
+        { label: 'Read column two', detail: 'The second column is [−1, 0], so e₂ = [0,1] (north) is sent to [−1,0] (west). North becomes west.' },
+        { label: 'Name the transformation', detail: 'East to north and north to west is a rotation by 90 degrees anticlockwise. No arithmetic was needed to see this.' },
+        { label: 'Predict the answer', detail: 'Rotating [3, 2] by 90 degrees anticlockwise should give [−2, 3].' },
+        { label: 'Confirm by the column picture', detail: 'Ax = 3·[0,1] + 2·[−1,0] = [0,3] + [−2,0] = [−2, 3]. The prediction holds.', latex: 'A\\mathbf{x} = 3\\begin{bmatrix}0\\\\1\\end{bmatrix} + 2\\begin{bmatrix}-1\\\\0\\end{bmatrix} = \\begin{bmatrix}-2\\\\3\\end{bmatrix}' },
+        { label: 'Confirm by the row picture', detail: 'Row one dotted with x is 0×3 + (−1)×2 = −2; row two is 1×3 + 0×2 = 3. Same answer, different route.' },
+        { label: 'Sanity check the length', detail: '‖x‖ = √13 and ‖Ax‖ = √(4+9) = √13. A rotation preserves length, as it must.' },
+      ],
+      conclusion:
+        'Two readings of the same four numbers gave the same result, and the geometric reading gave it faster and with more insight. When you meet an unfamiliar matrix, look at its columns before you multiply: they tell you what it is about to do.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'One array, two readings',
+        runnable: true,
+        code: `import numpy as np
+
+A = np.array([[2.0, 0.0],
+              [0.0, 3.0]])
+
+# Reading 1: data. Two examples, two features.
+print("example 0:", A[0], " feature 1 column:", A[:, 1])
+
+# Reading 2: a function. Where do the basis vectors land?
+e1, e2 = np.array([1.0, 0.0]), np.array([0.0, 1.0])
+print("e1 ->", A @ e1, " e2 ->", A @ e2)
+print("[3,2] ->", A @ np.array([3.0, 2.0]))`,
+        output: `example 0: [2. 0.]  feature 1 column: [0. 3.]
+e1 -> [2. 0.]  e2 -> [0. 3.]
+[3,2] -> [6. 6.]`,
+        explanation:
+          'Nothing about the stored array changed between the two readings; only the question did. Note that A @ e1 returns precisely the first column, which is the whole content of the column picture: the columns are the images of the basis vectors, so you can read a matrix’s geometry straight off the page.',
+      },
+      {
+        language: 'python',
+        title: 'Reading the geometry off the columns',
+        runnable: true,
+        code: `import numpy as np
+
+square = np.array([[0.0, 1.0, 1.0, 0.0],
+                   [0.0, 0.0, 1.0, 1.0]])   # corners of the unit square
+
+transforms = {
+    "stretch": np.array([[2.0, 0.0], [0.0, 0.5]]),
+    "rotate90": np.array([[0.0, -1.0], [1.0, 0.0]]),
+    "shear":   np.array([[1.0, 1.0], [0.0, 1.0]]),
+    "collapse":np.array([[1.0, 0.0], [0.0, 0.0]]),
+}
+
+for name, M in transforms.items():
+    out = M @ square
+    print(f"{name:9s} corners -> {np.round(out.T, 2).tolist()}")`,
+        output: `stretch   corners -> [[0.0, 0.0], [2.0, 0.0], [2.0, 0.5], [0.0, 0.5]]
+rotate90  corners -> [[0.0, 0.0], [0.0, 1.0], [-1.0, 1.0], [-1.0, 0.0]]
+shear     corners -> [[0.0, 0.0], [1.0, 0.0], [2.0, 1.0], [1.0, 1.0]]
+collapse  corners -> [[0.0, 0.0], [1.0, 0.0], [1.0, 0.0], [0.0, 0.0]]`,
+        explanation:
+          'Each matrix is applied to all four corners at once by putting the corners in columns. The collapse case is worth staring at: two distinct corners land on the same point, so the transformation has destroyed information and cannot be undone — which is exactly what a zero determinant will mean in MATH-009.',
+      },
+      {
+        language: 'python',
+        title: 'A dense layer is a transformation between spaces',
+        runnable: true,
+        code: `import numpy as np
+
+rng = np.random.default_rng(0)
+W = rng.normal(scale=0.3, size=(3, 5))   # 5 inputs -> 3 outputs
+b = np.zeros(3)
+
+x = rng.normal(size=5)
+h = np.maximum(0.0, W @ x + b)
+
+print("W shape:", W.shape, " x shape:", x.shape, " h shape:", h.shape)
+print("h:", np.round(h, 3))
+
+batch = rng.normal(size=(8, 5))          # 8 examples
+H = np.maximum(0.0, batch @ W.T + b)     # note the transpose
+print("batch:", batch.shape, "->", H.shape)`,
+        output: `W shape: (3, 5)  x shape: (5,)  h shape: (3,)
+h: [0.    0.263 0.   ]
+batch: (8, 5) -> (8, 3)`,
+        explanation:
+          'W maps a 5-dimensional space into a 3-dimensional one, so it is a genuine transformation between different spaces, not a rearrangement within one. The transpose in the batched version is where the data reading and the function reading meet: examples are rows in the data convention but the transformation expects them as columns, so one of the two must be flipped.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'A dense layer in PyTorch',
+        usage:
+          'nn.Linear(512, 256) stores a 256×512 weight matrix. It is data during an optimiser step and a transformation during the forward pass, within the same millisecond.',
+      },
+      {
+        context: 'Image rotation and augmentation',
+        usage:
+          'Rotating, scaling and shearing a training image are all 2×2 (or 3×3 homogeneous) matrices applied to pixel coordinates — geometry used deliberately as data augmentation.',
+      },
+      {
+        context: 'PCA as a change of basis',
+        usage:
+          'PCA finds a matrix whose columns are new axes aligned with the directions of greatest variance, then multiplies the data by it to re-express every example in those coordinates.',
+      },
+      {
+        context: 'A tabular dataset in pandas',
+        usage:
+          'df.values is the pure data reading: rows are observations, columns are features, and every model in scikit-learn expects exactly this layout.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'NumPy', role: '@ performs the transformation; slicing performs the data reading. Both act on the same ndarray.' },
+      { tool: 'PyTorch', role: 'nn.Linear holds weight of shape (out_features, in_features) and applies x @ W.T + b.' },
+      { tool: 'scikit-learn', role: 'PCA.components_ is a matrix of new basis directions; transform() applies it to your data.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Believing a matrix is only a table of numbers',
+        why: 'Spreadsheets are the first place most people meet grids, so the transformation reading never occurs to them.',
+        fix: 'Whenever you meet a matrix, ask where it sends the basis vectors. Its columns answer that immediately.',
+      },
+      {
+        mistake: 'Mixing up the data convention and the transformation convention',
+        why: 'Data puts examples in rows (n_samples, n_features), while y = Ax puts the input in a column, so batched code needs a transpose somewhere.',
+        fix: 'Pick one convention per codebase and write the shapes in a comment. PyTorch uses x @ W.T precisely to reconcile the two.',
+      },
+      {
+        mistake: 'Assuming every matrix preserves lengths and angles',
+        why: 'Rotations do, so people generalise from the first example they meet.',
+        fix: 'Only orthogonal matrices preserve lengths. A general matrix stretches some directions, shrinks others and can flatten space entirely.',
+      },
+      {
+        mistake: 'Thinking of the rows as "where the basis vectors go"',
+        why: 'The row picture is also valid for computing entries, so the two get conflated.',
+        fix: 'Columns are destinations of basis vectors; rows are the recipes for individual output components. Check with A @ e1, which returns the first column.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What does it mean to say a matrix is a linear transformation?',
+        answer:
+          'It means the function x ↦ Ax respects addition and scalar multiplication: A(u + v) = Au + Av and A(αv) = αAv. Geometrically this forces grid lines to stay straight and evenly spaced and the origin to stay put, which rules out bending, and it has a strong practical consequence: the transformation is completely determined by what it does to the basis vectors, since every other vector is a weighted sum of them. Those images are exactly the columns of A, which is why an n-dimensional input space needs a matrix with n columns. This is also why a neural network needs nonlinearities — linearity is a severe restriction as well as a convenience.',
+        followUp:
+          'A strong answer notes that affine maps such as Wx + b are not linear in the strict sense because they move the origin, which is why the bias is handled separately or absorbed by a homogeneous coordinate.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Why do people say the dual view of matrices is the central idea of linear algebra for ML?',
+        answer:
+          'Because a machine learning model constantly moves between the two readings of the same object. A weight matrix is data when the optimiser updates it, decays it, prunes it or saves it to a checkpoint, and it is a transformation when the forward pass maps activations from one space to another. Likewise the design matrix is data when you clean and standardise it, but the moment you multiply it by a weight vector you are applying a transformation to every example simultaneously. Holding both readings lets you reason about a layer geometrically — what directions does it amplify, what does it collapse — while still implementing it as an array operation, and it is what makes techniques like PCA, low-rank adaptation and weight-matrix spectral analysis comprehensible rather than magical.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Given the matrix [[1, 0], [0, 0]], describe what it does and what that implies.',
+        answer:
+          'Its columns are [1, 0] and [0, 0], so it sends e₁ to itself and sends e₂ to the origin. Every point is projected onto the horizontal axis: the entire vertical component of every input is discarded. The implication is that the transformation is not invertible, because infinitely many inputs — every point on a given vertical line — map to the same output, so there is no way to recover which one you started from. Its column space is one-dimensional despite living in ℝ², which is another way of saying its rank is 1 and its determinant is 0. In a network, a weight matrix drifting towards this kind of degeneracy means a layer has stopped carrying information along some direction.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'For A = [[3, 0], [0, 0.5]], say in words what the transformation does, then compute A[4, 6] by the column picture.',
+        hint: 'Look at where [1,0] and [0,1] land before doing any arithmetic.',
+        solution:
+          'The first column [3, 0] means east is stretched to three times its length; the second column [0, 0.5] means north is squashed to half. So the transformation triples horizontally and halves vertically. By the column picture, A[4,6] = 4·[3,0] + 6·[0,0.5] = [12, 0] + [0, 3] = [12, 3]. The unit square becomes a 3-by-0.5 rectangle, so areas are scaled by 1.5 — a fact that MATH-009 will call the determinant.',
+      },
+      {
+        prompt: 'Write down the 2×2 matrix that reflects points across the horizontal axis, and verify it on [2, 5].',
+        hint: 'A reflection across the horizontal axis leaves east alone and sends north to south.',
+        solution:
+          'e₁ = [1,0] is unchanged so the first column is [1, 0]; e₂ = [0,1] goes to [0, −1] so the second column is [0, −1]. The matrix is [[1, 0], [0, −1]]. Applying it: 2·[1,0] + 5·[0,−1] = [2, −5], which is [2, 5] flipped below the axis as required. Applying it twice returns the original point, which is the geometric reason its square is the identity.',
+      },
+      {
+        prompt: 'A dataset has 1000 examples and 20 features, and a layer maps 20 features to 6 outputs. State the shape of the weight matrix in the y = Wx convention and in the batched X @ W.T convention, and the shape of the output in each.',
+        hint: 'In y = Wx the input is a column of length 20; in the batched form examples are rows.',
+        solution:
+          'W has shape (6, 20) — six output units, each with twenty weights. For a single example, W @ x gives shape (6,). For the batch, X has shape (1000, 20), so X @ W.T has shape (1000, 6): one row per example, one column per output unit. The transpose is needed precisely because the data convention stores examples as rows while the transformation convention expects them as columns.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'MATH-006-q1',
+        type: 'mcq',
+        concept: 'columns as basis images',
+        prompt: 'What do the columns of a matrix A tell you, when A is read as a transformation?',
+        options: [
+          'Where each standard basis vector is sent',
+          'The eigenvalues of the transformation',
+          'The features of the dataset',
+          'The lengths of the output vectors',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Column j is A e_j, the image of the j-th basis vector. Because every vector is a weighted sum of basis vectors, those columns determine the whole transformation.',
+      },
+      {
+        id: 'MATH-006-q2',
+        type: 'truefalse',
+        concept: 'linearity',
+        prompt: 'A linear transformation can move the origin to a different point.',
+        answer: false,
+        explanation:
+          'False. Setting α = 0 in T(αv) = αT(v) forces T(0) = 0. Maps that do move the origin, such as Wx + b, are called affine, which is why the bias is treated separately.',
+      },
+      {
+        id: 'MATH-006-q3',
+        type: 'match',
+        concept: 'geometric effects',
+        prompt: 'Match each 2x2 matrix to its geometric effect.',
+        pairs: [
+          { left: '[[2,0],[0,2]]', right: 'Uniform scaling by 2' },
+          { left: '[[0,-1],[1,0]]', right: 'Rotation by 90 degrees anticlockwise' },
+          { left: '[[1,1],[0,1]]', right: 'Horizontal shear' },
+          { left: '[[1,0],[0,0]]', right: 'Projection onto the horizontal axis' },
+        ],
+        explanation:
+          'Each answer is read straight off the columns: where does east go, where does north go. Being able to do this at a glance is the practical payoff of the transformation view.',
+      },
+      {
+        id: 'MATH-006-q4',
+        type: 'code-output',
+        language: 'python',
+        concept: 'basis images in code',
+        prompt: 'What does this print?',
+        code: 'import numpy as np\nA = np.array([[4, 7], [2, 9]])\nprint(A @ np.array([1, 0]))',
+        options: ['[4 2]', '[4 7]', '[7 9]', '[1 0]'],
+        answerIndex: 0,
+        explanation:
+          'Multiplying by the first basis vector extracts the first column, which is [4, 2] reading down the column. This is the column picture demonstrated in one line.',
+      },
+      {
+        id: 'MATH-006-q5',
+        type: 'fill',
+        concept: 'design matrix layout',
+        prompt: 'In the data reading of a matrix with shape (n_samples, n_features), the columns represent what?',
+        answers: ['features', 'variables', 'attributes', 'columns are features'],
+        explanation:
+          'Rows are examples and columns are features. Confusing the two produces a transposed matrix and a dimension-mismatch error at the first model call, or worse, a silently wrong fit.',
+      },
+      {
+        id: 'MATH-006-q6',
+        type: 'explain',
+        concept: 'the dual view',
+        prompt: 'Explain the two ways of reading a matrix and why holding both at once is useful.',
+        rubric: [
+          'Describes the data reading with rows as examples and columns as features',
+          'Describes the transformation reading with columns as images of basis vectors',
+          'Gives a concrete case where switching between the readings is useful',
+        ],
+        sampleAnswer:
+          'Read as data, a matrix is a table: each row is one example and each column is one measured feature, which is how a dataset is stored and cleaned. Read as a function, the same grid describes a way of moving every point in space at once, and its columns say where each coordinate axis ends up, so you can tell at a glance whether it stretches, rotates, shears or flattens. Both readings apply to the same array. A neural network weight matrix is a clear case: the optimiser treats it as data when it updates and decays the numbers, while the forward pass treats it as a transformation carrying activations from one space to another. Thinking geometrically tells you that a layer whose matrix collapses a direction has permanently thrown information away, and thinking of it as data tells you how to store, regularise and inspect it.',
+        explanation:
+          'A strong answer keeps both readings live and gives a case where the geometric view explains something the table view cannot.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What do the columns of a matrix mean geometrically?', back: 'Column j is where the j-th basis vector lands. Together they determine the entire transformation.' },
+      { front: 'The column picture of Ax?', back: 'A weighted sum of A’s columns, using the components of x as the weights.' },
+      { front: 'What are the two readings of a matrix?', back: 'Data — rows are examples, columns are features. Function — a linear transformation of space.' },
+      { front: 'Why must a linear transformation fix the origin?', back: 'Because T(0v) = 0T(v) = 0. Maps that shift the origin, like Wx + b, are affine, not linear.' },
+      { front: 'What does [[1,0],[0,0]] do?', back: 'Projects every point onto the horizontal axis, destroying the vertical component — not invertible.' },
+      { front: 'Shape of nn.Linear(512, 256).weight?', back: '(256, 512) — out_features by in_features, applied as x @ W.T + b.' },
+    ],
+
+    challenge: {
+      title: 'Read the matrix before you multiply',
+      brief:
+        'Write classify_transform(A) for a 2×2 matrix that inspects only the columns and prints a plain-English description: uniform scaling, non-uniform scaling, rotation, reflection, shear, projection/collapse, or general. Verify each verdict by applying A to the corners of the unit square and printing the resulting shape. Test on at least six matrices including a singular one.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Detects a collapse by checking whether the columns are parallel',
+        'Distinguishes rotation from reflection using the sign of a₁₁a₂₂ − a₁₂a₂₁',
+        'Prints the transformed unit-square corners alongside each verdict',
+        'Correctly classifies at least six test matrices, one of which is singular',
+      ],
+      starterCode: 'import numpy as np\n\ndef classify_transform(A):\n    """Describe a 2x2 matrix by reading its columns."""\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Someone comfortable with spreadsheets asks why mathematicians make such a fuss about matrices when they are obviously just tables. Change their mind.',
+      mustCover: [
+        'A matrix can be read as data, with rows as examples and columns as features',
+        'The same matrix can be read as a transformation of space',
+        'The columns say where the basis vectors land, which determines everything',
+        'A neural network layer uses both readings of the same object',
+      ],
+      bonusSignals: ['gives a concrete 2x2 example such as a rotation', 'mentions that a collapse destroys information', 'notes that linearity keeps grid lines straight'],
+      sampleExplanation:
+        'You are right that a matrix is a table, and for storing data that reading is the whole story: one row per house, one column per thing you measured. But there is a second reading that the spreadsheet framing hides. Take a 2×2 grid and instead of asking what the numbers record, ask what they do. The first column says where the point one step east should end up; the second says where the point one step north should end up. Because every point on the page is some number of easts plus some number of norths, those two destinations tell you where every point goes. Four numbers, and you have described a motion of the entire plane: a stretch, a rotation, a shear, or a flattening that squashes the whole plane onto a line and throws information away for good. The reason this matters is that machine learning uses both readings of the same object constantly. A layer’s weight matrix is a table when the optimiser nudges its numbers, and a motion when the forward pass carries activations from one space into another. If you only ever see the table, a phrase like "this layer has collapsed a direction" is mysterious; once you see the motion, it is obvious.',
+    },
+  },
+
+  {
+    id: 'MATH-007',
+    domain: 'MATH',
+    module: 'Matrices',
+    topic: 'Matrix multiplication',
+    title: 'Matrix Multiplication',
+    slug: 'matrix-multiplication',
+    difficulty: 3,
+    estimatedMinutes: 40,
+    prerequisites: ['MATH-006'],
+    related: ['MATH-005', 'MATH-006'],
+    tags: ['matmul', 'shapes', 'composition', 'non-commutative', 'batching'],
+
+    learningObjectives: [
+      'State the shape rule for matrix multiplication and use it to predict the output shape before computing anything',
+      'Compute a product entry by entry as a dot product of a row with a column',
+      'Explain matrix multiplication as composition of transformations, applied right to left',
+      'Demonstrate that AB and BA are generally different, and say what that means for layer order',
+    ],
+
+    terminology: [
+      {
+        term: 'Inner dimension',
+        definition:
+          'The shared dimension in (m×n)(n×p): the number of columns of the left matrix and rows of the right. It must match, and it disappears from the result.',
+        simple: 'The number in the middle that has to agree and then vanishes.',
+      },
+      {
+        term: 'Conformable',
+        definition: 'Two matrices are conformable for multiplication when the inner dimensions agree.',
+        simple: 'Shapes that fit together.',
+      },
+      {
+        term: 'Composition',
+        definition:
+          'Applying one transformation after another. The matrix of the combined transformation is the product of the individual matrices, in right-to-left order.',
+        simple: 'Doing one motion then another, and writing the pair as a single motion.',
+      },
+      {
+        term: 'Non-commutativity',
+        definition:
+          'AB ≠ BA in general, because doing transformation B then A is not the same as doing A then B.',
+        simple: 'Order matters: rotating then stretching differs from stretching then rotating.',
+      },
+      {
+        term: 'Batched matmul',
+        definition:
+          'Multiplying a whole matrix of stacked examples by a weight matrix in one operation, which is how a layer processes a minibatch.',
+        simple: 'Doing the same transformation to a thousand things at once.',
+      },
+    ],
+
+    simpleExplanation:
+      'Think about two factory machines on a production line. The first takes raw material and turns it into parts; the second takes parts and turns them into finished goods. If you wanted, you could describe the pair as a single machine that goes straight from raw material to finished goods, and you could work out its behaviour without ever running it — just trace what happens to each kind of raw material through both stages. Matrix multiplication is that tracing. When you multiply two matrices you are not really combining two tables; you are combining two transformations into the one transformation that does both. This explains the two things that confuse everyone at first. It explains the shape rule: the output of the first machine must be something the second machine accepts, so the middle numbers must match. And it explains why the order matters: putting the paint machine before the cutting machine gives painted edges, putting it after gives bare ones, and no amount of arithmetic will make those the same.',
+
+    whyItExists:
+      'Once matrices represent transformations, you immediately want to chain them, and doing that by applying each one separately to every vector is both slow and conceptually clumsy. Matrix multiplication precomputes the combined transformation once, so a stack of operations collapses into a single object. It is also the operation that makes batching possible: one product applies a layer to thousands of examples simultaneously, which is why GPUs are designed around it and why almost all deep-learning compute time is spent inside it.',
+
+    analogy: {
+      scenario:
+        'A translation agency converts documents from Japanese into English, and a second agency converts English into French. A client with Japanese documents and French readers could use both in sequence. If the agencies merged, the combined service would go straight from Japanese to French, and its price list could be worked out in advance by tracing each Japanese phrase through both offices. Crucially, the English step must exist in both agencies’ vocabularies — if the first outputs English but the second expects German, no chain is possible.',
+      mapping: [
+        { from: 'The first agency, Japanese to English', to: 'The right-hand matrix B, applied first' },
+        { from: 'The second agency, English to French', to: 'The left-hand matrix A, applied second' },
+        { from: 'The merged Japanese-to-French service', to: 'The product AB' },
+        { from: 'English, which must be shared by both', to: 'The inner dimension, which must match and then disappears' },
+        { from: 'Japanese documents in, French documents out', to: 'The outer dimensions, which survive into the result’s shape' },
+        { from: 'Reversing the order and getting nonsense', to: 'BA being either undefined or a completely different transformation' },
+      ],
+      bridge:
+        'The chain explains the notation everyone finds backwards. In ABx, the matrix nearest the vector acts first, exactly as the first agency touches the document first. It also explains the shape rule precisely: (m×n)(n×p) works because the n is shared, and the result is m×p because you go from p inputs to m outputs overall.',
+      limitations:
+        'Translation loses information and is not reversible in a clean way, whereas many matrix products are invertible. The analogy also suggests each step is independent, while in reality the combined matrix can have properties neither factor has — a product of two non-zero matrices can be the zero matrix.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Compose two transformations and see the result',
+        caption: 'Apply one matrix, then another, then compare with their product applied once.',
+        widget: 'matrix-transform',
+      },
+      {
+        kind: 'annotated',
+        title: 'The shape rule',
+        subject: '(m × n) · (n × p) = (m × p)',
+        annotations: [
+          { part: 'm', note: 'Rows of the left matrix. Survives into the result as its number of rows.' },
+          { part: 'n (twice)', note: 'The inner dimension. Must match exactly, and is summed over and destroyed.' },
+          { part: 'p', note: 'Columns of the right matrix. Survives as the result’s number of columns.' },
+          { part: '=', note: 'If the two n values differ, NumPy raises ValueError: matmul: Input operand 1 has a mismatch in its core dimension.' },
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'Computing one entry of the product',
+        caption: 'Every entry of AB is a dot product, which is why MATH-005 came first.',
+        steps: [
+          { label: 'Decide which entry you want', detail: 'Say C₂₃: row 2, column 3 of the result.' },
+          { label: 'Take row 2 of A', detail: 'A vector of length n.' },
+          { label: 'Take column 3 of B', detail: 'Also a vector of length n — this is why the inner dimensions must match.' },
+          { label: 'Dot them together', detail: 'Multiply matching entries and sum. That single number is C₂₃.' },
+          { label: 'Repeat for every position', detail: 'An m×p result requires m·p dot products of length n, hence m·n·p multiply-adds in total.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'AB versus BA on the same pair',
+        caption: 'With A a 90-degree rotation and B a horizontal stretch by 2.',
+        left: {
+          heading: 'AB: stretch first, then rotate',
+          points: [
+            'The unit square becomes 2 wide and 1 tall',
+            'Then that wide rectangle is rotated upright',
+            'Result: 1 wide, 2 tall',
+            'Matrix: [[0,-1],[1,0]] · [[2,0],[0,1]] = [[0,-1],[2,0]]',
+          ],
+        },
+        right: {
+          heading: 'BA: rotate first, then stretch',
+          points: [
+            'The unit square is rotated upright, still 1 by 1',
+            'Then stretched horizontally by 2',
+            'Result: 2 wide, 1 tall',
+            'Matrix: [[2,0],[0,1]] · [[0,-1],[1,0]] = [[0,-2],[1,0]]',
+          ],
+        },
+      },
+    ],
+
+    formalDefinition:
+      'For A ∈ ℝ^(m×n) and B ∈ ℝ^(n×p), the product C = AB ∈ ℝ^(m×p) is defined entrywise by C_ij = Σ_{k=1}^{n} A_ik B_kj. The operation is associative, distributive over addition, and compatible with scalar multiplication, but not commutative. It corresponds exactly to composition of the associated linear maps: T_AB = T_A ∘ T_B, so the right-hand factor acts first.',
+
+    math: {
+      intuition:
+        'Two ideas carry all the weight. First, each entry of the answer is a dot product: row i of the left matrix against column j of the right. That is why the inner dimensions must agree — you cannot dot a length-3 row with a length-4 column. Second, the product is the composition of the two transformations, with the right-hand matrix acting first because it sits closest to the vector it will eventually multiply. The first idea tells you how to compute; the second tells you what you have computed. Almost every confusion about matrix multiplication dissolves once you decide which of the two questions you are currently asking.',
+      formulas: [
+        {
+          latex: 'C_{ij} = \\sum_{k=1}^{n} A_{ik}B_{kj}',
+          name: 'Entrywise definition',
+          meaning:
+            'The entry in row i, column j of the product is the dot product of row i of A with column j of B.',
+          variables: [
+            { symbol: 'C_{ij}', meaning: 'The entry of the product in row i, column j' },
+            { symbol: 'A_{ik}', meaning: 'The entry of A in row i, column k' },
+            { symbol: 'B_{kj}', meaning: 'The entry of B in row k, column j' },
+            { symbol: 'k', meaning: 'The summation index running along the shared inner dimension' },
+            { symbol: 'n', meaning: 'The inner dimension: columns of A and rows of B' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: 'A \\in \\mathbb{R}^{m\\times n},\; B \\in \\mathbb{R}^{n\\times p} \;\\Rightarrow\; AB \\in \\mathbb{R}^{m\\times p}',
+          name: 'The shape rule',
+          meaning:
+            'Inner dimensions must match and then vanish; outer dimensions survive. Checking this before you code prevents most matmul errors.',
+          variables: [
+            { symbol: 'm', meaning: 'Rows of A, and rows of the result' },
+            { symbol: 'n', meaning: 'Columns of A and rows of B — the inner dimension that must agree' },
+            { symbol: 'p', meaning: 'Columns of B, and columns of the result' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '(AB)\\mathbf{x} = A(B\\mathbf{x})',
+          name: 'Associativity, and composition order',
+          meaning:
+            'Multiplying the matrices first or applying them one at a time gives the same answer. B is applied first, because it is nearest x.',
+          variables: [
+            { symbol: 'A', meaning: 'The transformation applied second' },
+            { symbol: 'B', meaning: 'The transformation applied first' },
+            { symbol: '\\mathbf{x}', meaning: 'The input vector' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: 'AB \\neq BA \\quad \\text{in general}',
+          name: 'Non-commutativity',
+          meaning:
+            'Matrix multiplication depends on order. Even when both products are defined and the same shape, they are usually different matrices.',
+          variables: [
+            { symbol: 'A', meaning: 'One transformation' },
+            { symbol: 'B', meaning: 'Another transformation' },
+            { symbol: '\\neq', meaning: 'Not equal — equality holds only for special pairs, such as two rotations in the plane' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: 'H = XW^{\\top} + \\mathbf{1}\\mathbf{b}^{\\top}, \\qquad X \\in \\mathbb{R}^{B\\times d_{\\text{in}}},\; W \\in \\mathbb{R}^{d_{\\text{out}}\\times d_{\\text{in}}}',
+          name: 'A dense layer over a minibatch',
+          meaning:
+            'One matrix product applies the layer to every example in the batch simultaneously. This single line is where most training FLOPs are spent.',
+          variables: [
+            { symbol: 'H', meaning: 'Output activations, shape (B, d_out)' },
+            { symbol: 'X', meaning: 'Input minibatch, one example per row' },
+            { symbol: 'W', meaning: 'Weight matrix, stored as (d_out, d_in) by PyTorch convention' },
+            { symbol: 'B', meaning: 'Batch size: how many examples are processed together' },
+            { symbol: '\\mathbf{b}', meaning: 'Bias vector of length d_out, broadcast across the batch' },
+            { symbol: '\\mathbf{1}', meaning: 'A column of ones of length B, which broadcasts the bias to every row' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\text{FLOPs}(AB) \\approx 2mnp',
+          name: 'Cost of a matrix product',
+          meaning:
+            'Each of the m·p output entries needs n multiplications and n additions, so cost grows with the product of all three dimensions.',
+          variables: [
+            { symbol: 'm', meaning: 'Rows of A' },
+            { symbol: 'n', meaning: 'Inner dimension' },
+            { symbol: 'p', meaning: 'Columns of B' },
+            { symbol: '\\text{FLOPs}', meaning: 'Floating-point operations: the standard unit for estimating compute cost' },
+          ],
+          category: 'complexity',
+        },
+      ],
+      derivation: [
+        'Why does entry C_ij come out as a sum over the shared index? Start from composition: we want the matrix of the map x ↦ A(Bx).',
+        'First apply B. By the row picture, the k-th component of Bx is (Bx)_k = Σ_j B_kj x_j.',
+        'Now apply A to that result. The i-th component is (A(Bx))_i = Σ_k A_ik (Bx)_k.',
+        'Substitute the expression for (Bx)_k: (A(Bx))_i = Σ_k A_ik (Σ_j B_kj x_j).',
+        'Swap the order of summation, which is legitimate for finite sums: (A(Bx))_i = Σ_j (Σ_k A_ik B_kj) x_j.',
+        'Compare with the row picture for a single matrix C: (Cx)_i = Σ_j C_ij x_j. Matching coefficients of x_j gives C_ij = Σ_k A_ik B_kj.',
+        'So the strange-looking entrywise rule is not a convention someone chose; it is forced by insisting that matrix multiplication represent composition. The summation index k runs over the inner dimension, which is exactly why that dimension must match and why it disappears from the answer.',
+      ],
+    },
+
+    workedExample: {
+      title: 'A full 2×3 by 3×2 product, computed by hand',
+      setup:
+        'Let A = [[1, 2, 3], [4, 5, 6]] with shape (2, 3) and B = [[7, 8], [9, 10], [11, 12]] with shape (3, 2). The inner dimensions are both 3, so the product is defined and has shape (2, 2). That is four entries, each a dot product of length 3.',
+      steps: [
+        { label: 'Check shapes first', detail: '(2×3)(3×2): the inner 3s match, so the result is 2×2. Never start arithmetic before this check.' },
+        { label: 'C₁₁ = row 1 of A · column 1 of B', detail: '[1, 2, 3] · [7, 9, 11] = 7 + 18 + 33 = 58.', latex: 'C_{11} = 1(7) + 2(9) + 3(11) = 58' },
+        { label: 'C₁₂ = row 1 of A · column 2 of B', detail: '[1, 2, 3] · [8, 10, 12] = 8 + 20 + 36 = 64.', latex: 'C_{12} = 1(8) + 2(10) + 3(12) = 64' },
+        { label: 'C₂₁ = row 2 of A · column 1 of B', detail: '[4, 5, 6] · [7, 9, 11] = 28 + 45 + 66 = 139.', latex: 'C_{21} = 4(7) + 5(9) + 6(11) = 139' },
+        { label: 'C₂₂ = row 2 of A · column 2 of B', detail: '[4, 5, 6] · [8, 10, 12] = 32 + 50 + 72 = 154.', latex: 'C_{22} = 4(8) + 5(10) + 6(12) = 154' },
+        { label: 'Assemble', detail: 'C = [[58, 64], [139, 154]]. Total work: 4 entries × 3 multiply-adds = 12 multiplications, matching m·n·p = 2·3·2.', latex: 'AB = \\begin{bmatrix} 58 & 64 \\\\ 139 & 154 \\end{bmatrix}' },
+        { label: 'Now try the other order', detail: 'BA is (3×2)(2×3), which is also defined but gives a 3×3 matrix — a different shape entirely, so AB and BA could not possibly be equal here.' },
+      ],
+      conclusion:
+        'C = [[58, 64], [139, 154]]. The two habits worth taking away are checking shapes before computing, and remembering that each entry is one dot product between a row on the left and a column on the right.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'The worked example, verified',
+        runnable: true,
+        code: `import numpy as np
+
+A = np.array([[1, 2, 3],
+              [4, 5, 6]])
+B = np.array([[7, 8],
+              [9, 10],
+              [11, 12]])
+
+print("A:", A.shape, " B:", B.shape)
+print("AB:\\n", A @ B, "  shape", (A @ B).shape)
+print("BA shape:", (B @ A).shape)
+print("C11 by hand:", np.dot(A[0], B[:, 0]))`,
+        output: `A: (2, 3)  B: (3, 2)
+AB:
+ [[ 58  64]
+ [139 154]]   shape (2, 2)
+BA shape: (3, 3)
+C11 by hand: 58`,
+        explanation:
+          'AB and BA are both defined here yet have different shapes — (2,2) against (3,3) — which is the starkest possible demonstration that order is not negotiable. The last line confirms that a single entry really is the dot product of a row with a column, which is the mechanical heart of the operation.',
+      },
+      {
+        language: 'python',
+        title: 'Composition: multiply the matrices or apply them in turn',
+        runnable: true,
+        code: `import numpy as np
+
+rotate = np.array([[0.0, -1.0], [1.0, 0.0]])   # 90 degrees anticlockwise
+stretch = np.array([[2.0, 0.0], [0.0, 1.0]])   # double the width
+x = np.array([1.0, 1.0])
+
+print("apply stretch then rotate:", rotate @ (stretch @ x))
+print("as one matrix           :", (rotate @ stretch) @ x)
+print()
+print("rotate @ stretch:\\n", rotate @ stretch)
+print("stretch @ rotate:\\n", stretch @ rotate)`,
+        output: `apply stretch then rotate: [-1.  2.]
+as one matrix           : [-1.  2.]
+
+rotate @ stretch:
+ [[ 0. -1.]
+ [ 2.  0.]]
+stretch @ rotate:
+ [[ 0. -2.]
+ [ 1.  0.]]
+```,
+        explanation:
+          'The first two lines show associativity: precomputing the product gives exactly the same answer as applying the transformations one after another, which is what lets a framework fuse layers. The last two show non-commutativity concretely — stretching a rotated square is not the same as rotating a stretched one, and the two product matrices differ in where the 2 lands.',
+      },
+      {
+        language: 'python',
+        title: 'Batching: one product, a thousand examples',
+        runnable: true,
+        code: `import numpy as np
+
+rng = np.random.default_rng(0)
+X = rng.normal(size=(1000, 64))     # 1000 examples, 64 features
+W = rng.normal(size=(32, 64))       # layer maps 64 -> 32
+b = np.zeros(32)
+
+H = X @ W.T + b                     # one matmul for the whole batch
+print("X", X.shape, "@ W.T", W.T.shape, "->", H.shape)
+
+# the same thing example by example, to prove they agree
+slow = np.stack([W @ X[i] + b for i in range(1000)])
+print("identical:", np.allclose(H, slow))
+print("FLOPs ~", 2 * 1000 * 64 * 32)`,
+        output: `X (1000, 64) @ W.T (64, 32) -> (1000, 32)
+identical: True
+FLOPs ~ 4096000
+```,
+        explanation:
+          'The loop and the single matmul compute exactly the same numbers, but the matmul dispatches to a tuned BLAS kernel and runs orders of magnitude faster. The transpose on W is the price of the two conventions meeting: the data stores examples as rows while nn.Linear stores weights as (out, in).',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Every forward pass of every neural network',
+        usage:
+          'A transformer layer is a sequence of large matrix products; on a GPU, tensor cores exist specifically to make them fast, and matmul typically accounts for well over 90 per cent of training FLOPs.',
+      },
+      {
+        context: 'Graphics and data augmentation',
+        usage:
+          'Rotating then translating then scaling an image is done by multiplying three 3×3 homogeneous matrices into one, then applying that single matrix to every pixel coordinate.',
+      },
+      {
+        context: 'Markov chains and PageRank',
+        usage:
+          'Multiplying a state distribution by a transition matrix advances one step; raising the matrix to the k-th power advances k steps in one operation.',
+      },
+      {
+        context: 'Low-rank adaptation of large models',
+        usage:
+          'LoRA replaces a full weight update with the product of two thin matrices BA, exploiting the shape rule to cut trainable parameters by orders of magnitude.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'NumPy', role: '@ and np.matmul dispatch to BLAS; np.einsum expresses products with explicit index names when shapes get confusing.' },
+      { tool: 'PyTorch', role: 'torch.matmul broadcasts over leading batch dimensions, so a (B, T, d) @ (d, k) works without reshaping.' },
+      { tool: 'cuBLAS / tensor cores', role: 'The hardware path every framework ultimately calls; this is why matmul-shaped work is fast and everything else is not.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Using * instead of @ in NumPy',
+        why: '* is elementwise, and thanks to broadcasting it often succeeds silently on shapes where you intended a matrix product.',
+        fix: 'Use @ or np.matmul for matrix products. If a result has a surprising shape, print it — a (3,3) where you expected a (3,) is the classic signature.',
+      },
+      {
+        mistake: 'Assuming AB = BA',
+        why: 'Scalar arithmetic trains the intuition that order never matters, and it takes a deliberate counterexample to unlearn it.',
+        fix: 'Remember the transformation reading: rotating then stretching is visibly different from stretching then rotating. Never reorder factors when simplifying.',
+      },
+      {
+        mistake: 'Forgetting the transpose in a batched layer',
+        why: 'The data convention puts examples in rows while weights are stored as (out_features, in_features), so X @ W fails but X @ W.T succeeds.',
+        fix: 'Write the shapes in a comment above the line: (B, d_in) @ (d_in, d_out) -> (B, d_out). The comment makes the required transpose obvious.',
+      },
+      {
+        mistake: 'Reading ABC left to right as the order of application',
+        why: 'English reading order fights the notation, in which the matrix closest to the vector acts first.',
+        fix: 'Read ABCx from the right: C acts first, then B, then A. This matters when you build a pipeline of transformations by hand.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'When is the product AB defined, and what is its shape?',
+        answer:
+          'AB is defined when the number of columns of A equals the number of rows of B. If A is m×n and B is n×p, the product is m×p: the inner dimension n must match and is summed over, while the outer dimensions m and p survive. The reason is that each entry of the result is a dot product between a row of A and a column of B, and those two vectors must have the same length. A useful consequence is that AB being defined says nothing about BA — for a 2×3 times 3×2 both are defined but have shapes 2×2 and 3×3 respectively.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Why is matrix multiplication not commutative, and is there an intuitive way to see it?',
+        answer:
+          'Because a matrix product represents composition of transformations, and doing one thing after another is order-dependent in the same way that putting on socks then shoes differs from shoes then socks. Concretely, take A as a 90-degree rotation and B as a horizontal stretch by 2. Applying B then A turns the unit square into a shape that is 1 wide and 2 tall; applying A then B gives one that is 2 wide and 1 tall. The matrices differ accordingly. Some special pairs do commute — two rotations in the plane, any matrix with the identity, any matrix with a scalar multiple of itself, and simultaneously diagonalisable matrices — but these are exceptions and you should never assume commutativity when simplifying an expression.',
+        followUp:
+          'A strong answer connects this to layer order in a network: swapping two layers is not a no-op, and it is also why the order of factors in a gradient expression derived by the chain rule cannot be rearranged.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Estimate the FLOPs in the forward pass of a dense layer mapping 1024 features to 4096 for a batch of 256, and say why this estimate matters.',
+        answer:
+          'The product is (256 × 1024) by (1024 × 4096), so m·n·p = 256 × 1024 × 4096 = about 1.07 billion multiply-accumulates, or roughly 2.1 GFLOPs counting a multiply and an add separately. It matters for three reasons. It tells you whether a layer is compute-bound or memory-bound, by comparing against the bytes moved: here about 4 million weights at 4 bytes each, giving a high arithmetic intensity, so the layer is compute-bound and will use the GPU well. It lets you predict how a change in batch size or width will alter training time, since cost is linear in each of the three dimensions. And it explains why widening a layer is quadratically expensive while deepening is only linear, which is a real architectural trade-off.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'A is 4×7, B is 7×2, C is 2×5. Which of AB, BA, ABC, CBA are defined, and what are the shapes of those that are?',
+        hint: 'Check inner dimensions pairwise, left to right.',
+        solution:
+          'AB is (4×7)(7×2), defined, shape 4×2. BA is (7×2)(4×7) — inner dimensions 2 and 4 disagree, so undefined. ABC is (4×2)(2×5), defined, shape 4×5. CBA is (2×5)(7×2) — inner 5 against 7 — undefined. The lesson is that a chain of matrices is a pipeline, and each adjacent pair must agree at the join.',
+      },
+      {
+        prompt: 'Compute [[2, 1], [0, 3]] · [[1, 4], [5, 2]] by hand, then compute the product in the other order and compare.',
+        hint: 'Four entries, each a dot product of a row with a column.',
+        solution:
+          'AB: entry (1,1) = 2(1) + 1(5) = 7; (1,2) = 2(4) + 1(2) = 10; (2,1) = 0(1) + 3(5) = 15; (2,2) = 0(4) + 3(2) = 6. So AB = [[7, 10], [15, 6]]. BA: (1,1) = 1(2) + 4(0) = 2; (1,2) = 1(1) + 4(3) = 13; (2,1) = 5(2) + 2(0) = 10; (2,2) = 5(1) + 2(3) = 11. So BA = [[2, 13], [10, 11]]. Same shapes, completely different matrices — a clean demonstration of non-commutativity.',
+      },
+      {
+        prompt: 'Explain why (AB)ᵀ = BᵀAᵀ rather than AᵀBᵀ, using the shape rule alone.',
+        hint: 'Write down the shapes of each candidate and see which one is even defined.',
+        solution:
+          'Let A be m×n and B be n×p, so AB is m×p and (AB)ᵀ is p×m. Now Aᵀ is n×m and Bᵀ is p×n. The candidate AᵀBᵀ is (n×m)(p×n), whose inner dimensions m and p need not match, so it is usually undefined. The candidate BᵀAᵀ is (p×n)(n×m), whose inner dimensions both equal n, giving a p×m result — the only shape that could possibly be (AB)ᵀ. So the reversal is forced by the shapes before any entries are considered, which matches the transformation reading: undoing a composition reverses the order of the steps.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'MATH-007-q1',
+        type: 'mcq',
+        concept: 'shape rule',
+        prompt: 'A is 3×5 and B is 5×2. What is the shape of AB?',
+        options: ['3×2', '5×5', '2×3', 'Undefined'],
+        answerIndex: 0,
+        explanation:
+          'The inner dimensions are both 5, so they match and vanish. The outer dimensions 3 and 2 survive, giving a 3×2 result.',
+      },
+      {
+        id: 'MATH-007-q2',
+        type: 'numeric',
+        concept: 'computing an entry',
+        prompt: 'For A = [[1, 2, 3], [4, 5, 6]] and B = [[7, 8], [9, 10], [11, 12]], what is the entry of AB in row 2, column 1?',
+        answer: 139,
+        explanation:
+          'Row 2 of A is [4, 5, 6] and column 1 of B is [7, 9, 11], so the entry is 28 + 45 + 66 = 139. Every entry of a product is one dot product like this.',
+      },
+      {
+        id: 'MATH-007-q3',
+        type: 'truefalse',
+        concept: 'commutativity',
+        prompt: 'If both AB and BA are defined and have the same shape, then AB = BA.',
+        answer: false,
+        explanation:
+          'False. Two square matrices of the same size always admit both products with the same shape, yet [[2,1],[0,3]] and [[1,4],[5,2]] give completely different results in the two orders.',
+      },
+      {
+        id: 'MATH-007-q4',
+        type: 'order',
+        concept: 'order of application',
+        prompt: 'For the expression ABCx, order the operations from first applied to last applied.',
+        items: [
+          'C acts on x',
+          'B acts on the result',
+          'A acts on that result',
+          'The final output vector is produced',
+        ],
+        explanation:
+          'The matrix nearest the vector acts first, so the expression is read right to left. This is the opposite of English reading order and is the source of much confusion when building transformation pipelines.',
+      },
+      {
+        id: 'MATH-007-q5',
+        type: 'debug',
+        language: 'python',
+        concept: 'elementwise versus matmul',
+        prompt: 'This code is meant to apply a layer to a batch but produces the wrong shape. What is wrong?',
+        code: 'X = np.random.randn(100, 64)\nW = np.random.randn(32, 64)\nH = X * W.T',
+        options: [
+          '* is elementwise; it should be @ so the shapes contract properly',
+          'W should be transposed twice',
+          'X and W must have the same shape for any operation',
+          'The bias term is missing, which changes the shape',
+        ],
+        answerIndex: 0,
+        explanation:
+          '* multiplies elementwise with broadcasting, so a (100,64) against a (64,32) raises a broadcast error rather than contracting. X @ W.T gives the intended (100, 32).',
+      },
+      {
+        id: 'MATH-007-q6',
+        type: 'explain',
+        concept: 'multiplication as composition',
+        prompt: 'Explain why the shape rule for matrix multiplication is exactly what you would expect once you see a matrix as a transformation.',
+        rubric: [
+          'Says a matrix maps an input space to an output space',
+          'Says the output space of the right factor must be the input space of the left factor',
+          'Connects this to the inner dimensions matching and disappearing',
+        ],
+        sampleAnswer:
+          'An m×n matrix takes vectors with n components and produces vectors with m components, so it is a pipe from an n-dimensional space to an m-dimensional one. To chain two such pipes, whatever comes out of the first must be acceptable to the second: if B maps p-dimensional inputs to n-dimensional outputs, then A must accept n-dimensional inputs, which means A has n columns. That is exactly the rule that the inner dimensions must match. The combined pipe goes from p dimensions straight to m, which is why the result is m×p and why the shared n has disappeared — it was the intermediate space, used and then left behind, in the same way the summation index k is consumed inside the entrywise formula.',
+        explanation:
+          'The shape rule stops being arbitrary once the reader sees each matrix as a map between specific spaces that must connect end to end.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Shape rule for AB?', back: '(m×n)(n×p) = (m×p). Inner dimensions must match and then disappear; outer ones survive.' },
+      { front: 'How is one entry of AB computed?', back: 'C_ij is the dot product of row i of A with column j of B.' },
+      { front: 'What does a matrix product represent?', back: 'Composition of transformations. In ABx, B acts first because it sits nearest x.' },
+      { front: 'Is AB the same as BA?', back: 'Almost never. Order matters because composition is order-dependent — rotating then stretching differs from the reverse.' },
+      { front: 'Why does (AB)ᵀ = BᵀAᵀ?', back: 'Reversing is the only order whose shapes are defined, and it matches undoing a composition step by step in reverse.' },
+      { front: 'FLOPs in an m×n by n×p product?', back: 'About 2mnp — m·p output entries, each needing n multiplications and n additions.' },
+    ],
+
+    challenge: {
+      title: 'Matrix multiplication three ways',
+      brief:
+        'Implement the same product three times: with triple nested loops, as a stack of row-by-column dot products, and as a sum of outer products of columns of A with rows of B. Assert all three agree with A @ B, then time them on 200×200 matrices and report the ratio between the slowest hand-written version and NumPy.',
+      language: 'python',
+      acceptanceCriteria: [
+        'All three implementations agree with A @ B to within 1e-9',
+        'Raises a clear error when the inner dimensions do not match',
+        'Includes the outer-product formulation, not just the two dot-product variants',
+        'Reports timings and the speed ratio against NumPy',
+      ],
+      starterCode: 'import numpy as np\n\ndef matmul_loops(A, B):\n    """Triple-loop reference implementation."""\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'A learner can compute a matrix product mechanically but says it feels like an arbitrary ritual. Give them the reason behind the rule.',
+      mustCover: [
+        'Each entry of the result is a dot product of a row with a column',
+        'The inner dimensions must match, and they disappear in the result',
+        'A product represents doing one transformation after another',
+        'Order matters, because composition is order-dependent',
+      ],
+      bonusSignals: ['uses a production line or translation chain image', 'notes that the right-hand matrix acts first', 'mentions batching as the practical payoff'],
+      sampleExplanation:
+        'The ritual has a reason, and it is this: multiplying two matrices means combining two transformations into one. Think of a production line where the first machine turns raw material into parts and the second turns parts into finished goods. You could describe the pair as a single machine going straight from raw material to finished goods, and you could work out its behaviour in advance by tracing each input through both stages. That tracing is the multiplication. It explains the shape rule immediately: whatever the first machine outputs, the second must accept, so the middle numbers have to agree — and once you have traced through, the intermediate stage is gone, which is why it disappears from the answer. Mechanically, each entry of the result is a dot product between a row of the left matrix and a column of the right, and that works precisely because those two lists have the same length. It also explains why order matters so much: painting before cutting gives bare edges and cutting before painting gives painted ones. And the practical payoff is batching, because the same product applies a layer to a thousand examples at once, which is what the hardware in a GPU is actually built to do.',
+    },
+  },
+
+  {
+    id: 'MATH-008',
+    domain: 'MATH',
+    module: 'Matrices',
+    topic: 'Transpose, identity and inverse',
+    title: 'Transpose, Identity and Inverse',
+    slug: 'transpose-identity-inverse',
+    difficulty: 3,
+    estimatedMinutes: 35,
+    prerequisites: ['MATH-007'],
+    related: ['MATH-006', 'MATH-007'],
+    tags: ['transpose', 'identity', 'inverse', 'singular', 'linear-solve', 'conditioning'],
+
+    learningObjectives: [
+      'Transpose a matrix and explain what it does to shapes and to the roles of rows and columns',
+      'Describe the identity matrix as the transformation that does nothing, and say why it is the multiplicative unit',
+      'Define the inverse as the transformation that undoes another, and recognise when none exists',
+      'Explain why numerical code should call np.linalg.solve rather than forming an inverse',
+    ],
+
+    terminology: [
+      {
+        term: 'Transpose',
+        definition:
+          'The matrix Aᵀ obtained by reflecting A across its main diagonal, so (Aᵀ)_ij = A_ji. An m×n matrix becomes n×m.',
+        simple: 'Flip the grid so rows become columns.',
+      },
+      {
+        term: 'Identity matrix',
+        definition:
+          'The square matrix I with ones on the main diagonal and zeros elsewhere. IA = AI = A for any conformable A.',
+        simple: 'The do-nothing transformation — the number 1 of the matrix world.',
+      },
+      {
+        term: 'Inverse',
+        definition:
+          'A matrix A⁻¹ with AA⁻¹ = A⁻¹A = I. It exists only for square matrices with non-zero determinant.',
+        simple: 'The transformation that puts everything back where it started.',
+      },
+      {
+        term: 'Singular matrix',
+        definition:
+          'A square matrix with no inverse, equivalently one whose determinant is zero and whose transformation collapses space onto a lower-dimensional subspace.',
+        simple: 'A matrix that squashes things flat, so you can never undo it.',
+      },
+      {
+        term: 'Condition number',
+        definition:
+          'A measure of how much a matrix amplifies relative error when solving Ax = b. A large condition number means the matrix is nearly singular and the solution is untrustworthy.',
+        simple: 'How close a matrix is to being un-undoable.',
+      },
+      {
+        term: 'Symmetric matrix',
+        definition: 'A square matrix equal to its own transpose, A = Aᵀ. Covariance and Gram matrices are always symmetric.',
+        simple: 'A grid that looks the same when flipped across its diagonal.',
+      },
+    ],
+
+    simpleExplanation:
+      'Three ideas belong together here because they are all about undoing and doing nothing. Start with doing nothing. There is a special matrix that leaves every point exactly where it was — it sends east to east and north to north. It is called the identity, and it plays the same role for matrices that the number one plays for ordinary multiplication. Now think about undoing. If a matrix stretches the page to twice its width, there is obviously another matrix that halves it again, and doing both in sequence leaves you where you started. That second matrix is called the inverse. Some matrices, though, cannot be undone. If a matrix squashes the whole flat page down onto a single line, then two points that used to be separate are now sitting on top of each other, and no later operation can possibly tell them apart again. Such a matrix is called singular, and the information it destroyed is gone for good. The transpose is a different animal entirely: it is just flipping the grid so that rows become columns, and it shows up constantly because it is how you make two shapes line up.',
+
+    whyItExists:
+      'Solving a system of equations means undoing whatever the coefficient matrix did, so a language for undoing is essential. The identity gives that language a unit, the inverse gives it an operation, and singularity gives it an honest account of when the undoing is impossible. The transpose exists for a different reason: it is the bookkeeping device that reconciles the row-oriented data convention with the column-oriented transformation convention, which is why it appears in almost every gradient formula.',
+
+    analogy: {
+      scenario:
+        'A recipe says to double the sugar and halve the flour. To reverse it you halve the sugar and double the flour, and after doing both you are back to the original recipe — nothing has changed. But now consider a different instruction: "replace both the sugar and the flour with their combined weight in sugar". After that step you know the total but you have permanently lost the split, and no instruction can recover whether it was 200 grams of each or 300 and 100.',
+      mapping: [
+        { from: 'Doubling and then halving, ending where you began', to: 'A A⁻¹ = I, the inverse undoing the transformation' },
+        { from: 'Leaving the recipe untouched', to: 'The identity matrix' },
+        { from: 'Merging two ingredients into one total', to: 'A singular transformation collapsing two dimensions into one' },
+        { from: 'Being unable to recover the original split', to: 'Non-invertibility: information genuinely destroyed' },
+        { from: 'Knowing the total is 400g but not the split', to: 'Infinitely many solutions to the resulting system' },
+      ],
+      bridge:
+        'The distinction between reversible and irreversible steps is precisely the distinction between invertible and singular matrices. It also explains why singularity is not a computational nuisance to be worked around but a statement about information: once two distinct inputs produce the same output, no algorithm, however clever, can separate them again.',
+      limitations:
+        'Recipes are discrete and matrices are continuous, so the analogy misses the important middle case: a matrix can be technically invertible yet so close to collapsing that the inverse is numerically worthless. That is what the condition number measures, and it has no clean recipe equivalent.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Invertible and singular transformations side by side',
+        caption: 'Set the matrix to [[1,2],[2,4]] and watch the whole plane collapse onto a line.',
+        widget: 'matrix-transform',
+      },
+      {
+        kind: 'table',
+        title: 'Three operations at a glance',
+        columns: ['Operation', 'Notation', 'Effect on shape', 'Geometric meaning'],
+        rows: [
+          ['Transpose', 'Aᵀ', '(m×n) becomes (n×m)', 'Reflect across the diagonal; rows and columns swap roles'],
+          ['Identity', 'I', 'Square, n×n', 'Do nothing — every point stays put'],
+          ['Inverse', 'A⁻¹', 'Square, same size as A', 'Undo A exactly, returning every point to its origin'],
+          ['Singular', 'A⁻¹ undefined', 'Square but rank-deficient', 'Collapse space onto a lower-dimensional subspace'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Computing an inverse versus solving directly',
+        left: {
+          heading: 'x = np.linalg.inv(A) @ b',
+          points: [
+            'Roughly 2n³ operations, then another n² for the product',
+            'Forms n² intermediate numbers you never wanted',
+            'Rounding error accumulates twice',
+            'Fails loudly only when A is exactly singular, not when it is merely dreadful',
+          ],
+        },
+        right: {
+          heading: 'x = np.linalg.solve(A, b)',
+          points: [
+            'About n³/3 operations via LU factorisation',
+            'Computes only the answer you asked for',
+            'Numerically more stable, with pivoting built in',
+            'Raises LinAlgError on a singular matrix and warns on ill-conditioning',
+          ],
+        },
+      },
+      {
+        kind: 'flow',
+        title: 'What happens when you solve Ax = b',
+        caption: 'The route LAPACK actually takes — no inverse is ever formed.',
+        steps: [
+          { label: 'Factor A into L and U', detail: 'Gaussian elimination with partial pivoting, about n³/3 operations.' },
+          { label: 'Forward substitution', detail: 'Solve Ly = b, working down from the first row. Cheap: n² operations.' },
+          { label: 'Back substitution', detail: 'Solve Ux = y, working up from the last row. Also n².' },
+          { label: 'Return x', detail: 'The answer is produced without ever constructing A⁻¹, which would have cost three times as much and lost precision.' },
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'The transpose of A ∈ ℝ^(m×n) is Aᵀ ∈ ℝ^(n×m) with (Aᵀ)_ij = A_ji; it satisfies (AB)ᵀ = BᵀAᵀ and (Aᵀ)ᵀ = A. The identity I_n ∈ ℝ^(n×n) has entries δ_ij, equal to 1 when i = j and 0 otherwise, and is the multiplicative identity of the ring of n×n matrices. A square matrix A is invertible (non-singular) if there exists A⁻¹ with AA⁻¹ = A⁻¹A = I_n; such an inverse is unique when it exists, and exists precisely when det(A) ≠ 0, equivalently when rank(A) = n.',
+
+    math: {
+      intuition:
+        'Hold the picture of doing and undoing. The identity is the transformation that leaves the grid untouched, so multiplying by it changes nothing — it is the matrix equivalent of one. An inverse is a matrix that exactly reverses another, so applying the pair in either order returns you to the identity. The reason some matrices have no inverse is not a technicality: if a transformation squashes two distinct points onto the same spot, then undoing it would require sending one point to two places, which no function can do. The transpose is unrelated to undoing, despite often appearing beside inverses; it is a reshaping that swaps the roles of rows and columns, and its main job in machine learning is making shapes agree.',
+      formulas: [
+        {
+          latex: '(A^{\\top})_{ij} = A_{ji}',
+          name: 'Transpose, entrywise',
+          meaning:
+            'Reflect across the main diagonal: the entry in row i, column j of the transpose is the entry in row j, column i of the original.',
+          variables: [
+            { symbol: 'A', meaning: 'The original matrix' },
+            { symbol: 'A^{\\top}', meaning: 'Its transpose' },
+            { symbol: 'i', meaning: 'Row index in the transpose' },
+            { symbol: 'j', meaning: 'Column index in the transpose' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '(AB)^{\\top} = B^{\\top}A^{\\top}, \\qquad (A^{\\top})^{\\top} = A',
+          name: 'Transpose of a product',
+          meaning:
+            'Transposing a product reverses the order of the factors. This identity is why gradient formulas are littered with transposes.',
+          variables: [
+            { symbol: 'A', meaning: 'The left factor' },
+            { symbol: 'B', meaning: 'The right factor' },
+            { symbol: '\\top', meaning: 'The transpose operation' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: 'I_n = \\begin{bmatrix} 1 & 0 & \\cdots & 0 \\\\ 0 & 1 & \\cdots & 0 \\\\ \\vdots & \\vdots & \\ddots & \\vdots \\\\ 0 & 0 & \\cdots & 1 \\end{bmatrix}, \\qquad AI = IA = A',
+          name: 'The identity matrix',
+          meaning:
+            'Ones down the diagonal, zeros elsewhere. Its columns are the basis vectors themselves, so it sends every basis vector to itself and changes nothing.',
+          variables: [
+            { symbol: 'I_n', meaning: 'The n×n identity matrix' },
+            { symbol: 'n', meaning: 'The dimension of the space it acts on' },
+            { symbol: 'A', meaning: 'Any matrix of conformable shape' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: 'AA^{-1} = A^{-1}A = I',
+          name: 'Defining property of the inverse',
+          meaning:
+            'The inverse undoes the transformation in both orders. Note that this is one of the rare cases where two matrices do commute.',
+          variables: [
+            { symbol: 'A', meaning: 'A square, invertible matrix' },
+            { symbol: 'A^{-1}', meaning: 'Its inverse, which exists only when det(A) ≠ 0' },
+            { symbol: 'I', meaning: 'The identity matrix of the same size' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: 'A^{-1} = \\frac{1}{ad - bc}\\begin{bmatrix} d & -b \\\\ -c & a \\end{bmatrix} \\quad \\text{for} \\quad A = \\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}',
+          name: 'Inverse of a 2×2 matrix',
+          meaning:
+            'Swap the diagonal entries, negate the off-diagonal ones, and divide by the determinant. Undefined when ad − bc = 0, which is exactly singularity.',
+          variables: [
+            { symbol: 'a, b, c, d', meaning: 'The four entries of A, reading across then down' },
+            { symbol: 'ad - bc', meaning: 'The determinant; dividing by it is what fails for a singular matrix' },
+            { symbol: 'A^{-1}', meaning: 'The resulting inverse matrix' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\hat{\\boldsymbol{\\beta}} = (X^{\\top}X)^{-1}X^{\\top}\\mathbf{y}',
+          name: 'The normal equations for least squares',
+          meaning:
+            'The closed-form solution of linear regression. Textbooks write the inverse; every sane implementation solves the system instead.',
+          variables: [
+            { symbol: '\\hat{\\boldsymbol{\\beta}}', meaning: 'The fitted coefficient vector' },
+            { symbol: 'X', meaning: 'The design matrix, shape (n_samples, n_features)' },
+            { symbol: 'X^{\\top}X', meaning: 'The Gram matrix, square and symmetric, of size n_features' },
+            { symbol: '\\mathbf{y}', meaning: 'The vector of target values' },
+            { symbol: '(\\cdot)^{-1}', meaning: 'Matrix inverse — singular whenever two features are perfectly collinear' },
+          ],
+          category: 'regression',
+        },
+      ],
+      derivation: [
+        'Why does a singular matrix have no inverse? Suppose A collapses two distinct vectors onto the same image: Au = Av with u ≠ v.',
+        'Assume for contradiction that an inverse A⁻¹ exists.',
+        'Multiply both sides on the left by A⁻¹: A⁻¹Au = A⁻¹Av.',
+        'Use the defining property A⁻¹A = I: Iu = Iv, that is u = v.',
+        'This contradicts u ≠ v, so no such inverse can exist. Collapsing is exactly incompatible with undoing.',
+        'The same argument runs in reverse: if A never collapses two distinct vectors, its columns are linearly independent, its determinant is non-zero, and an inverse does exist.',
+        'For the 2×2 case you can construct it explicitly. Solving AX = I entry by entry gives X = (1/(ad−bc))·[[d, −b], [−c, a]], and the only step that can fail is the division, which fails precisely when ad − bc = 0 — the determinant that MATH-009 will interpret as the area scale factor. A transformation that scales area by zero has flattened the plane.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Inverting a 2×2 matrix, and meeting one that cannot be inverted',
+      setup:
+        'Take A = [[4, 7], [2, 6]] and B = [[1, 2], [2, 4]]. We will invert A by hand, verify it, and then see exactly where the same procedure breaks down for B.',
+      steps: [
+        { label: 'Determinant of A', detail: 'ad − bc = 4(6) − 7(2) = 24 − 14 = 10. Non-zero, so an inverse exists.', latex: '\\det A = 10' },
+        { label: 'Apply the 2×2 formula', detail: 'Swap the diagonal to get [[6, 7], [2, 4]] then negate off-diagonals: [[6, −7], [−2, 4]]. Divide by 10.', latex: 'A^{-1} = \\frac{1}{10}\\begin{bmatrix} 6 & -7 \\\\ -2 & 4 \\end{bmatrix} = \\begin{bmatrix} 0.6 & -0.7 \\\\ -0.2 & 0.4 \\end{bmatrix}' },
+        { label: 'Verify AA⁻¹ = I', detail: 'Row 1 of A times column 1 of A⁻¹: 4(0.6) + 7(−0.2) = 2.4 − 1.4 = 1. Row 1 times column 2: 4(−0.7) + 7(0.4) = −2.8 + 2.8 = 0. The other row works out the same way.' },
+        { label: 'Now try B', detail: 'ad − bc = 1(4) − 2(2) = 4 − 4 = 0. The formula would require dividing by zero, so there is no inverse.', latex: '\\det B = 0' },
+        { label: 'See why, geometrically', detail: 'The columns of B are [1, 2] and [2, 4], and the second is exactly twice the first. Both point along the same line, so the whole plane is squashed onto that line.' },
+        { label: 'Confirm the collapse', detail: 'B[2, −1] = 2[1,2] − 1[2,4] = [0, 0], and B[0, 0] = [0, 0] too. Two different inputs, the same output — undoing is impossible.' },
+        { label: 'Solve with A instead', detail: 'For b = [1, 1], x = A⁻¹b = [0.6 − 0.7, −0.2 + 0.4] = [−0.1, 0.2]. Check: 4(−0.1) + 7(0.2) = −0.4 + 1.4 = 1, and 2(−0.1) + 6(0.2) = −0.2 + 1.2 = 1.' },
+      ],
+      conclusion:
+        'A is invertible because its columns point in genuinely different directions; B is singular because its columns are parallel, so it flattens the plane and destroys information. The determinant is simply the number that detects which case you are in.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Transpose, identity and inverse in practice',
+        runnable: true,
+        code: `import numpy as np
+
+A = np.array([[4.0, 7.0],
+              [2.0, 6.0]])
+
+print("A.T:\\n", A.T)
+print("I:\\n", np.eye(2))
+Ainv = np.linalg.inv(A)
+print("A inverse:\\n", np.round(Ainv, 4))
+print("A @ Ainv:\\n", np.round(A @ Ainv, 12))
+print("exactly equal to I?", np.array_equal(A @ Ainv, np.eye(2)))
+print("close to I?        ", np.allclose(A @ Ainv, np.eye(2)))`,
+        output: `A.T:
+ [[4. 2.]
+ [7. 6.]]
+I:
+ [[1. 0.]
+ [0. 1.]]
+A inverse:
+ [[ 0.6 -0.7]
+ [-0.2  0.4]]
+A @ Ainv:
+ [[ 1. -0.]
+ [ 0.  1.]]
+exactly equal to I? False
+close to I?         True`,
+        explanation:
+          'The last two lines are the important ones. A @ Ainv is mathematically the identity but is only numerically close to it, because floating-point arithmetic leaves residue around 1e-16. Testing matrix results with == is therefore always wrong; np.allclose with a sensible tolerance is the correct check.',
+      },
+      {
+        language: 'python',
+        title: 'Singular matrices fail, and near-singular ones are worse',
+        runnable: true,
+        code: `import numpy as np
+
+B = np.array([[1.0, 2.0], [2.0, 4.0]])          # exactly singular
+C = np.array([[1.0, 2.0], [2.0, 4.0000001]])    # nearly singular
+
+print("det B:", np.linalg.det(B), " det C:", np.linalg.det(C))
+print("cond C:", f"{np.linalg.cond(C):.3e}")
+
+try:
+    np.linalg.inv(B)
+except np.linalg.LinAlgError as e:
+    print("inv(B) raised:", e)
+
+b = np.array([3.0, 6.0])
+x = np.linalg.solve(C, b)
+print("solve(C, b):", x)
+print("residual   :", C @ x - b)`,
+        output: `det B: 0.0  det C: 1.0000000116860974e-07
+cond C: 2.500e+08
+inv(B) raised: Singular matrix
+solve(C, b): [ 3.00000000e+00 -1.11022302e-09]
+residual   : [0. 0.]
+```,
+        explanation:
+          'B fails loudly, which is the easy case. C is the dangerous one: it is technically invertible, so nothing raises, yet its condition number of 2.5e8 means roughly eight of your sixteen significant digits are lost. A tiny change in b would swing the answer wildly. Always check np.linalg.cond before trusting a solve on data you did not construct yourself.',
+      },
+      {
+        language: 'python',
+        title: 'Why solve beats inv',
+        runnable: true,
+        code: `import numpy as np, time
+
+rng = np.random.default_rng(0)
+n = 800
+A = rng.normal(size=(n, n)) + n * np.eye(n)
+b = rng.normal(size=n)
+
+t0 = time.perf_counter(); x1 = np.linalg.inv(A) @ b; t1 = time.perf_counter()
+x2 = np.linalg.solve(A, b);                          t2 = time.perf_counter()
+
+print(f"inv+matmul: {t1 - t0:.4f}s   residual {np.abs(A @ x1 - b).max():.3e}")
+print(f"solve     : {t2 - t1:.4f}s   residual {np.abs(A @ x2 - b).max():.3e}")
+print("same answer:", np.allclose(x1, x2))`,
+        output: `inv+matmul: 0.0421s   residual 4.263e-14
+solve     : 0.0152s   residual 1.421e-14
+same answer: True
+```,
+        explanation:
+          'Solving is roughly three times faster because LU factorisation costs about n³/3 while inversion costs about 2n³, and the residual is smaller because forming the inverse introduces an extra round of rounding error before the multiply. The gap widens with n and with how badly conditioned the matrix is, which is why the rule "never compute an inverse you do not need" is worth following unconditionally.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Linear regression in scikit-learn',
+        usage:
+          'LinearRegression does not form (XᵀX)⁻¹. It calls scipy.linalg.lstsq, which uses an SVD-based solver that copes gracefully with collinear features where the inverse would not exist.',
+      },
+      {
+        context: 'Gradient formulas in backpropagation',
+        usage:
+          'The gradient with respect to a layer input is Wᵀδ, and with respect to the weights is δxᵀ. The transposes are what make the shapes line up between the forward and backward passes.',
+      },
+      {
+        context: 'Covariance matrices',
+        usage:
+          'A covariance matrix is symmetric by construction, so it equals its own transpose. Inverting it appears in the Mahalanobis distance and in Gaussian likelihoods, and it becomes singular when features are perfectly collinear.',
+      },
+      {
+        context: 'Kalman filters and control systems',
+        usage:
+          'Each update step solves a linear system. Production implementations use Cholesky or QR factorisations rather than explicit inverses, for exactly the stability reasons above.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'NumPy', role: 'np.linalg.solve for systems, np.linalg.lstsq for over-determined ones, np.linalg.cond to check trustworthiness.' },
+      { tool: 'SciPy', role: 'scipy.linalg.lu_factor and cho_solve when the same matrix is reused against many right-hand sides.' },
+      { tool: 'scikit-learn', role: 'Ridge adds λI to XᵀX, which guarantees invertibility even with perfectly collinear features.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Computing an inverse when a solve would do',
+        why: 'The textbook formula x = A⁻¹b is written that way for clarity, and people transcribe it literally into code.',
+        fix: 'Use np.linalg.solve(A, b). It is about three times cheaper and numerically more stable, and it raises a clear error on a singular matrix.',
+      },
+      {
+        mistake: 'Checking A @ A_inv == np.eye(n)',
+        why: 'Floating-point arithmetic never produces exact ones and zeros, so the comparison is always False.',
+        fix: 'Use np.allclose(A @ A_inv, np.eye(n)). Equality testing on floats is wrong regardless of context.',
+      },
+      {
+        mistake: 'Writing (AB)ᵀ = AᵀBᵀ',
+        why: 'Habit from scalar algebra, where order never matters.',
+        fix: 'The order reverses: (AB)ᵀ = BᵀAᵀ. Check with shapes — the unreversed version is usually not even defined.',
+      },
+      {
+        mistake: 'Treating a near-singular matrix as safe because no error was raised',
+        why: 'Invertibility is binary but conditioning is continuous, and NumPy only refuses in the exactly-singular case.',
+        fix: 'Call np.linalg.cond(A). Values above roughly 1e8 in float64 mean you are losing half your digits; regularise, drop collinear features, or use lstsq.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What does it mean for a matrix to be singular, and how would you detect it in practice?',
+        answer:
+          'A singular matrix has no inverse. Geometrically it collapses space onto a lower-dimensional subspace, so two distinct inputs can produce the same output and the transformation cannot be undone. Equivalently its determinant is zero, its columns are linearly dependent, and its rank is less than its size. In practice you rarely meet an exactly singular matrix in floating point, so checking det(A) == 0 is useless — rounding makes it a tiny non-zero number instead. The right check is the condition number from np.linalg.cond, or looking at the smallest singular value from an SVD. A condition number above about 1e8 in float64 means you are losing half your significant digits and the solution should not be trusted, even though no exception was raised.',
+        followUp:
+          'A strong answer connects this to multicollinearity in regression: two perfectly correlated features make XᵀX singular, which is exactly why Ridge adds λI and restores invertibility.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Why is np.linalg.solve preferred over np.linalg.inv followed by a matrix product?',
+        answer:
+          'Three reasons. Cost: LU factorisation with substitution is about n³/3 operations while inversion is about 2n³, so solving is roughly three times faster and the gap matters at scale. Stability: forming the inverse performs the elimination and then multiplies, so rounding error is introduced twice, and for ill-conditioned matrices the explicit inverse can be far less accurate than a direct solve. Honesty: solve raises LinAlgError on a singular matrix, whereas an inverse computed and then multiplied may silently produce enormous nonsense. The rule generalises: whenever you see A⁻¹b in a formula, implement it as a solve; whenever you see A⁻¹B, use a solve with multiple right-hand sides.',
+      },
+      {
+        level: 'advanced',
+        question: 'The normal equations give β = (XᵀX)⁻¹Xᵀy. What goes wrong with this in practice and what is done instead?',
+        answer:
+          'XᵀX squares the condition number of X, so a design matrix that is merely awkward becomes numerically hostile once you form the Gram matrix — you lose twice as many digits as the data warrants. Worse, if any two features are perfectly collinear, or if there are more features than samples, XᵀX is exactly singular and the inverse does not exist at all. Real implementations avoid forming XᵀX: scikit-learn calls scipy.linalg.lstsq, which uses an SVD or QR factorisation of X directly and returns the minimum-norm solution when the system is rank-deficient rather than failing. When regularisation is acceptable, Ridge adds λI to XᵀX, which lifts every eigenvalue by λ and makes the matrix invertible and far better conditioned — which is one reason a small amount of regularisation is good practice even when overfitting is not the primary worry.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Invert A = [[3, 1], [2, 4]] by hand and verify your answer.',
+        hint: 'Determinant first, then swap the diagonal and negate the off-diagonal entries.',
+        solution:
+          'det = 3(4) − 1(2) = 10. So A⁻¹ = (1/10)[[4, −1], [−2, 3]] = [[0.4, −0.1], [−0.2, 0.3]]. Verify: row 1 of A times column 1 of A⁻¹ is 3(0.4) + 1(−0.2) = 1.2 − 0.2 = 1; row 1 times column 2 is 3(−0.1) + 1(0.3) = −0.3 + 0.3 = 0. The other row checks out identically, so AA⁻¹ = I.',
+      },
+      {
+        prompt: 'Show that [[2, 6], [1, 3]] is singular in two different ways, and find two distinct vectors it maps to the same output.',
+        hint: 'Look at the determinant, and separately look at whether the columns are parallel.',
+        solution:
+          'First way: det = 2(3) − 6(1) = 0. Second way: the columns are [2, 1] and [6, 3], and the second is three times the first, so they span only a line rather than the plane. For two inputs with the same image, note that [3, −1] maps to 3[2,1] − 1[6,3] = [0, 0], which is also where [0, 0] maps. So [3, −1] and [0, 0] are distinct inputs with identical outputs, and no inverse could send [0,0] back to both.',
+      },
+      {
+        prompt: 'A colleague writes x = np.linalg.inv(A) @ b for a 5000×5000 matrix and the job runs out of memory and time. Give two concrete improvements and say what each saves.',
+        hint: 'Think about the cost of factorisation versus inversion, and about whether A is reused.',
+        solution:
+          'First, replace it with np.linalg.solve(A, b), which uses LU factorisation costing about n³/3 rather than the roughly 2n³ of inversion, and avoids materialising a second 5000×5000 array of 200 MB. Second, if the same A is used against many different b vectors, factor once with scipy.linalg.lu_factor and then call lu_solve per right-hand side, so the expensive n³ step happens once and each additional solve costs only n². If A is also symmetric positive definite — as a Gram matrix or covariance matrix is — use a Cholesky factorisation instead, which is about twice as fast again.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'MATH-008-q1',
+        type: 'mcq',
+        concept: 'identity matrix',
+        prompt: 'What does multiplying a vector by the identity matrix do?',
+        options: [
+          'Nothing — the vector is unchanged',
+          'Normalises it to unit length',
+          'Reverses its direction',
+          'Projects it onto the first axis',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The identity sends every basis vector to itself, so it leaves every vector untouched. It is the matrix analogue of multiplying a number by one.',
+      },
+      {
+        id: 'MATH-008-q2',
+        type: 'truefalse',
+        concept: 'transpose of a product',
+        prompt: '(AB)ᵀ equals AᵀBᵀ.',
+        answer: false,
+        explanation:
+          'False — the order reverses, so (AB)ᵀ = BᵀAᵀ. The shape rule forces it: for A of shape m×n and B of shape n×p, AᵀBᵀ is usually not even defined.',
+      },
+      {
+        id: 'MATH-008-q3',
+        type: 'numeric',
+        concept: '2x2 determinant and invertibility',
+        prompt: 'What is the determinant of [[1, 2], [2, 4]]?',
+        answer: 0,
+        explanation:
+          '1(4) − 2(2) = 0, so the matrix is singular. Its columns are parallel, meaning the transformation squashes the plane onto a line and cannot be undone.',
+      },
+      {
+        id: 'MATH-008-q4',
+        type: 'mcq',
+        concept: 'solve versus inverse',
+        prompt: 'Why should you prefer np.linalg.solve(A, b) over np.linalg.inv(A) @ b?',
+        options: [
+          'It is roughly three times cheaper and numerically more stable',
+          'It works on non-square matrices',
+          'It always returns an exact answer',
+          'It automatically standardises the features first',
+        ],
+        answerIndex: 0,
+        explanation:
+          'LU factorisation costs about n³/3 against about 2n³ for inversion, and avoiding the explicit inverse removes one round of accumulated rounding error. For non-square systems you need lstsq instead.',
+      },
+      {
+        id: 'MATH-008-q5',
+        type: 'match',
+        concept: 'terminology',
+        prompt: 'Match each term to its meaning.',
+        pairs: [
+          { left: 'Transpose', right: 'Rows become columns; shape (m,n) becomes (n,m)' },
+          { left: 'Identity', right: 'Leaves every vector exactly as it was' },
+          { left: 'Inverse', right: 'Undoes a transformation, giving back the identity' },
+          { left: 'Singular', right: 'Collapses space, so no inverse exists' },
+        ],
+        explanation:
+          'Keeping these four distinct is the vocabulary needed to read any linear-algebra-heavy paper or gradient derivation without guessing.',
+      },
+      {
+        id: 'MATH-008-q6',
+        type: 'explain',
+        concept: 'why singularity destroys information',
+        prompt: 'Explain why a matrix that maps two different vectors to the same output cannot possibly have an inverse.',
+        rubric: [
+          'States that an inverse would have to return each output to its unique input',
+          'Observes that a shared output has two candidate inputs',
+          'Concludes that no function can send one input to two outputs',
+        ],
+        sampleAnswer:
+          'An inverse is itself a function: give it a vector and it returns exactly one vector back. Suppose the original matrix sends both u and v, which are different, to the same result w. To undo the transformation, the inverse would have to take w and return u, and also take w and return v. That is impossible, because a function produces one output per input. So the moment a transformation collapses two distinct points onto one, invertibility is lost. This is not a limitation of our algorithms: the information distinguishing u from v has genuinely been discarded, and nothing downstream can recover it. Geometrically the transformation has flattened space onto a lower-dimensional subspace, which is what a zero determinant records.',
+        explanation:
+          'The argument should rest on the definition of a function rather than on determinants, which are a symptom rather than the cause.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does the transpose do?', back: 'Reflects a matrix across its diagonal: (Aᵀ)_ij = A_ji, turning an m×n into an n×m.' },
+      { front: 'What is the identity matrix?', back: 'Ones on the diagonal, zeros elsewhere. The do-nothing transformation; AI = IA = A.' },
+      { front: 'Defining property of A⁻¹?', back: 'AA⁻¹ = A⁻¹A = I. One of the rare pairs of matrices that genuinely commute.' },
+      { front: 'When does a matrix have no inverse?', back: 'When it is singular: determinant zero, columns linearly dependent, space collapsed onto a lower dimension.' },
+      { front: '(AB)ᵀ = ?', back: 'BᵀAᵀ — the order reverses. AᵀBᵀ is usually not even a valid product.' },
+      { front: 'Why solve instead of inv?', back: 'About three times cheaper (n³/3 versus 2n³), numerically more stable, and it errors honestly on singular input.' },
+    ],
+
+    challenge: {
+      title: 'Conditioning laboratory',
+      brief:
+        'Build a family of 2×2 matrices [[1, 2], [2, 4 + eps]] for eps from 1e-1 down to 1e-12. For each, print the determinant, the condition number, and the relative error in the recovered solution when you solve Ax = b for a known x. Plot or tabulate how the error grows as eps shrinks, and state the eps at which fewer than half the digits of x survive.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Reports determinant and condition number for each eps',
+        'Compares the recovered x against the known ground truth and reports relative error',
+        'Identifies the eps at which relative error exceeds 1e-8',
+        'Includes a printed observation relating condition number to digits lost',
+      ],
+      starterCode: 'import numpy as np\n\nx_true = np.array([1.0, -2.0])\nfor eps in [10.0 ** -k for k in range(1, 13)]:\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain to someone comfortable with matrix multiplication what the inverse is, why some matrices do not have one, and why experienced engineers avoid computing inverses.',
+      mustCover: [
+        'The identity is the transformation that does nothing',
+        'The inverse undoes a transformation, giving back the identity',
+        'A matrix that collapses space destroys information and cannot be undone',
+        'Solving a system directly is cheaper and more stable than forming an inverse',
+      ],
+      bonusSignals: ['mentions the condition number', 'connects singularity to collinear features', 'notes that near-singular is more dangerous than exactly singular'],
+      sampleExplanation:
+        'Start with the matrix that does nothing at all: it sends east to east and north to north, leaving every point exactly where it was. That is the identity, and it plays the role that the number one plays in ordinary multiplication. An inverse is a matrix that undoes another one, so that applying the pair in sequence lands you back at the identity — if one matrix doubles the width of the page, its inverse halves it again. The interesting case is when no inverse exists. Suppose a matrix squashes the whole flat page down onto a single line. Two points that were previously distinct are now sitting on top of each other, and undoing the squash would mean sending that one shared point back to two different places, which no function can do. The information is genuinely gone, not merely hidden. Such a matrix is called singular. In real code the picture is subtler still, because a matrix can be technically invertible yet so close to collapsing that the answer you compute is mostly rounding error; the condition number is what tells you this, and it is the number to check before trusting a result. That is also why experienced engineers almost never call inv. Solving the system directly costs roughly a third as much, carries less rounding error, and fails honestly when the matrix really is degenerate.',
+    },
+  },

@@ -2752,3 +2752,1147 @@ Mouse Pad    Lagos          8.0    41.25`,
         'Think of everyone finishing a race and then standing about in a field. They finished, but nobody has put them in order, so if you ask "who are the first three?" the question has no real answer — you would just grab whoever is nearest. That is what a database does without ORDER BY: it hands you rows in whatever order was convenient, and that can be different tomorrow. ORDER BY is the timekeeper. You say "fastest first", and now first, second and third mean something, and LIMIT 3 gives you the podium. But here is the catch: if two runners finished in exactly the same time, who goes ahead of whom? The rules you gave do not say, so the database picks one, and it might pick differently next time. That is why people add a second rule as a tiebreak — "and if the times are equal, lower bib number first". Once every pair of rows has a definite order, the top three is the same every single time.',
     },
   },
+
+  {
+    id: 'SQL-007',
+    domain: 'SQL',
+    module: 'Aggregation',
+    topic: 'Aggregation and grouping',
+    title: 'Aggregate Functions and GROUP BY',
+    slug: 'aggregate-functions-group-by',
+    difficulty: 2,
+    estimatedMinutes: 40,
+    prerequisites: ['SQL-006'],
+    related: ['SQL-004', 'SQL-005', 'SQL-006'],
+    tags: ['group-by', 'count', 'sum', 'avg', 'aggregate', 'logical-order', 'grain'],
+
+    learningObjectives: [
+      'Use COUNT, SUM, AVG, MIN and MAX, and explain how each treats NULL',
+      'Distinguish COUNT(*), COUNT(col) and COUNT(DISTINCT col) precisely',
+      'Explain GROUP BY as collapsing rows into one row per distinct key combination',
+      'State the logical order of clause evaluation and use it to predict what each clause can see',
+      'Recognise which columns may legally appear in SELECT alongside an aggregate, and why',
+    ],
+
+    terminology: [
+      {
+        term: 'Aggregate function',
+        definition:
+          'A function that consumes many rows and produces a single value: COUNT, SUM, AVG, MIN, MAX and, in most dialects, string and statistical aggregates too.',
+        simple: 'A function that turns a column of values into one number.',
+      },
+      {
+        term: 'GROUP BY',
+        definition:
+          'Partitions the rows surviving WHERE into groups sharing the same values in the grouping columns, then evaluates each aggregate once per group, emitting one row per group.',
+        simple: 'Collapse the rows into one row per category.',
+      },
+      {
+        term: 'Grain',
+        definition:
+          'What one row of a result represents — one order, one customer-month, one product. GROUP BY is how you deliberately change grain.',
+        simple: 'What one row of the answer means.',
+      },
+      {
+        term: 'Logical clause order',
+        definition:
+          'The order in which clauses are conceptually evaluated — FROM, WHERE, GROUP BY, HAVING, SELECT, ORDER BY, LIMIT — which determines what each clause can refer to, regardless of the physical plan.',
+        simple: 'The order SQL thinks in, which is not the order you type.',
+      },
+      {
+        term: 'Bare column',
+        definition:
+          'A column in SELECT that is neither aggregated nor listed in GROUP BY. Standard SQL and PostgreSQL reject it; SQLite and older MySQL silently pick an arbitrary row’s value.',
+        simple: 'A column you asked for without saying which row of the group it should come from.',
+      },
+      {
+        term: 'Functional dependency',
+        definition:
+          'When grouping by a primary key, every other column of that table is uniquely determined, so PostgreSQL permits those columns bare in SELECT.',
+        simple: 'If you group by the id, the name is already decided.',
+      },
+    ],
+
+    simpleExplanation:
+      "So far every query has returned one row per row of the table. Aggregation changes that. An aggregate function takes a whole column of values and squeezes it into one: COUNT how many, SUM them, take the AVG, the MIN, the MAX. On its own, `SELECT COUNT(*) FROM orders` gives a single number for the entire table. GROUP BY is what makes that genuinely powerful: it says “do not collapse everything into one number — first sort the rows into piles by country, or by status, or by month, and then give me one number per pile”. The output has one row per distinct pile, which means the meaning of a row has changed. Before, a row was an order; afterwards, a row is a country. That shift is called changing the grain, and keeping track of it is most of what makes complicated SQL comprehensible. The one rule to internalise is that once you group, every column in SELECT must either be one of the things you grouped by, or be wrapped in an aggregate — because anything else has many possible values and no way to choose.",
+
+    whyItExists:
+      'Raw rows answer questions about individuals; almost every business or scientific question is about populations — how many, how much on average, what is the maximum per category. Doing that reduction inside the engine means only the summary crosses the network, and the engine can compute it while scanning, rather than materialising millions of rows for a client to loop over.',
+
+    analogy: {
+      scenario:
+        'Imagine a teacher with a pile of two hundred marked exam papers. To answer "what was the average mark?" she adds every score and divides — one number from two hundred papers. To answer "what was the average mark in each class?" she first sorts the papers into piles, one per class, and then works out an average within each pile. She ends up with one figure per pile, and the individual papers are gone from the summary. If someone then asks "and what was the name on the paper?", the question is unanswerable: which of the thirty names in that pile did they mean?',
+      mapping: [
+        { from: 'The pile of two hundred papers', to: 'The rows surviving WHERE' },
+        { from: 'Sorting into piles by class', to: 'GROUP BY class' },
+        { from: 'One average per pile', to: 'An aggregate evaluated once per group' },
+        { from: 'The single sheet of results, one line per class', to: 'The result set, one row per group' },
+        { from: '"Which name?" having no answer', to: 'The bare-column error: a non-grouped, non-aggregated column' },
+        { from: 'Discarding papers with no mark before averaging', to: 'Aggregates ignoring NULL inputs' },
+      ],
+      bridge:
+        'The teacher’s piles are literally what GROUP BY builds, and her summary sheet is the result set with its new grain: a line is now a class, not a pupil. The unanswerable name question is exactly the error PostgreSQL raises — "column must appear in the GROUP BY clause or be used in an aggregate function" — and once you have pictured the piles, that message stops being cryptic.',
+      limitations:
+        'The teacher physically makes piles; the engine usually does not. It may sort, or hash, or read a pre-sorted index and aggregate on the fly, and it may do it in parallel. The piles are a model of the meaning, not a description of the mechanism.',
+    },
+
+    visuals: [
+      {
+        kind: 'ascii',
+        title: 'GROUP BY, drawn',
+        caption: 'Eight order rows become three country rows. The grain changes from "one order" to "one country".',
+        art: `INPUT (after WHERE)                     GROUPED                 OUTPUT
+
+customer_id  country  amount          Nigeria                country  orders  revenue
+-----------  -------  ------          -------                -------  ------  -------
+    1        Nigeria    120    -->    120, 40, 85     -->    Nigeria    3       245
+    2        Spain       55           = 3 rows               Spain      2        95
+    1        Nigeria     40
+    3        China       70           Spain                  China      3       260
+    2        Spain       40           55, 40
+    4        China      120           = 2 rows
+    1        Nigeria     85
+    5        China       70           China
+                                      70, 120, 70
+                                      = 3 rows
+
+SELECT country,
+       COUNT(*)    AS orders,      <- one value per pile
+       SUM(amount) AS revenue      <- one value per pile
+FROM   ...
+GROUP BY country;                  <- what defines a pile`,
+      },
+      {
+        kind: 'table',
+        title: 'The counting family',
+        caption: 'Three functions that look similar and answer different questions.',
+        columns: ['Expression', 'Counts', 'On a column with values 5, 5, NULL'],
+        rows: [
+          ['`COUNT(*)`', 'Rows in the group, regardless of values', '3'],
+          ['`COUNT(col)`', 'Rows where col is not NULL', '2'],
+          ['`COUNT(DISTINCT col)`', 'Distinct non-NULL values of col', '1'],
+          ['`SUM(col)`', 'Total of non-NULL values; NULL if all are NULL', '10'],
+          ['`AVG(col)`', 'SUM of non-NULL divided by COUNT of non-NULL', '5.0, not 3.33'],
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'Logical order of evaluation',
+        caption: 'Not the order you write. This is what each clause can and cannot see.',
+        steps: [
+          { label: 'FROM / JOIN', detail: 'Assemble the source rows. Table aliases become available.' },
+          { label: 'WHERE', detail: 'Filter individual rows. Cannot see aggregates — they do not exist yet.' },
+          { label: 'GROUP BY', detail: 'Partition surviving rows into groups. The grain changes here.' },
+          { label: 'HAVING', detail: 'Filter whole groups. Can see aggregates, because groups now exist.' },
+          { label: 'SELECT', detail: 'Evaluate the projection and create column aliases.' },
+          { label: 'ORDER BY', detail: 'Sort. Can use SELECT aliases, since SELECT has run.' },
+          { label: 'LIMIT / OFFSET', detail: 'Cap the result. Meaningless without ORDER BY.' },
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Change the grain yourself',
+        caption: 'Run `SELECT country, COUNT(*) FROM customers GROUP BY country;` then add a second grouping column and watch the row count grow.',
+        widget: 'sql-playground',
+      },
+    ],
+
+    formalDefinition:
+      'An aggregate function maps a multiset of input values to a single value, ignoring NULL inputs except for COUNT(*). GROUP BY partitions the rows produced by FROM and WHERE into equivalence classes by the values of its grouping expressions, and the query emits exactly one tuple per class. Within a grouped query every SELECT expression must be either a grouping expression, an aggregate over the group, or functionally dependent on the grouping expressions; standard SQL rejects anything else.',
+
+    math: {
+      intuition:
+        'An aggregate is a reduction: it folds a list of values into one using an associative operation, which is why databases can compute it while streaming rows and can split the work across threads or machines. Counting and summing are trivially parallel — partial results simply add — while an average is not stored as a single accumulator but derived from two, because you cannot correctly average partial averages of unequal group sizes.',
+      formulas: [
+        {
+          latex: '\\mathrm{COUNT}(x) = \\sum_{i=1}^{n} \\mathbb{1}[x_i \\neq \\mathrm{NULL}]',
+          name: 'COUNT of a column',
+          meaning: 'Counts how many rows in the group have a recorded value, which is why COUNT(col) can be smaller than COUNT(*).',
+          variables: [
+            { symbol: 'n', meaning: 'Number of rows in the group' },
+            { symbol: 'x_i', meaning: 'The value of the column in row i' },
+            { symbol: '\\mathbb{1}[\\cdot]', meaning: 'Indicator: 1 when the condition holds, 0 otherwise' },
+          ],
+        },
+        {
+          latex: '\\mathrm{AVG}(x) = \\frac{\\sum_{i : x_i \\neq \\mathrm{NULL}} x_i}{\\sum_{i=1}^{n} \\mathbb{1}[x_i \\neq \\mathrm{NULL}]}',
+          name: 'AVG ignores NULLs in both numerator and denominator',
+          meaning: 'The mean of the recorded values only. Treating missing values as zero would instead divide by n, giving a different and usually smaller number.',
+          variables: [
+            { symbol: 'x_i', meaning: 'The value in row i' },
+            { symbol: 'n', meaning: 'Rows in the group, including those with NULL' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\mathrm{AVG}(x) \\neq \\frac{1}{k}\\sum_{g=1}^{k} \\mathrm{AVG}(x_g) \\quad \\text{unless all } |x_g| \\text{ are equal}',
+          name: 'Averages do not average',
+          meaning: 'The mean of group means equals the overall mean only when the groups are the same size. This is why re-aggregating a summary table silently produces wrong numbers.',
+          variables: [
+            { symbol: 'k', meaning: 'Number of groups' },
+            { symbol: 'x_g', meaning: 'The values belonging to group g' },
+            { symbol: '|x_g|', meaning: 'The number of rows in group g' },
+          ],
+          category: 'statistics',
+        },
+      ],
+      derivation: [
+        'Suppose two groups: group A has values 10 and 10 (mean 10, n = 2); group B has the single value 100 (mean 100, n = 1).',
+        'The mean of the group means is (10 + 100) / 2 = 55.',
+        'The true overall mean is (10 + 10 + 100) / 3 = 40.',
+        'They differ because the naive average weights each group equally, while the true mean weights each row equally.',
+        'To recombine correctly you need the counts: sum of (mean x count) divided by sum of counts, giving (20 + 100) / 3 = 40.',
+        'The practical rule: a summary table must carry the counts, or its averages can never be safely rolled up.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Revenue per country, step by step',
+      setup:
+        'We want one row per country with the number of orders and the total revenue. Revenue lives on `order_items` as quantity times unit price, orders belong to customers, and customers carry the country. We also want to exclude cancelled orders.',
+      steps: [
+        {
+          label: 'FROM: assemble the rows',
+          detail:
+            'Join customers to orders to order_items. The grain of this intermediate result is one row per order item — already three tables deep and no longer one row per order. Naming the grain now is what prevents double counting later.',
+        },
+        {
+          label: 'WHERE: filter individual rows',
+          detail:
+            "`WHERE o.status <> 'cancelled'` removes cancelled orders before any grouping. Filtering here rather than later is both correct and cheaper, because fewer rows reach the aggregation.",
+        },
+        {
+          label: 'GROUP BY: choose the grain of the answer',
+          detail:
+            '`GROUP BY c.country` collapses all remaining item rows into one pile per country. From this point on, a row means a country and individual order items are no longer addressable.',
+        },
+        {
+          label: 'Aggregate: one value per pile',
+          detail:
+            '`SUM(oi.quantity * oi.unit_price)` totals revenue correctly because it sums an item-level quantity. `COUNT(*)` would count item rows, not orders — so to count orders we need `COUNT(DISTINCT o.id)`.',
+          latex: '\\text{revenue}_c = \\sum_{i \\in \\text{items}(c)} q_i \\cdot p_i',
+        },
+        {
+          label: 'SELECT: project the group row',
+          detail:
+            'Only `c.country` and the aggregates may appear. Adding `c.name` would be a bare column — there are many names per country and no rule for choosing one — and PostgreSQL rejects it.',
+        },
+        {
+          label: 'ORDER BY and LIMIT',
+          detail:
+            '`ORDER BY revenue DESC, country ASC` sorts the summary, with a unique tiebreak so the ranking is reproducible, and LIMIT takes the leaders.',
+        },
+      ],
+      conclusion:
+        'The query is six lines, but the thinking is one question repeated: what does one row mean at this point? One order item after the joins, one country after the GROUP BY. The only genuinely subtle step is COUNT(DISTINCT o.id) rather than COUNT(*), and that subtlety exists entirely because the join multiplied orders into items.',
+    },
+
+    codeExamples: [
+      {
+        language: 'sql',
+        title: 'The five core aggregates, ungrouped',
+        runnable: true,
+        code: `SELECT
+  COUNT(*)              AS product_rows,
+  COUNT(stock)          AS products_with_stock_recorded,
+  COUNT(DISTINCT category) AS categories,
+  SUM(stock)            AS total_units,
+  ROUND(AVG(price), 2)  AS mean_price,
+  MIN(price)            AS cheapest,
+  MAX(price)            AS dearest
+FROM products;`,
+        explanation:
+          'With no GROUP BY the whole table is one group, so you get exactly one row back. The first two columns are the null audit from SQL-002 in aggregate form: any gap between them is missing data. Note that AVG divides by the count of non-NULL prices, not by the number of rows — if you want missing prices treated as zero you must say so with `AVG(COALESCE(price, 0))`, and the two answers are genuinely different.',
+        output: `product_rows  products_with_stock_recorded  categories  total_units  mean_price  cheapest  dearest
+------------  ----------------------------  ----------  -----------  ----------  --------  -------
+24            22                            6           4831         76.42       4.5       349.0`,
+      },
+      {
+        language: 'sql',
+        title: 'GROUP BY: one row per category',
+        runnable: true,
+        code: `SELECT
+  category,
+  COUNT(*)             AS n_products,
+  ROUND(AVG(price), 2) AS avg_price,
+  MIN(price)           AS cheapest,
+  MAX(price)           AS dearest,
+  SUM(stock)           AS units_in_stock
+FROM products
+GROUP BY category
+ORDER BY avg_price DESC, category ASC;`,
+        explanation:
+          'The grain of the result is one row per category, and every selected column respects that: `category` is the grouping key, everything else is an aggregate. Try adding a bare `name` to the SELECT — SQLite will quietly return an arbitrary product’s name for each category, while PostgreSQL raises "column products.name must appear in the GROUP BY clause or be used in an aggregate function". The PostgreSQL behaviour is the correct one, and relying on SQLite’s leniency produces queries that mean something different on different engines.',
+        output: `category     n_products  avg_price  cheapest  dearest  units_in_stock
+-----------  ----------  ---------  --------  -------  --------------
+displays     3           289.33     199.0     349.0    142
+peripherals  6           64.50      18.0      89.0     883
+cables       5           11.30      4.5       19.0     2104`,
+      },
+      {
+        language: 'sql',
+        title: 'Grouping by more than one column, and by an expression',
+        runnable: true,
+        code: `-- Two grouping keys: one row per country/status pair
+SELECT c.country, o.status, COUNT(*) AS orders
+FROM orders AS o
+JOIN customers AS c ON c.id = o.customer_id
+GROUP BY c.country, o.status
+ORDER BY c.country, o.status;
+
+-- Grouping by a derived value: orders per month
+SELECT SUBSTR(order_date, 1, 7) AS month, COUNT(*) AS orders
+FROM orders
+GROUP BY SUBSTR(order_date, 1, 7)
+ORDER BY month;`,
+        explanation:
+          'Adding a grouping column subdivides the piles, so the row count goes up, never down — the opposite of what people expect from a word like "grouping". The second query groups by an expression, which is how monthly rollups are written when dates are stored as ISO text: `SUBSTR(order_date, 1, 7)` yields `2024-03`. PostgreSQL would use `DATE_TRUNC(’month’, order_date)` on a real date column, and the substring trick works in SQLite precisely because ISO-8601 text sorts and truncates correctly.',
+        output: `country  status     orders
+-------  ---------  ------
+China    pending    3
+China    shipped    6
+Nigeria  cancelled  1
+Nigeria  shipped    13
+
+month    orders
+-------  ------
+2024-01  9
+2024-02  14
+2024-03  17`,
+      },
+      {
+        language: 'sql',
+        title: 'Counting the right thing after a join',
+        runnable: true,
+        code: `SELECT
+  c.country,
+  COUNT(*)                            AS item_rows,
+  COUNT(DISTINCT o.id)                AS orders,
+  COUNT(DISTINCT c.id)                AS customers,
+  ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+FROM customers   AS c
+JOIN orders      AS o  ON o.customer_id = c.id
+JOIN order_items AS oi ON oi.order_id   = o.id
+WHERE o.status <> 'cancelled'
+GROUP BY c.country
+ORDER BY revenue DESC, c.country;`,
+        explanation:
+          'Four counts of the same group, all different, all correct for different questions. `COUNT(*)` counts item rows because that is the grain after two joins; `COUNT(DISTINCT o.id)` recovers the number of orders; `COUNT(DISTINCT c.id)` the number of customers. Revenue is safe to SUM because `quantity * unit_price` is genuinely an item-level fact — had `orders` carried an `order_total` column, summing it here would multiply each order’s total by its number of items. This single example contains the most common analytics bug in the industry.',
+        output: `country  item_rows  orders  customers  revenue
+-------  ---------  ------  ---------  --------
+Nigeria  31         13      4          4820.50
+China    22         9       5          3115.00
+Spain    17         8       3          1944.75`,
+      },
+      {
+        language: 'sql',
+        title: 'Conditional aggregation: pivoting without a PIVOT clause',
+        runnable: true,
+        code: `SELECT
+  c.country,
+  COUNT(*)                                                AS total_orders,
+  SUM(CASE WHEN o.status = 'shipped'   THEN 1 ELSE 0 END) AS shipped,
+  SUM(CASE WHEN o.status = 'pending'   THEN 1 ELSE 0 END) AS pending,
+  SUM(CASE WHEN o.status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled,
+  ROUND(AVG(CASE WHEN o.status = 'cancelled' THEN 1.0 ELSE 0.0 END), 3) AS cancel_rate
+FROM orders AS o
+JOIN customers AS c ON c.id = o.customer_id
+GROUP BY c.country
+ORDER BY cancel_rate DESC;`,
+        explanation:
+          'Putting a CASE inside an aggregate is how you turn rows into columns, and it is one of the highest-value patterns in analytical SQL. Each SUM counts only the rows matching its condition, so one pass over the data produces a whole cross-tabulation. The final column exploits the same trick to get a rate rather than a count: averaging a 1/0 indicator gives the proportion directly. You could also write `COUNT(CASE WHEN ... THEN 1 END)` without an ELSE, relying on COUNT ignoring the NULLs.',
+        output: `country  total_orders  shipped  pending  cancelled  cancel_rate
+-------  ------------  -------  -------  ---------  -----------
+Spain    9             6        2        1          0.111
+China    9             6        3        0          0.000
+Nigeria  14            13       1        0          0.000`,
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Feature engineering for churn models',
+        usage:
+          'Features such as "orders in the last 90 days", "mean basket value" and "distinct categories purchased" are exactly GROUP BY over a filtered window, keyed by customer. The aggregate query is the feature definition.',
+      },
+      {
+        context: 'Funnel and conversion reporting',
+        usage:
+          'Conditional aggregation over an events table — one SUM(CASE ...) per funnel step — produces the whole funnel in one scan, which is why it is the standard pattern in product analytics.',
+      },
+      {
+        context: 'Data-quality monitoring',
+        usage:
+          'A nightly job compares COUNT(*) with COUNT(col) per column to track null rates, and alerts when one moves. Most upstream breakages show up as a sudden jump in missingness before they show up anywhere else.',
+      },
+      {
+        context: 'Class balance before training',
+        usage:
+          '`SELECT label, COUNT(*) FROM training_set GROUP BY label` is the first query anyone should run on a labelled dataset. A 99:1 imbalance changes the metric, the sampling and sometimes the whole approach.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'pandas', role: '`df.groupby("country").agg(orders=("id", "count"), revenue=("total", "sum"))` is the same operation; `nunique()` is COUNT(DISTINCT).' },
+      { tool: 'dbt', role: 'Aggregate models are where business metrics get defined once. A metric duplicated across dashboards is a metric that will eventually disagree with itself.' },
+      { tool: 'scikit-learn', role: 'Aggregated per-entity features from SQL are typically the input matrix; the GROUP BY key becomes the row index of the training set.' },
+      { tool: 'Spark SQL / BigQuery', role: 'The same GROUP BY runs distributed, with partial aggregates computed per node and merged — which works precisely because COUNT and SUM are associative.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Selecting a bare column alongside an aggregate',
+        why: 'The column has many values within the group and no rule selects one. PostgreSQL errors; SQLite returns an arbitrary value, so the query appears to work and quietly means something else.',
+        fix: 'Add the column to GROUP BY if it defines the grain, or wrap it in an aggregate such as MIN/MAX if you genuinely want any one value. Never rely on SQLite’s leniency.',
+      },
+      {
+        mistake: 'Using COUNT(*) after a one-to-many join and calling it the number of orders',
+        why: 'The join has already multiplied each order into one row per item, so COUNT(*) counts items. The number is plausible, just wrong, which is the worst kind of wrong.',
+        fix: 'Use `COUNT(DISTINCT o.id)`, or aggregate the child table to the parent grain in a subquery before joining.',
+      },
+      {
+        mistake: 'Assuming AVG treats NULL as zero',
+        why: 'AVG divides the sum of known values by the count of known values, so 10, 20 and NULL average to 15, not 10. Both answers are defensible; only one is what the engine does.',
+        fix: 'Be explicit: `AVG(col)` for the mean of recorded values, `AVG(COALESCE(col, 0))` to treat missing as zero. State the choice in a comment.',
+      },
+      {
+        mistake: 'Averaging an average from a summary table',
+        why: 'The mean of group means equals the true mean only when groups are equal in size. Re-aggregating a pre-aggregated table silently reweights the data.',
+        fix: 'Carry counts alongside means in any summary table, then recombine as SUM(mean * count) / SUM(count) — or re-aggregate from the raw rows.',
+      },
+      {
+        mistake: 'Trying to filter on an aggregate in WHERE',
+        why: 'WHERE is evaluated before GROUP BY, so no aggregate exists yet. PostgreSQL reports "aggregate functions are not allowed in WHERE".',
+        fix: 'Filter groups in HAVING, which runs after grouping. The distinction is the whole subject of SQL-008.',
+      },
+      {
+        mistake: 'Expecting more grouping columns to mean fewer rows',
+        why: 'Each extra grouping column subdivides the existing piles, so the result grows. "Grouping" suggests consolidation, but the row count moves the other way.',
+        fix: 'Decide the grain of the answer first — one row per what? — and let that dictate the GROUP BY list exactly.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'Explain the difference between COUNT(*), COUNT(col) and COUNT(DISTINCT col).',
+        answer:
+          'COUNT(*) counts rows in the group and never inspects values, so nothing can be skipped. COUNT(col) counts rows where col is not NULL, because aggregates ignore NULL inputs — the gap between the two is precisely the number of missing values, which makes the pair a cheap data-quality check. COUNT(DISTINCT col) counts distinct non-NULL values, so it answers "how many different customers" rather than "how many rows". A practical consequence is that after a one-to-many join, COUNT(*) counts the child rows while COUNT(DISTINCT parent.id) recovers the parent count, and confusing the two is the standard cause of inflated dashboards.',
+      },
+      {
+        level: 'intermediate',
+        question: 'What is the logical order of clause evaluation in a SELECT statement, and why does it matter?',
+        answer:
+          'FROM and JOIN, then WHERE, then GROUP BY, then HAVING, then SELECT, then ORDER BY, then LIMIT. It matters because it determines visibility rather than performance. WHERE runs before grouping, so it cannot reference aggregates and can only filter individual rows. SELECT runs after grouping, so aliases created there do not exist in WHERE, GROUP BY or HAVING — but ORDER BY, which runs last, can use them. HAVING can reference aggregates because groups exist by then. The physical plan may differ entirely, pushing filters down and reordering joins, but it must produce the result this logical order defines.',
+        followUp:
+          'A strong answer adds that window functions are evaluated after HAVING and before ORDER BY, which is why a window function cannot appear in WHERE and needs a subquery to be filtered on.',
+      },
+      {
+        level: 'internship',
+        question: 'A dashboard reports average order value by country by joining orders to order_items and taking AVG(order_items.unit_price). What is wrong with it?',
+        answer:
+          'Several things, and they compound. First, the grain: after the join, one row is an order item, so the average is over item prices, not order values — an order for one expensive item and an order for ten cheap ones contribute one and ten observations respectively, so the number is weighted by basket size rather than by order. Second, `unit_price` ignores quantity entirely, so it is not even an item value. The correct computation aggregates to order level first — in a CTE, `SELECT order_id, SUM(quantity * unit_price) AS order_total FROM order_items GROUP BY order_id` — and then takes AVG(order_total) grouped by country. The general lesson is to state the grain of every intermediate result, and to be suspicious of any AVG taken directly over a joined table.',
+        followUp:
+          'Mentioning that the median is usually a better summary of order value than the mean, because basket values are right-skewed, is the answer that gets remembered.',
+      },
+      {
+        level: 'internship',
+        question: 'Write a query to find, for each month, the number of orders and the number of distinct customers who ordered.',
+        answer:
+          "`SELECT SUBSTR(order_date, 1, 7) AS month, COUNT(*) AS orders, COUNT(DISTINCT customer_id) AS customers FROM orders GROUP BY SUBSTR(order_date, 1, 7) ORDER BY month;`. Grouping by the truncated ISO date works because `YYYY-MM-DD` text truncates cleanly to `YYYY-MM` and still sorts chronologically; in PostgreSQL the same idea is `DATE_TRUNC('month', order_date)`. COUNT(*) is correct for orders here because the grain of `orders` is already one row per order — no join has multiplied anything — while COUNT(DISTINCT customer_id) is required because a customer may order several times in a month. The ratio of the two is orders per active customer, which is usually the metric anyone actually wanted.",
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'For each order status, report the number of orders and the number of distinct customers who have an order with that status.',
+        hint: 'One GROUP BY key and two different counts. The `orders` table alone is enough.',
+        language: 'sql',
+        starterCode: '-- one row per status\n',
+        solution:
+          'SELECT\n  status,\n  COUNT(*)                   AS orders,\n  COUNT(DISTINCT customer_id) AS customers\nFROM orders\nGROUP BY status\nORDER BY orders DESC, status ASC;\n\nCOUNT(*) is right for orders because the grain of `orders` is one row per order. COUNT(DISTINCT customer_id) is needed for customers because one customer can hold several orders of the same status. If `status` can be NULL, those rows form their own group — GROUP BY treats all NULLs as a single group, which is the one place in SQL where two NULLs are considered equal.',
+      },
+      {
+        prompt: 'Compute, for each product category, the total revenue it has generated and the number of distinct orders it appeared in.',
+        hint: 'Revenue lives in `order_items` as quantity times unit_price; the category lives in `products`.',
+        language: 'sql',
+        solution:
+          "SELECT\n  p.category,\n  ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue,\n  COUNT(DISTINCT oi.order_id)                AS orders_containing,\n  SUM(oi.quantity)                           AS units_sold\nFROM order_items AS oi\nJOIN products    AS p ON p.id = oi.product_id\nGROUP BY p.category\nORDER BY revenue DESC;\n\nThe grain after the join is one row per order item, which is exactly the grain revenue is defined at, so SUM is safe. `COUNT(DISTINCT oi.order_id)` is necessary because a single order can contain several items from the same category and would otherwise be counted more than once. Using `oi.unit_price` rather than `p.price` keeps historical revenue correct after a price change.",
+      },
+      {
+        prompt: 'Produce a monthly summary of orders: month, total orders, shipped orders, cancelled orders, and the cancellation rate as a decimal.',
+        hint: 'Group by the first seven characters of the date; use SUM(CASE ...) for the conditional counts.',
+        language: 'sql',
+        solution:
+          "SELECT\n  SUBSTR(order_date, 1, 7) AS month,\n  COUNT(*)                 AS orders,\n  SUM(CASE WHEN status = 'shipped'   THEN 1 ELSE 0 END) AS shipped,\n  SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled,\n  ROUND(AVG(CASE WHEN status = 'cancelled' THEN 1.0 ELSE 0.0 END), 4) AS cancel_rate\nFROM orders\nGROUP BY SUBSTR(order_date, 1, 7)\nORDER BY month;\n\nConditional aggregation gives the whole cross-tabulation in one scan. The rate uses AVG over a 1.0/0.0 indicator rather than dividing two counts, which avoids integer division entirely — in SQLite `cancelled / orders` with two integers truncates to 0, a bug that produces a column of zeroes and looks like clean data.",
+      },
+      {
+        prompt: 'A summary table holds one row per country with `avg_order_value` and `orders`. A colleague computes the global average as AVG(avg_order_value). Show why this is wrong and give the correct expression.',
+        hint: 'Consider two countries, one with 100 orders averaging 10 and one with 1 order of 1000.',
+        solution:
+          'With 100 orders averaging 10 and 1 order of 1000, AVG(avg_order_value) gives (10 + 1000) / 2 = 505, while the true average is (100 x 10 + 1 x 1000) / 101 = 19.8. The naive version weights each country equally instead of each order equally. The correct expression is the count-weighted mean: `SUM(avg_order_value * orders) / SUM(orders)`. The general rule is that sums and counts recombine freely because they are additive, while means, medians and distinct counts do not — which is why any summary table intended for further aggregation must carry its counts, and why distinct counts usually have to be recomputed from raw rows.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'SQL-007-q1',
+        type: 'mcq',
+        concept: 'count variants',
+        prompt: 'A group has the values 7, 7 and NULL in column `x`. What do COUNT(*), COUNT(x) and COUNT(DISTINCT x) return?',
+        options: ['3, 2, 1', '3, 3, 2', '2, 2, 1', '3, 2, 2'],
+        answerIndex: 0,
+        explanation:
+          'COUNT(*) counts rows (3). COUNT(x) skips the NULL (2). COUNT(DISTINCT x) counts distinct non-NULL values, and both sevens are the same value (1).',
+      },
+      {
+        id: 'SQL-007-q2',
+        type: 'order',
+        concept: 'logical clause order',
+        prompt: 'Order these clauses as SQL logically evaluates them.',
+        items: ['FROM', 'WHERE', 'GROUP BY', 'HAVING', 'SELECT', 'ORDER BY', 'LIMIT'],
+        explanation:
+          'This order explains visibility: WHERE cannot see aggregates because grouping has not happened; ORDER BY can use SELECT aliases because SELECT has already run.',
+      },
+      {
+        id: 'SQL-007-q3',
+        type: 'code-output',
+        language: 'sql',
+        concept: 'avg and nulls',
+        prompt: 'A column holds 10, 20 and NULL. What does AVG return?',
+        code: 'SELECT AVG(v) AS mean FROM (SELECT 10 AS v UNION ALL SELECT 20 UNION ALL SELECT NULL);',
+        options: ['15.0', '10.0', 'NULL', '30.0'],
+        answerIndex: 0,
+        explanation:
+          'AVG ignores NULL in both the sum and the divisor, giving 30/2 = 15. Treating the NULL as zero would give 10, which is why the choice must be made explicitly with COALESCE.',
+      },
+      {
+        id: 'SQL-007-q4',
+        type: 'debug',
+        language: 'sql',
+        concept: 'bare columns',
+        prompt: 'PostgreSQL rejects this query. Why, and what does SQLite do instead?',
+        code: 'SELECT category, name, AVG(price)\nFROM products\nGROUP BY category;',
+        options: [
+          '`name` is neither grouped nor aggregated, so no single value is defined per group; SQLite silently returns an arbitrary one',
+          'AVG cannot be used without an alias',
+          'GROUP BY must list every column in the table',
+          'The query needs a HAVING clause',
+        ],
+        answerIndex: 0,
+        explanation:
+          'A group has many names and nothing chooses between them. PostgreSQL raises an error; SQLite picks an arbitrary row’s value, which makes the query mean different things on different engines.',
+      },
+      {
+        id: 'SQL-007-q5',
+        type: 'truefalse',
+        concept: 'grouping granularity',
+        prompt: 'Adding a second column to GROUP BY can only reduce the number of rows in the result.',
+        answer: false,
+        explanation:
+          'It subdivides each existing group, so the row count can only stay the same or increase. Grouping by more columns produces a finer grain, not a coarser one.',
+      },
+      {
+        id: 'SQL-007-q6',
+        type: 'multi',
+        concept: 'join grain and aggregation',
+        prompt: 'After joining `orders` to `order_items`, which statements are true? Select all that apply.',
+        options: [
+          'COUNT(*) counts order items, not orders',
+          'COUNT(DISTINCT orders.id) recovers the number of orders',
+          'SUM(order_items.quantity * order_items.unit_price) is a valid revenue total',
+          'Summing a column stored on `orders` would multiply it by the number of items per order',
+          'AVG over the joined rows is automatically weighted per order',
+        ],
+        answerIndices: [0, 1, 2, 3],
+        explanation:
+          'The join sets the grain to one row per item. Item-level facts aggregate correctly; order-level facts get duplicated, and any AVG is implicitly weighted by basket size rather than per order.',
+      },
+      {
+        id: 'SQL-007-q7',
+        type: 'explain',
+        concept: 'group by as grain change',
+        prompt: 'Explain GROUP BY to someone who understands spreadsheets but has never written SQL, and say what happens to columns you did not group by.',
+        rubric: [
+          'Describes grouping as sorting rows into piles by a key and producing one row per pile',
+          'States that aggregates are computed once per pile',
+          'Explains that a column not grouped and not aggregated has no single value, hence the error',
+        ],
+        sampleAnswer:
+          'GROUP BY is a pivot table written as a sentence. You name the column that defines the piles — say country — and the database sorts every row into the pile matching its country. Then, for each pile, it works out whatever summaries you asked for: how many rows, the total, the average. The answer has one line per pile, so a row no longer means an order, it means a country. The important consequence is that the individual rows are gone. If you ask for the customer’s name as well, the database has thirty names in that pile and no rule for picking one, so PostgreSQL refuses the query and tells you the column must be grouped or aggregated. SQLite will hand you an arbitrary name instead, which is worse, because the query looks like it worked.',
+        explanation:
+          'The examinable idea is that grouping changes what a row means, and that the bare-column error follows directly from that change rather than being an arbitrary restriction.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does GROUP BY do?', back: 'Partitions rows into groups sharing the grouping key, then emits one row per group with aggregates computed per group. It changes the grain of the result.' },
+      { front: 'COUNT(*) vs COUNT(col)', back: 'COUNT(*) counts rows; COUNT(col) counts non-NULL values. The gap between them is the column’s missingness.' },
+      { front: 'What is the logical clause order?', back: 'FROM → WHERE → GROUP BY → HAVING → SELECT → ORDER BY → LIMIT. It governs what each clause can reference.' },
+      { front: 'Why can WHERE not filter on COUNT(*)?', back: 'WHERE runs before GROUP BY, so no groups and no aggregates exist yet. Use HAVING.' },
+      { front: 'Does AVG treat NULL as zero?', back: 'No. It sums and counts only non-NULL values, so 10, 20, NULL averages to 15. Use AVG(COALESCE(col, 0)) for the other meaning.' },
+      { front: 'Why is AVG of AVGs wrong?', back: 'It weights each group equally instead of each row. Recombine with SUM(mean * count) / SUM(count), which is why summary tables must carry counts.' },
+      { front: 'What is conditional aggregation?', back: 'An aggregate wrapped around a CASE, e.g. SUM(CASE WHEN status = ’shipped’ THEN 1 ELSE 0 END) — the standard way to pivot rows into columns.' },
+    ],
+
+    challenge: {
+      title: 'A country performance report',
+      brief:
+        'Produce a single query giving one row per country with: number of customers, number of distinct orders, number of order items, total revenue, average order value (correctly computed at order grain, not item grain), the share of orders that were cancelled, and the date of the most recent order. Every count must be verifiably counting the right entity, and you should include a comment above each aggregate stating the grain it operates on.',
+      language: 'sql',
+      acceptanceCriteria: [
+        'Average order value is computed from order totals, not from item prices',
+        'COUNT(DISTINCT ...) is used wherever a join has multiplied rows',
+        'The cancellation share is computed without integer division',
+        'Every aggregate is annotated with the grain it operates on',
+        'The result is ordered by revenue with a deterministic tiebreak',
+      ],
+      starterCode: "-- Aggregate order_items to order grain first, then join.\nWITH order_totals AS (\n  SELECT order_id, SUM(quantity * unit_price) AS order_total\n  FROM order_items\n  GROUP BY order_id\n)\nSELECT 1;\n",
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Imagine I am nine. Teach me what it means to group rows in a database, and why after grouping I cannot ask for someone’s name any more.',
+      mustCover: [
+        'An aggregate squeezes many values into one number',
+        'GROUP BY sorts the rows into piles by whatever column you name',
+        'You get one row of answer per pile, so a row now means a pile, not an original record',
+        'Columns you did not group by have many values in the pile, so asking for them has no single answer',
+        'COUNT(*) counts rows while COUNT(column) skips the blanks',
+      ],
+      bonusSignals: ['uses a sorting-into-piles analogy', 'gives a concrete example of a wrong count after joining', 'mentions that more grouping columns means more rows, not fewer'],
+      sampleExplanation:
+        'Imagine you have two hundred exam papers on a table. If I ask "what was the average mark?", you add up every mark and divide by how many there were — two hundred papers become one number. That squeezing is what an aggregate does. Now if I ask "what was the average in each class?", you first sort the papers into piles, one pile per class, and then do the same squeezing inside each pile. That sorting into piles is GROUP BY, and you end up with one line of answer per class. Here is the part that trips people up: once you have made the piles and written down the averages, the individual papers are no longer part of the answer. So if I then ask "and whose name was on the paper?", there is no answer — there were thirty names in that pile and nothing tells you which one I meant. That is why the database refuses: any column you want to see must either be the thing you made the piles by, or be squeezed into one value like the average was.',
+    },
+  },
+
+  {
+    id: 'SQL-008',
+    domain: 'SQL',
+    module: 'Aggregation',
+    topic: 'Filtering groups',
+    title: 'HAVING vs WHERE',
+    slug: 'having-vs-where',
+    difficulty: 3,
+    estimatedMinutes: 25,
+    prerequisites: ['SQL-007'],
+    related: ['SQL-005', 'SQL-007'],
+    tags: ['having', 'where', 'aggregation', 'filter', 'logical-order', 'performance'],
+
+    learningObjectives: [
+      'State precisely when a filter belongs in WHERE and when it belongs in HAVING',
+      'Explain why WHERE cannot reference an aggregate and HAVING can',
+      'Predict how moving a condition between the two clauses changes the result, not just the speed',
+      'Write filters that use conditional aggregation to combine both kinds of condition',
+      'Recognise when a HAVING clause is doing work that WHERE should be doing, and fix it',
+    ],
+
+    terminology: [
+      {
+        term: 'HAVING',
+        definition:
+          'A predicate applied to whole groups after GROUP BY has formed them. It may reference aggregates and the grouping columns, but not individual non-grouped columns.',
+        simple: 'A filter on the summary rows, not on the original rows.',
+      },
+      {
+        term: 'Row-level predicate',
+        definition:
+          'A condition that can be decided by looking at a single row, such as `status <> ’cancelled’`. It belongs in WHERE.',
+        simple: 'A test one row can answer by itself.',
+      },
+      {
+        term: 'Group-level predicate',
+        definition:
+          'A condition that can only be decided once a whole group exists, such as `COUNT(*) >= 3`. It belongs in HAVING.',
+        simple: 'A test that needs the whole pile before it can be answered.',
+      },
+      {
+        term: 'Predicate pushdown',
+        definition:
+          'The optimiser moving a filter as early in the plan as it can. Row-level filters written in WHERE are pushed below the aggregation, so fewer rows are aggregated.',
+        simple: 'Filtering early so there is less work to do later.',
+      },
+      {
+        term: 'Conditional aggregation filter',
+        definition:
+          'Using an aggregate over a CASE inside HAVING, e.g. `HAVING SUM(CASE WHEN status = ’cancelled’ THEN 1 ELSE 0 END) = 0`, to express "no row in this group satisfies X" without removing rows first.',
+        simple: 'Asking a question about part of the pile while keeping the whole pile.',
+      },
+    ],
+
+    simpleExplanation:
+      "WHERE and HAVING both throw rows away, and the difference is entirely about when. WHERE runs before grouping, so it sees the original rows one at a time: it can ask “is this order cancelled?” but it cannot ask “does this customer have more than five orders?”, because at that moment there is no such thing as a customer’s group — only individual orders. HAVING runs after grouping, so it sees the finished piles: it can ask about COUNT(*), SUM(amount) or AVG(price), because those values now exist. That is the whole rule. What makes it worth a unit of its own is that moving a condition between the two clauses can change the answer rather than just the speed. “Countries with at least three orders, ignoring cancelled ones” and “countries with at least three orders, of which none were cancelled” are different questions, and which clause you put the cancellation test in decides which one you asked.",
+
+    whyItExists:
+      'Aggregates do not exist until groups are formed, so a language with only one filtering clause could never express conditions on a summary — you could not ask for customers with more than five orders without computing every customer first and filtering outside the database. HAVING exists to make group-level predicates expressible in the same statement, evaluated in the right place.',
+
+    analogy: {
+      scenario:
+        'A sports league is deciding which teams qualify for a play-off. Two different rules are at work. The first applies to individual matches: friendlies do not count towards the table, so they are struck out before anything is added up. The second applies to whole teams: only teams with at least ten competitive wins qualify. You cannot apply the second rule to a single match — a match has no idea how many wins its team has — and you cannot apply the first rule to a team, because a team is not a friendly.',
+      mapping: [
+        { from: 'Striking out friendly matches', to: 'WHERE — a row-level filter, applied before grouping' },
+        { from: 'Adding up each team’s results', to: 'GROUP BY plus aggregate functions' },
+        { from: 'Requiring at least ten wins to qualify', to: 'HAVING — a group-level filter on the totals' },
+        { from: 'A match not knowing its team’s total', to: 'Why WHERE cannot reference an aggregate' },
+        { from: 'Deciding whether friendlies count before or after totalling', to: 'The choice that changes the answer, not just the speed' },
+        { from: '"Teams who never lost" as a rule about the whole record', to: 'A HAVING clause using conditional aggregation' },
+      ],
+      bridge:
+        'The league has to strike out friendlies first because the totals depend on which matches count — that is exactly predicate pushdown, and exactly why a row-level filter belongs in WHERE. And the qualification rule can only be checked once the totals exist, which is precisely the constraint that forces it into HAVING. The reason the distinction is not merely stylistic is visible in the analogy: if you struck out the friendlies after totalling, the totals would already be wrong.',
+      limitations:
+        'The league applies its rules in a fixed sequence by hand. A database is free to reorder physically — it may push a HAVING condition down when it can prove the result is identical — so the logical order describes meaning, not the plan.',
+    },
+
+    visuals: [
+      {
+        kind: 'compare',
+        title: 'WHERE versus HAVING',
+        caption: 'The same word "filter", two different objects being filtered.',
+        left: {
+          heading: 'WHERE — filters rows',
+          points: [
+            'Runs before GROUP BY',
+            'Sees one original row at a time',
+            'Cannot reference COUNT, SUM, AVG',
+            'Reduces how many rows get aggregated',
+            'Can use an index to avoid reading rows at all',
+            'Changes what goes into the totals',
+          ],
+        },
+        right: {
+          heading: 'HAVING — filters groups',
+          points: [
+            'Runs after GROUP BY',
+            'Sees one finished group at a time',
+            'Exists precisely to reference aggregates',
+            'Discards whole summary rows',
+            'Cannot use an index — the groups must be built first',
+            'Changes which totals survive',
+          ],
+        },
+      },
+      {
+        kind: 'flow',
+        title: 'Where each filter takes effect',
+        caption: 'Follow 40 order rows through the pipeline.',
+        steps: [
+          { label: '40 order rows leave FROM', detail: 'Every order, joined to its customer.' },
+          { label: 'WHERE removes 4', detail: "`status <> 'cancelled'` is decidable per row. 36 rows continue." },
+          { label: 'GROUP BY forms 3 groups', detail: 'One pile per country. Aggregates are computed over the 36 surviving rows.' },
+          { label: 'HAVING removes 1 group', detail: '`HAVING COUNT(*) >= 5` discards the country with only 2 orders. 2 rows remain.' },
+          { label: 'SELECT projects 2 rows', detail: 'The result has one row per surviving country.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Which clause does this condition belong in?',
+        columns: ['Condition', 'Clause', 'Why'],
+        rows: [
+          ["`status <> 'cancelled'`", 'WHERE', 'Decidable from one row; filtering early also shrinks the aggregation'],
+          ['`COUNT(*) >= 5`', 'HAVING', 'Needs the whole group to exist'],
+          ['`SUM(quantity * unit_price) > 1000`', 'HAVING', 'An aggregate over the group'],
+          ["`country IN ('Spain', 'Chile')`", 'WHERE', 'Row-level, even though country is also the grouping key'],
+          ['`AVG(price) > (SELECT AVG(price) FROM products)`', 'HAVING', 'Compares a group aggregate with a scalar subquery'],
+          ['`SUM(CASE WHEN status = ’cancelled’ THEN 1 ELSE 0 END) = 0`', 'HAVING', 'A property of the whole group: it contains no cancelled order'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Move the filter and watch the answer change',
+        caption: "Run the two contrasted queries below and compare the numbers, not just the row counts.",
+        widget: 'sql-playground',
+      },
+    ],
+
+    formalDefinition:
+      'HAVING applies a predicate to each group produced by GROUP BY, retaining only groups for which it evaluates to TRUE under three-valued logic. Its predicate may reference grouping expressions, aggregate functions over the group, and outer references, but not ungrouped column values, since those are not single-valued within a group. WHERE applies its predicate to individual tuples before grouping and may therefore not reference aggregates. In the absence of GROUP BY, HAVING treats the entire result as one group.',
+
+    workedExample: {
+      title: 'The same words, two different questions',
+      setup:
+        'Business request: "show me countries with at least three orders, excluding cancelled ones." That sentence is ambiguous, and the ambiguity maps exactly onto WHERE versus HAVING. Assume Nigeria has 5 orders of which 1 is cancelled, Spain has 3 of which 1 is cancelled, and China has 3, none cancelled.',
+      steps: [
+        {
+          label: 'Reading A: exclude cancelled orders, then count',
+          detail:
+            "`WHERE status <> 'cancelled'` removes the cancelled rows before grouping, so the counts become Nigeria 4, Spain 2, China 3. `HAVING COUNT(*) >= 3` then keeps Nigeria and China. Spain is dropped because it has only two non-cancelled orders.",
+        },
+        {
+          label: 'Reading B: count all orders, then require none cancelled',
+          detail:
+            "No WHERE. Counts are Nigeria 5, Spain 3, China 3. `HAVING COUNT(*) >= 3 AND SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) = 0` keeps only China, because Nigeria and Spain each contain a cancelled order.",
+        },
+        {
+          label: 'Reading C: the mistake — filtering in HAVING as if it were WHERE',
+          detail:
+            "Writing `HAVING status <> 'cancelled'` is either an error (PostgreSQL: column must appear in the GROUP BY clause) or, in SQLite, silently evaluates against an arbitrary row of each group, producing a result that is neither A nor B and is not reproducible.",
+          latex: '\\text{result} \\ne A, \\quad \\text{result} \\ne B',
+        },
+        {
+          label: 'Diagnose which reading was meant',
+          detail:
+            'Ask: is the cancellation a property of an individual order (exclude it from the tally) or a property of the country’s record (disqualify the country)? A is the usual intent; B is what auditors and quality gates usually mean.',
+        },
+        {
+          label: 'Note the performance difference',
+          detail:
+            'In reading A the cancelled rows never reach the aggregator, and an index on status could reduce the rows read. In reading B they must be aggregated, because the group-level test depends on them. The performance difference is real but secondary — the two queries answer different questions.',
+        },
+      ],
+      conclusion:
+        'WHERE and HAVING are not two ways to write the same filter with different efficiency. Reading A returns two countries and reading B returns one, from the same data and the same English sentence. Choosing the clause is choosing the question, and the right first move on any ambiguous request is to ask which reading the requester meant.',
+    },
+
+    codeExamples: [
+      {
+        language: 'sql',
+        title: 'The basic contrast',
+        runnable: true,
+        code: `-- Row-level filter: which orders count
+SELECT c.country, COUNT(*) AS orders
+FROM orders AS o
+JOIN customers AS c ON c.id = o.customer_id
+WHERE o.status <> 'cancelled'
+GROUP BY c.country;
+
+-- Group-level filter: which countries survive
+SELECT c.country, COUNT(*) AS orders
+FROM orders AS o
+JOIN customers AS c ON c.id = o.customer_id
+GROUP BY c.country
+HAVING COUNT(*) >= 5;
+
+-- Both, in the order they logically run
+SELECT c.country, COUNT(*) AS orders
+FROM orders AS o
+JOIN customers AS c ON c.id = o.customer_id
+WHERE o.status <> 'cancelled'
+GROUP BY c.country
+HAVING COUNT(*) >= 5
+ORDER BY orders DESC, c.country;`,
+        explanation:
+          'The third query is the canonical shape and reads in logical order once you know to read it that way: take these rows, drop the cancelled ones, pile them by country, keep piles of five or more, sort what is left. Note that HAVING repeats `COUNT(*)` rather than using the alias `orders` — aliases are created in SELECT, which runs after HAVING, so PostgreSQL rejects the alias here even though SQLite and MySQL accept it.',
+        output: `country  orders
+-------  ------
+Nigeria  13
+China    9`,
+      },
+      {
+        language: 'sql',
+        title: 'Moving a condition changes the answer',
+        runnable: true,
+        code: `-- A: exclude cancelled orders, then require 3+ remaining
+SELECT c.country, COUNT(*) AS non_cancelled_orders
+FROM orders AS o JOIN customers AS c ON c.id = o.customer_id
+WHERE o.status <> 'cancelled'
+GROUP BY c.country
+HAVING COUNT(*) >= 3;
+
+-- B: count all orders, require 3+ AND require none cancelled
+SELECT c.country,
+       COUNT(*) AS all_orders,
+       SUM(CASE WHEN o.status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled
+FROM orders AS o JOIN customers AS c ON c.id = o.customer_id
+GROUP BY c.country
+HAVING COUNT(*) >= 3
+   AND SUM(CASE WHEN o.status = 'cancelled' THEN 1 ELSE 0 END) = 0;`,
+        explanation:
+          'These are not two spellings of one query. A asks "which countries placed at least three orders that were not cancelled"; B asks "which countries placed at least three orders and never had one cancelled". A country with four orders, one cancelled, appears in A and not in B. The conditional aggregation inside HAVING is the general technique for expressing "no row in this group satisfies X" without removing those rows from the counts — removing them in WHERE would make the test vacuously true.',
+        output: `-- A
+country  non_cancelled_orders
+-------  --------------------
+Nigeria  13
+China    9
+Spain    8
+
+-- B
+country  all_orders  cancelled
+-------  ----------  ---------
+China    9           0`,
+      },
+      {
+        language: 'sql',
+        title: 'HAVING with a scalar subquery, and HAVING without GROUP BY',
+        runnable: true,
+        code: `-- Categories whose average price beats the overall average
+SELECT category, ROUND(AVG(price), 2) AS avg_price
+FROM products
+GROUP BY category
+HAVING AVG(price) > (SELECT AVG(price) FROM products)
+ORDER BY avg_price DESC;
+
+-- HAVING with no GROUP BY treats the whole table as one group
+SELECT COUNT(*) AS n
+FROM orders
+HAVING COUNT(*) > 100;`,
+        explanation:
+          'The first query compares a per-group aggregate with a scalar computed over the whole table — a pattern that appears constantly in "above average" questions and that needs HAVING because both sides are aggregates. The second is a curiosity worth knowing: with no GROUP BY the entire result is a single implicit group, so this returns one row if the table has more than 100 orders and zero rows otherwise. It is occasionally useful as an assertion in a data-quality check.',
+        output: `category  avg_price
+--------  ---------
+displays  289.33`,
+      },
+      {
+        language: 'sql',
+        title: 'The classic mistake, and what each engine does with it',
+        code: `-- Wrong: a row-level condition placed in HAVING
+SELECT c.country, COUNT(*) AS orders
+FROM orders AS o JOIN customers AS c ON c.id = o.customer_id
+GROUP BY c.country
+HAVING o.status <> 'cancelled';`,
+        explanation:
+          'PostgreSQL rejects this with `column "o.status" must appear in the GROUP BY clause or be used in an aggregate function`, which is the helpful outcome. SQLite accepts it and evaluates `o.status` against an arbitrary row from each group, so a country is kept or dropped depending on which row the engine happened to keep — a result that is neither reading A nor reading B and can change between runs. Whenever a condition mentions a column that is neither grouped nor aggregated, it belongs in WHERE.',
+        output: `ERROR:  column "o.status" must appear in the GROUP BY clause
+        or be used in an aggregate function`,
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Finding duplicates',
+        usage:
+          '`GROUP BY email HAVING COUNT(*) > 1` is the standard duplicate-detection query, and it is the archetypal HAVING: the condition is a property of the group, not of any row.',
+      },
+      {
+        context: 'Cohort minimum-size rules',
+        usage:
+          'Analytics and privacy policies often require a group to contain at least k members before it is reported. That threshold is a HAVING clause, applied after the cohort is formed.',
+      },
+      {
+        context: 'Data-quality gates in a pipeline',
+        usage:
+          'A dbt or Great Expectations test such as "no customer may have more than one active subscription" compiles to a GROUP BY with HAVING COUNT(*) > 1, failing the build if any row comes back.',
+      },
+      {
+        context: 'Filtering rare classes out of a training set',
+        usage:
+          'Keeping only labels with at least 50 examples is `GROUP BY label HAVING COUNT(*) >= 50`, and doing it in SQL means the model never sees classes too rare to learn.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'pandas', role: '`df.groupby("k").filter(lambda g: len(g) >= 5)` is HAVING; `df[df.status != "cancelled"]` before the groupby is WHERE.' },
+      { tool: 'dbt tests', role: 'Uniqueness and relationship tests compile to GROUP BY / HAVING queries that must return zero rows to pass.' },
+      { tool: 'SQLAlchemy', role: '`.group_by(...).having(func.count() >= 5)` exposes the two clauses separately for exactly this reason.' },
+      { tool: 'Query planners', role: 'EXPLAIN shows a row-level filter applied at the scan and a HAVING applied above the aggregate node, making the pipeline visible.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Putting a row-level condition in HAVING',
+        why: 'PostgreSQL rejects it; SQLite evaluates it against an arbitrary row of each group, giving a non-reproducible result that resembles neither intended reading.',
+        fix: 'If the condition can be decided from one row, it belongs in WHERE. If it mentions a column that is neither grouped nor aggregated, that is the tell.',
+      },
+      {
+        mistake: 'Trying to use an aggregate in WHERE',
+        why: 'WHERE runs before grouping, so no aggregate has been computed. PostgreSQL reports "aggregate functions are not allowed in WHERE".',
+        fix: 'Move it to HAVING, or compute the aggregate in a subquery or CTE and filter the result of that.',
+      },
+      {
+        mistake: 'Referencing a SELECT alias in HAVING',
+        why: 'HAVING is evaluated before SELECT, so the alias does not exist yet. SQLite and MySQL allow it; PostgreSQL does not, so the query breaks on porting.',
+        fix: 'Repeat the aggregate expression in HAVING, or wrap the aggregation in a CTE and filter the CTE in an outer WHERE.',
+      },
+      {
+        mistake: 'Assuming WHERE and HAVING are interchangeable when both would "work"',
+        why: 'For a row-level condition they can give different results, because filtering before grouping changes the totals that the group-level test then examines.',
+        fix: 'Decide what the question means first: does the condition disqualify individual rows, or disqualify whole groups? The clause follows from the answer.',
+      },
+      {
+        mistake: 'Expressing "groups containing no X" by filtering out X in WHERE',
+        why: 'Removing the X rows makes the group look clean, so every group passes. The information needed to disqualify the group has been deleted before the test.',
+        fix: 'Keep the rows and test with conditional aggregation: `HAVING SUM(CASE WHEN x THEN 1 ELSE 0 END) = 0`.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'What is the difference between WHERE and HAVING?',
+        answer:
+          'WHERE filters individual rows before grouping; HAVING filters whole groups after grouping. The consequence is that WHERE cannot reference an aggregate — none exists yet — while HAVING exists precisely to do so. The practical rule is to ask whether the condition can be decided by looking at one row. "Is this order cancelled?" can, so it goes in WHERE. "Does this customer have more than five orders?" cannot, so it goes in HAVING. Putting a row-level condition in HAVING is either an error in PostgreSQL or, worse, silently evaluated against an arbitrary row in SQLite.',
+        followUp:
+          'A strong answer adds that a row-level filter in WHERE also reduces the rows reaching the aggregator and may use an index, which HAVING can never do.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Does moving a condition from WHERE to HAVING ever change the result, or only the performance?',
+        answer:
+          'It can change the result, and that is the more important point. Consider "countries with at least three orders, excluding cancelled ones". Filtering cancelled orders in WHERE removes them before the count, so a country with four orders of which two are cancelled fails the threshold. Leaving them in and testing the group instead — `HAVING COUNT(*) >= 3 AND SUM(CASE WHEN status = ’cancelled’ THEN 1 ELSE 0 END) = 0` — asks a genuinely different question: at least three orders and a clean record. These return different sets of countries from the same data. So the clause choice is a modelling decision first and a performance decision second; when both readings are valid, the right move is to ask which one the requester meant.',
+      },
+      {
+        level: 'internship',
+        question: 'Find all customers who have placed more than three orders but have never had one cancelled. Write the query and explain each clause.',
+        answer:
+          "`SELECT c.id, c.name, COUNT(*) AS orders FROM customers c JOIN orders o ON o.customer_id = c.id GROUP BY c.id, c.name HAVING COUNT(*) > 3 AND SUM(CASE WHEN o.status = 'cancelled' THEN 1 ELSE 0 END) = 0 ORDER BY orders DESC, c.id;`. There is deliberately no WHERE: excluding cancelled orders up front would delete the very evidence the second condition needs, and every customer would then trivially pass. Both conditions are group-level, so both belong in HAVING. Grouping by `c.id, c.name` rather than by name alone keeps two customers with the same name distinct, and including `c.name` in the GROUP BY is what allows it in SELECT — PostgreSQL would also accept `c.name` bare here because it is functionally dependent on the primary key.",
+        followUp:
+          'Mentioning that this pattern generalises to "groups containing no row satisfying X", and that NOT EXISTS is the alternative formulation, shows the candidate sees the shape rather than the instance.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Find every product category that contains more than four products and whose average price exceeds 50.',
+        hint: 'Both conditions concern the whole category, so both go in the same clause.',
+        language: 'sql',
+        starterCode: 'SELECT category, COUNT(*) AS n, ROUND(AVG(price), 2) AS avg_price\nFROM products\nGROUP BY category\n-- add the filter\n',
+        solution:
+          'SELECT category, COUNT(*) AS n, ROUND(AVG(price), 2) AS avg_price\nFROM products\nGROUP BY category\nHAVING COUNT(*) > 4 AND AVG(price) > 50\nORDER BY avg_price DESC, category;\n\nBoth predicates are aggregates, so neither could be evaluated before the groups exist. Note that HAVING repeats the raw expressions rather than the aliases `n` and `avg_price`: HAVING runs before SELECT, so the aliases do not yet exist, and although SQLite tolerates them PostgreSQL does not.',
+      },
+      {
+        prompt: 'Find customers whose non-cancelled orders total more than 500 in revenue, counting only orders placed in 2024.',
+        hint: 'Two row-level conditions and one group-level one. Revenue lives on order_items.',
+        language: 'sql',
+        solution:
+          "SELECT c.id, c.name,\n       ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue\nFROM customers   AS c\nJOIN orders      AS o  ON o.customer_id = c.id\nJOIN order_items AS oi ON oi.order_id   = o.id\nWHERE o.status <> 'cancelled'\n  AND o.order_date >= '2024-01-01'\n  AND o.order_date <  '2025-01-01'\nGROUP BY c.id, c.name\nHAVING SUM(oi.quantity * oi.unit_price) > 500\nORDER BY revenue DESC, c.id;\n\nThe status and date tests are decidable per row, so they belong in WHERE, where they also shrink the input to the aggregation and can use an index on `order_date`. The revenue threshold needs the whole group, so it belongs in HAVING. Grouping by `c.id, c.name` keeps same-named customers apart.",
+      },
+      {
+        prompt: 'Find duplicate customer names — names shared by more than one customer — and show how many customers share each.',
+        hint: 'This is the archetypal HAVING query. Group by the column you suspect is not unique.',
+        language: 'sql',
+        solution:
+          "SELECT name, COUNT(*) AS occurrences, MIN(id) AS keep_id, MAX(id) AS other_id\nFROM customers\nGROUP BY name\nHAVING COUNT(*) > 1\nORDER BY occurrences DESC, name;\n\nThe MIN and MAX are a practical touch: when deduplicating, you usually want to keep the earliest record and merge the rest, and having the ids in the same result saves a second query. This pattern generalises to any uniqueness check — group by the columns that should form a key, and any row returned is a violation. It is exactly what a dbt uniqueness test compiles to, and running it before adding a UNIQUE constraint tells you whether the constraint will succeed.",
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'SQL-008-q1',
+        type: 'mcq',
+        concept: 'clause selection',
+        prompt: 'Which condition belongs in HAVING rather than WHERE?',
+        options: [
+          '`COUNT(*) > 3`',
+          "`status = 'shipped'`",
+          "`order_date >= '2024-01-01'`",
+          "`country IN ('Spain', 'Chile')`",
+        ],
+        answerIndex: 0,
+        explanation:
+          'Only the first needs a whole group to evaluate. The other three are decidable from a single row and belong in WHERE, where they also reduce the rows that must be aggregated.',
+      },
+      {
+        id: 'SQL-008-q2',
+        type: 'truefalse',
+        concept: 'result equivalence',
+        prompt: 'Moving a row-level condition from WHERE to HAVING changes only performance, never the result.',
+        answer: false,
+        explanation:
+          'Filtering before grouping changes the totals the group-level test then examines, so the two placements can return different sets of groups. The clause choice is a modelling decision.',
+      },
+      {
+        id: 'SQL-008-q3',
+        type: 'debug',
+        language: 'sql',
+        concept: 'aggregates in where',
+        prompt: 'PostgreSQL reports "aggregate functions are not allowed in WHERE". What is the fix?',
+        code: "SELECT customer_id, COUNT(*) AS orders\nFROM orders\nWHERE COUNT(*) > 3\nGROUP BY customer_id;",
+        options: [
+          'Move `COUNT(*) > 3` into a HAVING clause after GROUP BY',
+          'Add an alias to COUNT(*) and reference it in WHERE',
+          'Add `customer_id` to the WHERE clause',
+          'Replace COUNT(*) with COUNT(customer_id)',
+        ],
+        answerIndex: 0,
+        explanation:
+          'WHERE runs before GROUP BY, so no aggregate has been computed yet. HAVING runs after the groups are formed, which is why it may reference aggregates.',
+      },
+      {
+        id: 'SQL-008-q4',
+        type: 'order',
+        concept: 'evaluation pipeline',
+        prompt: 'Order the stages a grouped, filtered, sorted query passes through.',
+        items: [
+          'FROM and JOIN assemble the rows',
+          'WHERE discards individual rows',
+          'GROUP BY forms the groups',
+          'HAVING discards whole groups',
+          'SELECT projects the surviving groups',
+          'ORDER BY sorts the result',
+        ],
+        explanation:
+          'This sequence explains every visibility rule in the unit: aggregates do not exist until stage 3, and SELECT aliases do not exist until stage 5.',
+      },
+      {
+        id: 'SQL-008-q5',
+        type: 'multi',
+        concept: 'having capabilities',
+        prompt: 'What may a HAVING clause legally reference? Select all that apply.',
+        options: [
+          'Aggregate functions over the group',
+          'Columns listed in GROUP BY',
+          'A scalar subquery',
+          'A column that is neither grouped nor aggregated',
+          'An alias created in the SELECT clause, portably',
+        ],
+        answerIndices: [0, 1, 2],
+        explanation:
+          'Ungrouped, unaggregated columns have no single value per group. SELECT aliases are created after HAVING runs, so relying on them is a portability trap even where SQLite allows it.',
+      },
+      {
+        id: 'SQL-008-q6',
+        type: 'code-output',
+        language: 'sql',
+        concept: 'conditional aggregation in having',
+        prompt: 'Nigeria has 5 orders (1 cancelled), Spain 3 (1 cancelled), China 3 (0 cancelled). Which countries does this return?',
+        code: "SELECT c.country, COUNT(*) AS n\nFROM orders o JOIN customers c ON c.id = o.customer_id\nGROUP BY c.country\nHAVING COUNT(*) >= 3\n   AND SUM(CASE WHEN o.status = 'cancelled' THEN 1 ELSE 0 END) = 0;",
+        options: ['China only', 'Nigeria and China', 'All three', 'Nigeria, Spain and China with adjusted counts'],
+        answerIndex: 0,
+        explanation:
+          'All three meet the count threshold, but Nigeria and Spain each contain a cancelled order, so the conditional sum is non-zero and they are disqualified. Only China has a clean record.',
+      },
+      {
+        id: 'SQL-008-q7',
+        type: 'explain',
+        concept: 'where vs having as question design',
+        prompt: 'A stakeholder asks for "regions with at least 10 sales, not counting returns". Explain why you would ask a clarifying question before writing the query.',
+        rubric: [
+          'Identifies that "not counting returns" could filter rows before the count or disqualify the region',
+          'Explains that WHERE and HAVING implement the two readings and give different results',
+          'Proposes a concrete clarifying question or shows both results',
+        ],
+        sampleAnswer:
+          'The phrase "not counting returns" is ambiguous in exactly the way WHERE and HAVING are different. One reading is that returned sales should be excluded from the tally, so a region with twelve sales of which three were returned has nine and misses the threshold — that is a WHERE filter before grouping. The other reading is that the threshold applies to all sales, and returns are a separate matter. A third possible intent, which stakeholders sometimes mean, is that any region with returns should be excluded entirely, which needs conditional aggregation in HAVING. These give materially different region lists from the same data, so I would either ask which is meant or, faster in practice, produce both columns — total sales and non-returned sales — and let the stakeholder point at the one they meant.',
+        explanation:
+          'The examinable skill is recognising that clause choice encodes the question, so ambiguity in the request is ambiguity in the SQL and must be resolved before coding.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'WHERE vs HAVING in one sentence', back: 'WHERE filters rows before grouping; HAVING filters groups after grouping. That is why only HAVING may reference aggregates.' },
+      { front: 'Why can WHERE not use COUNT(*)?', back: 'WHERE is evaluated before GROUP BY, so no groups and therefore no aggregates exist yet.' },
+      { front: 'Can HAVING use a SELECT alias?', back: 'Not portably. HAVING runs before SELECT, so PostgreSQL rejects the alias even though SQLite and MySQL accept it. Repeat the expression.' },
+      { front: 'How do you find duplicates?', back: '`GROUP BY key HAVING COUNT(*) > 1` — the archetypal group-level predicate, and what a uniqueness test compiles to.' },
+      { front: 'How do you say "this group contains no cancelled row"?', back: '`HAVING SUM(CASE WHEN status = ’cancelled’ THEN 1 ELSE 0 END) = 0`. Filtering them out in WHERE would make the test vacuous.' },
+      { front: 'Does clause choice affect correctness or only speed?', back: 'Correctness. Filtering before grouping changes the totals the group test examines, so the two placements can return different groups.' },
+    ],
+
+    challenge: {
+      title: 'Disambiguate a real request',
+      brief:
+        'A stakeholder asks: "Which customers are our best repeat buyers? I mean people who have bought from us at least three times, ignoring anything cancelled." Write three queries implementing three defensible readings of that sentence: (1) at least three non-cancelled orders; (2) at least three orders in total, none cancelled; (3) at least three non-cancelled orders AND a cancellation rate below 20%. Report the row count of each, and write two sentences recommending which one you would put in front of the stakeholder and why.',
+      language: 'sql',
+      acceptanceCriteria: [
+        'Three distinct queries, each producing a different customer set',
+        'Reading 1 uses WHERE for the cancellation filter; reading 2 uses conditional aggregation in HAVING',
+        'Reading 3 combines a WHERE filter with a rate computed by conditional aggregation, avoiding integer division',
+        'Row counts for all three are reported side by side',
+        'The recommendation names the business meaning, not just the SQL difference',
+      ],
+      starterCode: "-- Reading 1: at least three non-cancelled orders\nSELECT c.id, c.name, COUNT(*) AS orders\nFROM customers c JOIN orders o ON o.customer_id = c.id\nWHERE o.status <> 'cancelled'\nGROUP BY c.id, c.name\nHAVING COUNT(*) >= 3;\n",
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Imagine I am nine and I understand that GROUP BY makes piles. Teach me the difference between throwing away cards before I make the piles and throwing away whole piles afterwards.',
+      mustCover: [
+        'WHERE throws away individual rows before the piles are made',
+        'HAVING throws away whole piles after they are made and counted',
+        'Only HAVING can talk about counts and totals, because those do not exist until the piles do',
+        'Choosing the wrong one can change the answer, not just the speed',
+        'A condition about one row belongs in WHERE; a condition about a whole pile belongs in HAVING',
+      ],
+      bonusSignals: ['gives a worked contrast where the two give different answers', 'mentions that filtering early also means less work', 'notes what happens if you put a row condition in HAVING'],
+      sampleExplanation:
+        'Imagine a big stack of cards, one per order, and you are going to sort them into piles by country and then count each pile. There are two different moments when you can throw something away. The first is before you sort: you go through the stack and bin every cancelled order, so those cards never reach a pile at all. That is WHERE. The second is after you have sorted and counted: you look at the finished piles and bin any pile with fewer than five cards in it. That is HAVING. The reason you cannot swap them is that a single card has no idea how big its pile is — you simply cannot ask "is this pile big?" while holding one card. And the reason it matters beyond tidiness is that the two give different answers. If you bin the cancelled cards first, a country with six orders and two cancelled is counted as four. If you keep them and judge the pile instead, it is counted as six but might be disqualified for having any cancelled at all. Same words, different question, so you have to decide which one you actually meant.',
+    },
+  },
