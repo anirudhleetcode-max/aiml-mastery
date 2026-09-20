@@ -98,3 +98,13 @@ export const storedEvaluationSchema = z.object({
     evaluatedAt: z.string().max(40),
   }),
 });
+
+/** Which button the recall check would press, if it were allowed to. */
+export type RecallSuggestion = 'known' | 'partial' | 'again';
+
+export interface FlashcardEvaluation extends AnswerEvaluation {
+  /** Advisory only. The learner's own button is what the scheduler records. */
+  suggestion: RecallSuggestion;
+  /** Plain-language reason for the suggestion, shown beside it. */
+  suggestionReason: string;
+}

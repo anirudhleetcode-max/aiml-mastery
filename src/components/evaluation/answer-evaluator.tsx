@@ -21,21 +21,21 @@ import type { AnswerEvaluation } from '@/features/evaluation/schema';
  * learner their place in the session.
  */
 
-type State =
+type State<T> =
   | { phase: 'idle' }
   | { phase: 'running' }
-  | { phase: 'done'; evaluation: AnswerEvaluation }
+  | { phase: 'done'; evaluation: T }
   | { phase: 'failed'; message: string };
 
-export interface AnswerEvaluatorProps {
+export interface AnswerEvaluatorProps<T extends AnswerEvaluation> {
   endpoint: string;
   /** Identifies the item on the server. Never carries the question text. */
   body: Record<string, string | number>;
   label: string;
   placeholder: string;
   /** Rendered under the result, for the caller's own follow-up controls. */
-  children?: (evaluation: AnswerEvaluation) => React.ReactNode;
-  onEvaluated?: (evaluation: AnswerEvaluation) => void;
+  children?: (evaluation: T) => React.ReactNode;
+  onEvaluated?: (evaluation: T) => void;
 }
 
 const MAX_CHARS = 6_000;
@@ -48,17 +48,17 @@ const DEGRADED_NOTE: Record<NonNullable<AnswerEvaluation['degraded']>, string> =
   'invalid-output': 'The evaluation model returned something unusable, so this is the concept check instead.',
 };
 
-export function AnswerEvaluator({
+export function AnswerEvaluator<T extends AnswerEvaluation = AnswerEvaluation>({
   endpoint,
   body,
   label,
   placeholder,
   children,
   onEvaluated,
-}: AnswerEvaluatorProps) {
+}: AnswerEvaluatorProps<T>) {
   const fieldId = React.useId();
   const [answer, setAnswer] = React.useState('');
-  const [state, setState] = React.useState<State>({ phase: 'idle' });
+  const [state, setState] = React.useState<State<T>>({ phase: 'idle' });
   const abort = React.useRef<AbortController | null>(null);
 
   // A learner who moves to the next question mid-request should not have the
@@ -99,7 +99,7 @@ export function AnswerEvaluator({
         return;
       }
 
-      const data = (await res.json()) as { evaluation?: AnswerEvaluation };
+      const data = (await res.json()) as { evaluation?: T };
       if (!data.evaluation) {
         setState({ phase: 'failed', message: 'That could not be evaluated. Your answer is still here.' });
         return;
