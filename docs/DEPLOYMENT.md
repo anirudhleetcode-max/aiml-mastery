@@ -237,6 +237,7 @@ a build log.
 | Session cookie flags | **Production verified** — `HttpOnly`, `Secure`, `SameSite=Lax` observed on the live response. |
 | Security headers | **Production verified** — all six present on the alias, through Vercel's proxy. |
 | API authorisation | **Production verified** — `/api/state` 401 anonymous; cross-origin login 403. |
+| Performance, live site | **Production verified** — measured on the alias in a real Chromium, signed in and signed out (run 35545316413). Worst LCP 1704 ms (Labs), best 256 ms (Login); CLS 0 on every route; zero console or page errors. All routes inside the budget of LCP 2500 ms / CLS 0.1 / 3000 DOM nodes. |
 | Production build (`npm run build`) | Verified — passes, and emits `.next/standalone`. |
 | Full test suite | Verified locally — 730 unit/integration and 127 end-to-end, the latter against a production server rather than `next dev`. |
 | `./scripts/verify-all.sh --full` twice consecutively | Verified — 7/7 both runs. |
