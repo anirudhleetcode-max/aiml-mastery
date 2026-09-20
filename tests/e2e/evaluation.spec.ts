@@ -13,7 +13,9 @@ import { expect, test } from '@playwright/test';
 async function startInterviewSession(page: import('@playwright/test').Page) {
   await page.goto('/interview');
   await page.getByRole('button', { name: '10 questions' }).click();
-  await expect(page.getByText(/1 of \d+/)).toBeVisible();
+  // Anchored: the readiness copy says "You have graded 1 of 660", which an
+  // unanchored /1 of \d+/ also matches once any question has been graded.
+  await expect(page.getByText(/^1 of \d+$/)).toBeVisible();
 }
 
 test.describe('evaluating an interview answer', () => {
@@ -57,7 +59,7 @@ test.describe('evaluating an interview answer', () => {
 
     // Still on the same question: evaluating did not advance the session, did
     // not reveal the answer, and did not grade anything.
-    await expect(page.getByText(/1 of \d+/)).toBeVisible();
+    await expect(page.getByText(/^1 of \d+$/)).toBeVisible();
     await expect(page.getByText(/What a strong answer covers/i)).toHaveCount(0);
   });
 });
