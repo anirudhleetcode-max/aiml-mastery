@@ -23,8 +23,9 @@ export function radiusFor(unlocks: number): number {
 }
 
 /**
- * One anchor per domain, placed around an ellipse in curriculum order, so the
- * settled graph reads left-to-right as a journey rather than a hairball.
+ * One anchor per domain, placed around a flattened ring in curriculum order,
+ * so the settled graph keeps its domains in recognisable neighbourhoods rather
+ * than collapsing into one hairball.
  */
 const ANCHORS: Record<string, { x: number; y: number }> = Object.fromEntries(
   DOMAINS.map((d, i) => {
@@ -247,7 +248,9 @@ export function GraphCanvas({
       const shown = vis.has(n.id);
       const inNear = near ? near.has(n.id) : true;
       const dim = !shown || !inNear;
-      const alpha = dim ? 0.12 : 1;
+      // Filtered-out units stay as faint ghosts so the shape of the whole
+      // curriculum is still readable behind a narrow filter.
+      const alpha = !shown ? 0.07 : inNear ? 1 : 0.15;
       const mastered = isAtLeast(n.node.mastery, 'MASTERED');
       const started = n.node.mastery !== 'NOT_STARTED';
 
@@ -501,7 +504,7 @@ export function GraphCanvas({
 
     if (reducedMotion) {
       // No animation at all: run it out, then paint the final layout once.
-      for (let i = 0; i < 320; i++) sim.tick();
+      for (let i = 0; i < 200; i++) sim.tick();
       finish();
     } else {
       let ticks = 0;

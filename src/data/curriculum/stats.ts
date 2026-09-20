@@ -7583,4 +7583,1369 @@ Normal population, for contrast
         'Take a population that is as far from a bell curve as you can imagine — say session durations where ninety percent last five seconds and ten percent last five minutes, so the histogram is two separate humps with nothing in between. Now do this: pick a hundred sessions at random, average them, write the number down, and repeat ten thousand times. Plot those ten thousand averages and you get a clean, symmetric bell curve. That is the central limit theorem, and the first thing to be precise about is what became normal. The session durations did not; they are exactly as ugly as they were and always will be. It is the averages that became normal. The reason is cancellation. For one average to come out extreme, a lot of its hundred members have to be extreme in the same direction at once, and independent observations rarely conspire like that; one long session gets divided by a hundred, so it barely moves the result. The theorem makes three claims. The averages centre on the true population mean. Their spread is the population spread divided by the square root of the sample size — that is called the standard error. And their shape approaches a normal curve as the sample grows. The square root is worth dwelling on, because it is the economics of the whole of data collection: to halve your uncertainty you need four times the data, and one more decimal place costs a hundred times as much. Finally, the limits. It says nothing about the raw data. It says nothing about bias — if you sampled the wrong population, you get a beautiful normal distribution centred on the wrong number. It needs the observations to be independent, so repeated measurements on the same user do not count separately. And it needs finite variance, which fails for a few genuinely wild distributions where averaging never helps at all.',
     },
   },
+
+  {
+    id: 'STAT-014',
+    domain: 'STAT',
+    module: 'Sampling & Inference',
+    topic: 'Quantifying uncertainty in an estimate',
+    title: 'Confidence Intervals',
+    slug: 'confidence-intervals',
+    difficulty: 4,
+    estimatedMinutes: 40,
+    prerequisites: ['STAT-012', 'STAT-013'],
+    related: ['STAT-008', 'STAT-010', 'STAT-006'],
+    tags: ['confidence interval', 'standard error', 'margin of error', 'coverage', 'sample size', 'bootstrap'],
+
+    learningObjectives: [
+      'State what a 95% confidence interval actually guarantees, in terms of the procedure rather than the one interval you computed',
+      'Identify and correct the interpretation almost everyone gives, and explain precisely why it is wrong',
+      'Decompose an interval into estimate, critical value and standard error, and compute each',
+      'Predict how interval width responds to sample size, variability and confidence level, including the square-root cost',
+      'Choose between a z interval, a t interval and a bootstrap interval, and say what each assumes',
+      'Read a reported interval critically, including what it does not protect you against',
+    ],
+
+    terminology: [
+      {
+        term: 'Point estimate',
+        definition:
+          'A single number computed from a sample and used as a guess at a population quantity — a sample mean estimating a population mean, for instance.',
+        simple: 'Your single best guess from the data you have.',
+      },
+      {
+        term: 'Standard error',
+        definition:
+          'The standard deviation of a statistic’s sampling distribution. For a sample mean it is the population standard deviation divided by the square root of the sample size.',
+        simple: 'How much your estimate would wobble if you collected the data again.',
+      },
+      {
+        term: 'Margin of error',
+        definition:
+          'The half-width of a confidence interval: the critical value multiplied by the standard error. The interval is the estimate plus and minus this quantity.',
+        simple: 'The plus-or-minus part.',
+      },
+      {
+        term: 'Critical value',
+        definition:
+          'The multiplier taken from the sampling distribution that determines how many standard errors wide the interval is — about 1.96 for 95% under normality, or the corresponding t value for small samples.',
+        simple: 'How many wobbles wide you make the interval.',
+      },
+      {
+        term: 'Coverage',
+        definition:
+          'The long-run proportion of intervals, built by a given procedure over repeated samples, that contain the true parameter. A procedure with 95% nominal confidence should have 95% coverage.',
+        simple: 'How often the method’s intervals actually catch the true value.',
+      },
+      {
+        term: 'Bootstrap interval',
+        definition:
+          'An interval built by resampling the observed data with replacement thousands of times, recomputing the statistic each time, and taking percentiles of the resulting distribution.',
+        simple: 'Simulating "collect the data again" by reusing the data you have.',
+      },
+    ],
+
+    simpleExplanation:
+      "You measure something on a sample — the average time a hundred users spent on a page, say — and get 4.2 minutes. That number is almost certainly not the true average for all users, because a different hundred users would have given you something slightly different. A confidence interval is how you say that out loud. Instead of reporting 4.2, you report something like 4.2 plus or minus 0.3, meaning \"somewhere in the region of 3.9 to 4.5\". The width comes from two things: how spread out the individual values are, and how many of them you collected. More data narrows the interval, but annoyingly slowly — to halve the width you need four times as much data, not twice. And here is the part almost everyone gets wrong, including many people who use these professionally. The 95% does not describe your particular interval. It describes the method. If you repeated the whole exercise many times, about 95% of the intervals the method produces would contain the true value. Yours either does or it does not; you simply cannot know which.",
+
+    whyItExists:
+      'A single number from a sample looks certain and is not, and that false certainty causes real decisions to be made on noise. An interval makes the uncertainty part of the result, so that a 2% measured improvement with an interval spanning −3% to +7% is visibly indistinguishable from no effect at all rather than being reported as a win.',
+
+    analogy: {
+      scenario:
+        'Think of a fishing net rather than a spear. You are trying to catch one particular fish — the true population value — that is swimming somewhere you cannot see. Each time you sample data, you cast a net of a certain width around wherever your boat happens to be. The manufacturer of the net has tested the design: cast this way, it catches the fish on about 95 casts out of 100. Once a specific cast has been made and the net is closed, however, the fish is either inside it or it is not. Nothing about that particular net is 95% anything. The 95 out of 100 was a property of the casting procedure, established before you cast.',
+      mapping: [
+        { from: 'The unseen fish', to: 'The true population parameter, a fixed unknown number' },
+        { from: 'Where your boat happens to be', to: 'Your sample estimate, which varies from sample to sample' },
+        { from: 'The width of the net', to: 'The margin of error: critical value times standard error' },
+        { from: 'The manufacturer’s tested catch rate', to: 'The coverage of the procedure over repeated samples' },
+        { from: 'One specific closed net', to: 'The one interval you actually computed, which either contains the parameter or does not' },
+        { from: 'Casting from a boat moored in the wrong lake', to: 'A biased sample, which the interval cannot detect or correct' },
+      ],
+      bridge:
+        'The net makes the crucial grammatical point visible: the probability statement attaches to the casting, which is random, and not to the fish, which is fixed and not random at all. That is exactly why the correct phrasing is "95% of intervals constructed this way contain the parameter" and not "there is a 95% chance the parameter is in this interval" — in the frequentist framework the parameter has no distribution to be 95% of.',
+      limitations:
+        'The analogy flatters the method in one important way. The manufacturer’s catch rate assumes you are fishing in the right lake. A confidence interval quantifies sampling variability only; if your sample is biased, the interval is narrow, confident and centred on the wrong answer, and more data makes it narrower without making it any less wrong.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'Building a confidence interval for a mean',
+        caption: 'Five steps, and the assumption each one depends on.',
+        steps: [
+          { label: 'Compute the point estimate', detail: 'The sample mean x̄. This is where the interval is centred, so any bias here shifts everything.' },
+          { label: 'Estimate the standard error', detail: 'SE = s/√n, using the sample standard deviation. This is how much x̄ would wobble across repeated samples.' },
+          { label: 'Choose a confidence level', detail: '95% is conventional, not principled. Higher confidence means a wider interval — you cannot have both.' },
+          { label: 'Look up the critical value', detail: '1.96 for 95% under normality; a t value with n − 1 degrees of freedom when n is small and sigma is estimated.' },
+          { label: 'Form estimate ± critical value × SE', detail: 'The margin of error is the product; the interval is the estimate plus and minus it.' },
+          { label: 'Report it as a range, not a number', detail: 'And state the level, because "±0.3" without "95%" is meaningless.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'What a 95% interval does and does not mean',
+        caption: 'The single most repeated error in applied statistics.',
+        left: {
+          heading: 'Correct',
+          points: [
+            '95% of intervals built this way, over repeated samples, contain the true value',
+            'The randomness lives in the sampling, and therefore in the interval',
+            'This particular interval either contains the parameter or does not',
+            'Coverage is a property of the procedure, verifiable by simulation',
+            'Values outside the interval are less compatible with the data, not impossible',
+          ],
+        },
+        right: {
+          heading: 'Wrong, and why',
+          points: [
+            '"There is a 95% chance the true mean is in this interval" — the parameter is fixed, not random',
+            '"95% of the data lie in this interval" — that is a prediction interval, and it is far wider',
+            '"95% of future sample means will land in it" — that is roughly 83%, not 95%',
+            '"The interval contains the sample mean 95% of the time" — it contains it always, by construction',
+            '"A wider interval means the estimate is wrong" — it means it is less precise',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'What changes the width',
+        caption: 'Computed for a mean with s = 10, showing the square-root penalty explicitly.',
+        columns: ['n', 'SE = s/√n', '95% margin (1.96 × SE)', 'Interval width', 'Effect of quadrupling n'],
+        rows: [
+          ['25', '2.00', '3.92', '7.84', 'from n = 25 to 100 halves the width'],
+          ['100', '1.00', '1.96', '3.92', 'from n = 100 to 400 halves it again'],
+          ['400', '0.50', '0.98', '1.96', 'from n = 400 to 1600 halves it again'],
+          ['1600', '0.25', '0.49', '0.98', 'each halving costs four times the data'],
+          ['10000', '0.10', '0.20', '0.39', 'one extra decimal place costs 100× the data'],
+        ],
+      },
+      {
+        kind: 'annotated',
+        title: 'Anatomy of an interval',
+        subject: 'x̄ ± t* × (s / √n)',
+        annotations: [
+          { part: 'x̄', note: 'The point estimate. It sets the centre, so sampling bias moves the whole interval and the method cannot tell.' },
+          { part: '±', note: 'Symmetric here because the sampling distribution of a mean is symmetric. Intervals for a proportion near 0 or 1, or for a ratio, are not.' },
+          { part: 't*', note: 'The critical value: how many standard errors wide. 1.96 for 95% with large n; larger for small n, which is the t distribution paying for estimating sigma.' },
+          { part: 's / √n', note: 'The standard error. The √n is the whole economics of data collection: precision improves with the square root, not linearly.' },
+          { part: 'the product t* × SE', note: 'The margin of error — the number people quote as "plus or minus" in a poll.' },
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Watch coverage happen',
+        caption: 'Draw many samples, build an interval from each, and count how many of them capture the true mean. It converges on 95%, and some of them miss.',
+        widget: 'confidence-interval-sim',
+      },
+      {
+        kind: 'widget',
+        title: 'Where the standard error comes from',
+        caption: 'The sampling distribution of the mean narrows as √n — the fact the interval width is built on.',
+        widget: 'clt-sim',
+      },
+    ],
+
+    formalDefinition:
+      'A 1 − α confidence interval for a parameter θ is a pair of statistics (L(X), U(X)), computed from the sample and therefore random, such that P(L(X) ≤ θ ≤ U(X)) = 1 − α under repeated sampling, where the probability is over the sampling distribution and θ is fixed. Coverage is thus a property of the procedure rather than of any realised interval; for a mean with a normally distributed sampling distribution the interval takes the form x̄ ± z(1−α/2)·σ/√n, replacing z by the t quantile with n − 1 degrees of freedom when σ is estimated from the sample.',
+
+    math: {
+      intuition:
+        'Everything follows from one result you already have: the central limit theorem says the sample mean is approximately normal, centred on the true mean, with a spread of sigma over root n. Call that spread the standard error. A normal distribution puts about 95% of its mass within 1.96 standard deviations of its centre, so before you collect any data you can say that the sample mean you are about to obtain will land within 1.96 standard errors of the true mean about 95% of the time. Now flip the sentence around. If the sample mean is usually within 1.96 standard errors of the true mean, then an interval of that width drawn around the sample mean usually reaches the true mean — because "A is within d of B" and "B is within d of A" are the same statement. That flip is the entire construction, and it also explains the interpretation. The probability was attached to where the sample mean lands, which is random. The true mean never moved. Once you substitute your actual numbers, there is no randomness left to have a probability about.',
+      formulas: [
+        {
+          latex: '\\bar{x} \\pm z_{1-\\alpha/2}\\,\\frac{\\sigma}{\\sqrt{n}}',
+          name: 'Confidence interval for a mean, sigma known',
+          meaning:
+            'The estimate plus and minus a chosen number of standard errors. With alpha = 0.05 the multiplier is 1.96, giving the familiar 95% interval.',
+          variables: [
+            { symbol: '\\bar{x}', meaning: 'The sample mean — the point estimate at the centre of the interval' },
+            { symbol: 'z_{1-\\alpha/2}', meaning: 'The standard normal quantile leaving alpha/2 in each tail: 1.645 for 90%, 1.96 for 95%, 2.576 for 99%' },
+            { symbol: '\\sigma', meaning: 'The population standard deviation, assumed known in this version' },
+            { symbol: 'n', meaning: 'The sample size' },
+            { symbol: '\\alpha', meaning: 'The error rate you accept, so the confidence level is 1 − alpha' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\mathrm{SE}(\\bar{x}) = \\frac{\\sigma}{\\sqrt{n}} \\quad\\text{estimated by}\\quad \\frac{s}{\\sqrt{n}}',
+          name: 'Standard error of the mean',
+          meaning:
+            'The standard deviation of the sampling distribution of the mean. It is not the spread of the data — it is the spread of the estimate, and it shrinks as the square root of the sample size.',
+          variables: [
+            { symbol: '\\mathrm{SE}', meaning: 'Standard error: how much the estimate varies across repeated samples' },
+            { symbol: '\\sigma', meaning: 'Population standard deviation — the spread of individual observations, which does not shrink with n' },
+            { symbol: 's', meaning: 'Sample standard deviation, used when sigma is unknown' },
+            { symbol: '\\sqrt{n}', meaning: 'The square root of the sample size, the source of diminishing returns to data collection' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\bar{x} \\pm t_{n-1,\\,1-\\alpha/2}\\,\\frac{s}{\\sqrt{n}}',
+          name: 'The t interval, for when sigma is estimated',
+          meaning:
+            'Estimating sigma from the same small sample adds uncertainty, so the multiplier comes from a heavier-tailed t distribution, making the interval wider than the z version.',
+          variables: [
+            { symbol: 't_{n-1,\\,1-\\alpha/2}', meaning: 'The t quantile with n − 1 degrees of freedom; 2.776 at n = 5 and 95%, against 1.96 for z' },
+            { symbol: 'n-1', meaning: 'Degrees of freedom — one is spent estimating the mean before estimating the spread' },
+            { symbol: 's', meaning: 'The sample standard deviation, itself an estimate and therefore a source of extra uncertainty' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\hat{p} \\pm z_{1-\\alpha/2}\\sqrt{\\frac{\\hat{p}(1-\\hat{p})}{n}}',
+          name: 'Interval for a proportion',
+          meaning:
+            'The conversion-rate version, used in every A/B test dashboard. The variance of a proportion depends on the proportion itself, which is why it is widest at 0.5.',
+          variables: [
+            { symbol: '\\hat{p}', meaning: 'The observed proportion, such as a click-through or conversion rate' },
+            { symbol: '\\hat{p}(1-\\hat{p})', meaning: 'The variance of a single Bernoulli trial; maximised at p = 0.5 and small near 0 or 1' },
+            { symbol: 'n', meaning: 'Number of trials — the approximation needs roughly n·p and n·(1−p) both above 10' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'n \\ge \\left(\\frac{z_{1-\\alpha/2}\\,\\sigma}{E}\\right)^{2}',
+          name: 'Sample size for a target margin of error',
+          meaning:
+            'Solve the margin-of-error formula for n. The square is the point: halving the margin E multiplies the required sample size by four.',
+          variables: [
+            { symbol: 'E', meaning: 'The margin of error you are willing to tolerate — the half-width of the interval' },
+            { symbol: 'z_{1-\\alpha/2}', meaning: 'The critical value for your confidence level' },
+            { symbol: '\\sigma', meaning: 'An estimate of the population spread, usually from a pilot study or historical data' },
+            { symbol: 'n', meaning: 'The required sample size, rounded up' },
+          ],
+          category: 'statistics',
+        },
+      ],
+      derivation: [
+        'Start from the central limit theorem: for large n, the sample mean has approximately the distribution N(mu, sigma²/n).',
+        'Standardise it: Z = (x̄ − mu)/(sigma/√n) is approximately standard normal, with mean 0 and standard deviation 1.',
+        'By definition of the quantile, P(−z ≤ Z ≤ z) = 1 − alpha when z is the 1 − alpha/2 quantile. For alpha = 0.05, z = 1.96.',
+        'Substitute: P(−1.96 ≤ (x̄ − mu)/(sigma/√n) ≤ 1.96) = 0.95.',
+        'Multiply through the inequality by sigma/√n: P(−1.96·sigma/√n ≤ x̄ − mu ≤ 1.96·sigma/√n) = 0.95.',
+        'Subtract x̄ and multiply by −1, which reverses the inequalities: P(x̄ − 1.96·sigma/√n ≤ mu ≤ x̄ + 1.96·sigma/√n) = 0.95.',
+        'That final line is the interval. Read it carefully: the only random quantity in it is x̄, which appears at both ends. Mu is a fixed constant sitting in the middle, not a random variable.',
+        'This is exactly why the interpretation must be about the procedure. Before sampling, the statement is a genuine probability about where the random endpoints will fall. After sampling, x̄ is a number, the endpoints are numbers, mu is a number, and the statement is either true or false — with no probability left in it.',
+        'When sigma is unknown you substitute s, which is itself estimated from the same data. The standardised quantity then follows a t distribution with n − 1 degrees of freedom rather than a normal one, and its heavier tails give a larger multiplier — which is the interval honestly paying for the extra uncertainty.',
+      ],
+    },
+
+    workedExample: {
+      title: 'An interval, a misinterpretation, and a sample-size decision',
+      setup:
+        'You measure page load times for a random sample of 100 sessions. The sample mean is 4.20 seconds and the sample standard deviation is 1.50 seconds. Build a 95% confidence interval, interpret it correctly, and work out what it would take to halve its width.',
+      steps: [
+        { label: 'Point estimate', detail: 'x̄ = 4.20 seconds. This is the centre of the interval and the best single guess available.', latex: '\\bar{x} = 4.20' },
+        { label: 'Standard error', detail: 'SE = s/√n = 1.50/√100 = 1.50/10 = 0.15 seconds. Note this is ten times smaller than the spread of the data itself — it describes the estimate, not the sessions.', latex: '\\mathrm{SE} = \\frac{1.50}{\\sqrt{100}} = 0.15' },
+        { label: 'Critical value', detail: 'n = 100 is comfortably large, so t with 99 degrees of freedom is 1.984, barely different from the normal 1.96. Using the t value is the more honest choice.', latex: 't_{99,\\,0.975} = 1.984' },
+        { label: 'Margin of error', detail: '1.984 × 0.15 = 0.298, so about 0.30 seconds.', latex: 'E = 1.984 \\times 0.15 \\approx 0.30' },
+        { label: 'The interval', detail: '4.20 ± 0.30, that is [3.90, 4.50] seconds.', latex: '[3.90,\\; 4.50]' },
+        { label: 'State it correctly', detail: 'The procedure that produced this interval captures the true mean load time in 95% of repeated samples. This particular interval either contains it or does not.' },
+        { label: 'Three wrong statements to reject', detail: 'Not "there is a 95% probability the true mean is between 3.90 and 4.50" — the true mean is fixed. Not "95% of page loads take between 3.90 and 4.50 seconds" — that would be a prediction interval, and with s = 1.50 it would be roughly [1.2, 7.2], five times wider. And not "95% of future sample means will fall in this interval" — the actual figure is about 83%, because both the new mean and this interval vary.' },
+        { label: 'Halving the width', detail: 'The margin is proportional to 1/√n, so to halve it you need 4n. From 100 sessions to 400 sessions takes the interval to roughly 4.20 ± 0.15, that is [4.05, 4.35].', latex: 'E \\propto \\frac{1}{\\sqrt{n}}' },
+        { label: 'What it costs to be sure to 0.05 seconds', detail: 'Solve n ≥ (1.96 × 1.50 / 0.05)² = (58.8)² = 3457, so about 3500 sessions. Getting from ±0.30 to ±0.05 — a factor of six — costs thirty-five times the data.', latex: 'n \\ge \\left(\\frac{1.96 \\times 1.50}{0.05}\\right)^2 \\approx 3457' },
+        { label: 'The assumption nobody checks', detail: 'All of this quantifies sampling variability only. If the 100 sessions came disproportionately from one region or one device type, the interval is exactly as narrow as calculated and centred on the wrong number, and collecting 3500 biased sessions would make it narrower and no less wrong.' },
+      ],
+      conclusion:
+        'The interval [3.90, 4.50] is a statement about the precision of your measurement procedure, not a probability about the world. Its width is governed by the square root of the sample size, which sets the brutal economics of data collection: each extra decimal place of precision costs a hundred times the data. And none of it protects against a biased sample, which is why how you collected the hundred sessions matters more than the arithmetic you just did.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Coverage is a property of the procedure, and you can verify it',
+        runnable: true,
+        code: `import numpy as np
+from scipy import stats
+
+rng = np.random.default_rng(0)
+TRUE_MU, TRUE_SIGMA, n = 4.2, 1.5, 100
+
+def interval(sample, conf=0.95):
+    xbar, s = sample.mean(), sample.std(ddof=1)
+    tcrit = stats.t.ppf(1 - (1 - conf) / 2, df=len(sample) - 1)
+    margin = tcrit * s / np.sqrt(len(sample))
+    return xbar - margin, xbar + margin
+
+hits = 0
+trials = 10_000
+for i in range(trials):
+    sample = rng.normal(TRUE_MU, TRUE_SIGMA, n)
+    lo, hi = interval(sample)
+    if lo <= TRUE_MU <= hi:
+        hits += 1
+    if i < 3:
+        print(f"  interval {i}: [{lo:.3f}, {hi:.3f}]  contains mu? {lo <= TRUE_MU <= hi}")
+
+print(f"coverage: {hits / trials:.4f} of {trials} intervals contained the true mean")`,
+        output: `  interval 0: [3.959, 4.535]  contains mu? True
+  interval 1: [4.003, 4.596]  contains mu? True
+  interval 2: [3.816, 4.398]  contains mu? True
+coverage: 0.9487 of 10000 intervals contained the true mean`,
+        explanation:
+          'This is the definition made executable. Each loop draws a fresh sample and builds a fresh interval, and the intervals differ from one another because the data does — that variation is where the 95% lives. Roughly 95% of them contain 4.2 and roughly 5% do not, and the code cannot tell which is which without knowing the answer in advance, which in real work you never do. Run it with `conf=0.80` and coverage drops to about 80%, confirming the number is a property of the procedure rather than a description of any one interval.',
+      },
+      {
+        language: 'python',
+        title: 'The square-root penalty, and the difference from a prediction interval',
+        runnable: true,
+        code: `import numpy as np
+from scipy import stats
+
+s, conf = 1.5, 0.95
+print(f"{'n':>7} {'SE':>8} {'margin':>8} {'width':>8}")
+for n in (25, 100, 400, 1600, 10_000):
+    se = s / np.sqrt(n)
+    margin = stats.t.ppf(0.975, df=n - 1) * se
+    print(f"{n:>7} {se:>8.4f} {margin:>8.4f} {2 * margin:>8.4f}")
+
+# Sample size needed for a target margin of error
+for target in (0.30, 0.15, 0.05):
+    n_needed = int(np.ceil((1.96 * s / target) ** 2))
+    print(f"margin {target}: need n >= {n_needed}")
+
+# A confidence interval is NOT a prediction interval
+xbar, n = 4.2, 100
+ci = 1.96 * s / np.sqrt(n)
+pi = 1.96 * s * np.sqrt(1 + 1 / n)
+print(f"95% CI for the mean:        [{xbar - ci:.2f}, {xbar + ci:.2f}]")
+print(f"95% interval for one value: [{xbar - pi:.2f}, {xbar + pi:.2f}]")`,
+        output: `      n       SE   margin    width
+     25   0.3000   0.6192   1.2383
+    100   0.1500   0.2977   0.5953
+    400   0.0750   0.1474   0.2948
+   1600   0.0375   0.0736   0.1472
+  10000   0.0150   0.0294   0.0588
+margin 0.3: need n >= 97
+margin 0.15: need n >= 385
+margin 0.05: need n >= 3458
+95% CI for the mean:        [3.91, 4.49]
+95% interval for one value: [1.25, 7.15]`,
+        explanation:
+          'The first table shows the square root at work: every quadrupling of n halves the width, so precision is bought at a quadratic price. The sample-size figures make that concrete — going from a margin of 0.30 to 0.05 is a factor of six in precision and thirty-five times the data. The last two lines address the most common confusion of all. The confidence interval for the mean is [3.91, 4.49] and is narrow because averages are stable; the interval predicting a single new observation is [1.25, 7.15] and is five times wider because individual page loads vary. Quoting the first when someone asked the second understates the real spread enormously.',
+      },
+      {
+        language: 'python',
+        title: 'When the formula does not apply: proportions and the bootstrap',
+        runnable: true,
+        code: `import numpy as np
+from scipy import stats
+rng = np.random.default_rng(1)
+
+# A conversion rate: the normal approximation needs np and n(1-p) above ~10
+def prop_ci(successes, n, conf=0.95):
+    p = successes / n
+    z = stats.norm.ppf(1 - (1 - conf) / 2)
+    margin = z * np.sqrt(p * (1 - p) / n)
+    return p, (p - margin, p + margin)
+
+for successes, n in [(120, 2000), (3, 200)]:
+    p, (lo, hi) = prop_ci(successes, n)
+    ok = min(n * p, n * (1 - p)) >= 10
+    print(f"p={p:.4f} CI=[{lo:.4f}, {hi:.4f}]  approximation valid? {ok}")
+
+# Wilson interval: correct even for small counts, and never goes below zero
+print("Wilson:", [round(v, 4) for v in stats.binomtest(3, 200).proportion_ci(method="wilson")])
+
+# Bootstrap: no distributional assumption, works for any statistic
+skewed = rng.lognormal(mean=1.0, sigma=1.2, size=200)
+boot = np.array([rng.choice(skewed, size=len(skewed), replace=True).mean()
+                 for _ in range(10_000)])
+print(f"mean={skewed.mean():.3f}  bootstrap 95% CI="
+      f"[{np.percentile(boot, 2.5):.3f}, {np.percentile(boot, 97.5):.3f}]")
+print(f"t-interval for comparison: "
+      f"{tuple(round(v, 3) for v in stats.t.interval(0.95, len(skewed) - 1, skewed.mean(), stats.sem(skewed)))}")`,
+        output: `p=0.0600 CI=[0.0496, 0.0704]  approximation valid? True
+p=0.0150 CI=[-0.0018, 0.0318]  approximation valid? False
+Wilson: [0.0051, 0.0432]
+mean=4.851  bootstrap 95% CI=[4.113, 5.717]
+t-interval for comparison: (4.088, 5.613)`,
+        explanation:
+          'Three lessons. The second proportion interval has a negative lower bound, which is impossible for a rate — a clear signal that the normal approximation has been used outside its range, and the check `min(np, n(1−p)) ≥ 10` catches it before you publish. The Wilson interval fixes this by construction and should be the default for small counts. The bootstrap handles the third case: with strongly skewed log-normal data the sampling distribution of the mean is itself skewed, so the bootstrap interval is asymmetric about the estimate while the t interval is forced to be symmetric — and you can see the two disagree at both ends. The bootstrap assumes only that the sample is representative, which makes it the pragmatic choice for statistics with no tidy formula, such as a median, a 95th percentile, or an AUC.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Reporting model accuracy',
+        usage:
+          'A classifier scoring 92.0% on a 1000-item test set has a 95% interval of roughly ±1.7 percentage points. That is why a rival model at 92.8% cannot be declared better on that evidence, and why a leaderboard without intervals encourages conclusions the data does not support.',
+      },
+      {
+        context: 'A/B testing a product change',
+        usage:
+          'The dashboard reports a lift of +1.2% with an interval of [−0.4%, +2.8%]. Because the interval contains zero, the honest read is that the experiment has not yet distinguished the change from no effect, and the useful next question is how much more traffic would be needed.',
+      },
+      {
+        context: 'Opinion polling',
+        usage:
+          'The "margin of error ±3 points" quoted in news coverage is exactly this quantity, computed for a proportion at n around 1000. It accounts for sampling variability only, which is why polls with impeccable margins still miss when the sampling frame is unrepresentative.',
+      },
+      {
+        context: 'Cross-validation results',
+        usage:
+          'Five-fold cross-validation gives five scores; the interval across folds shows whether a 0.3-point difference between two pipelines is signal or fold noise. Reporting the mean alone hides exactly the information needed to decide.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'scipy.stats', role: '`t.interval`, `norm.ppf`, `sem` and `binomtest(...).proportion_ci` cover the standard constructions directly.' },
+      { tool: 'scipy.stats.bootstrap', role: 'Builds bootstrap intervals for arbitrary statistics, including BCa intervals that correct for skew.' },
+      { tool: 'scikit-learn', role: '`cross_val_score` returns per-fold scores precisely so you can report spread rather than a single number.' },
+      { tool: 'statsmodels', role: '`conf_int()` on a fitted model gives intervals for every coefficient, which is where regression uncertainty is actually read.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Saying "there is a 95% probability the true value lies in this interval"',
+        why: 'In the frequentist framework the parameter is a fixed unknown constant with no probability distribution. The randomness is entirely in the sampling, and therefore in the interval’s endpoints. Once the numbers are computed, the statement is simply true or false and no probability remains.',
+        fix: 'Say "95% of intervals constructed by this procedure contain the true value". If you genuinely want a probability statement about the parameter, you want a Bayesian credible interval, which requires a prior and means something different.',
+      },
+      {
+        mistake: 'Confusing a confidence interval with a prediction interval',
+        why: 'A confidence interval bounds the mean and shrinks like 1/√n; a prediction interval bounds a single future observation and does not shrink towards zero, because individual variability never goes away. They differ by a factor of √n and people routinely quote the narrow one when asked about the wide one.',
+        fix: 'Ask which question is being answered: "where is the average" or "where will the next one land". Use s/√n for the first and s·√(1 + 1/n) for the second.',
+      },
+      {
+        mistake: 'Treating "the interval contains zero" as proof of no effect',
+        why: 'An interval of [−0.4%, +2.8%] is equally compatible with no effect and with a useful 2% gain. Absence of evidence is not evidence of absence, and with a small sample an interval can be too wide to rule out anything at all.',
+        fix: 'Report the interval and interpret its width. Say "we cannot distinguish this from no effect; effects up to +2.8% remain consistent with the data" and state the sample size needed to narrow it.',
+      },
+      {
+        mistake: 'Believing a narrow interval means an accurate estimate',
+        why: 'Width measures precision, which is only about sampling variability. A biased sampling procedure produces a tight interval around the wrong value, and more data makes it tighter without moving it closer to the truth.',
+        fix: 'Interrogate how the sample was obtained before looking at the arithmetic. Bias is a design problem and no interval can detect it.',
+      },
+      {
+        mistake: 'Using the normal approximation for small counts or heavily skewed data',
+        why: 'For a proportion with only three successes in 200 trials the formula can return a negative lower bound, which is impossible; for skewed data the symmetric interval misplaces both ends because the sampling distribution is not symmetric.',
+        fix: 'Check np and n(1−p) are both above about 10. Use a Wilson or Clopper–Pearson interval for proportions and a bootstrap for skewed data or unusual statistics.',
+      },
+      {
+        mistake: 'Building many intervals and highlighting the interesting ones',
+        why: 'At 95% confidence, one interval in twenty misses by design. Compute twenty segment-level intervals and you should expect roughly one to be misleading; picking the one that excludes zero and reporting it alone turns an expected error into a finding.',
+        fix: 'Decide in advance which comparisons matter, and widen the intervals to control the family-wise error rate when making many at once.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What does a 95% confidence interval actually mean?',
+        answer:
+          'It means that the procedure used to build it captures the true parameter in 95% of repeated samples. The confidence attaches to the method, not to the particular interval in front of you: your interval either contains the parameter or it does not, and you cannot know which. The reason is that in the frequentist framework the parameter is a fixed constant while the sample — and therefore both endpoints of the interval — is random. You can see this in the derivation: the probability statement is made before sampling, about where random endpoints will fall relative to a fixed mu, and once you substitute actual numbers there is no random quantity left to attach a probability to. The statement people usually want, "there is a 95% chance the parameter is in this range", is a Bayesian credible interval, which is a legitimate thing to compute but requires a prior and answers a different question.',
+        followUp:
+          'A strong answer offers to demonstrate it by simulation: build ten thousand intervals from a known population and count how many contain the truth.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Your A/B test shows a 1.2% lift with a 95% interval of [−0.4%, 2.8%]. What do you tell the product manager?',
+        answer:
+          'That the experiment has not yet distinguished this change from no change, and also has not ruled out a worthwhile improvement — both conclusions matter. The interval spans zero, so the data are compatible with a small loss, with no effect, and with a 2.8% gain, and anyone reporting "we saw a 1.2% lift" without the interval is reporting noise as a result. The useful next step is a power calculation: if a 1% lift is the smallest effect worth shipping, I can compute how much traffic is needed for the interval to be narrow enough to detect it, since the width shrinks with the square root of the sample size. I would also check the test’s integrity before extending it — whether the analysis was peeked at repeatedly, whether randomisation was at the right unit, and whether this is one of many metrics being examined, because each of those inflates the chance of a spurious finding independently of the interval itself.',
+        followUp:
+          'Strong answers name the minimum detectable effect explicitly and mention that repeatedly checking an ongoing test invalidates the stated coverage.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'How would you put a confidence interval on a model’s test-set accuracy, and what would you be careful about?',
+        answer:
+          'Accuracy on a test set is a proportion, so the straightforward approach is a binomial interval: with accuracy p̂ on n items, the margin is roughly 1.96·√(p̂(1−p̂)/n), which at 92% on 1000 items is about ±1.7 percentage points. For small test sets or accuracies near 0 or 1, I would use a Wilson interval instead of the normal approximation, because the latter can produce bounds outside [0, 1]. Three cautions. First, this interval covers sampling variability of the test set only; it says nothing about whether the test set represents deployment data, which is usually the larger risk. Second, it assumes the test items are independent — if the set contains multiple crops of the same image or several sessions from the same user, the effective sample size is smaller and the true interval is wider, so I would use a clustered bootstrap resampling at the user or document level. Third, if the test set has been used repeatedly for model selection it is no longer a clean sample, and the interval will be optimistically centred no matter how correctly it is computed. For comparing two models on the same test set I would not compare overlapping intervals; I would build an interval for the paired difference, which is much tighter because it removes the item-level variation common to both.',
+        followUp:
+          'Mentioning that overlapping intervals do not imply a non-significant difference, and that the paired difference is the right quantity, is the mark of real experience.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A sample of 64 API response times has a mean of 210 ms and a standard deviation of 48 ms. Compute the 95% confidence interval, then state how large a sample you would need for a margin of error of 5 ms.',
+        hint: 'SE = s/√n, and the margin is about 1.96 × SE. For the sample size, solve the margin formula for n and remember it appears under a square root.',
+        solution:
+          'SE = 48/√64 = 48/8 = 6 ms. With n = 64 the t value with 63 degrees of freedom is 1.998, essentially 2, so the margin is 1.998 × 6 ≈ 12 ms. The interval is 210 ± 12, that is [198, 222] ms.\n\nInterpretation: the procedure that produced this range captures the true mean response time in 95% of repeated samples. This particular range either does or does not.\n\nFor a margin of 5 ms, solve n ≥ (1.96 × 48 / 5)² = (18.816)² = 354.0, so n = 355 measurements. Note what happened: cutting the margin from 12 ms to 5 ms, a factor of 2.4, required 355/64 ≈ 5.5 times the data — which is 2.4 squared, as the formula requires. This quadratic cost is the single most useful thing to remember when someone asks whether a bit more data will settle the question.',
+      },
+      {
+        prompt:
+          'A colleague writes in a report: "We are 95% confident that between 41% and 47% of users prefer the new layout, which means there is a 95% probability the true figure is in that range, and that 95% of users fall between 41% and 47%." Identify every error and rewrite the sentence.',
+        hint: 'There are two distinct errors here, and they are different mistakes rather than two phrasings of one.',
+        solution:
+          'Error one: "there is a 95% probability the true figure is in that range". The true proportion of users preferring the layout is a fixed number, not a random variable, so it has no probability of being anywhere. The 95% describes the interval-building procedure across repeated samples. This is the classic misstatement and the one that leads people to treat a single study as more conclusive than it is.\n\nError two: "95% of users fall between 41% and 47%" is a category mistake rather than a rephrasing. Users do not have percentages; each user either prefers the layout or does not. The interval bounds the population proportion, a single aggregate quantity, not the spread of individuals. This confusion is the same one that makes people quote a confidence interval when asked for a prediction interval.\n\nRewrite: "In a sample of n users, 44% preferred the new layout. A 95% confidence interval for the population proportion is 41% to 47%; intervals constructed this way contain the true proportion in 95% of repeated samples. The data are therefore consistent with a true preference anywhere in that range, which includes values both above and below a simple majority split."',
+      },
+      {
+        prompt:
+          'Model A scores 91.0% and model B scores 93.0% on the same 500-item test set. Each has a 95% interval of roughly ±2.4 points, so the intervals overlap substantially. Can you conclude anything, and what would you compute instead?',
+        hint: 'The two models were evaluated on the same items. What variability does that let you remove?',
+        solution:
+          'You cannot conclude "no difference" from overlapping intervals, and this is a genuinely common error: overlapping individual intervals do not imply the difference is indistinguishable from zero. The reason is that both intervals are dominated by variation in which items happened to be in the test set — and that variation is shared by both models, since they were scored on exactly the same items.\n\nThe right quantity is an interval for the paired difference. For each item record whether A was correct and whether B was correct, and focus on the discordant pairs: items where exactly one model was right. If B is right and A is wrong on b items, and the reverse on c items, McNemar’s test or a binomial interval on b/(b + c) gives an interval for the difference that removes all the item-level variation common to both models. In practice this interval is far narrower than either individual one, and a 2-point gap on 500 items can easily be clearly distinguishable from zero under the paired analysis while the marginal intervals overlap heavily.\n\nThe general principle is to build the interval for the quantity you want to make a decision about — here, the difference — rather than inspecting two intervals for quantities you do not care about individually. The same applies to cross-validation: compare per-fold differences, not two sets of fold scores.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'STAT-014-q1',
+        type: 'mcq',
+        concept: 'correct interpretation',
+        prompt: 'A 95% confidence interval for the mean is [10.2, 12.8]. Which statement is correct?',
+        options: [
+          '95% of intervals built by this procedure over repeated samples contain the true mean',
+          'There is a 95% probability the true mean is between 10.2 and 12.8',
+          '95% of the observations lie between 10.2 and 12.8',
+          '95% of future sample means will fall between 10.2 and 12.8',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Confidence is a property of the procedure. The parameter is fixed and the interval is random, so once the numbers are computed the statement is simply true or false. Option 3 describes a prediction interval, which is much wider; option 4 is about 83%, not 95%.',
+      },
+      {
+        id: 'STAT-014-q2',
+        type: 'numeric',
+        concept: 'standard error',
+        prompt: 'A sample of n = 400 has standard deviation s = 20. What is the standard error of the mean?',
+        answer: 1,
+        tolerance: 0.01,
+        explanation:
+          'SE = s/√n = 20/√400 = 20/20 = 1. Note how much smaller this is than the data’s own spread of 20: the standard error describes how the estimate varies, not how the observations vary.',
+      },
+      {
+        id: 'STAT-014-q3',
+        type: 'mcq',
+        concept: 'sample size and width',
+        prompt: 'You want to halve the width of a confidence interval. Roughly how much data do you need?',
+        options: [
+          'Four times as much',
+          'Twice as much',
+          'Half as much',
+          'It depends only on the confidence level, not the sample size',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The margin of error is proportional to 1/√n, so halving it requires quadrupling n. This square-root relationship is the fundamental economics of data collection: each extra decimal place of precision costs a hundred times the data.',
+      },
+      {
+        id: 'STAT-014-q4',
+        type: 'truefalse',
+        concept: 'bias versus precision',
+        prompt: 'A very narrow confidence interval guarantees the estimate is close to the true value.',
+        answer: false,
+        explanation:
+          'False. Width measures precision, which concerns sampling variability alone. A biased sampling procedure gives a tight interval around the wrong number, and collecting more data narrows it further without moving it towards the truth.',
+      },
+      {
+        id: 'STAT-014-q5',
+        type: 'fill',
+        concept: 'critical value',
+        prompt: 'For a 95% confidence interval with a large sample, how many standard errors wide is the margin of error?',
+        answers: ['1.96', '1.96 standard errors', 'about 2', '~1.96', '2'],
+        explanation:
+          'About 1.96, the standard normal quantile leaving 2.5% in each tail. It is 1.645 for 90% and 2.576 for 99%, which is why higher confidence always costs width.',
+      },
+      {
+        id: 'STAT-014-q6',
+        type: 'multi',
+        concept: 'what widens an interval',
+        prompt: 'Which of these make a confidence interval for a mean wider?',
+        options: [
+          'Increasing the confidence level from 90% to 99%',
+          'A larger population standard deviation',
+          'A smaller sample size',
+          'A sample mean further from zero',
+          'Using a t critical value instead of z when n is small',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'Width is critical value times s/√n, so it responds to the confidence level, the spread and the sample size, and to the heavier-tailed t multiplier when sigma is estimated. Where the mean happens to sit only shifts the interval; it does not change its width.',
+      },
+      {
+        id: 'STAT-014-q7',
+        type: 'explain',
+        concept: 'interpretation and limits',
+        prompt:
+          'An A/B test reports a conversion lift of +1.2% with a 95% confidence interval of [−0.4%, +2.8%]. Explain what this does and does not tell the business, and what you would do next.',
+        rubric: [
+          'States that the interval includes zero, so the data do not distinguish the change from no effect',
+          'Notes that this is not evidence of no effect — a useful gain remains consistent with the data',
+          'Proposes a concrete next step tied to the square-root relationship between width and sample size',
+        ],
+        sampleAnswer:
+          'The measured lift is 1.2%, but the interval runs from a small loss to a substantial gain, so the experiment has not separated this change from doing nothing. The first thing to say plainly is that reporting "we saw a 1.2% lift" without the interval would be reporting noise as a finding. The second thing, equally important and usually omitted, is that this is not evidence the change does nothing: a real gain of 2% is entirely consistent with these data, so "no significant effect" must not be translated into "no effect". The experiment is simply underpowered for the size of effect being looked for. What I would do next depends on the smallest lift worth shipping. If that is 1%, I would compute the traffic needed for the margin of error to be comfortably below 1%. Because the margin shrinks with the square root of the sample size, roughly halving the current margin of 1.6 points means about four times the current traffic, and I would check whether that is a few more days or a few more months before committing. Alongside that I would verify the things an interval cannot see: that randomisation was at the right unit, that the analysis was not peeked at repeatedly while running — which destroys the stated coverage — and that this is not one metric out of twenty being scanned for something interesting, because at 95% confidence one interval in twenty excludes zero by chance alone.',
+        explanation:
+          'A good answer refuses both wrong conclusions — "it worked" and "it does nothing" — and converts the width of the interval into a concrete data-collection decision.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does 95% confidence actually refer to?', back: 'The procedure: 95% of intervals built this way over repeated samples contain the true parameter. Not the particular interval you computed.' },
+      { front: 'Why is "95% probability the parameter is in this interval" wrong?', back: 'The parameter is a fixed constant with no distribution; the randomness is in the sample and hence in the endpoints. After computing, the statement is simply true or false.' },
+      { front: 'What is the standard error of a mean?', back: 's/√n — the standard deviation of the sampling distribution of the mean, describing how the estimate wobbles, not how the data spread.' },
+      { front: 'How does interval width depend on n?', back: 'It is proportional to 1/√n. Quadrupling the data halves the width; one extra decimal place of precision costs a hundred times the data.' },
+      { front: 'Confidence interval versus prediction interval?', back: 'The first bounds the mean and shrinks with n; the second bounds a single future observation and stays roughly as wide as the data, about √n times wider.' },
+      { front: 'When should you use a t interval instead of z?', back: 'When sigma is estimated from a small sample. The t distribution has heavier tails, giving a larger multiplier that pays for that extra uncertainty.' },
+      { front: 'When is the bootstrap the right tool?', back: 'When the statistic has no tidy formula — a median, a percentile, an AUC — or the data are skewed enough that a symmetric interval misplaces both ends.' },
+      { front: 'What can a confidence interval never tell you?', back: 'Whether the sample was biased. It quantifies sampling variability only; a biased sample gives a narrow interval around the wrong value.' },
+    ],
+
+    challenge: {
+      title: 'Verify coverage, then break it',
+      brief:
+        'Write a simulation that builds confidence intervals for a mean under five conditions and measures actual coverage against the nominal 95%: normal data with n = 100, normal data with n = 5 using both the z and t multipliers, strongly skewed log-normal data with n = 20, a proportion with p = 0.01 and n = 200 using the normal approximation, and the same proportion using a Wilson interval. Then add a sixth condition with a deliberately biased sampler — one that systematically omits the top decile — and report both coverage and interval width. Produce a table and a short written conclusion about which failures the interval can and cannot warn you about.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Coverage is measured empirically over at least 10,000 replications per condition, not asserted',
+        'The z-versus-t comparison at n = 5 shows the z interval under-covering, with the size of the shortfall stated',
+        'The small-p normal approximation is shown to under-cover and to produce impossible bounds below zero',
+        'The Wilson interval is shown to restore approximately nominal coverage for the same small-p case',
+        'The biased sampler shows near-zero coverage with narrow intervals, and the write-up draws the correct conclusion about bias versus precision',
+      ],
+      starterCode:
+        'import numpy as np\nfrom scipy import stats\n\nrng = np.random.default_rng(0)\n\ndef coverage(sampler, true_value, interval_fn, trials=10_000):\n    """Fraction of intervals from interval_fn that contain true_value."""\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone who understands means, standard deviations and the central limit theorem what a confidence interval is, how wide it should be, and exactly what the 95% refers to. Make sure they leave able to correct the standard misinterpretation.',
+      mustCover: [
+        'An interval reports the precision of an estimate rather than a single number pretending to be exact',
+        'Width is the critical value times the standard error, and the standard error shrinks as √n',
+        'The 95% is a property of the procedure across repeated samples, not of the one interval computed',
+        'The interval covers sampling variability only and cannot detect bias',
+      ],
+      bonusSignals: ['distinguishes a confidence interval from a prediction interval', 'gives the quadratic cost of extra precision', 'says explicitly why "95% chance the parameter is in here" is wrong'],
+      sampleExplanation:
+        'You measure something on a sample and get a number. That number is not the truth, and everyone knows it, but a bare number on a slide stops looking uncertain within about four seconds. A confidence interval is the discipline of reporting the uncertainty alongside the estimate so the reader cannot forget it. The construction comes straight from the central limit theorem. Your sample mean is approximately normal, centred on the true mean, with a spread of sigma over root n — call that the standard error, and notice it describes how the estimate wobbles rather than how the data spread. A normal distribution keeps about 95% of its mass within 1.96 standard deviations of its centre, so before you collect anything you can say the mean you are about to get will land within 1.96 standard errors of the true mean about 95% of the time. Then you flip it: if the sample mean is usually within that distance of the true mean, an interval of that width drawn around your sample mean usually reaches the true mean, because being within a distance is symmetric. That flip is the whole construction. Now the interpretation, which is where almost everyone goes wrong, including people who use these professionally. It is tempting to say "there is a 95% chance the true value is between 3.9 and 4.5". That sentence is wrong, and it is worth knowing exactly why rather than just avoiding it. The true mean is a fixed number. It is not wandering about. The thing that was random was your sample, and therefore the two endpoints of your interval. Before you collected the data, there genuinely was a 95% probability that the random interval you were about to build would land around the fixed truth. After you collect it, everything in the statement is a specific number and the statement is simply true or false — you just do not know which. So the correct phrasing is about the method: intervals built this way capture the truth 95% of the time. Picture casting a net: the manufacturer tested the design and it catches the fish on 95 casts in 100, but once this particular net has closed, the fish is in or out. Two practical consequences. First, width. It is the critical value times the standard error, and the standard error carries a square root, so precision gets expensive fast — quadrupling your data halves the width, and squeezing out one more decimal place costs a hundred times the data. When someone asks whether collecting a bit more data will settle the question, that square root is your answer. Second, and this is the limitation to state loudly: the interval quantifies sampling variability and nothing else. If your sample came from the wrong population, the interval will be beautifully narrow and centred on the wrong number, and more data will make it narrower and no less wrong. How you collected the data matters more than the arithmetic you do afterwards.',
+    },
+  },
+  {
+    id: 'STAT-015',
+    domain: 'STAT',
+    module: 'Interpreting Evidence',
+    topic: 'Testing claims and inferring causes',
+    title: 'Hypothesis Testing, p-values and Causation',
+    slug: 'hypothesis-testing-and-p-values',
+    difficulty: 4,
+    estimatedMinutes: 45,
+    prerequisites: ['STAT-013', 'STAT-014'],
+    related: ['STAT-003', 'STAT-009', 'STAT-012'],
+    tags: ['hypothesis testing', 'p-value', 'type I error', 'type II error', 'power', 'p-hacking', 'multiple comparisons', 'causation', 'confounding', 'a-b testing'],
+
+    learningObjectives: [
+      'Set up a null and an alternative hypothesis for a concrete question, and explain why the null is the one assumed true',
+      'Define a p-value correctly and identify the three wrong definitions people routinely give',
+      'Distinguish type I from type II errors, and explain how alpha, effect size and sample size determine power',
+      'Explain how multiple comparisons and p-hacking manufacture significance, and apply a correction',
+      'Separate statistical significance from practical importance, and read a test alongside its confidence interval',
+      'Explain why correlation does not imply causation, name the mechanisms that produce spurious association, and say what randomisation actually buys',
+    ],
+
+    terminology: [
+      {
+        term: 'Null hypothesis',
+        definition:
+          'The default claim of no effect or no difference, denoted H₀. It is assumed true for the purpose of computing the p-value, and is rejected only if the data would be surprising under it.',
+        simple: 'The boring explanation: nothing is going on.',
+      },
+      {
+        term: 'Test statistic',
+        definition:
+          'A single number computed from the sample that measures how far the data fall from what the null predicts, scaled by the noise — for example a t statistic, which is a difference divided by its standard error.',
+        simple: 'How big the effect is, measured in units of how much it wobbles.',
+      },
+      {
+        term: 'p-value',
+        definition:
+          'The probability of obtaining a test statistic at least as extreme as the observed one, assuming the null hypothesis is true. It is a statement about the data given the hypothesis, never the reverse.',
+        simple: 'If nothing were really going on, how often would you see a result this striking?',
+      },
+      {
+        term: 'Significance level',
+        definition:
+          'A threshold alpha, chosen before seeing the data, below which the p-value leads to rejecting the null. It is the type I error rate you have agreed to tolerate.',
+        simple: 'The bar you set in advance for calling a result convincing.',
+      },
+      {
+        term: 'Type I and type II error',
+        definition:
+          'A type I error rejects a true null — a false positive, occurring at rate alpha. A type II error fails to reject a false null — a false negative, occurring at rate beta.',
+        simple: 'Crying wolf, versus missing the wolf.',
+      },
+      {
+        term: 'Power',
+        definition:
+          'The probability 1 − beta of detecting an effect of a specified size when it genuinely exists. It rises with sample size, with effect size, and with a larger alpha.',
+        simple: 'The chance your test notices a real effect.',
+      },
+      {
+        term: 'Confounder',
+        definition:
+          'A variable that influences both the supposed cause and the supposed effect, producing an association between them that is not causal.',
+        simple: 'A hidden third thing driving both of the things you measured.',
+      },
+      {
+        term: 'p-hacking',
+        definition:
+          'Analysing data in many ways — trying subgroups, metrics, exclusions or stopping points — and reporting whichever yielded p < 0.05. It inflates the false-positive rate far above the nominal alpha.',
+        simple: 'Searching until something looks significant, then reporting only that.',
+      },
+    ],
+
+    simpleExplanation:
+      "Suppose you change the colour of a button and conversions go up by 2%. Did the change work, or would you have seen a wobble like that anyway? Hypothesis testing is a formal way of asking that question. You start by assuming the dull answer — the change did nothing — and then ask: if that were true, how often would random variation alone produce a result at least as striking as the one I got? That probability is the p-value. If it is very small, the dull answer is starting to look like a poor explanation for what you saw, so you reject it. Two cautions come with this, and they matter more than the arithmetic. The first is that a small p-value tells you the result is hard to explain by chance; it does not tell you the effect is large, or important, or real in some deeper sense. The second is that the whole procedure only earns its guarantees if you decided what to test before you looked. Search through enough comparisons and something will cross the line by luck alone — at the usual threshold, about one in twenty.",
+
+    whyItExists:
+      'Every measured difference is part signal and part noise, and human beings are extremely good at seeing patterns in noise. Hypothesis testing exists to impose a decision rule agreed in advance: a specified false-positive rate, a defined threshold, and an explicit statement of what the data would have to look like to change your mind — so that conclusions do not depend on how badly someone wanted the result.',
+
+    analogy: {
+      scenario:
+        'A criminal trial begins by assuming the defendant is innocent, and the prosecution must show that the evidence would be very unlikely to arise if that assumption held. The jury is not asked whether innocence is probable; it is asked whether the evidence is compatible with it. A verdict of not guilty therefore does not mean the defendant has been shown to be innocent — only that the evidence fell short. And the standard of proof is fixed before the trial, precisely so that it cannot be adjusted once everyone can see which way the evidence points.',
+      mapping: [
+        { from: 'The presumption of innocence', to: 'The null hypothesis, assumed true while the evidence is weighed' },
+        { from: 'The strength of the evidence against innocence', to: 'The test statistic' },
+        { from: 'How unlikely this evidence would be for an innocent person', to: 'The p-value' },
+        { from: 'The standard of proof, fixed in advance', to: 'The significance level alpha' },
+        { from: 'Convicting an innocent defendant', to: 'A type I error, a false positive at rate alpha' },
+        { from: 'Acquitting a guilty defendant', to: 'A type II error, a false negative at rate beta' },
+        { from: 'A verdict of not guilty', to: 'Failing to reject the null — which is not the same as proving it' },
+        { from: 'Retrying the same person until a jury convicts', to: 'Testing many metrics or peeking repeatedly until something reaches p < 0.05' },
+      ],
+      bridge:
+        'The asymmetry in the story is the asymmetry in the mathematics. The p-value is computed under the assumption that the null is true, so like a trial it can only ever cast doubt on that assumption — it cannot confirm it, and it says nothing about the probability that the assumption is true. That is exactly why "we failed to reject the null" must never be reported as "we showed there is no effect", and why the retrial image captures p-hacking so well: each fresh attempt gets its own independent chance of a false conviction.',
+      limitations:
+        'The analogy has no counterpart for effect size, and that omission matters. A court asks only whether guilt is established; statistics must also ask how much. A massive sample can make a completely trivial difference come out as overwhelmingly significant, which is a conviction for an offence nobody should care about.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'Running a hypothesis test honestly',
+        caption: 'Steps one to three happen before any data is seen. That ordering is what the guarantees depend on.',
+        steps: [
+          { label: 'State H₀ and H₁', detail: 'The null is the no-effect default; the alternative is what you would act on. Decide one-sided or two-sided now, not later.' },
+          { label: 'Choose alpha and the minimum effect worth detecting', detail: 'Alpha is the false-positive rate you accept. The minimum effect is a business or scientific judgement, not a statistical one.' },
+          { label: 'Compute the required sample size', detail: 'Power analysis turns alpha, the effect size and a target power of 80% or 90% into an n. Commit to it.' },
+          { label: 'Collect the data, then compute the test statistic', detail: 'A difference divided by its standard error. No looking before the planned n is reached.' },
+          { label: 'Compute the p-value and the confidence interval', detail: 'The p-value gives the decision; the interval gives the magnitude and its uncertainty. Report both, always.' },
+          { label: 'Decide, and state the effect size', detail: 'Reject or fail to reject — and say how big the effect was and whether that size matters in practice.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'What a p-value is, and the three things people think it is',
+        caption: 'The three wrong definitions are all the same error: reversing the conditional.',
+        left: {
+          heading: 'Correct',
+          points: [
+            'P(data at least this extreme | H₀ is true)',
+            'A statement about the data, conditional on the hypothesis',
+            'Small p means the data are surprising if nothing is going on',
+            'Says nothing about how large the effect is',
+            'Its guarantees hold only for a test specified in advance',
+          ],
+        },
+        right: {
+          heading: 'Wrong, and why',
+          points: [
+            '"The probability the null is true" — that reverses the conditional; it would need a prior',
+            '"The probability the result was due to chance" — same reversal in plainer clothing',
+            '"1 − p is the probability the finding will replicate" — replication depends on power and true effect size, not p',
+            '"p = 0.04 means a stronger effect than p = 0.06" — a threshold is not a measurement',
+            '"p > 0.05 proves there is no effect" — absence of evidence, not evidence of absence',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'The four outcomes of a test',
+        caption: 'Alpha and beta are the two ways of being wrong, and lowering one raises the other unless you collect more data.',
+        columns: ['', 'H₀ is actually true', 'H₀ is actually false'],
+        rows: [
+          ['You reject H₀', 'Type I error — false positive, rate alpha', 'Correct detection — probability 1 − beta, the power'],
+          ['You fail to reject H₀', 'Correct — probability 1 − alpha', 'Type II error — false negative, rate beta'],
+          ['Controlled by', 'Choosing alpha before the test', 'Sample size, effect size and alpha together'],
+          ['Cost in an A/B test', 'Shipping a change that does nothing, and trusting a false result', 'Discarding a change that would have worked'],
+        ],
+      },
+      {
+        kind: 'annotated',
+        title: 'Anatomy of a t statistic',
+        subject: 't = (x̄₁ − x̄₂) / SE(x̄₁ − x̄₂)',
+        annotations: [
+          { part: 'x̄₁ − x̄₂', note: 'The observed effect: the raw difference between groups. This is what the business cares about, in its own units.' },
+          { part: 'SE(x̄₁ − x̄₂)', note: 'The noise: how much that difference would vary across repeated experiments. It shrinks as √n.' },
+          { part: 'the ratio', note: 'Signal divided by noise. Big t means the difference is large relative to the wobble, which is the only sense in which a test finds anything.' },
+          { part: 'why n matters', note: 'Increasing n does not change the effect, only the denominator — so any non-zero difference becomes significant eventually.' },
+          { part: 'the p-value from t', note: 'The tail area beyond ±t under the null distribution. Two-sided unless you genuinely pre-registered a direction.' },
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'From correlation to a causal claim',
+        caption: 'Four rival explanations must be eliminated before "X causes Y" is warranted.',
+        branching: true,
+        steps: [
+          { label: 'X and Y move together', detail: 'The starting observation. It is compatible with every branch below.' },
+          { label: 'Chance', detail: 'With enough variables examined, strong correlations appear by luck alone. Ruled out by pre-registration and replication.' },
+          { label: 'Reverse causation', detail: 'Y causes X. Ruled out by temporal ordering or by intervening on X.' },
+          { label: 'Confounding', detail: 'A third variable Z drives both. Ruled out by randomisation, or partially by adjusting for measured confounders.' },
+          { label: 'Selection effects', detail: 'The sample was chosen in a way that manufactures the association. Ruled out by examining how units entered the data.' },
+          { label: 'Causation', detail: 'What remains once the others are excluded. A randomised experiment excludes confounding by construction, which is why it is the gold standard.' },
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Where the null distribution comes from',
+        caption: 'Simulate the sampling distribution under the null, then see where your observed statistic falls in its tail.',
+        widget: 'clt-sim',
+      },
+    ],
+
+    formalDefinition:
+      'Given a null hypothesis H₀ specifying a distribution for a test statistic T, the p-value of an observed t_obs is P(T at least as extreme as t_obs | H₀), where extremeness is defined by the alternative. Rejecting H₀ when p ≤ alpha yields a test with type I error rate alpha; the type II error rate beta and the power 1 − beta are defined against a specific alternative and depend on the effect size, the variance and the sample size. A p-value is a probability of data given a hypothesis and is not P(H₀ | data), which requires a prior and Bayes’ theorem.',
+
+    math: {
+      intuition:
+        'The whole machine rests on one comparison. Assume nothing is going on. Under that assumption, the difference you are measuring still wobbles from experiment to experiment, and the central limit theorem tells you the shape and width of that wobble: roughly normal, centred on zero, with a spread equal to the standard error. That is the null distribution — a full picture of what noise alone can produce. Now place your observed difference on it. If it sits comfortably inside the bulk, noise explains it and you have learned nothing. If it sits far out in the tail, noise is a poor explanation, and the p-value is exactly the area of that tail: the proportion of noise-only experiments that would have produced something at least this extreme. Two consequences follow immediately. First, since the standard error shrinks like one over root n, any non-zero difference at all is eventually pushed into the tail by enough data — so statistical significance is a statement about sample size as much as about the effect. Second, since the tail beyond the threshold has area alpha by construction, testing twenty independent true nulls gives you roughly one excursion into it by chance, which is the entire arithmetic of the multiple-comparisons problem.',
+      formulas: [
+        {
+          latex: 'p = P\\bigl(|T| \\ge |t_{\\text{obs}}| \\;\\big|\\; H_0\\bigr)',
+          name: 'The p-value, two-sided',
+          meaning:
+            'The probability of a statistic at least as extreme as the one observed, computed assuming the null is true. Note the direction of the conditioning bar — it is the single most important symbol in the formula.',
+          variables: [
+            { symbol: 'T', meaning: 'The test statistic regarded as a random variable under the null' },
+            { symbol: 't_{\\text{obs}}', meaning: 'The value actually computed from your sample' },
+            { symbol: 'H_0', meaning: 'The null hypothesis, assumed true for the purpose of this calculation' },
+            { symbol: '|\\cdot|', meaning: 'Absolute value, making the test two-sided: extreme in either direction counts' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 't = \\frac{\\bar{x}_1 - \\bar{x}_2}{\\sqrt{\\dfrac{s_1^2}{n_1} + \\dfrac{s_2^2}{n_2}}}',
+          name: 'Two-sample t statistic (Welch)',
+          meaning:
+            'The observed difference divided by its standard error. Welch’s version does not assume the two groups have equal variances, which is why it is the sensible default.',
+          variables: [
+            { symbol: '\\bar{x}_1, \\bar{x}_2', meaning: 'The two group means — control and treatment' },
+            { symbol: 's_1^2, s_2^2', meaning: 'The two sample variances, estimated separately' },
+            { symbol: 'n_1, n_2', meaning: 'The two group sizes' },
+            { symbol: 'the denominator', meaning: 'The standard error of the difference — the noise the effect must stand out against' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\alpha = P(\\text{reject } H_0 \\mid H_0 \\text{ true}), \\qquad \\beta = P(\\text{fail to reject } H_0 \\mid H_1 \\text{ true}), \\qquad \\text{power} = 1 - \\beta',
+          name: 'The two error rates and power',
+          meaning:
+            'Alpha is chosen; beta follows from the design. For a fixed sample size, tightening alpha increases beta — the only way to reduce both is more data.',
+          variables: [
+            { symbol: '\\alpha', meaning: 'Type I error rate: the false-positive rate you accept, conventionally 0.05' },
+            { symbol: '\\beta', meaning: 'Type II error rate: the chance of missing a real effect of the specified size' },
+            { symbol: '1 - \\beta', meaning: 'Power: the probability of detecting that effect when it exists; 0.80 is a common target' },
+            { symbol: 'H_1', meaning: 'A specific alternative — power is undefined without naming the effect size you care about' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'n \\approx \\frac{2\\sigma^2\\,(z_{1-\\alpha/2} + z_{1-\\beta})^2}{\\delta^2}',
+          name: 'Sample size per group for a two-sample comparison',
+          meaning:
+            'The n needed to detect a difference delta with the chosen alpha and power. The square on delta is the punchline: halving the effect you want to detect quadruples the data required.',
+          variables: [
+            { symbol: '\\delta', meaning: 'The minimum effect size worth detecting, in the measurement’s own units' },
+            { symbol: '\\sigma', meaning: 'The standard deviation of the outcome within a group' },
+            { symbol: 'z_{1-\\alpha/2}', meaning: '1.96 for alpha = 0.05 two-sided' },
+            { symbol: 'z_{1-\\beta}', meaning: '0.84 for 80% power, 1.28 for 90% power' },
+            { symbol: 'n', meaning: 'Required observations per group' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'P(\\text{at least one false positive}) = 1 - (1-\\alpha)^{m}',
+          name: 'The multiple-comparisons inflation',
+          meaning:
+            'Run m independent tests on true nulls and the chance of at least one spurious significant result grows quickly: 23% at m = 5, 40% at m = 10, 64% at m = 20.',
+          variables: [
+            { symbol: 'm', meaning: 'The number of independent tests performed — including the ones you did not report' },
+            { symbol: '\\alpha', meaning: 'The per-test significance level' },
+            { symbol: '(1-\\alpha)^m', meaning: 'The probability that every one of the m tests correctly fails to reject' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\alpha_{\\text{Bonferroni}} = \\frac{\\alpha}{m}, \\qquad \\text{BH: reject } p_{(i)} \\le \\frac{i}{m}\\alpha',
+          name: 'Two corrections',
+          meaning:
+            'Bonferroni controls the chance of any false positive and is conservative. Benjamini–Hochberg controls the expected proportion of false discoveries among those declared significant, and is the usual choice when screening many hypotheses.',
+          variables: [
+            { symbol: 'm', meaning: 'The number of tests in the family' },
+            { symbol: 'p_{(i)}', meaning: 'The i-th smallest p-value when they are sorted ascending' },
+            { symbol: 'i', meaning: 'That p-value’s rank, which makes the BH threshold less punishing than Bonferroni for the smallest p-values' },
+            { symbol: '\\alpha', meaning: 'The family-wise error rate, or the false discovery rate, being controlled' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'P(H_0 \\mid \\text{data}) = \\frac{P(\\text{data} \\mid H_0)\\,P(H_0)}{P(\\text{data})} \\neq p',
+          name: 'Why the p-value is not the probability the null is true',
+          meaning:
+            'Getting from P(data | H₀) to P(H₀ | data) requires Bayes’ theorem and a prior. When most tested hypotheses are false leads, a p just under 0.05 can still leave a large posterior probability that the null is true.',
+          variables: [
+            { symbol: 'P(H_0 \\mid \\text{data})', meaning: 'What people want: the probability the null is true given what was observed' },
+            { symbol: 'P(\\text{data} \\mid H_0)', meaning: 'What the p-value is built from: the probability of the data given the null' },
+            { symbol: 'P(H_0)', meaning: 'The prior probability the null is true — supplied by context, never by the data alone' },
+            { symbol: 'P(\\text{data})', meaning: 'The marginal probability of the data across all hypotheses' },
+          ],
+          category: 'probability',
+        },
+      ],
+      derivation: [
+        'Why does a small p-value count as evidence? Start by assuming the null is true, and derive the distribution the test statistic must then follow.',
+        'For a difference of means, the central limit theorem gives that distribution: approximately normal, centred on zero, with standard deviation equal to the standard error of the difference.',
+        'Standardising by that standard error produces a statistic whose null distribution is known and fixed — a t distribution, or a standard normal for large samples.',
+        'The p-value is the tail area beyond the observed value. By construction, if the null is true this quantity is uniformly distributed on [0, 1], which is why P(p ≤ alpha) = alpha exactly.',
+        'That uniformity is the whole guarantee: rejecting when p ≤ alpha gives a false-positive rate of exactly alpha, no more and no less — for one pre-specified test.',
+        'Now break the guarantee. Run m independent tests on true nulls. Each p-value is uniform, so the probability that none falls below alpha is (1 − alpha)^m, and the chance of at least one false positive is 1 − (1 − alpha)^m. At alpha = 0.05 and m = 20 that is 0.64.',
+        'The same arithmetic covers p-hacking, which is multiple testing with the count concealed. Trying four metrics, three subgroups and two exclusion rules is twenty-four tests even if only one is written up — the reported alpha of 0.05 is then a fiction.',
+        'Repeated peeking is the sequential version: checking an ongoing experiment daily and stopping at the first p < 0.05 raises the false-positive rate to well above 0.30, because each look is another opportunity to cross the line. Sequential designs exist precisely to restore the guarantee under looking.',
+        'Finally, why a p-value cannot tell you the probability the null is true. It supplies P(data | H₀); the question asks for P(H₀ | data), and Bayes’ theorem shows these differ by the ratio of priors and the marginal likelihood.',
+        'A concrete consequence: if only one in ten tested hypotheses is genuinely true, a test with alpha = 0.05 and 80% power produces about 45 false positives for every 80 true ones across a thousand tests — so roughly a third of significant findings are wrong even with everything done correctly.',
+      ],
+    },
+
+    workedExample: {
+      title: 'An A/B test, from power calculation to honest conclusion',
+      setup:
+        'A model-ranked recommendation panel is tested against the existing rule-based one. Baseline conversion is 5.0%. The product team says a lift below 0.5 percentage points is not worth the maintenance cost. Plan the experiment, then analyse a result of 5.6% treatment against 5.0% control on 20,000 users per arm.',
+      steps: [
+        { label: 'State the hypotheses', detail: 'H₀: p_treatment = p_control, the new panel changes nothing. H₁: p_treatment ≠ p_control, two-sided because a meaningful drop matters as much as a rise.', latex: 'H_0: p_t = p_c' },
+        { label: 'Fix alpha and power before collecting anything', detail: 'alpha = 0.05, power = 0.80. Both are decisions about acceptable error rates, made now so they cannot be adjusted once the numbers are visible.', latex: '\\alpha = 0.05,\\; 1-\\beta = 0.80' },
+        { label: 'Compute the required sample size', detail: 'For proportions with p ≈ 0.05, sigma² ≈ p(1 − p) = 0.0475, and delta = 0.005. n ≈ 2(0.0475)(1.96 + 0.84)²/0.005² = 2(0.0475)(7.84)/0.000025 ≈ 29,792 per arm.', latex: 'n \\approx \\frac{2 p(1-p)(z_{\\alpha/2} + z_{\\beta})^2}{\\delta^2} \\approx 29{,}800' },
+        { label: 'Notice the problem immediately', detail: 'The experiment as run has 20,000 per arm, not 29,800. It is underpowered for the effect the team said it cares about — power is roughly 63%, so a genuine 0.5-point lift would be missed more than a third of the time. This is worth knowing before the analysis, not after.' },
+        { label: 'Compute the observed difference', detail: '5.6% − 5.0% = 0.6 percentage points, a relative lift of 12%.', latex: '\\hat{p}_t - \\hat{p}_c = 0.006' },
+        { label: 'Compute the standard error of the difference', detail: 'SE = √(0.056·0.944/20000 + 0.05·0.95/20000) = √(2.643e−6 + 2.375e−6) = √5.018e−6 = 0.00224.', latex: '\\mathrm{SE} = 0.00224' },
+        { label: 'Compute the test statistic', detail: 'z = 0.006/0.00224 = 2.68. The observed difference is 2.68 standard errors from zero.', latex: 'z = 2.68' },
+        { label: 'Compute the p-value', detail: 'Two-sided tail area beyond ±2.68 under the standard normal is 0.0074. Under the null, results this extreme occur about seven times in a thousand.', latex: 'p = 0.0074' },
+        { label: 'Build the confidence interval, which is the more useful output', detail: '0.006 ± 1.96(0.00224) = 0.006 ± 0.0044, that is [0.0016, 0.0104], or a lift between 0.16 and 1.04 percentage points.', latex: '[0.16\\%,\\; 1.04\\%]' },
+        { label: 'Read the interval against the decision threshold', detail: 'The interval excludes zero, so the effect is distinguishable from nothing. But it also includes values below the 0.5-point threshold the team set, so the data do not establish that the lift is large enough to be worth shipping. Significance and importance have come apart, and only the interval reveals it.' },
+        { label: 'Check what would invalidate all of this', detail: 'Was this the only metric examined, or one of fifteen? Was the test stopped as soon as p dropped below 0.05, or at the planned n? Was randomisation at the user level, so that one user cannot contribute to both arms? Any of these breaks the stated 0.05 error rate regardless of the arithmetic above.' },
+        { label: 'State the conclusion honestly', detail: 'The new panel produces a conversion lift that is unlikely to be chance alone, estimated at 0.6 points with a plausible range of 0.16 to 1.04 points. Because the range extends below the 0.5-point decision threshold, the experiment does not settle whether the lift justifies the cost; extending to roughly 30,000 per arm would narrow it enough to decide.' },
+      ],
+      conclusion:
+        'The p-value answered one narrow question — is this distinguishable from noise — and answered it well. Every decision-relevant fact came from elsewhere: the size of the effect, its plausible range, the pre-set threshold for mattering, and whether the experiment had the power to detect what was being looked for. Report the p-value if you like, but the interval and the effect size are what anyone should act on.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'A two-sample test, with the interval that makes it interpretable',
+        runnable: true,
+        code: `import numpy as np
+from scipy import stats
+
+rng = np.random.default_rng(7)
+control   = rng.normal(100, 15, 200)      # true mean 100
+treatment = rng.normal(103, 15, 200)      # true mean 103: a real effect
+
+t, p = stats.ttest_ind(treatment, control, equal_var=False)   # Welch
+diff = treatment.mean() - control.mean()
+se = np.sqrt(treatment.var(ddof=1) / 200 + control.var(ddof=1) / 200)
+ci = (diff - 1.96 * se, diff + 1.96 * se)
+
+print(f"observed difference: {diff:.2f}")
+print(f"t = {t:.3f}, p = {p:.5f}")
+print(f"95% CI for the difference: [{ci[0]:.2f}, {ci[1]:.2f}]")
+print(f"Cohen's d = {diff / np.sqrt((treatment.var(ddof=1) + control.var(ddof=1)) / 2):.3f}")
+
+# The same true effect, with a tiny sample: real, but undetectable
+small_c, small_t = rng.normal(100, 15, 12), rng.normal(103, 15, 12)
+t2, p2 = stats.ttest_ind(small_t, small_c, equal_var=False)
+print(f"n=12 per arm: p = {p2:.3f}  ->  fail to reject, though the effect is real")`,
+        output: `observed difference: 3.63
+t = 2.484, p = 0.01340
+95% CI for the difference: [0.77, 6.50]
+Cohen's d = 0.248
+n=12 per arm: p = 0.462  ->  fail to reject, though the effect is real`,
+        explanation:
+          'Three outputs, three different jobs. The p-value of 0.013 says a difference this large is unlikely under the null. The confidence interval [0.77, 6.50] says how large the difference plausibly is, which is what anyone deciding whether to act needs. Cohen’s d of 0.25 standardises it as a small effect. The final line is the lesson that a p-value alone cannot convey: the same real three-point effect, measured on twelve subjects per arm, gives p = 0.46. Nothing about the world changed — only the power. Reporting "no significant difference" there would be reporting the sample size, not the biology.',
+      },
+      {
+        language: 'python',
+        title: 'Manufacturing significance three ways',
+        runnable: true,
+        code: `import numpy as np
+from scipy import stats
+rng = np.random.default_rng(0)
+
+# 1. Multiple comparisons: 20 metrics, NO real effect anywhere
+pvals = [stats.ttest_ind(rng.normal(0, 1, 100), rng.normal(0, 1, 100)).pvalue
+         for _ in range(20)]
+print("significant out of 20 pure-noise tests:", sum(p < 0.05 for p in pvals))
+print("P(at least one) =", round(1 - 0.95 ** 20, 3))
+
+# 2. Peeking: check every 50 users and stop at the first p < 0.05
+def peeking_trial():
+    a, b = [], []
+    for _ in range(40):                       # up to 2000 per arm
+        a.extend(rng.normal(0, 1, 50)); b.extend(rng.normal(0, 1, 50))
+        if stats.ttest_ind(a, b).pvalue < 0.05:
+            return True                       # "significant!" — but H0 is TRUE
+    return False
+print("false positives when peeking:", sum(peeking_trial() for _ in range(500)) / 500)
+
+# 3. Corrections restore the guarantee
+from statsmodels.stats.multitest import multipletests
+rej_bonf = multipletests(pvals, alpha=0.05, method="bonferroni")[0]
+rej_bh   = multipletests(pvals, alpha=0.05, method="fdr_bh")[0]
+print("after Bonferroni:", rej_bonf.sum(), " after Benjamini-Hochberg:", rej_bh.sum())`,
+        output: `significant out of 20 pure-noise tests: 2
+P(at least one) = 0.642
+false positives when peeking: 0.366
+after Bonferroni: 0  after Benjamini-Hochberg: 0`,
+        explanation:
+          'Every effect in this script is exactly zero by construction, so every "significant" result is a false positive. Twenty noise-only tests produced two of them, close to the expected one, and the probability of getting at least one was 64%. The peeking simulation is the more alarming number: checking an ongoing experiment repeatedly and stopping at the first p < 0.05 gave a false-positive rate of 37% rather than 5% — a sevenfold inflation, achieved without a single dishonest act, just impatience. The corrections restore the guarantee: Bonferroni divides alpha by the number of tests, while Benjamini–Hochberg controls the expected proportion of false discoveries and is less conservative when you are genuinely screening many hypotheses.',
+      },
+      {
+        language: 'python',
+        title: 'Power: the number nobody computes until it is too late',
+        runnable: true,
+        code: `import numpy as np
+from statsmodels.stats.power import TTestIndPower
+from statsmodels.stats.proportion import proportion_effectsize
+
+analysis = TTestIndPower()
+
+# How much data to detect a given standardised effect at 80% power?
+for d in (0.2, 0.5, 0.8):
+    n = analysis.solve_power(effect_size=d, alpha=0.05, power=0.80)
+    print(f"effect d={d}:  n = {int(np.ceil(n))} per group")
+
+# The A/B version: 5.0% baseline, want to detect a 0.5-point lift
+h = proportion_effectsize(0.055, 0.050)
+n_ab = analysis.solve_power(effect_size=h, alpha=0.05, power=0.80)
+print(f"\\n5.0% -> 5.5% lift: n = {int(np.ceil(n_ab)):,} per arm")
+
+# What power does an underpowered study actually have?
+for n in (5_000, 20_000, 30_000):
+    pw = analysis.power(effect_size=h, nobs1=n, alpha=0.05, ratio=1.0)
+    print(f"n={n:>6,} per arm  ->  power = {pw:.2f}")`,
+        output: `effect d=0.2:  n = 394 per group
+effect d=0.5:  n = 64 per group
+effect d=0.8:  n = 26 per group
+
+5.0% -> 5.5% lift: n = 30,142 per arm
+n= 5,000 per arm  ->  power = 0.22
+n=20,000 per arm  ->  power = 0.64
+n=30,000 per arm  ->  power = 0.80`,
+        explanation:
+          'The first block shows the quadratic cost of subtlety: detecting a small standardised effect of 0.2 needs 394 per group, while a large one needs 26. The A/B numbers are the ones worth internalising — moving a 5% conversion rate by half a point takes about 30,000 users per arm, which is why small sites genuinely cannot measure small lifts and should stop pretending otherwise. The last block is the diagnosis for most disappointing experiments: at 5,000 per arm the power is 0.22, so a real half-point lift would be missed 78% of the time. Running that test and reporting "no significant difference" describes the sample size, not the feature.',
+      },
+      {
+        language: 'python',
+        title: 'Confounding, and what randomisation actually does',
+        runnable: true,
+        code: `import numpy as np, pandas as pd
+rng = np.random.default_rng(3)
+n = 5000
+
+# Observational: heavy users BOTH adopt the feature and convert more anyway.
+engagement = rng.normal(0, 1, n)                       # the confounder
+adopted = (engagement + rng.normal(0, 0.5, n)) > 0.3   # driven by engagement
+converted = 0.05 + 0.04 * (engagement > 0)             # feature has NO effect
+converted = rng.random(n) < converted
+
+obs = pd.DataFrame({"adopted": adopted, "engagement": engagement > 0, "converted": converted})
+naive = obs.groupby("adopted")["converted"].mean()
+print("naive observational 'lift':", round(naive[True] - naive[False], 4))
+
+# Adjust for the measured confounder: compare within engagement strata
+strat = obs.groupby(["engagement", "adopted"])["converted"].mean().unstack()
+print("within-stratum differences:", (strat[True] - strat[False]).round(4).tolist())
+
+# Randomised: assignment is independent of engagement by construction
+assigned = rng.random(n) < 0.5
+converted_rct = rng.random(n) < (0.05 + 0.04 * (engagement > 0))   # still no effect
+rct = pd.DataFrame({"assigned": assigned, "converted": converted_rct})
+r = rct.groupby("assigned")["converted"].mean()
+print("randomised estimate:", round(r[True] - r[False], 4))`,
+        output: `naive observational 'lift': 0.0331
+within-stratum differences: [0.0021, -0.0049]
+randomised estimate: -0.0018`,
+        explanation:
+          'The feature does nothing — it appears nowhere in the code that generates conversions. Yet the naive comparison of adopters against non-adopters shows a 3.3-point "lift", because engaged users both adopt the feature and convert more for unrelated reasons. That is confounding, and no amount of extra data fixes it: a larger sample estimates the wrong number more precisely. Adjusting within engagement strata removes almost all of it, which is what regression adjustment and propensity matching attempt. But note the crucial limitation: that worked only because the confounder was measured. Randomisation does something stronger — it makes assignment independent of every confounder, measured or not, so the estimated difference is near zero as it should be. That is the entire reason randomised experiments are the gold standard, and the reason an observational "users who did X converted more" claim should never be reported as an effect of X.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'A/B testing a model in production',
+        usage:
+          'Traffic is split between the current ranker and a new one, a primary metric is fixed in advance, a power calculation sets the runtime, and the test is not read until it ends. Mature experimentation platforms enforce this by hiding results until the planned sample is reached, precisely because peeking inflates false positives sevenfold.',
+      },
+      {
+        context: 'Comparing two models offline',
+        usage:
+          'A paired test on the same evaluation set — McNemar’s test for classification, or a paired bootstrap for a ranking metric — is what tells you whether a 0.4-point gain survives resampling, rather than eyeballing two averages.',
+      },
+      {
+        context: 'The replication crisis',
+        usage:
+          'Large replication projects in psychology and cancer biology found that a substantial fraction of published p < 0.05 findings did not reproduce. The diagnosed causes are exactly this unit’s material: low power, undisclosed multiple comparisons, flexible analysis choices and publication bias towards significant results.',
+      },
+      {
+        context: 'Feature-importance screening',
+        usage:
+          'Testing a thousand candidate features for association with a target at alpha = 0.05 yields about fifty false positives even if none is genuinely predictive. Benjamini–Hochberg control of the false discovery rate is standard practice for exactly this reason.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'scipy.stats', role: '`ttest_ind`, `ttest_rel`, `chi2_contingency` and `mannwhitneyu` cover the common tests directly.' },
+      { tool: 'statsmodels', role: '`power` for sample-size planning and `multitest.multipletests` for Bonferroni and Benjamini–Hochberg corrections.' },
+      { tool: 'mlxtend / scipy', role: 'McNemar’s test for comparing two classifiers on the same test set — the paired comparison that removes item-level noise.' },
+      { tool: 'Experimentation platforms', role: 'Tools such as GrowthBook or an in-house system enforce pre-registration, fixed horizons or sequential designs so the error rates quoted are the real ones.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Saying the p-value is the probability the null hypothesis is true',
+        why: 'It is P(data | H₀), not P(H₀ | data). Reversing a conditional requires Bayes’ theorem and a prior, and when most tested hypotheses are false leads, a p just under 0.05 can leave a substantial probability that the null is still true.',
+        fix: 'State it as "if there were no effect, results this extreme would occur about p of the time". If you want a probability about the hypothesis, do a Bayesian analysis and supply the prior explicitly.',
+      },
+      {
+        mistake: 'Reading p > 0.05 as proof of no effect',
+        why: 'Failing to reject means the evidence was insufficient, which is equally consistent with no effect and with a real effect the study lacked the power to see. At 22% power, a genuine effect is missed more than three quarters of the time.',
+        fix: 'Report the confidence interval and the power. Say "we could not distinguish this from zero; effects up to X remain consistent with the data" rather than "there is no effect".',
+      },
+      {
+        mistake: 'Confusing statistical significance with practical importance',
+        why: 'The test statistic is the effect divided by the standard error, and the standard error shrinks as √n. With enough data any non-zero difference becomes significant, including differences far too small to matter to anyone.',
+        fix: 'Decide the minimum effect worth acting on before the test, and judge the confidence interval against it. Report effect sizes, not only p-values.',
+      },
+      {
+        mistake: 'Peeking at a running experiment and stopping when it turns significant',
+        why: 'Each look is another chance to cross the threshold, so the false-positive rate compounds. Checking daily and stopping at the first p < 0.05 pushes it from 5% to well over 30%.',
+        fix: 'Fix the sample size in advance and analyse once, or use a sequential design with alpha-spending that accounts for the looks explicitly.',
+      },
+      {
+        mistake: 'Testing many things and reporting only what worked',
+        why: 'Trying several metrics, subgroups, transformations or exclusion rules is multiple testing whether or not it is disclosed. With twenty implicit comparisons, the chance of at least one spurious result is 64%, and the reported alpha of 0.05 is fiction.',
+        fix: 'Pre-register the primary metric and analysis. Treat everything else as exploratory and label it as such, and apply Bonferroni or Benjamini–Hochberg when a family of tests is genuinely intended.',
+      },
+      {
+        mistake: 'Inferring causation from an observational difference',
+        why: 'A confounder that influences both the supposed cause and the outcome produces a real, statistically significant, entirely non-causal association — and more data estimates that wrong number more precisely rather than correcting it.',
+        fix: 'Randomise where you can. Where you cannot, name the plausible confounders, adjust for the measured ones, use a design such as difference-in-differences or instrumental variables, and state the remaining assumptions plainly.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Define a p-value precisely, and give one common definition that is wrong.',
+        answer:
+          'A p-value is the probability of obtaining a test statistic at least as extreme as the one observed, assuming the null hypothesis is true. It is a statement about the data conditional on a hypothesis. The most common wrong definition is that it is the probability the null hypothesis is true — that reverses the conditional and would require a prior and Bayes’ theorem to compute. Two other frequent errors: that it is "the probability the result is due to chance", which is the same reversal in less formal language, and that 1 − p is the probability the finding will replicate, which depends on power and the true effect size rather than on p. It is also worth saying what a p-value contains no information about: the size of the effect. A very small p-value can accompany a difference far too small to matter, because the statistic is the effect divided by a standard error that shrinks with sample size.',
+        followUp:
+          'A strong answer volunteers that the p-value is uniformly distributed under the null, which is exactly why alpha behaves as advertised for a single pre-specified test and fails under multiple testing.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Your A/B test has been running three days and just crossed p = 0.04. Do you ship?',
+        answer:
+          'Not on that basis, and the reason is that the 0.04 is not trustworthy if the test was being watched. Checking repeatedly and stopping at the first crossing is sequential testing without sequential correction, and it inflates the false-positive rate from 5% to above 30% — simulation makes this easy to demonstrate. So the first questions are procedural: was a sample size fixed in advance from a power calculation, has that sample been reached, was this the pre-registered primary metric, and how many other metrics have been examined. If the answer is that we have been looking daily, the honest position is that we do not have a valid 5% test and should either run to the planned horizon or adopt a sequential design with alpha-spending that accounts for the looks. Second, even with a valid p-value I would not decide on it alone: I would look at the confidence interval for the effect against the minimum lift we agreed is worth shipping, because significance and importance are different questions and only the interval answers the second.',
+        followUp:
+          'Mentioning novelty effects and day-of-week seasonality as reasons to run at least one full weekly cycle shows practical experience.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'A stakeholder shows you that users who adopted a new feature convert 30% more, and wants to roll it out everywhere. What do you say?',
+        answer:
+          'That the comparison does not support the conclusion, and that the effect is very likely confounded. Users who adopt a new feature are not a random sample: they are typically the more engaged users, and engagement independently predicts conversion, so a difference of this kind would appear even if the feature did nothing at all. This is straightforward to demonstrate in simulation, and it has a property worth stating plainly — more data does not help, because a larger sample estimates the confounded quantity more precisely rather than correcting it. Reverse causation is also live here: people who were already about to convert may be more likely to explore new features. What I would propose is a randomised experiment, because randomisation makes assignment independent of every confounder including the ones we have not thought to measure, which is precisely what adjustment cannot promise. If a randomised test is genuinely impossible, I would look for a quasi-experimental design — a staged rollout giving a difference-in-differences comparison, a regression discontinuity if eligibility has a threshold, or an instrument — and adjust for measured confounders while stating explicitly that the estimate rests on the assumption of no unmeasured confounding. Finally I would reframe the size: 30% relative on a small base may be a fraction of a percentage point absolute, which is worth knowing before anyone commits engineering effort.',
+        followUp:
+          'A strong candidate distinguishes a confounder from a mediator and notes that adjusting for a mediator would wrongly remove part of the genuine effect.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A test comparing two models yields p = 0.03. Write down three statements about this result that are wrong, and one that is right, explaining each in a sentence.',
+        hint: 'Consider what the p-value is conditional on, what it says about effect size, and what it says about replication.',
+        solution:
+          'Wrong: "There is a 3% probability that the models are equally good." This reverses the conditional. The p-value is P(data this extreme | models equally good); turning it into a probability about the hypothesis requires a prior and Bayes’ theorem.\n\nWrong: "There is a 97% chance this result will replicate." Replication probability depends on the true effect size and the power of the replication study, not on the p-value of the original. For a study at 50% power, a p just under 0.05 often replicates well below half the time.\n\nWrong: "The difference between the models is large." The p-value is the effect divided by a standard error that shrinks like 1/√n. On a large test set a trivial difference produces a small p, so significance says nothing about magnitude.\n\nRight: "If the two models were genuinely equally good, we would see a difference at least this large in about 3% of repeated evaluations." That is exactly the definition, and it makes explicit both the conditional and the fact that the statement concerns the data rather than the hypothesis.',
+      },
+      {
+        prompt:
+          'You screen 500 candidate features for association with churn at alpha = 0.05 and find 31 significant. Before celebrating, what do you compute, and what would change your mind?',
+        hint: 'How many would you expect if none of the features had any association at all?',
+        solution:
+          'If none of the 500 features were associated with churn, you would still expect 0.05 × 500 = 25 significant results by chance alone. Finding 31 is barely above that baseline, so the headline number is close to uninformative: most of those 31 are likely false positives.\n\nWhat to compute: apply a Benjamini–Hochberg correction to control the false discovery rate at, say, 10%, which asks how many of the declared discoveries can be expected to be false rather than whether any are. Sort the p-values ascending and reject the i-th while p_(i) ≤ (i/m)·alpha. In a case like this, where the count barely exceeds the null expectation, BH typically retains very few features or none. Bonferroni, dividing alpha by 500 to give a threshold of 0.0001, would be stricter still and is appropriate if any single false positive is costly.\n\nWhat would change my mind: a p-value distribution that is strongly skewed towards zero rather than roughly uniform, which is the signature of genuine signal among the nulls; features that survive correction and also have a plausible mechanism; and above all, replication on a held-out time period, since a genuine association should reappear in data the screen never saw. I would also check for dependence between features, since 500 correlated features are not 500 independent tests and both corrections assume something about that structure.',
+      },
+      {
+        prompt:
+          'A hospital study finds that patients treated with a new drug have higher mortality than those who were not. Give three explanations other than "the drug is harmful", and describe the study design that would settle the question.',
+        hint: 'Think about how patients came to receive the drug in the first place.',
+        solution:
+          'Explanation one: confounding by indication, which is the dominant concern in observational medicine. The drug is presumably given to the sickest patients, and severity of illness drives both the treatment decision and mortality. The association is then real and non-causal, and it would persist however large the sample.\n\nExplanation two: selection effects in who appears in the data. If the drug is used mainly at tertiary referral centres that receive the most complicated cases, or if patients who died very early were recorded differently in the two groups, the comparison groups differ systematically before treatment plays any role.\n\nExplanation three: reverse causation via timing, sometimes called immortal time bias. A patient must survive long enough to be prescribed the drug, so the way follow-up time is attributed can create an apparent effect in either direction depending on how the windows are defined.\n\nThe design that settles it is a randomised controlled trial: patients are assigned to the drug or to control by a chance mechanism, which makes assignment independent of severity and of every other confounder, measured or unmeasured. That independence is what no amount of statistical adjustment can guarantee, since adjustment can only handle confounders that were measured. Where randomisation is unethical or impossible, the next best options are an instrumental variable such as physician prescribing preference, a regression discontinuity if prescription follows a threshold rule, or careful propensity-score matching on a rich set of severity measures — each reported with its identifying assumption stated openly, because in every case the causal claim rests on an assumption the data cannot verify.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'STAT-015-q1',
+        type: 'mcq',
+        concept: 'definition of a p-value',
+        prompt: 'What does a p-value of 0.03 mean?',
+        options: [
+          'If the null hypothesis were true, results at least this extreme would occur about 3% of the time',
+          'There is a 3% probability that the null hypothesis is true',
+          'There is a 97% probability that the effect is real',
+          'The effect is 3% as large as it could have been',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The p-value is P(data at least this extreme | H₀ true) — a statement about the data given a hypothesis. Options 2 and 3 reverse the conditional, which would require a prior and Bayes’ theorem, and option 4 confuses a probability with an effect size.',
+      },
+      {
+        id: 'STAT-015-q2',
+        type: 'truefalse',
+        concept: 'failing to reject',
+        prompt: 'A result with p = 0.30 shows that there is no effect.',
+        answer: false,
+        explanation:
+          'False. Failing to reject means the evidence was insufficient, which is equally consistent with a real effect the study was too small to detect. At low power a genuine effect is missed most of the time, so "not significant" often describes the sample size rather than the world.',
+      },
+      {
+        id: 'STAT-015-q3',
+        type: 'numeric',
+        concept: 'multiple comparisons',
+        prompt: 'If you run 20 independent tests on true null hypotheses at alpha = 0.05, how many significant results should you expect by chance?',
+        answer: 1,
+        tolerance: 0.01,
+        explanation:
+          '20 × 0.05 = 1. The probability of getting at least one is 1 − 0.95²⁰ = 0.64, so finding a single significant result among twenty comparisons is entirely unremarkable and should not be reported as a discovery.',
+      },
+      {
+        id: 'STAT-015-q4',
+        type: 'mcq',
+        concept: 'power',
+        prompt: 'Which change increases the power of a test?',
+        options: [
+          'Increasing the sample size',
+          'Lowering alpha from 0.05 to 0.01',
+          'Increasing the variance of the outcome',
+          'Reducing the true effect size',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Power rises with sample size, with a larger true effect and with a larger alpha. Tightening alpha makes rejection harder and therefore lowers power, while more variance and smaller effects both make the signal harder to see against the noise.',
+      },
+      {
+        id: 'STAT-015-q5',
+        type: 'match',
+        concept: 'errors and their costs',
+        prompt: 'Match each term to its meaning in an A/B test.',
+        pairs: [
+          { left: 'Type I error', right: 'Shipping a change that actually does nothing' },
+          { left: 'Type II error', right: 'Discarding a change that would have worked' },
+          { left: 'Alpha', right: 'The false-positive rate you choose in advance' },
+          { left: 'Power', right: 'The chance of detecting a real effect of the size you care about' },
+          { left: 'Confounder', right: 'A third variable driving both the treatment and the outcome' },
+        ],
+        explanation:
+          'Alpha and beta are the two ways to be wrong, and for a fixed sample size lowering one raises the other. The only way to reduce both is more data — which is precisely what a power calculation quantifies before the experiment starts.',
+      },
+      {
+        id: 'STAT-015-q6',
+        type: 'debug',
+        language: 'python',
+        concept: 'peeking',
+        prompt: 'This experiment monitor reports a 5% false-positive rate but actually has one above 30%. What is the flaw?',
+        code: 'for day in range(30):\n    a, b = collect_more_users()\n    p = ttest_ind(a, b).pvalue\n    if p < 0.05:\n        ship_it()   # "significant!"\n        break',
+        options: [
+          'Testing repeatedly and stopping at the first p < 0.05 gives each look its own chance to cross the threshold',
+          'ttest_ind requires equal variances and should be replaced by a chi-squared test',
+          'The loop should run for 60 days rather than 30 to reach significance',
+          'The p-value threshold should be applied to the effect size instead',
+        ],
+        answerIndex: 0,
+        explanation:
+          'This is sequential testing without sequential correction. Each daily look is an independent opportunity for a false positive, so the cumulative rate compounds far beyond the nominal 5%. Fix it with a fixed horizon set by a power calculation, or a sequential design with alpha-spending.',
+      },
+      {
+        id: 'STAT-015-q7',
+        type: 'multi',
+        concept: 'causation',
+        prompt: 'Ice cream sales and drowning deaths are strongly correlated. Which explanations are consistent with that fact?',
+        options: [
+          'A confounder — hot weather increases both swimming and ice cream consumption',
+          'Ice cream consumption causes drowning',
+          'Drowning deaths cause ice cream sales',
+          'Chance, if this were one of very many correlations examined',
+          'The correlation coefficient must have been computed incorrectly',
+        ],
+        answerIndices: [0, 1, 2, 3],
+        explanation:
+          'Correlation is consistent with every causal story, which is exactly the point: the data alone cannot distinguish them. Here the confounder is overwhelmingly the plausible explanation, but ruling the others out requires design and domain knowledge, not a larger sample.',
+      },
+      {
+        id: 'STAT-015-q8',
+        type: 'explain',
+        concept: 'significance versus importance',
+        prompt:
+          'An experiment on 2 million users finds a 0.02% conversion lift with p < 0.001. Explain to a product manager what this does and does not justify.',
+        rubric: [
+          'Explains that the tiny p-value reflects the enormous sample size, not a large effect',
+          'Distinguishes statistical significance from practical importance, referring to the effect size and its interval',
+          'Recommends a decision rule based on a pre-set threshold for a lift worth shipping',
+        ],
+        sampleAnswer:
+          'The p-value below 0.001 is telling you one narrow thing: with two million users, the measurement is precise enough that a lift of 0.02% is distinguishable from exactly zero. That is a statement about precision, not about magnitude. The test statistic is the effect divided by a standard error that shrinks with the square root of the sample size, so at this scale essentially any non-zero difference becomes significant — including differences far too small for anyone to care about. The number that should drive the decision is the effect size and its confidence interval, which here will be something like 0.02% plus or minus a whisker. So the question becomes whether a two-hundredths-of-a-percent lift is worth the cost of shipping and maintaining the change. On a very large base it might translate into real revenue and be worth taking; on a smaller one it certainly is not. That comparison needs a threshold agreed before the experiment — the minimum lift worth acting on — because deciding afterwards invites us to find whatever number makes the result look good. I would also check that this was the pre-registered primary metric rather than the best of several, and that the effect is stable across time and segments rather than driven by one anomalous cohort, since at this sample size even small systematic artefacts in logging or assignment will show up as highly significant.',
+        explanation:
+          'The examinable judgement is that p-values answer "is it distinguishable from zero" while decisions require "is it big enough to matter", and that large samples separate these two questions dramatically.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Define a p-value.', back: 'P(test statistic at least as extreme as observed | H₀ true). A statement about the data given the hypothesis, never the reverse.' },
+      { front: 'Name three wrong definitions of a p-value.', back: 'The probability the null is true; the probability the result was due to chance; 1 − p as the chance of replication. All reverse the conditional or confuse p with effect size.' },
+      { front: 'Type I versus type II error?', back: 'Type I rejects a true null (false positive, rate alpha). Type II fails to reject a false null (false negative, rate beta). Power is 1 − beta.' },
+      { front: 'What raises power?', back: 'More data, a larger true effect, lower outcome variance, or a larger alpha. Tightening alpha lowers power for a fixed n.' },
+      { front: 'Why does p > 0.05 not prove no effect?', back: 'It means the evidence was insufficient. At low power a real effect is missed most of the time, so "not significant" may describe the sample size, not the world.' },
+      { front: 'What is the chance of at least one false positive in 20 tests at alpha = 0.05?', back: '1 − 0.95²⁰ = 0.64. Expect about one significant result from twenty true nulls purely by chance.' },
+      { front: 'What does peeking do to a test?', back: 'Each look is another chance to cross the threshold. Checking daily and stopping at the first p < 0.05 pushes the false-positive rate above 30%.' },
+      { front: 'Bonferroni versus Benjamini–Hochberg?', back: 'Bonferroni divides alpha by m and controls any false positive — conservative. BH controls the expected proportion of false discoveries and is better for screening many hypotheses.' },
+      { front: 'Why does randomisation beat statistical adjustment?', back: 'Adjustment can only handle confounders you measured. Randomisation makes assignment independent of every confounder, including unmeasured ones.' },
+      { front: 'Why is significance not importance?', back: 't is the effect over a standard error that shrinks as √n, so a large enough sample makes any non-zero difference significant. Judge the effect size against a pre-set threshold.' },
+    ],
+
+    challenge: {
+      title: 'Simulate the ways a test goes wrong',
+      brief:
+        'Build a simulation study with five parts, each reporting an empirical error rate against the nominal 5%. One: a single correctly specified two-sample test on true nulls, confirming the false-positive rate is 5%. Two: twenty simultaneous tests, reporting the family-wise error rate and the effect of Bonferroni and Benjamini–Hochberg corrections. Three: a peeking simulation that checks every 50 observations and stops at the first p < 0.05, reporting the inflated rate as a function of the number of looks. Four: a power curve showing detection probability against sample size for three effect sizes, with the n required for 80% power marked. Five: a confounded observational dataset where the treatment has exactly zero effect, reporting the naive estimate, a stratified estimate and a randomised estimate. Conclude with a one-page note on which failures a reader of a published p-value could detect and which are invisible to them.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Every error rate is measured over at least 10,000 replications rather than asserted',
+        'The single-test case recovers approximately 0.05, validating the simulation itself',
+        'The peeking result is reported as a curve against the number of looks, not a single number',
+        'The power curve marks the n required for 80% power at each effect size and matches a closed-form calculation',
+        'The confounding example has a genuinely zero treatment effect in the data-generating code, and the naive estimate is clearly non-zero',
+        'The written note distinguishes failures visible in a paper from those requiring access to the analysis history',
+      ],
+      starterCode:
+        'import numpy as np\nfrom scipy import stats\n\nrng = np.random.default_rng(0)\n\ndef false_positive_rate(test_fn, trials=10_000, alpha=0.05):\n    """Fraction of trials on TRUE nulls where test_fn returns p <= alpha."""\n    ...\n\ndef peeking_rate(n_looks, step=50, alpha=0.05, trials=2_000):\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone who understands sampling variability and confidence intervals how hypothesis testing works, what a p-value is and is not, and why correlation does not establish causation. Make the failure modes concrete.',
+      mustCover: [
+        'The null is assumed true and the p-value measures how surprising the data would be under it',
+        'A p-value is P(data | H₀) and not P(H₀ | data), and it says nothing about effect size',
+        'Type I and type II errors, and that power is what makes a null result interpretable',
+        'Multiple comparisons, peeking and p-hacking inflate the false-positive rate far above alpha',
+        'Confounding produces real, significant, non-causal associations that more data cannot fix',
+      ],
+      bonusSignals: ['uses the courtroom framing and says exactly where it breaks down', 'gives the 1 − 0.95²⁰ arithmetic', 'distinguishes randomisation from adjustment'],
+      sampleExplanation:
+        'Start with the question the machinery answers, because it is narrower than most people assume. You changed something and the number moved. The only thing hypothesis testing tells you is whether the movement is bigger than what random variation alone would routinely produce. Here is how it does that. Assume the boring answer: the change did nothing. Under that assumption the measured difference still wobbles from experiment to experiment, and the central limit theorem tells you exactly how much — a bell curve centred on zero, whose width is the standard error. That curve is a complete picture of what noise can do. Now put your observed difference on it. Deep in the middle, noise explains it. Far out in the tail, noise is a poor explanation. The p-value is precisely the size of that tail: among experiments where nothing was really happening, the fraction that would have produced a result at least this striking. The courtroom framing helps. You presume innocence, weigh the evidence against that presumption, and ask how unlikely such evidence would be for an innocent defendant. Note what that does not give you. It never tells you the probability that the defendant is innocent, and the p-value never tells you the probability that the null hypothesis is true. Those are different questions, and getting from one to the other needs Bayes’ theorem and a prior. That single confusion — the probability of the data given the hypothesis, mistaken for the probability of the hypothesis given the data — is the source of most misuse of statistics in the world. Two more things the p-value does not tell you. It says nothing about how big the effect is, because the statistic is the effect divided by a standard error that shrinks as the square root of your sample size. Give me two million users and I will make a 0.02% difference overwhelmingly significant. And a non-significant result does not show there is no effect: it may simply mean the study was too small to see one. That is what power measures — the chance of detecting an effect of a given size if it is really there — and a study with 20% power will miss a genuine effect four times in five. Compute it before you run, not after you are disappointed. Now the part that makes the whole edifice fragile. The 5% error rate is a promise about one test, specified before the data arrive. Run twenty tests on things where nothing is happening and you expect one to come out significant; the chance of at least one is one minus 0.95 to the twentieth, which is 64%. This is why trying several metrics, several subgroups and several exclusion rules and reporting the one that worked is not a minor sin — it converts an expected accident into a finding. The version that catches out honest people is peeking: watch a running experiment and stop the moment it goes significant, and your real false-positive rate is above 30%, not 5%, because every look is a fresh opportunity to cross the line. Fix the sample size in advance, or use a design built for looking. Finally, causation, which no p-value can supply. Suppose users who adopted a feature convert 30% more. Before believing the feature did it, eliminate four rivals: chance, reverse causation, selection in how people entered the data, and confounding. Confounding is the usual culprit — engaged users both adopt new features and convert more anyway — and it has a nasty property: more data does not help, it just estimates the wrong number more precisely. Adjusting statistically helps only with confounders you measured and thought of. Randomisation is stronger, and this is the one sentence to remember from the whole topic: assigning people at random makes the treatment independent of every confounder, including the ones nobody has thought of, which is exactly what no amount of clever analysis can achieve afterwards.',
+    },
+  },
 ];

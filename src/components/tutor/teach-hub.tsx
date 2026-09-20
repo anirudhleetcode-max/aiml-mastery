@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { domainColor } from '@/data/domains';
+import type { DomainId } from '@/types/curriculum';
 import { pct, relativeTime } from '@/lib/format';
 import { cn } from '@/lib/cn';
 
@@ -16,7 +17,7 @@ export interface TeachableUnit {
   id: string;
   title: string;
   slug: string;
-  domain: string;
+  domain: DomainId;
   domainName: string;
   bestTeachingScore: number | null;
   lastTaughtAt: string | null;
@@ -88,7 +89,7 @@ export function TeachHub({
           <div className="flex flex-wrap items-center gap-2">
             <span
               className="h-2 w-2 rounded-full"
-              style={{ background: domainColor(meta.domain as never) }}
+              style={{ background: domainColor(meta.domain) }}
               aria-hidden
             />
             <span className="text-[12px] text-subtle">{meta.domainName}</span>
@@ -151,7 +152,7 @@ export function TeachHub({
                 >
                   <span
                     className="h-2 w-2 shrink-0 rounded-full"
-                    style={{ background: domainColor(u.domain as never) }}
+                    style={{ background: domainColor(u.domain) }}
                     aria-hidden
                   />
                   <span className="min-w-0 flex-1">

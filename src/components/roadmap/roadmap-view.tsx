@@ -4,6 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { Check, ChevronRight, Filter, Search, X } from 'lucide-react';
 import { domainColor } from '@/data/domains';
+import type { DomainId } from '@/types/curriculum';
 import { MASTERY_META, type MasteryLevel } from '@/types/progress';
 import { ProgressRing } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
@@ -27,7 +28,7 @@ export interface RoadmapUnit {
 }
 
 export interface RoadmapDomain {
-  id: string;
+  id: DomainId;
   order: number;
   name: string;
   tagline: string;

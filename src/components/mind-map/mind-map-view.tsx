@@ -63,6 +63,8 @@ interface MapNode {
   progress?: number;
   expanded?: boolean;
   aria: string;
+  /** Native tooltip text, for the domain branches. */
+  hint?: string;
 }
 
 interface MapLink {
@@ -167,6 +169,7 @@ function layoutRadial(domains: MindDomain[], expanded: Set<DomainId>): Layout {
       progress: d.total ? d.completed / d.total : 0,
       expanded: open,
       aria: `${d.name}. ${d.completed} of ${d.total} units complete. ${open ? 'Expanded' : 'Collapsed'}.`,
+      hint: `${d.name} — ${d.tagline}`,
     });
 
     if (!open) return;
@@ -317,6 +320,7 @@ function layoutVertical(domains: MindDomain[], expanded: Set<DomainId>): Layout 
       progress: d.total ? d.completed / d.total : 0,
       expanded: open,
       aria: `${d.name}. ${d.completed} of ${d.total} units complete. ${open ? 'Expanded' : 'Collapsed'}.`,
+      hint: `${d.name} — ${d.tagline}`,
     });
 
     y += 40;
@@ -568,6 +572,7 @@ function MapNodeShape({ node, onToggle }: { node: MapNode; onToggle: (id: Domain
         }}
         className="group cursor-pointer outline-none"
       >
+        {node.hint && <title>{node.hint}</title>}
         <circle r={node.r + 10} fill="transparent" />
         <circle
           r={node.r + 8}
