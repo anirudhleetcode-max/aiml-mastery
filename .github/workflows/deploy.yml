@@ -82,12 +82,6 @@ jobs:
       - name: Install the Vercel CLI
         run: npm i -g vercel@latest
 
-      - name: Pull the Vercel environment
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: vercel pull --yes --environment=${{ inputs.environment }} --token=${{ secrets.VERCEL_TOKEN }}
-
       # DATABASE_PROVIDER has to be stated here, not just on the Vercel
       # project. `vercel build` runs `npm run build` in an environment of its
       # own, and when the variable does not reach it the build generates a
@@ -95,15 +89,75 @@ jobs:
       # serves every page that does not touch the database, and then fails
       # every read and write at runtime. A managed host cannot keep a SQLite
       # file anyway, which is why this is a constant and not an input.
-      # Names only. `vercel env ls` prints the variable names, their targets
-      # and when they were added — never their values — which is exactly what
-      # is needed to tell "the variable is missing" apart from "the variable is
-      # wrong" without putting a secret anywhere near a log.
-      - name: List the production environment variable names
+      # The application reads its configuration from the Vercel project, and a
+      # project with no variables set deploys perfectly and then fails every
+      # request that needs a database or a session — which is exactly what
+      # happened: `vercel env ls` reported "No Environment Variables found"
+      # while the build stayed green.
+      #
+      # So the deploy makes sure they exist rather than assuming it. This runs
+      # before the deployment is created, because Vercel binds a deployment's
+      # environment at creation: setting a variable afterwards does nothing
+      # until something deploys again.
+      #
+      # It only ever *adds* what is absent. A variable already set is left
+      # exactly as it is — this must not quietly replace a value somebody
+      # chose, and rotating AUTH_SECRET would sign every existing session out.
+      # Values arrive on stdin and every command's output is discarded, so no
+      # value can reach the log.
+      - name: Ensure the production environment is configured
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: vercel env ls ${{ inputs.environment }} --token=${{ secrets.VERCEL_TOKEN }}
+          TARGET: ${{ inputs.environment }}
+          TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DB_URL: ${{ secrets.DATABASE_URL }}
+          PUBLIC_URL: ${{ inputs.public_url }}
+        run: |
+          set -euo pipefail
+          existing=$(vercel env ls "$TARGET" --token="$TOKEN" 2>/dev/null || true)
+
+          ensure() {
+            name="$1"
+            value="$2"
+            if printf '%s' "$existing" | grep -qw -- "$name"; then
+              echo "  $name — already set, left unchanged"
+              return
+            fi
+            if [ -z "$value" ]; then
+              echo "  $name — MISSING and no source available"
+              return
+            fi
+            if printf '%s' "$value" | vercel env add "$name" "$TARGET" --token="$TOKEN" >/dev/null 2>&1; then
+              echo "  $name — added"
+            else
+              # Deploying on past this would produce the exact failure this
+              # step exists to prevent, so it stops here instead.
+              echo "  $name — could not be added"
+              exit 1
+            fi
+          }
+
+          # A managed serverless host cannot keep a SQLite file, so the
+          # provider is a constant here rather than a choice.
+          ensure DATABASE_PROVIDER postgresql
+          ensure DATABASE_URL "$DB_URL"
+          ensure APP_URL "${PUBLIC_URL:-https://aiml-mastery.vercel.app}"
+          # Generated rather than stored: it needs to be high-entropy and
+          # stable, and nothing outside the running application needs to know
+          # it. `ensure` will not touch it again once it exists.
+          ensure AUTH_SECRET "$(openssl rand -hex 32)"
+
+          echo
+          echo "Names now configured for $TARGET:"
+          vercel env ls "$TARGET" --token="$TOKEN" 2>/dev/null || true
+
+      - name: Pull the Vercel environment
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: vercel pull --yes --environment=${{ inputs.environment }} --token=${{ secrets.VERCEL_TOKEN }}
+
 
       - name: Build
         env:
