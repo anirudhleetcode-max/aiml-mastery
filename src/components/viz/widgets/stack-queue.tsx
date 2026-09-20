@@ -20,7 +20,6 @@ const BTN =
   'rounded-md border border-line bg-surface-2 px-2.5 py-1 text-[12px] font-medium text-muted transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-40';
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
-const CAPACITY = 6;
 
 type Op = { kind: 'push'; value: string } | { kind: 'take' };
 

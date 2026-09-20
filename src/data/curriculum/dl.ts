@@ -7525,4 +7525,1761 @@ shifted  global average: 0.043
         "A convolution takes a small grid of numbers — say three by three — and slides it across the image. At each position it multiplies each of its nine numbers by the pixel underneath and adds the results, producing a single score, and those scores laid out in their original arrangement form a new image called a feature map. Because a dot product measures how well two things line up, the score says how strongly the kernel pattern is present at that spot, so the feature map is a record of where the pattern was found and how convincingly. The alternative would be a dense layer, and it is worth seeing how badly that loses. Flattening a two-hundred-and-twenty-four-pixel-square colour image gives over a hundred and fifty thousand numbers, and connecting them to a thousand hidden units costs a hundred and fifty million weights. The equivalent convolution costs under two thousand. But the parameter count is not really the argument. The dense layer has a separate weight for every pixel position, which means it has to learn independently that an edge in the top-left is an edge and that an edge in the bottom-right is also an edge — and to do that it has to see examples of every feature in every location. Convolution assumes two things about images that happen to be true: that a low-level feature can be worked out from a small neighbourhood, and that a pattern means the same thing wherever it appears. The second assumption is what lets you use the same weights everywhere, and that is weight sharing. It means every training example teaches the kernel at every position simultaneously, which is why convolutional networks need far less data. One caution about what you do not get. Convolution is equivariant to translation — shift the picture and the whole feature map shifts with it — but it gives you nothing about rotation or scale. Turn a vertical edge detector on its side and it produces exactly zero on a vertical edge. Networks handle those by learning many kernels and by augmenting the training data, not by any property of the operation itself.",
     },
   },
+
+  {
+    id: 'DL-014',
+    domain: 'DL',
+    module: 'Convolutional Networks',
+    topic: 'Geometry of convolution',
+    title: 'Padding, Stride and Feature Maps',
+    slug: 'padding-stride-feature-maps',
+    difficulty: 4,
+    estimatedMinutes: 40,
+    prerequisites: ['DL-013'],
+    related: ['DL-003', 'DL-013'],
+    tags: ['padding', 'stride', 'output-size', 'same-padding', 'valid-padding', 'receptive-field', 'dilation'],
+
+    learningObjectives: [
+      'Derive the output-size formula for a convolution from the positions the kernel can occupy',
+      'Distinguish valid and same padding, and compute the padding that preserves spatial size for any odd kernel',
+      'Explain what stride does to the output size, the compute cost and the receptive field',
+      'Compute the receptive field of a stack of layers and use it to reason about architecture design',
+    ],
+
+    terminology: [
+      {
+        term: 'Padding',
+        definition:
+          'Extra values, almost always zeros, added around the border of the input before convolving, so that the kernel can be centred on border pixels and the output keeps a chosen size.',
+        simple: 'A frame of zeros around the picture so the filter can reach the edges properly.',
+      },
+      {
+        term: 'Valid padding',
+        definition:
+          'No padding at all. The kernel is only placed where it fits entirely inside the input, so the output is smaller than the input by kernel_size - 1 in each dimension.',
+        simple: 'Only use positions where the whole filter sits on real pixels; the output shrinks.',
+      },
+      {
+        term: 'Same padding',
+        definition:
+          'Padding chosen so that, with stride 1, the output has the same spatial size as the input. For an odd kernel of size k it is (k - 1)/2 on each side.',
+        simple: 'Add just enough border that the output picture is the same size as the input.',
+      },
+      {
+        term: 'Stride',
+        definition:
+          'The step in pixels between consecutive kernel placements. A stride of 2 evaluates the kernel at every other position, roughly halving the output size in each dimension.',
+        simple: 'How far the filter jumps each time instead of sliding one pixel.',
+      },
+      {
+        term: 'Receptive field',
+        definition:
+          'The region of the original input that can influence one particular value in a deep feature map. It grows with each layer and grows faster once strides are involved.',
+        simple: 'How much of the original picture one number deep in the network can actually see.',
+      },
+    ],
+
+    simpleExplanation:
+      "When you slide a small window over a picture, two practical questions come up. The first is what to do at the edges: a three-by-three window centred on a corner pixel hangs off the side of the image, so either you refuse to put it there — and your output comes out slightly smaller than your input, losing a ring of pixels at every layer — or you imagine a border of zeros around the picture so the window always has something to sit on, and the output stays the same size. That choice is padding. The second question is how far to move the window between measurements. Moving one pixel at a time gives you a reading everywhere, which is thorough but expensive and produces a very large output. Moving two pixels at a time halves the width and the height of the output, quartering the amount of downstream work, at the price of measuring half as finely. That is stride. Between them, padding and stride decide the size of every feature map in a network, and there is a single small formula that tells you the answer. It is worth knowing by heart, because almost every shape error in a convolutional network is a mistake in that one line.",
+
+    whyItExists:
+      'Without padding, every convolution shrinks its input by kernel_size - 1, so a twenty-layer network with 3 by 3 kernels would lose forty pixels from each dimension and could not be built at all on small inputs, while border pixels would be sampled far less often than central ones. Without stride, feature maps would stay at full resolution throughout and the compute cost of deep layers would be unaffordable. The two together let an architect choose exactly where the network spends resolution and where it trades it for depth and channel count.',
+
+    analogy: {
+      scenario:
+        'A surveyor is measuring soil moisture across a rectangular field with a probe that reads a one-metre square. Two decisions face her. At the edge of the field, she can either refuse to take readings where her square would overhang the boundary — leaving an unmeasured strip all around — or she can treat the land just outside as having a known default value and take the reading anyway, so her map covers the whole field. And she must decide how often to probe: every metre gives a dense, expensive map, while every two metres gives a map a quarter of the size in a quarter of the time, at coarser resolution.',
+      mapping: [
+        { from: 'Refusing to probe at the overhanging edge', to: 'Valid padding, where the output shrinks by kernel_size - 1' },
+        { from: 'Assuming a default value outside the boundary', to: 'Zero padding, which lets the kernel be centred on border pixels' },
+        { from: 'Probing every metre versus every two metres', to: 'Stride 1 versus stride 2' },
+        { from: 'A map a quarter of the size', to: 'Halving both spatial dimensions, so a four-fold reduction in downstream compute' },
+        { from: 'The one-metre square the probe reads', to: 'The kernel footprint, and at depth, the receptive field' },
+      ],
+      bridge:
+        'The output-size formula is exactly the count of valid probe positions: start at the left edge of the padded field, step forward by the stride until the probe would overhang, and count how many placements you managed. That count is floor((W + 2P - K)/S) + 1, where the plus one is the very first placement. Where the analogy misleads slightly is the treatment of the outside: zero padding does not mean the network believes the world outside the image is black. It means the border activations receive a systematically different mix of real and artificial inputs, which is a small but real artefact — visible as border effects in image generation models, and the reason reflection and replication padding exist.',
+      limitations:
+        'The surveyor map is a single measurement, whereas a deep network stacks the operation, so the effective probe size grows with depth. One value in the last layer of a ResNet sees a region larger than the entire input image, which has no analogue in the field.',
+    },
+
+    visuals: [
+      {
+        kind: 'annotated',
+        title: 'The output-size formula, term by term',
+        subject: 'H_out = floor((H_in + 2P - K) / S) + 1',
+        annotations: [
+          { part: 'H_in', note: 'The input height. The same formula applies independently to the width, with its own padding, kernel and stride if they differ.' },
+          { part: '+ 2P', note: 'Padding is added to both sides, hence the factor of two. P = 0 is valid padding; P = (K-1)/2 is same padding for an odd K.' },
+          { part: '- K', note: 'The kernel must fit, so the last position at which it can start is K - 1 pixels before the end. This term is the loss from the kernel footprint.' },
+          { part: '/ S', note: 'Dividing by the stride counts how many steps of size S fit into that span. Stride 2 approximately halves the result.' },
+          { part: 'floor', note: 'A partial step is not a valid position, so the remainder is discarded and the final rows or columns are simply never visited. This is where silent off-by-one bugs come from.' },
+          { part: '+ 1', note: 'The very first placement, at offset zero, which the division does not count. Forgetting it is the single most common error in this formula.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Common configurations and what they do to the shape',
+        caption: 'Each row is a layer you will see constantly in real architectures. Memorise the first three.',
+        columns: ['Configuration', 'Input 224', 'Output', 'Effect'],
+        rows: [
+          ['k=3, s=1, p=1', '224', '224', 'Same padding: preserves size. The workhorse of VGG and ResNet bodies.'],
+          ['k=3, s=1, p=0', '224', '222', 'Valid: loses one pixel per side per layer.'],
+          ['k=3, s=2, p=1', '224', '112', 'Halves the resolution. The standard strided downsampling step.'],
+          ['k=1, s=1, p=0', '224', '224', 'Pointwise convolution: mixes channels only, never touches spatial extent.'],
+          ['k=7, s=2, p=3', '224', '112', 'The ResNet stem: a large receptive field and a halving in one operation.'],
+          ['k=3, s=1, p=2, d=2', '224', '224', 'Dilated: same size and parameter count, receptive field of a 5 by 5 kernel.'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Valid versus same padding',
+        caption: 'Same padding is the default in almost all modern architectures, but valid has genuine uses.',
+        left: {
+          heading: 'Valid (p = 0)',
+          points: [
+            'Output is H - K + 1: a 3x3 kernel costs two pixels per layer',
+            'Every output value is computed entirely from real input data',
+            'A deep stack shrinks the map until it disappears; 3x3 valid convolutions exhaust a 32 by 32 input in sixteen layers',
+            'Used in segmentation architectures such as the original U-Net, where border artefacts are unacceptable and cropping is explicit',
+          ],
+        },
+        right: {
+          heading: 'Same (p = (K-1)/2)',
+          points: [
+            'Output equals input, so depth is free in shape terms',
+            'Border output values are partly computed from zeros that are not real data',
+            'Lets you build arbitrarily deep stacks and add residual connections, which require matching shapes',
+            'The default everywhere: VGG, ResNet, and essentially every classification backbone',
+          ],
+        },
+      },
+      {
+        kind: 'widget',
+        title: 'Change padding and stride and watch the output shape',
+        caption: 'Set a kernel size, then sweep the padding and stride and read off the output grid. Try to make a 7 by 7 input produce a 4 by 4 output in two different ways.',
+        widget: 'convolution-lab',
+      },
+    ],
+
+    formalDefinition:
+      'For an input of spatial size H, a kernel of size K, padding P applied symmetrically to both sides, stride S and dilation D, the output size is H_out = floor((H + 2P - D*(K - 1) - 1)/S) + 1, which reduces to floor((H + 2P - K)/S) + 1 when D = 1. Same padding for odd K and S = 1 is P = (K - 1)/2, giving H_out = H. The receptive field of a stack of layers satisfies r_l = r_{l-1} + (K_l - 1) * prod_{i<l} S_i, with r_0 = 1, so strides multiply the growth contributed by every later layer.',
+
+    math: {
+      intuition:
+        'Count positions, do not memorise. Lay the padded input out as a strip of length H + 2P. The kernel occupies K consecutive cells, so its starting position can be anywhere from 0 up to H + 2P - K inclusive. If you step by S, the number of valid starts is that span divided by the stride, rounded down, plus one for the start itself. Everything else in this unit is a special case of that sentence. The receptive field is the same counting exercise run backwards: each layer widens the window by K - 1, but the widening is measured in input pixels, so it must be multiplied by every stride the signal has already passed through.',
+      formulas: [
+        {
+          latex: 'H_{\\text{out}} = \\left\\lfloor \\frac{H_{\\text{in}} + 2P - K}{S} \\right\\rfloor + 1',
+          name: 'Convolution output size',
+          meaning:
+            'The number of positions at which the kernel can be placed. This is the single most-used formula in convolutional architecture design, and it applies unchanged to pooling layers.',
+          variables: [
+            { symbol: 'H_{\\text{in}}', meaning: 'Input spatial size along one axis' },
+            { symbol: 'P', meaning: 'Padding added to each side, so 2P in total' },
+            { symbol: 'K', meaning: 'Kernel size along that axis' },
+            { symbol: 'S', meaning: 'Stride: the step between consecutive kernel placements' },
+            { symbol: '\\lfloor\\cdot\\rfloor', meaning: 'Floor: a partial step is not a valid position, so the trailing pixels are ignored' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: 'P = \\frac{K-1}{2} \\;\\Rightarrow\\; H_{\\text{out}} = H_{\\text{in}} \\quad (S = 1,\\; K \\text{ odd})',
+          name: 'Same padding',
+          meaning:
+            'Substituting P = (K-1)/2 into the formula with S = 1 gives exactly H_in. This is why kernel sizes in modern networks are almost always odd: an even kernel has no integer padding that centres it, so the output is offset by half a pixel.',
+          variables: [
+            { symbol: 'K \\text{ odd}', meaning: 'Required for symmetric padding; 3, 5 and 7 are the common choices' },
+            { symbol: 'P', meaning: '1 for a 3 by 3 kernel, 2 for 5 by 5, 3 for 7 by 7' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: 'H_{\\text{out}} = \\left\\lfloor \\frac{H_{\\text{in}} + 2P - D(K-1) - 1}{S} \\right\\rfloor + 1',
+          name: 'Output size with dilation',
+          meaning:
+            'Dilation inserts D - 1 gaps between kernel taps, so a 3 by 3 kernel with dilation 2 spans 5 pixels while still using only 9 weights. It buys receptive field without parameters or downsampling, which is why segmentation networks rely on it.',
+          variables: [
+            { symbol: 'D', meaning: 'Dilation rate; D = 1 is an ordinary convolution' },
+            { symbol: 'D(K-1)+1', meaning: 'The effective kernel span in pixels: 5 for K = 3, D = 2' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: 'r_l = r_{l-1} + (K_l - 1)\\prod_{i=1}^{l-1} S_i, \\qquad r_0 = 1',
+          name: 'Receptive field of a stack',
+          meaning:
+            'Each layer adds K - 1 to the receptive field, but measured in original input pixels, so the contribution is multiplied by the product of all strides before it. Stacking is additive; striding is multiplicative.',
+          variables: [
+            { symbol: 'r_l', meaning: 'Receptive field after layer l, in input pixels' },
+            { symbol: 'K_l', meaning: 'Kernel size of layer l' },
+            { symbol: '\\prod S_i', meaning: 'The cumulative stride, sometimes called the jump: how many input pixels one step at layer l corresponds to' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\text{two } 3\\times3 \\equiv \\text{one } 5\\times5 \\text{ receptive field}, \\quad 2\\cdot 9C^2 < 25C^2',
+          name: 'Why small stacked kernels beat one large kernel',
+          meaning:
+            'Two 3 by 3 layers see a 5 by 5 region using 18 weights per channel pair instead of 25, and they include an extra nonlinearity between them. This is the central argument of the VGG paper and the reason 3 by 3 became universal.',
+          variables: [
+            { symbol: 'C', meaning: 'Channel count, appearing squared because each layer maps C channels to C channels' },
+            { symbol: '9C^2, 25C^2', meaning: 'Parameter counts of a 3 by 3 and a 5 by 5 layer respectively' },
+          ],
+          category: 'deep-learning',
+        },
+      ],
+      derivation: [
+        'Lay the input out along one axis as positions 0 to H - 1, and add P zeros at each end so the padded strip runs from 0 to H + 2P - 1, a length of H + 2P.',
+        'A kernel of size K placed with its left edge at position j occupies j through j + K - 1, so it fits exactly when j + K - 1 <= H + 2P - 1, that is j <= H + 2P - K.',
+        'With stride S the valid starting positions are j = 0, S, 2S, and so on up to the largest multiple of S not exceeding H + 2P - K.',
+        'The number of such multiples is floor((H + 2P - K)/S), and adding one for j = 0 gives the formula.',
+        'Check the three standard cases. With P = 0, S = 1, K = 3 you get H - 2, the valid case. With P = 1, S = 1, K = 3 you get H, the same case. With P = 1, S = 2, K = 3 you get floor((H - 1)/2) + 1, which is H/2 for even H.',
+        'Now derive the receptive field. A single layer with kernel K has r = K. Add a second layer of kernel K on top: each of its K inputs is itself a window of K input pixels, and consecutive inputs are offset by the first layer stride, so the total span is K + (K - 1)*S_1.',
+        'Generalising, layer l adds (K_l - 1) steps of the current jump, where the jump is the product of all previous strides. Hence r_l = r_{l-1} + (K_l - 1) * prod S_i.',
+        'The practical reading is that depth grows the receptive field linearly while stride grows it geometrically. A stack of twenty 3 by 3 layers at stride 1 sees 41 pixels; the same twenty layers with four stride-2 downsamplings interleaved see several hundred.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Tracing the ResNet-50 stem, and then a receptive field',
+      setup:
+        'A 224 by 224 image enters a ResNet. The stem is Conv2d(3, 64, kernel_size=7, stride=2, padding=3) followed by MaxPool2d(kernel_size=3, stride=2, padding=1). Compute both output sizes, then compute the receptive field after three further 3 by 3 stride-1 convolutions.',
+      steps: [
+        {
+          label: 'The stem convolution',
+          detail: '(224 + 2*3 - 7)/2 + 1 = (224 + 6 - 7)/2 + 1 = 223/2 + 1 = floor(111.5) + 1 = 111 + 1 = 112. The output is 64 channels of 112 by 112. Note the floor discarded half a step, so the final row of the padded input is never used as a kernel start.',
+          latex: 'H_1 = \\left\\lfloor\\frac{224 + 6 - 7}{2}\\right\\rfloor + 1 = 112',
+        },
+        {
+          label: 'The max-pool',
+          detail: '(112 + 2*1 - 3)/2 + 1 = 111/2 + 1 = floor(55.5) + 1 = 55 + 1 = 56. The output is 64 channels of 56 by 56. The same formula applies to pooling as to convolution, because it is the same counting problem.',
+          latex: 'H_2 = \\left\\lfloor\\frac{112 + 2 - 3}{2}\\right\\rfloor + 1 = 56',
+        },
+        {
+          label: 'Why the resolution drops so fast at the start',
+          detail: 'Two operations have taken 224 down to 56, a factor of four in each dimension and sixteen in area. Every subsequent layer is therefore sixteen times cheaper than it would have been at full resolution. This front-loading of downsampling is deliberate: the early layers are the most expensive, because compute scales with H times W.',
+          latex: '\\frac{224\\times224}{56\\times56} = 16',
+        },
+        {
+          label: 'Receptive field after the stem convolution',
+          detail: 'r_1 = 1 + (7 - 1) * 1 = 7. One value in this map sees a 7 by 7 region of the original image. The jump — how many input pixels one step corresponds to — is now 2.',
+          latex: 'r_1 = 7,\\qquad j_1 = 2',
+        },
+        {
+          label: 'Receptive field after the max-pool',
+          detail: 'r_2 = 7 + (3 - 1) * 2 = 11. The jump becomes 2 * 2 = 4. Each value now summarises an 11 by 11 patch of the original image, and adjacent values are four input pixels apart.',
+          latex: 'r_2 = 7 + 2\\cdot 2 = 11,\\qquad j_2 = 4',
+        },
+        {
+          label: 'Three more 3 by 3 stride-1 convolutions',
+          detail: 'Each adds (3 - 1) * 4 = 8. So r_3 = 19, r_4 = 27, r_5 = 35. Three cheap 3 by 3 layers have added 24 pixels of receptive field, because they sit behind a cumulative stride of 4. The same three layers applied directly to the input would have added only 6.',
+          latex: 'r_3 = 19,\\; r_4 = 27,\\; r_5 = 35',
+        },
+        {
+          label: 'The architectural lesson',
+          detail: 'Depth adds to the receptive field; stride multiplies what each later layer contributes. That is why networks downsample early and often: it is the cheapest way to let a small kernel eventually see the whole image. By the last stage of a ResNet-50 the cumulative stride is 32 and the theoretical receptive field exceeds the input size.',
+          latex: 'r_l = r_{l-1} + (K_l - 1)\\prod_{i<l} S_i',
+        },
+      ],
+      conclusion:
+        'Two formulas run the geometry of every convolutional network: one counts kernel positions to give the output size, and one accumulates kernel spans weighted by cumulative stride to give the receptive field. Being able to apply both from memory is what lets you read an architecture definition and know what it does before running it.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'The output-size formula, verified against PyTorch',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+def out_size(h, k, s=1, p=0, d=1):
+    return (h + 2 * p - d * (k - 1) - 1) // s + 1
+
+cases = [
+    dict(k=3, s=1, p=1),      # same
+    dict(k=3, s=1, p=0),      # valid
+    dict(k=3, s=2, p=1),      # halve
+    dict(k=7, s=2, p=3),      # ResNet stem
+    dict(k=3, s=1, p=2, d=2), # dilated
+    dict(k=1, s=1, p=0),      # pointwise
+]
+
+x = torch.randn(1, 4, 224, 224)
+for c in cases:
+    conv = nn.Conv2d(4, 4, kernel_size=c["k"], stride=c["s"],
+                     padding=c["p"], dilation=c["d"] if "d" in c else 1)
+    actual = conv(x).shape[-1]
+    predicted = out_size(224, c["k"], c["s"], c["p"], c.get("d", 1))
+    print(f"{c}  predicted {predicted}  actual {actual}  match {predicted == actual}")`,
+        output: `{'k': 3, 's': 1, 'p': 1}  predicted 224  actual 224  match True
+{'k': 3, 's': 1, 'p': 0}  predicted 222  actual 222  match True
+{'k': 3, 's': 2, 'p': 1}  predicted 112  actual 112  match True
+{'k': 7, 's': 2, 'p': 3}  predicted 112  actual 112  match True
+{'k': 3, 's': 1, 'p': 2, 'd': 2}  predicted 224  actual 224  match True
+{'k': 1, 's': 1, 'p': 0}  predicted 224  actual 224  match True`,
+        explanation:
+          'Integer division in Python is already a floor for positive numbers, so the formula translates directly. The dilated case is worth a second look: a 3 by 3 kernel with dilation 2 spans 5 input pixels, so it needs padding 2 to preserve the size, and it has the receptive field of a 5 by 5 kernel with the parameter count of a 3 by 3. That trade is the basis of the atrous convolutions used throughout DeepLab and other segmentation architectures, where downsampling would destroy the pixel-level output you need.',
+      },
+      {
+        language: 'python',
+        title: 'Computing the receptive field of a real architecture',
+        runnable: true,
+        code: `def receptive_field(layers):
+    """layers: list of (kernel, stride). Returns (rf, jump) after each layer."""
+    rf, jump = 1, 1
+    out = []
+    for k, s in layers:
+        rf = rf + (k - 1) * jump
+        jump = jump * s
+        out.append((rf, jump))
+    return out
+
+resnet_start = [(7, 2), (3, 2), (3, 1), (3, 1), (3, 1), (3, 1)]
+for i, (rf, j) in enumerate(receptive_field(resnet_start), start=1):
+    print(f"after layer {i}: receptive field {rf:3d} px, jump {j} px")
+
+vgg_block = [(3, 1)] * 13 + [(2, 2)] * 0
+print("13 stacked 3x3 stride-1 layers:", receptive_field(vgg_block)[-1])`,
+        output: `after layer 1: receptive field   7 px, jump 2 px
+after layer 2: receptive field  11 px, jump 4 px
+after layer 3: receptive field  19 px, jump 4 px
+after layer 4: receptive field  27 px, jump 4 px
+after layer 5: receptive field  35 px, jump 4 px
+after layer 6: receptive field  43 px, jump 4 px
+13 stacked 3x3 stride-1 layers: (27, 1)`,
+        explanation:
+          'Compare the two results. Thirteen 3 by 3 layers at stride 1 reach only 27 pixels, growing by a fixed 2 per layer. Six layers that include two stride-2 steps reach 43, because every layer after a stride contributes four pixels instead of two. This is the quantitative justification for the classic pyramid design: without downsampling, a network would need well over a hundred layers before a single unit could see a whole 224 by 224 image, and the compute at full resolution would be prohibitive.',
+      },
+      {
+        language: 'python',
+        title: 'Padding modes and what happens at the border',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+x = torch.arange(1.0, 26.0).view(1, 1, 5, 5)
+k = torch.ones(1, 1, 3, 3) / 9.0     # a 3x3 box blur
+
+for mode in ["zeros", "reflect", "replicate"]:
+    conv = nn.Conv2d(1, 1, 3, padding=1, padding_mode=mode, bias=False)
+    with torch.no_grad():
+        conv.weight.copy_(k)
+    y = conv(x)
+    print(f"{mode:10s} corner {y[0,0,0,0]:.3f}   centre {y[0,0,2,2]:.3f}")`,
+        output: `zeros      corner 1.556   centre 13.000
+reflect    corner 4.000   centre 13.000
+replicate  corner 4.000   centre 13.000
+`,
+        explanation:
+          'The centre value is 13.0 in every case, the true average of the nine values around the middle. The corner tells a different story: with zero padding it is 1.556, because five of the nine values in the window are artificial zeros that drag the average down, while reflection and replication give 4.0, a plausible local average. In a classifier this artefact rarely matters, because the border is usually uninformative. In image generation, super-resolution and segmentation it shows up as visible frames and halos around the output, which is exactly why those architectures specify padding_mode explicitly.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'The VGG design rule',
+        usage:
+          'VGG fixed every convolution at 3 by 3 with stride 1 and padding 1, and did all downsampling with 2 by 2 max pooling. That single decision meant the spatial size inside a block never changed, so the architecture could be described by a list of channel counts alone. The paper justification is the receptive-field argument: two stacked 3 by 3 layers cover the same region as one 5 by 5 with fewer parameters and an extra nonlinearity.',
+      },
+      {
+        context: 'Dilated convolutions in semantic segmentation',
+        usage:
+          'DeepLab needs a large receptive field but must produce a prediction for every pixel, so it cannot downsample aggressively. It replaces the later strides with dilation, keeping the feature map at one eighth of the input resolution while the effective kernel span grows to cover a wide context. The output-size formula with the dilation term is exactly how those architectures are configured.',
+      },
+      {
+        context: 'Strided convolutions replacing pooling',
+        usage:
+          'All-convolutional networks, and the discriminator of most GAN architectures, downsample with stride-2 convolutions rather than pooling. The shape arithmetic is identical, but the downsampling now has learned weights, so the network chooses what to keep rather than always taking the maximum. Generator networks reverse it with ConvTranspose2d, whose output-size formula is the convolution one solved for the input.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'PyTorch', role: "nn.Conv2d accepts padding='same' for stride 1, but you still need the formula whenever stride is not 1, since same padding is undefined there." },
+      { tool: 'torchinfo', role: 'summary(model, input_size=...) prints the output shape of every layer, which is the fastest way to confirm your arithmetic on an unfamiliar architecture.' },
+      { tool: 'ONNX and TensorRT', role: 'Export tools require statically known shapes for many optimisations, so a model whose shape arithmetic depends on the input size can fail to export or to fuse layers.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Forgetting the plus one in the output-size formula',
+        why: 'The division counts steps between positions, not positions themselves. Omitting the plus one gives an answer one too small everywhere, which often still looks plausible and so survives review.',
+        fix: 'Sanity-check with the trivial case: K = H, P = 0, S = 1 must give exactly 1. Without the plus one it gives 0, which is obviously wrong.',
+      },
+      {
+        mistake: 'Assuming stride 2 always halves the size exactly',
+        why: 'The floor discards the remainder, so an odd input with the wrong padding loses a row and a column silently. A 7 by 7 input with k=3, s=2, p=0 gives 3, not 3.5 rounded up to 4, and the last row and column are never visited at all.',
+        fix: 'Compute the formula rather than assuming, and prefer configurations where the arithmetic is exact: with k = 3, s = 2, p = 1 an even input halves cleanly.',
+      },
+      {
+        mistake: 'Using an even kernel size with same padding',
+        why: 'Same padding requires (K - 1)/2 to be an integer, which fails for even K. PyTorch rejects padding=\'same\' for even kernels with stride 1, and manually padding asymmetrically shifts the output by half a pixel, which accumulates through a deep stack.',
+        fix: 'Use odd kernel sizes — 1, 3, 5, 7 — for anything meant to preserve alignment. Even kernels are reserved for deliberate downsampling, such as a 2 by 2 stride-2 pooling.',
+      },
+      {
+        mistake: 'Ignoring the difference between the theoretical and the effective receptive field',
+        why: 'The formula gives the region that can influence an output, but the influence is far from uniform: it decays roughly as a Gaussian from the centre, so the effective receptive field is often only a fraction of the theoretical one. Architectures designed to the theoretical number alone underperform on tasks needing long-range context.',
+        fix: 'Treat the computed receptive field as an upper bound. If a task genuinely needs global context, add dilation, attention or an explicit global pooling path rather than relying on depth alone.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'Write the output-size formula for a convolution and explain each term.',
+        answer:
+          'H_out = floor((H_in + 2P - K)/S) + 1. The derivation is a counting argument: after padding, the strip has length H_in + 2P, and a kernel of size K can start anywhere from position 0 up to H_in + 2P - K. Stepping by S, the number of starts is that span divided by the stride, floored because a partial step is not a valid position, plus one for the start at zero. The plus one is the term people forget, and the quickest check is the case where the kernel exactly fills the input: K = H, P = 0, S = 1 must give 1. Same padding is P = (K-1)/2, which for stride 1 and odd K makes H_out equal H_in; valid padding is P = 0, which shrinks the output by K - 1. The identical formula applies to pooling layers, since they are the same sliding-window count.',
+        followUp:
+          'A strong answer adds the dilation version, replacing K with D(K-1) + 1, and notes why even kernels have no valid same padding.',
+      },
+      {
+        level: 'intermediate',
+        question: 'What is a receptive field, how do you compute it, and why does it drive architecture design?',
+        answer:
+          'The receptive field of a unit is the region of the original input that can influence its value. It starts at one pixel and grows layer by layer according to r_l = r_{l-1} + (K_l - 1) times the product of all strides before layer l. The key asymmetry is that depth adds while stride multiplies: a 3 by 3 layer adds 2 pixels if it sits directly on the input, but 8 pixels if it sits behind two stride-2 downsamplings. That is why classification networks downsample early and aggressively. A ResNet-50 reaches a cumulative stride of 32 and a theoretical receptive field larger than the input, which is what allows a final unit to integrate evidence from the whole image. The design consequences are concrete: if your task needs long-range context — segmentation of large objects, for instance — you must either downsample, dilate or add attention, because stacking stride-1 3 by 3 layers grows the field only two pixels at a time. It is also worth knowing that the effective receptive field is much smaller than the theoretical one, since influence decays from the centre.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Your model works on 224 by 224 inputs but crashes on 225 by 225. What is likely wrong and how do you make the architecture size-agnostic?',
+        answer:
+          'Almost certainly a floor in the downsampling path that behaves differently for odd sizes, combined with something downstream that expects an exact shape. With stride-2 convolutions, 224 halves cleanly to 112, 56, 28, 14, 7, whereas 225 gives 113, 57, 29, 15, 8, and if two branches of a residual or skip connection downsample by different routes their shapes can diverge by one, producing a size-mismatch error on the addition or concatenation. The other classic culprit is a flatten followed by a fixed-width nn.Linear, which encodes the spatial size in its weight shape. The fixes are standard: replace the flatten with nn.AdaptiveAvgPool2d(1), which produces one value per channel whatever the input size; make sure every downsampling path uses the same kernel, stride and padding so branches stay aligned; and in encoder-decoder architectures, either pad the input up to a multiple of the total stride or crop the skip connection explicitly, which is what U-Net does.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'An input of size 32 by 32 passes through Conv2d(k=5, s=1, p=2), then MaxPool2d(k=2, s=2), then Conv2d(k=3, s=2, p=1). Give the spatial size after each step.',
+        hint: 'Apply floor((H + 2P - K)/S) + 1 three times.',
+        solution:
+          'First: (32 + 4 - 5)/1 + 1 = 31 + 1 = 32, so the 5 by 5 kernel with padding 2 is same padding and the size is preserved. Second: (32 + 0 - 2)/2 + 1 = 15 + 1 = 16, the standard halving by a 2 by 2 stride-2 pool with no padding. Third: (16 + 2 - 3)/2 + 1 = floor(15/2) + 1 = 7 + 1 = 8. So the sequence is 32, 32, 16, 8. Note that the third step halves cleanly only because 16 is even; had the input been 15, the result would have been floor(14/2) + 1 = 8 as well, which is the kind of coincidence that hides an off-by-one until a different input size exposes it.',
+      },
+      {
+        prompt:
+          'You need a layer that preserves the 64 by 64 spatial size but gives each output unit a receptive field of 9 pixels, using as few parameters as possible. Give two designs and compare them.',
+        hint: 'Consider stacking small kernels and consider dilation.',
+        solution:
+          'Design one: four stacked 3 by 3 stride-1 padding-1 convolutions. The receptive field is 1 + 4*2 = 9 and the size is preserved at every step. The cost for C channels throughout is 4 * 9 * C^2 = 36C^2 weights, and it includes three extra nonlinearities, which is usually a benefit. Design two: a single 3 by 3 convolution with dilation 4 and padding 4. Its effective span is 4*(3-1) + 1 = 9 and the size is preserved, at a cost of only 9C^2 weights, four times fewer. The trade is real: the dilated version samples nine pixels spread across a 9 by 9 region with gaps, so it can miss fine detail and can produce gridding artefacts, whereas the stacked version covers every pixel in the region densely and computes a richer function. Segmentation architectures use dilation where cheap context matters more than fine texture; classification backbones use stacking.',
+      },
+      {
+        prompt:
+          'Write a function that takes a list of (kernel, stride, padding) tuples and an input size, and returns both the output size and the receptive field after every layer. Use it to check whether a proposed 8-layer design can see a 100-pixel object.',
+        hint: 'Track three quantities: current size, current receptive field and current jump.',
+        language: 'python',
+        starterCode:
+          'def trace(layers, h_in):\n    """layers: [(k, s, p), ...]. Print size, receptive field and jump per layer."""\n    h, rf, jump = h_in, 1, 1\n    for i, (k, s, p) in enumerate(layers, start=1):\n        ...\n',
+        solution:
+          'The update rules are h = (h + 2*p - k)//s + 1, then rf = rf + (k - 1)*jump, then jump = jump*s, applied in that order — the receptive field must be updated with the jump as it was before this layer stride takes effect. Running it on eight 3 by 3 stride-1 layers gives a receptive field of 17, which cannot see a 100-pixel object: no unit in the final map has access to enough of the image. Inserting three stride-2 layers instead of three of the stride-1 ones gives a cumulative jump of 8 and a receptive field well over 100, at the cost of an output map eight times smaller in each dimension. Writing this function once and keeping it is genuinely useful; it turns architecture design from guesswork into arithmetic.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DL-014-q1',
+        type: 'numeric',
+        concept: 'output size',
+        prompt: 'An input of size 28 passes through a convolution with kernel 5, stride 1 and padding 0. What is the output size?',
+        answer: 24,
+        tolerance: 0,
+        explanation:
+          '(28 + 0 - 5)/1 + 1 = 23 + 1 = 24. Valid padding with a 5 by 5 kernel removes two pixels from each side, so four in total from each dimension.',
+      },
+      {
+        id: 'DL-014-q2',
+        type: 'mcq',
+        concept: 'same padding',
+        prompt: 'What padding preserves the spatial size for a 7 by 7 kernel with stride 1?',
+        options: ['3', '7', '6', '3.5'],
+        answerIndex: 0,
+        explanation:
+          'Same padding is (K - 1)/2 = (7 - 1)/2 = 3. Check it: (H + 6 - 7)/1 + 1 = H. This is exactly the padding used in the ResNet stem, although there the stride of 2 means the size halves rather than being preserved.',
+      },
+      {
+        id: 'DL-014-q3',
+        type: 'truefalse',
+        concept: 'equivariance and stride',
+        prompt: 'Increasing the stride reduces the number of parameters in a convolutional layer.',
+        answer: false,
+        explanation:
+          'False. Parameters are C_out * C_in * k * k + C_out and do not involve the stride at all. Stride reduces the output size and therefore the compute and the activation memory, but the kernel is the same kernel however far it jumps.',
+      },
+      {
+        id: 'DL-014-q4',
+        type: 'numeric',
+        concept: 'receptive field',
+        prompt: 'Three stacked 3 by 3 convolutions, all with stride 1, are applied to an image. What is the receptive field of one output unit, in pixels along one axis?',
+        answer: 7,
+        tolerance: 0,
+        explanation:
+          'r = 1 + 3*(3-1)*1 = 7. Each stride-1 3 by 3 layer adds 2. This is the VGG argument: three 3 by 3 layers match a single 7 by 7 kernel receptive field using 27C^2 parameters instead of 49C^2, with two extra nonlinearities.',
+      },
+      {
+        id: 'DL-014-q5',
+        type: 'code-output',
+        language: 'python',
+        concept: 'shape tracing',
+        prompt: 'What does this print?',
+        code: 'import torch, torch.nn as nn\nnet = nn.Sequential(nn.Conv2d(3, 8, 3, stride=2, padding=1),\n                    nn.Conv2d(8, 8, 3, stride=2, padding=1))\nprint(tuple(net(torch.randn(1, 3, 64, 64)).shape))',
+        options: ['(1, 8, 16, 16)', '(1, 8, 32, 32)', '(1, 8, 15, 15)', '(1, 8, 8, 8)'],
+        answerIndex: 0,
+        explanation:
+          'Each layer computes (64 + 2 - 3)/2 + 1 = 32, then (32 + 2 - 3)/2 + 1 = 16. Two stride-2 layers halve the size twice, giving 16, while the channel count follows the layer definitions rather than the spatial arithmetic.',
+      },
+      {
+        id: 'DL-014-q6',
+        type: 'order',
+        concept: 'deriving the formula',
+        prompt: 'Put the steps of deriving the output-size formula into order.',
+        items: [
+          'Pad the input so the strip has length H + 2P',
+          'Note that the kernel left edge can start anywhere from 0 to H + 2P - K',
+          'Count how many multiples of the stride fit into that span',
+          'Take the floor, because a partial step is not a valid position',
+          'Add one for the starting position at offset zero',
+        ],
+        explanation:
+          'The formula is a counting argument, not something to memorise. Deriving it this way makes the floor and the plus one obvious rather than arbitrary.',
+      },
+      {
+        id: 'DL-014-q7',
+        type: 'explain',
+        concept: 'downsampling strategy',
+        prompt: 'Explain why convolutional networks downsample early and often, referring to both compute and receptive field.',
+        rubric: [
+          'States that compute scales with the output spatial size, so early high-resolution layers dominate the FLOP budget',
+          'States the receptive field recursion and notes that strides multiply the contribution of all later layers',
+          'Connects the two into the standard pyramid design of halving resolution while doubling channels',
+        ],
+        sampleAnswer:
+          'Two pressures push in the same direction. The first is cost: the FLOPs of a convolution are proportional to the output height times the output width, so a layer at 224 by 224 is sixteen times more expensive than the same layer at 56 by 56. Downsampling early means the deep, wide layers where most of the parameters live run on small maps. The second is context. The receptive field grows as r_l = r_{l-1} + (K_l - 1) times the cumulative stride, so a 3 by 3 layer adds only two pixels if it sits on the raw input but eight pixels once it sits behind two stride-2 steps. Depth adds to the receptive field, striding multiplies what every later layer adds. Without downsampling you would need over a hundred stride-1 3 by 3 layers before a unit could see a whole 224 by 224 image, and the compute would be impossible. The resulting convention is to halve the spatial size and double the channel count at each stage, which keeps the cost per stage roughly constant while the receptive field grows geometrically.',
+        explanation:
+          'The examinable insight is the asymmetry between additive depth and multiplicative stride, which is what justifies the pyramid shape shared by essentially every convolutional backbone.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'State the convolution output-size formula.', back: 'H_out = floor((H_in + 2P - K)/S) + 1. The same formula applies to pooling layers.' },
+      { front: 'What is same padding, and when is it defined?', back: 'P = (K-1)/2, which preserves the size when the stride is 1 and K is odd. It is undefined for even kernels.' },
+      { front: 'What does stride change and what does it not?', back: 'It reduces output size, compute and activation memory. It does not change the parameter count.' },
+      { front: 'Receptive field recursion?', back: 'r_l = r_{l-1} + (K_l - 1) * (product of all previous strides). Depth adds, stride multiplies.' },
+      { front: 'Why are two 3x3 layers preferred to one 5x5?', back: 'Same receptive field, 18C^2 parameters instead of 25C^2, and an extra nonlinearity between them.' },
+      { front: 'What does dilation buy?', back: 'Receptive field without extra parameters or downsampling: a 3x3 kernel at dilation D spans D*(K-1)+1 pixels using 9 weights.' },
+      { front: 'Why do zero-padded borders cause artefacts?', back: 'Border outputs mix real data with artificial zeros, which shows up as frames or halos in generation and segmentation. Use reflect or replicate padding there.' },
+    ],
+
+    challenge: {
+      title: 'An architecture shape calculator',
+      brief:
+        'Write a tool that parses a list of layer specifications — convolutions, pools and dilations — and prints a table of input size, output size, receptive field, cumulative stride, parameter count and FLOPs for each layer, plus totals. Validate it against torchinfo on three real architectures from torchvision. Then use it to design a network for 96 by 96 inputs that reaches a receptive field of at least 96 pixels in under twelve layers while keeping total parameters below two million, and justify each design decision from the table your tool produces.',
+      language: 'python',
+      acceptanceCriteria: [
+        'The tool handles kernel, stride, padding and dilation, and its output sizes match PyTorch exactly on at least ten configurations',
+        'Receptive field and cumulative stride are tracked correctly, verified by hand on a known architecture',
+        'FLOPs and parameters are reported per layer and as totals, and the per-layer breakdown shows early layers dominating FLOPs and late layers dominating parameters',
+        'The designed network meets both constraints and the write-up cites the table rather than asserting the result',
+      ],
+      starterCode:
+        'from dataclasses import dataclass\n\n@dataclass\nclass LayerSpec:\n    kind: str      # "conv" or "pool"\n    k: int\n    s: int = 1\n    p: int = 0\n    d: int = 1\n    c_in: int = 0\n    c_out: int = 0\n\ndef analyse(specs, h_in, c_in):\n    """Print a per-layer table and return the totals."""\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain padding and stride, derive the output-size formula, and say what a receptive field is and why it matters.',
+      mustCover: [
+        'Padding adds a border so the kernel can reach edge pixels; valid means none and same preserves the size',
+        'Stride is the step between kernel placements and reduces the output size and compute',
+        'The output size is floor((H + 2P - K)/S) + 1, which is a count of valid kernel positions',
+        'The receptive field is the input region influencing one unit, and it grows additively with depth and multiplicatively with stride',
+      ],
+      bonusSignals: [
+        'derives the formula rather than reciting it',
+        'notes that stride does not change the parameter count',
+        'explains why kernel sizes are odd',
+        'mentions dilation as a way to grow the receptive field without downsampling',
+      ],
+      sampleExplanation:
+        "When you slide a kernel across an image, two configuration choices decide the shape of everything downstream. The first is what happens at the edges. A three-by-three kernel centred on a corner pixel hangs off the image, so either you only place it where it fits entirely — which is called valid padding and costs you two pixels from each dimension every layer — or you surround the image with a border of zeros so it always has something to sit on, which is called same padding when the border is chosen to make the output exactly the same size as the input. For an odd kernel of size K that border is K minus one over two, so one for a three-by-three and three for a seven-by-seven. That is also why kernel sizes are almost always odd: with an even kernel there is no integer padding that centres it, and the output ends up offset by half a pixel. The second choice is how far to move between placements, which is the stride. A stride of one reads every position; a stride of two skips every other one and roughly halves the output in each dimension, which quarters the work of everything that follows. Note that stride changes the output size and the compute but not the number of parameters — it is the same kernel, evaluated in fewer places. Putting the two together gives the formula, and it is worth deriving rather than memorising. After padding, the strip is H plus twice P long. The kernel needs K consecutive cells, so its left edge can sit anywhere from position zero up to H plus two P minus K. Stepping by S, the number of valid positions is that span divided by the stride, rounded down because a partial step is not a position, plus one for the very first placement. That plus one is the term everybody forgets. Finally, the receptive field. One value deep in the network was computed from some region of the original image, and that region grows layer by layer: each layer widens it by K minus one, but measured in input pixels, so it gets multiplied by every stride the signal has already passed through. Depth adds to the receptive field; stride multiplies what all the later layers add. That single asymmetry explains the shape of almost every convolutional network — downsample early so that small cheap kernels can eventually see the whole picture.",
+    },
+  },
+
+  {
+    id: 'DL-015',
+    domain: 'DL',
+    module: 'Convolutional Networks',
+    topic: 'Spatial reduction',
+    title: 'Pooling and Downsampling',
+    slug: 'pooling-and-downsampling',
+    difficulty: 3,
+    estimatedMinutes: 30,
+    prerequisites: ['DL-013', 'DL-014'],
+    related: ['DL-013', 'DL-014'],
+    tags: ['pooling', 'max-pool', 'average-pool', 'downsampling', 'translation-invariance', 'global-average-pooling'],
+
+    learningObjectives: [
+      'Compute max and average pooling by hand and state how each changes the shape of a feature map',
+      'Explain how pooling converts translation equivariance into local translation invariance, and what that costs',
+      'Compare pooling with strided convolution and say why modern architectures often prefer the latter',
+      'Use global average pooling to make a classifier independent of input resolution',
+    ],
+
+    terminology: [
+      {
+        term: 'Pooling',
+        definition:
+          'A fixed, parameter-free downsampling operation that replaces each window of a feature map with a single summary value, usually the maximum or the mean, applied independently to every channel.',
+        simple: 'Shrink the picture by keeping one number per little block.',
+      },
+      {
+        term: 'Max pooling',
+        definition:
+          'Pooling that takes the largest value in each window. It reports whether a feature was detected anywhere in the window, discarding exactly where and how many times.',
+        simple: 'Keep the strongest response in each block and throw the rest away.',
+      },
+      {
+        term: 'Average pooling',
+        definition:
+          'Pooling that takes the mean of each window. It preserves overall intensity and is smoother than max pooling, but a single strong response is diluted by its weak neighbours.',
+        simple: 'Keep the average of each block, so everything contributes a little.',
+      },
+      {
+        term: 'Local translation invariance',
+        definition:
+          'The property that a small shift of the input, smaller than the pooling window, leaves the pooled output unchanged. It is local because a shift larger than the window still moves the output.',
+        simple: 'Nudging the picture by a pixel or two does not change the answer.',
+      },
+      {
+        term: 'Global average pooling',
+        definition:
+          'Averaging each channel over the entire spatial extent, producing one number per channel. It replaces the flatten-and-dense head of older architectures and makes the model independent of input size.',
+        simple: 'Collapse each feature map to a single number: how much of this feature is in the image overall.',
+      },
+    ],
+
+    simpleExplanation:
+      "After a convolution you have a map showing where each pattern was found. Often that map is more detailed than you need. If a filter has detected a whiskers-like texture somewhere in the top-left quarter of a photograph, the fact that it was at pixel forty-one rather than pixel forty-two almost never matters for deciding whether the photograph shows a cat. Pooling is the step that throws away that excess precision on purpose. You chop the map into small blocks, usually two by two, and replace each block with a single number — most often the largest value in it, sometimes the average. The map halves in width and height, so there is a quarter as much of it, everything downstream becomes four times cheaper, and small wobbles in where a feature sits stop changing the answer. There are no weights to learn: pooling is a fixed rule, which is why it costs nothing and why it is also somewhat blunt. Modern networks often replace it with a convolution that strides by two instead, so the network can learn what to keep rather than always taking the maximum.",
+
+    whyItExists:
+      'Convolution is equivariant rather than invariant, so a feature map retains the exact position of every response, and a classifier that cares only whether an object is present must eventually discard that position or it will treat a two-pixel shift as a different input. Pooling provides that discarding step, and at the same time cuts the spatial size so that the deeper, wider layers of a network run on a quarter of the data, which is what makes deep convolutional stacks affordable at all.',
+
+    analogy: {
+      scenario:
+        'A supermarket chain wants to know which of its stores had a strong week. Head office does not want a spreadsheet of every transaction; it wants one number per store per week. One manager reports the single largest sale of the week, which is a good way to spot whether any unusual high-value item moved at all, but tells you nothing about volume. Another reports the average transaction value, which reflects the whole week evenly but hides the one remarkable sale among hundreds of ordinary ones. Either way, head office now has a table small enough to act on, and a sale happening on Tuesday rather than Wednesday no longer shows up at all.',
+      mapping: [
+        { from: 'All the individual transactions in a week', to: 'The values inside one pooling window' },
+        { from: 'Reporting the single largest sale', to: 'Max pooling: detects presence, discards position and count' },
+        { from: 'Reporting the average transaction', to: 'Average pooling: preserves overall level, dilutes a single strong response' },
+        { from: 'Tuesday versus Wednesday no longer mattering', to: 'Local translation invariance within the window' },
+        { from: 'A much smaller table for head office', to: 'The spatial size reduction, and the compute saving downstream' },
+      ],
+      bridge:
+        'The summary is exactly the pooling function, and the choice between maximum and mean is exactly the choice made in nn.MaxPool2d versus nn.AvgPool2d — both applied per channel, so each feature is summarised independently just as each store is. The invariance is precisely the loss of within-window position: a shift smaller than the window changes which cell held the maximum but not what the maximum was. Where the analogy breaks is that head office chooses its summary deliberately, whereas pooling is baked into the architecture and cannot adapt. That fixedness is what strided convolution removes, by letting the network learn a weighted summary instead of imposing one.',
+      limitations:
+        'The story suggests summarising is always harmless compression. For a classifier it mostly is, but for segmentation or detection the discarded position is the answer, which is why those architectures either avoid pooling or carefully restore resolution afterwards.',
+    },
+
+    visuals: [
+      {
+        kind: 'ascii',
+        title: 'Max and average pooling over a 4x4 map, 2x2 window, stride 2',
+        caption: 'Four windows, four outputs. Max keeps the strongest response; average keeps the overall level.',
+        art: `input 4x4                 max pool 2x2, s=2      avg pool 2x2, s=2
+
+  1   3 | 2   4                    6   4                  3.75  2.25
+  5   6 | 1   2
+  ------+------                    7   9                  4.00  5.00
+  7   2 | 9   1
+  3   4 | 2   8
+
+window (0,0) = {1,3,5,6} -> max 6, mean 3.75
+window (0,1) = {2,4,1,2} -> max 4, mean 2.25
+window (1,0) = {7,2,3,4} -> max 7, mean 4.00
+window (1,1) = {9,1,2,8} -> max 9, mean 5.00`,
+      },
+      {
+        kind: 'compare',
+        title: 'Max pooling versus average pooling',
+        caption: 'Both halve the resolution. They differ in what they consider worth keeping.',
+        left: {
+          heading: 'Max pooling',
+          points: [
+            'Reports the strongest activation: did this feature appear anywhere here?',
+            'Gradient flows only to the argmax position; the other three cells receive nothing',
+            'Sharpens: a weak background does not dilute a strong detection',
+            'The default inside convolutional bodies, from LeNet through VGG',
+            'Sensitive to outliers, which for a ReLU feature map is usually the point',
+          ],
+        },
+        right: {
+          heading: 'Average pooling',
+          points: [
+            'Reports the mean: how much of this feature is present overall?',
+            'Gradient is spread equally over all cells in the window',
+            'Smooths: preserves texture and overall intensity rather than peaks',
+            'The standard choice for the final global pooling before a classifier head',
+            'Less able to ignore a mostly empty window, since zeros drag the mean down',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Ways to halve a feature map',
+        caption: 'All three produce a map half the size in each dimension. They differ in cost and in what they learn.',
+        columns: ['Method', 'Parameters', 'What decides the output', 'Typical use'],
+        rows: [
+          ['MaxPool2d(2, 2)', 'None', 'A fixed rule: the maximum', 'Classic architectures; still common and still effective'],
+          ['AvgPool2d(2, 2)', 'None', 'A fixed rule: the mean', 'Rare mid-network; standard as a global pool at the end'],
+          ['Conv2d(C, C, 3, stride=2, padding=1)', 'C*C*9', 'Learned weights over the window', 'ResNet downsampling, GAN discriminators, most modern designs'],
+          ['AdaptiveAvgPool2d(1)', 'None', 'The mean over the whole map', 'The classifier head: makes the model input-size independent'],
+          ['Conv2d(C, C, 2, stride=2)', 'C*C*4', 'Learned, non-overlapping', 'Patch merging in hierarchical vision transformers such as Swin'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Pool a feature map and shift the input',
+        caption: 'Apply max and average pooling to the same map, then translate the input by one pixel and see which outputs change and which do not.',
+        widget: 'pooling-lab',
+      },
+    ],
+
+    formalDefinition:
+      'A pooling layer with window size K, stride S and padding P maps a feature map X to Y with Y[c, i, j] = agg{ X[c, iS + u - P, jS + v - P] : 0 <= u, v < K }, applied independently to each channel c, where agg is max for max pooling and the arithmetic mean for average pooling. The output size obeys the same formula as convolution, floor((H + 2P - K)/S) + 1, and the layer has no learnable parameters. Max pooling is a subgradient operation: the gradient is routed entirely to the argmax element of each window and is zero elsewhere.',
+
+    math: {
+      intuition:
+        'Pooling is a summary statistic computed over a sliding window, and the only interesting question is which statistic. The maximum answers whether the feature fired at all in this neighbourhood, which is the natural question for a detector whose outputs are non-negative after a ReLU. The mean answers how much of the feature is present on average, which is the natural question when you are about to feed the number to a classifier and want it to reflect extent rather than peak. The backward pass follows from the forward one by differentiating: the maximum depends on only one input, so only that one gets the gradient, whereas the mean depends equally on all of them, so the gradient is shared out evenly.',
+      formulas: [
+        {
+          latex: 'Y[c,i,j] = \\max_{0\\le u,v < K} X[c,\\, iS+u,\\, jS+v]',
+          name: 'Max pooling',
+          meaning:
+            'The largest activation in each window, per channel. Because the operation is per channel, pooling never mixes features — a channel that detects edges is summarised only against itself.',
+          variables: [
+            { symbol: 'K', meaning: 'Pooling window size, almost always 2 or 3' },
+            { symbol: 'S', meaning: 'Stride, usually equal to K so the windows do not overlap' },
+            { symbol: 'c', meaning: 'Channel index; pooling is applied independently to each channel' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: 'Y[c,i,j] = \\frac{1}{K^2}\\sum_{u=0}^{K-1}\\sum_{v=0}^{K-1} X[c,\\, iS+u,\\, jS+v]',
+          name: 'Average pooling',
+          meaning:
+            'The mean activation in each window. Note that this is a convolution with a fixed uniform kernel of weight 1/K squared and no cross-channel mixing, which is why it is sometimes described as a non-learnable depthwise convolution.',
+          variables: [
+            { symbol: '1/K^2', meaning: 'The uniform weight given to each cell in the window' },
+            { symbol: 'K^2', meaning: 'Number of cells being averaged, 4 for a 2 by 2 window' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\frac{\\partial Y[i,j]}{\\partial X[m,n]} = \\begin{cases}1 & (m,n) = \\arg\\max \\\\ 0 & \\text{otherwise}\\end{cases}',
+          name: 'Backward pass of max pooling',
+          meaning:
+            'All of the gradient goes to the single winning cell and none to the others, so in a 2 by 2 window three quarters of the positions receive no learning signal from this path on this example. Frameworks cache the argmax indices during the forward pass to make this cheap.',
+          variables: [
+            { symbol: '\\arg\\max', meaning: 'The position of the largest value in the window; ties are broken arbitrarily but deterministically' },
+            { symbol: 'X[m,n]', meaning: 'An input cell inside the window' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: 'Y[c] = \\frac{1}{HW}\\sum_{i=1}^{H}\\sum_{j=1}^{W} X[c,i,j]',
+          name: 'Global average pooling',
+          meaning:
+            'Collapses each channel to one number, turning a (C, H, W) map into a vector of length C. Because the output does not depend on H or W, the classifier that follows works for any input resolution — the key property that lets one ResNet run on 224 by 224 and on 384 by 384 inputs.',
+          variables: [
+            { symbol: 'H, W', meaning: 'The spatial size of the final feature map, whatever it happens to be' },
+            { symbol: 'C', meaning: 'Channel count, which becomes the dimension of the vector fed to the classifier' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\text{FLOPs}_{\\ell+1} \\propto H_{\\text{out}}W_{\\text{out}} \\;\\Rightarrow\\; \\text{halving } H,W \\text{ divides cost by } 4',
+          name: 'Why downsampling is the lever on cost',
+          meaning:
+            'Every layer after a 2 by 2 pool operates on a quarter of the positions, so its compute and its activation memory both fall by four. This is the reason pooling appears so early and so often in classic architectures.',
+          variables: [
+            { symbol: 'H_{\\text{out}}W_{\\text{out}}', meaning: 'Number of spatial positions in the feature map' },
+          ],
+          category: 'complexity',
+        },
+      ],
+      derivation: [
+        'Start from what convolution gives you: equivariance. Shift the input by delta and every value in the feature map shifts by delta, so a classifier reading that map directly would see a different input vector for a one-pixel shift.',
+        'Ask for something weaker than full invariance: outputs that are unchanged by shifts smaller than some tolerance. That is achievable by summarising over a window of that size.',
+        'Take the maximum over a 2 by 2 window. If the input shifts by one pixel and the feature that produced the maximum is still inside the window, the maximum is unchanged, so the output is unchanged. If the feature crosses a window boundary, the output does change — hence local invariance, not global.',
+        'Note the size reduction that comes with it. Non-overlapping windows of size K with stride K give an output K times smaller in each dimension, so K = 2 quarters the number of positions and therefore quarters the compute of every following layer.',
+        'Differentiate. For the mean, dY/dX is 1/K squared for every cell, so the gradient is spread evenly. For the maximum, Y depends on only one input in each window, so the gradient is routed entirely there and every other cell in the window receives zero.',
+        'Finally, push the window to the whole map. Global average pooling produces one number per channel and is completely invariant to translation — position information is gone entirely — which is exactly what a whole-image classifier wants and exactly what a segmentation model must not do.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Pooling a 4x4 map, then shifting the input to see the invariance',
+      setup:
+        'A single-channel feature map has rows [1, 3, 2, 4], [5, 6, 1, 2], [7, 2, 9, 1], [3, 4, 2, 8]. Apply 2 by 2 max pooling with stride 2, then 2 by 2 average pooling with stride 2, then shift a feature within one window and repeat.',
+      steps: [
+        {
+          label: 'Split into four non-overlapping windows',
+          detail: 'Top-left is {1, 3, 5, 6}; top-right is {2, 4, 1, 2}; bottom-left is {7, 2, 3, 4}; bottom-right is {9, 1, 2, 8}. With stride equal to the window size, every input cell belongs to exactly one window.',
+          latex: '4\\times4 \\to 2\\times2,\\quad H_{\\text{out}} = \\left\\lfloor\\frac{4-2}{2}\\right\\rfloor + 1 = 2',
+        },
+        {
+          label: 'Max pool',
+          detail: 'max{1,3,5,6} = 6; max{2,4,1,2} = 4; max{7,2,3,4} = 7; max{9,1,2,8} = 9. The output is [[6, 4], [7, 9]]. Twelve of the sixteen input values have been discarded entirely.',
+          latex: 'Y_{\\max} = \\begin{bmatrix}6&4\\\\7&9\\end{bmatrix}',
+        },
+        {
+          label: 'Average pool',
+          detail: '(1+3+5+6)/4 = 3.75; (2+4+1+2)/4 = 2.25; (7+2+3+4)/4 = 4.00; (9+1+2+8)/4 = 5.00. The output is [[3.75, 2.25], [4.00, 5.00]]. Every input value contributed, but the sharp 9 has been pulled down to 5 by its weak neighbours.',
+          latex: 'Y_{\\text{avg}} = \\begin{bmatrix}3.75&2.25\\\\4.00&5.00\\end{bmatrix}',
+        },
+        {
+          label: 'Shift a feature inside its window',
+          detail: 'Swap the 6 and the 1 in the top-left window, so it becomes {1, 3, 5, 6} rearranged as rows [1, 3] and [6, 5] — the strong response has moved one cell. The maximum is still 6 and the mean is still 3.75. Both outputs are completely unchanged: this is local translation invariance.',
+          latex: '\\max\\{1,3,6,5\\} = 6,\\qquad \\text{mean} = 3.75',
+        },
+        {
+          label: 'Shift the feature across a window boundary',
+          detail: 'Now move the 6 from the top-left window into the top-right window. The top-left maximum falls to 5 and the top-right rises to 6. The invariance has failed, because the shift exceeded the window. Invariance from pooling is always bounded by the window size.',
+          latex: 'Y_{\\max} = \\begin{bmatrix}5&6\\\\7&9\\end{bmatrix}',
+        },
+        {
+          label: 'The backward pass',
+          detail: 'For max pooling, a gradient of 1 arriving at output [0][0] is routed entirely to the cell that held the 6 and the other three cells get zero. For average pooling the same gradient of 1 is split into four quarters. Over many examples the max-pooled cells that never win receive no signal from this path at all, which is a real, if usually tolerable, sparsity in the learning.',
+          latex: '\\nabla_{\\max}: [0,0,0,1] \\quad\\text{vs}\\quad \\nabla_{\\text{avg}}: [0.25,0.25,0.25,0.25]',
+        },
+        {
+          label: 'What it cost',
+          detail: 'The map went from 16 values to 4, so every subsequent layer does a quarter of the work. What was lost is the position of each response within its 2 by 2 block — irrelevant for classification, fatal for pixel-level prediction, which is why segmentation architectures record the pooling indices or avoid pooling entirely.',
+          latex: '16 \\to 4 \\;\\Rightarrow\\; 4\\times \\text{cheaper downstream}',
+        },
+      ],
+      conclusion:
+        'Pooling trades spatial precision for invariance and for compute, at zero parameter cost. The maximum answers whether a feature is present, the mean answers how much of it there is, and the window size is exactly the amount of translation you are declaring irrelevant.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Max and average pooling, matching the hand calculation',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+x = torch.tensor([[1., 3., 2., 4.],
+                  [5., 6., 1., 2.],
+                  [7., 2., 9., 1.],
+                  [3., 4., 2., 8.]]).view(1, 1, 4, 4)
+
+print("max :", nn.MaxPool2d(2, 2)(x).squeeze().tolist())
+print("avg :", nn.AvgPool2d(2, 2)(x).squeeze().tolist())
+print("global avg:", nn.AdaptiveAvgPool2d(1)(x).item())
+
+# where the gradient goes
+x_grad = x.clone().requires_grad_(True)
+nn.MaxPool2d(2, 2)(x_grad).sum().backward()
+print("max-pool gradient:")
+print(x_grad.grad.squeeze())`,
+        output: `max : [[6.0, 4.0], [7.0, 9.0]]
+avg : [[3.75, 2.25], [4.0, 5.0]]
+global avg: 3.75
+max-pool gradient:
+tensor([[0., 0., 0., 1.],
+        [0., 1., 0., 0.],
+        [1., 0., 0., 1.],
+        [0., 0., 0., 0.]])`,
+        explanation:
+          'The pooled values match the hand calculation exactly. The gradient tensor is the instructive part: exactly four of the sixteen cells receive a gradient of one and the other twelve receive nothing, because the maximum depends on only one input per window. Those four ones sit precisely at the positions of the 4, the 6, the 7 and the 9. With average pooling the same backward pass would put 0.25 in every cell, which is the difference between routing the learning signal to the winner and sharing it out.',
+      },
+      {
+        language: 'python',
+        title: 'Pooling gives invariance to small shifts, but only small ones',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+pool = nn.MaxPool2d(2, 2)
+
+def feature_at(col):
+    x = torch.zeros(1, 1, 8, 8)
+    x[0, 0, 2, col] = 5.0
+    return x
+
+base = pool(feature_at(2))
+for col in (2, 3, 4, 5):
+    same = torch.equal(pool(feature_at(col)), base)
+    print(f"feature at column {col}: pooled output identical to column 2? {same}")`,
+        output: `feature at column 2: pooled output identical to column 2? True
+feature at column 3: pooled output identical to column 2? True
+feature at column 4: pooled output identical to column 2? False
+feature at column 5: pooled output identical to column 2? False`,
+        explanation:
+          'Columns 2 and 3 fall inside the same 2 by 2 window, so the pooled output is bit-for-bit identical and the shift is genuinely invisible to everything downstream. Columns 4 and 5 fall into the next window and the output changes. This is exactly what local translation invariance means and why the word local matters: pooling declares shifts smaller than the window irrelevant and nothing more. Stacking several pooling layers compounds the tolerance, which is why a deep network is robust to shifts of many pixels even though each individual pool only handles one.',
+      },
+      {
+        language: 'python',
+        title: 'Global average pooling makes a classifier resolution-independent',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+flatten_head = nn.Sequential(nn.Conv2d(3, 16, 3, padding=1), nn.ReLU(),
+                             nn.Flatten(), nn.Linear(16 * 32 * 32, 10))
+
+gap_head = nn.Sequential(nn.Conv2d(3, 16, 3, padding=1), nn.ReLU(),
+                         nn.AdaptiveAvgPool2d(1), nn.Flatten(), nn.Linear(16, 10))
+
+for size in (32, 64):
+    x = torch.randn(1, 3, size, size)
+    try:
+        flatten_head(x)
+        print(f"flatten head, {size}x{size}: ok")
+    except RuntimeError as e:
+        print(f"flatten head, {size}x{size}: {str(e)[:60]}...")
+    print(f"gap head,     {size}x{size}: {tuple(gap_head(x).shape)}")
+
+print("flatten params:", sum(p.numel() for p in flatten_head.parameters()))
+print("gap params    :", sum(p.numel() for p in gap_head.parameters()))`,
+        output: `flatten head, 32x32: ok
+gap head,     32x32: (1, 10)
+flatten head, 64x64: mat1 and mat2 shapes cannot be multiplied (1x65536...
+gap head,     64x64: (1, 10)
+flatten params: 164282
+gap params    : 618
+`,
+        explanation:
+          'The flatten-and-dense head bakes the spatial size into the weight shape of the linear layer, so it fails outright on a different input resolution and carries 164,282 parameters, almost all of them in that one layer. Global average pooling collapses each channel to a single number first, so the linear layer sees 16 inputs regardless of resolution, works on both sizes, and costs 618 parameters in total. This substitution, introduced in the Network-in-Network paper and adopted by every architecture from ResNet onward, is one of the highest-value single changes in convolutional design.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'LeNet-5 and VGG',
+        usage:
+          'Both alternate convolution blocks with pooling: LeNet used average pooling in 1998, and VGG used a 2 by 2 max pool after every block of 3 by 3 convolutions, five times in total, taking a 224 by 224 input down to 7 by 7. The regular structure is what made VGG so easy to describe and so widely reused as a feature extractor.',
+      },
+      {
+        context: 'ResNet using strided convolutions instead',
+        usage:
+          'ResNet keeps exactly one max pool, in the stem, and does all subsequent downsampling with stride-2 convolutions inside the residual blocks. The learned downsampling performs slightly better than fixed pooling, and it integrates cleanly with the shortcut path, which also needs a stride-2 1 by 1 convolution to match shapes.',
+      },
+      {
+        context: 'Segmentation architectures that must undo pooling',
+        usage:
+          'U-Net pools down through an encoder and then upsamples back, concatenating the corresponding high-resolution encoder feature map at each level so the fine positional detail that pooling destroyed is restored from the skip connection. SegNet takes a different route and stores the max-pooling argmax indices so it can place values back exactly where they came from.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'PyTorch', role: 'nn.MaxPool2d, nn.AvgPool2d, nn.AdaptiveAvgPool2d and the return_indices option on max pooling, which segmentation decoders use.' },
+      { tool: 'torchvision', role: 'Every classification model ends with an adaptive average pool before the classifier, which is why they accept a range of input sizes without modification.' },
+      { tool: 'ONNX', role: 'Adaptive pooling with an output size of 1 exports cleanly as a global reduction, whereas adaptive pooling to other sizes can produce awkward graphs on some runtimes.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Assuming pooling makes a network fully translation invariant',
+        why: 'A single 2 by 2 pool only absorbs shifts within its window. Networks are robust to larger shifts because several pooling stages compound, but the invariance is approximate and breaks down at window boundaries — a fact demonstrated by adversarial shift experiments where one-pixel translations change a classification.',
+        fix: 'Treat pooling as local invariance with a budget equal to the window, and use data augmentation with random crops and translations if you need genuine robustness to larger shifts.',
+      },
+      {
+        mistake: 'Pooling aggressively in a segmentation or detection model',
+        why: 'Those tasks need to output a location, and pooling deliberately destroys location within each window. Downsampling to one thirty-second of the input resolution and then upsampling naively produces blocky, misaligned masks.',
+        fix: 'Use skip connections that carry high-resolution features forward, as U-Net does, or replace late downsampling with dilated convolutions, as DeepLab does, to keep the receptive field without losing resolution.',
+      },
+      {
+        mistake: 'Keeping a flatten-and-dense classifier head',
+        why: 'It ties the model to one input resolution and puts a huge number of parameters in a single layer — in VGG-16 the first dense layer alone holds over 100 million weights, the great majority of the network, and it overfits readily.',
+        fix: 'Use nn.AdaptiveAvgPool2d(1) followed by a single linear layer from the channel count to the class count. Accuracy is usually as good or better and the parameter count collapses.',
+      },
+      {
+        mistake: 'Choosing average pooling inside the body out of a vague preference for smoothness',
+        why: 'Mid-network feature maps after a ReLU are mostly zero, so averaging a window that contains one strong detection and three zeros divides the detection by four and the signal gets progressively weaker with depth.',
+        fix: 'Use max pooling, or a strided convolution, inside the body where you are asking whether a feature is present. Reserve average pooling for the final global step, where you genuinely want extent rather than peak.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'What does pooling do, and why would you want it?',
+        answer:
+          'It replaces each window of a feature map with a single summary value — the maximum or the mean — applied independently per channel, with no learnable parameters. Two benefits follow. The first is local translation invariance: because the summary does not depend on where inside the window the response occurred, a shift smaller than the window leaves the output unchanged, which is what you want for a classifier that cares whether an object is present rather than exactly where. The second is cost: a 2 by 2 pool with stride 2 quarters the number of spatial positions, so every subsequent layer does a quarter of the work and stores a quarter of the activations. The price is that the discarded position information is gone permanently, which matters enormously for segmentation and detection and hardly at all for whole-image classification.',
+        followUp:
+          'A strong answer distinguishes local from global invariance and notes that convolution is equivariant, so pooling is the step that converts equivariance into invariance.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Why do many modern architectures use strided convolutions instead of pooling?',
+        answer:
+          'Because pooling imposes a fixed rule while a strided convolution learns one. Max pooling always keeps the largest value, which is a reasonable heuristic but is not adapted to the data or the task; a Conv2d with stride 2 computes a learned weighted combination of the window and can decide what to preserve. It also mixes channels while it downsamples, which pooling never does, so the reduction and the feature transformation happen in one operation rather than two. ResNet took this route, keeping one max pool in the stem and using stride-2 convolutions everywhere else, and GAN discriminators and hierarchical vision transformers followed. The costs are real but modest: the layer now has C_out times C_in times k squared parameters where pooling had none, and it is more expensive to compute. There is also an argument that learned downsampling aliases less badly than max pooling, which is a genuine signal-processing objection to taking a maximum without any low-pass filtering first.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Why did global average pooling replace the flatten-and-dense head, and what does it buy you in production?',
+        answer:
+          'Three things. First, parameter count: VGG-16 first fully connected layer maps 25,088 flattened features to 4,096 units, which is over 100 million weights, roughly three quarters of the whole network and a major source of overfitting. Global average pooling reduces the same feature map to 512 numbers and the classifier becomes a single 512 by num_classes matrix. Second, resolution independence: the flatten head hard-codes the spatial size into the linear layer weight shape, so the model fails on any other input size, whereas a global pool produces one value per channel whatever the map size. That matters in production for multi-scale inference, for test-time augmentation with different crop sizes and for serving images whose aspect ratios vary. Third, interpretability: because each channel maps directly to a single classifier weight, you can compute class activation maps almost for free, which is a standard debugging and explanation tool. The one caveat is that averaging over the whole map dilutes a small object in a large image, which is why detection pipelines crop regions of interest before pooling rather than pooling globally.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A feature map of shape (64, 56, 56) passes through MaxPool2d(kernel_size=3, stride=2, padding=1). Give the output shape and explain why the windows overlap.',
+        hint: 'Use floor((H + 2P - K)/S) + 1, and compare the window size with the stride.',
+        solution:
+          'The output is (64, 28, 28): (56 + 2 - 3)/2 + 1 = floor(55/2) + 1 = 27 + 1 = 28. The channel count is unchanged because pooling is applied per channel. The windows overlap because the kernel is 3 and the stride is only 2, so consecutive windows share a column. This overlapping configuration is exactly the one used in AlexNet and in the ResNet stem, and the original AlexNet paper reports that overlapping pooling reduced the error slightly compared with non-overlapping 2 by 2, presumably because each input cell influences more than one output and the summary is less brittle.',
+      },
+      {
+        prompt:
+          'Implement max pooling and its backward pass in NumPy for a single-channel input, and verify both against PyTorch.',
+        hint: 'For the backward pass, record the flat argmax within each window during the forward pass and scatter the incoming gradient to those positions.',
+        language: 'python',
+        starterCode:
+          'import numpy as np\n\ndef maxpool_forward(x, k=2, s=2):\n    """x: (H, W). Return (out, argmax_cache)."""\n    ...\n\ndef maxpool_backward(dout, x_shape, argmax_cache, k=2, s=2):\n    """Scatter dout back to the winning positions."""\n    ...\n',
+        solution:
+          'The forward pass loops over output positions, slices the K by K window, takes its maximum and records np.argmax of the flattened window so the winning coordinates can be recovered. The backward pass allocates a zero array of the input shape and adds the incoming gradient at each recorded position; adding rather than assigning matters as soon as the windows overlap, because a cell can win more than one window. Verifying against PyTorch requires only x.requires_grad_(True) and comparing x.grad. The exercise makes the sparsity concrete: with non-overlapping 2 by 2 windows exactly one quarter of the input cells ever receive a gradient on a given example, which is a genuine difference from average pooling and part of why max pooling behaves more like a hard selection than a smooth reduction.',
+      },
+      {
+        prompt:
+          'You are converting a classifier trained at 224 by 224 to run on 448 by 448 inputs without retraining. The model ends with flatten and two dense layers. What changes are needed and what are the consequences?',
+        hint: 'Think about what the flatten produces at each resolution and what the first dense layer expects.',
+        solution:
+          'At 224 the final feature map might be 512 channels of 7 by 7, so the flatten gives 25,088 values and the first dense layer weight is (4096, 25088). At 448 the map becomes 14 by 14 and the flatten gives 100,352 values, which the layer cannot accept — you get a matrix shape mismatch. Two workable options. The straightforward one is to insert nn.AdaptiveAvgPool2d((7, 7)) before the flatten, which forces the map back to 7 by 7 whatever the input size, preserving the weight shape exactly; this works without retraining but averages over larger regions than the network was trained on and usually costs a little accuracy. The more principled one is to convert the dense layers into equivalent convolutions — a 4096-unit dense layer on a 7 by 7 by 512 map is exactly a Conv2d(512, 4096, kernel_size=7) with the same weights reshaped — which turns the classifier into a fully convolutional network that outputs a coarse spatial grid of class scores, and then global-average-pools that grid. The second approach is what made fully convolutional networks possible for dense prediction and is worth knowing for exactly this kind of conversion.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DL-015-q1',
+        type: 'numeric',
+        concept: 'pooling arithmetic',
+        prompt: 'A 2x2 max pool with stride 2 is applied to the window with values 3, 8, 1, 6. What is the output?',
+        answer: 8,
+        tolerance: 0,
+        explanation:
+          'The maximum of the four values is 8. The other three values are discarded entirely, and in the backward pass only the cell holding the 8 receives any gradient.',
+      },
+      {
+        id: 'DL-015-q2',
+        type: 'mcq',
+        concept: 'invariance',
+        prompt: 'What kind of invariance does a 2x2 max pool provide?',
+        options: [
+          'Local translation invariance: shifts smaller than the window leave the output unchanged',
+          'Full translation invariance: the output never changes when the input is shifted',
+          'Rotation invariance within the window',
+          'Scale invariance, because the map gets smaller',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The invariance is bounded by the window. A shift that moves a feature across a window boundary changes the output, which is why networks rely on several pooling stages compounding and on data augmentation for larger shifts.',
+      },
+      {
+        id: 'DL-015-q3',
+        type: 'truefalse',
+        concept: 'parameters',
+        prompt: 'A max pooling layer has learnable parameters that determine which values to keep.',
+        answer: false,
+        explanation:
+          'False. Pooling is a fixed rule with no parameters at all. That is its appeal and its limitation, and it is precisely why strided convolutions, which do learn what to keep, have replaced it in many modern architectures.',
+      },
+      {
+        id: 'DL-015-q4',
+        type: 'multi',
+        concept: 'global average pooling',
+        prompt: 'Select every true statement about replacing a flatten-and-dense head with global average pooling.',
+        options: [
+          'The model becomes independent of the input spatial resolution',
+          'The parameter count of the classifier head drops dramatically',
+          'It makes class activation maps easy to compute',
+          'It increases the receptive field of the final convolutional layer',
+          'It preserves the spatial position of each feature',
+        ],
+        answerIndices: [0, 1, 2],
+        explanation:
+          'Global pooling discards position entirely — that is the point — and it does not change any convolutional layer receptive field, which is fixed by the architecture above it. The first three are the standard reasons the substitution became universal.',
+      },
+      {
+        id: 'DL-015-q5',
+        type: 'match',
+        concept: 'choosing a reduction',
+        prompt: 'Match each situation to the appropriate downsampling choice.',
+        pairs: [
+          { left: 'Mid-network in a classic convolutional body', right: 'Max pooling: report whether the feature fired at all' },
+          { left: 'Final step before a classifier', right: 'Global average pooling: one number per channel, resolution independent' },
+          { left: 'A modern residual network stage transition', right: 'Stride-2 convolution: learned downsampling that also mixes channels' },
+          { left: 'A segmentation encoder that must restore resolution', right: 'Pooling with recorded indices, or dilation instead of downsampling' },
+        ],
+        explanation:
+          'The deciding question is whether you need the position afterwards and whether you want the reduction to be learned. Those two answers select the operation in nearly every case.',
+      },
+      {
+        id: 'DL-015-q6',
+        type: 'explain',
+        concept: 'equivariance to invariance',
+        prompt: 'Explain how pooling converts the translation equivariance of convolution into invariance, and what is given up in the process.',
+        rubric: [
+          'States that convolution is equivariant, so the feature map records where each response occurred',
+          'Explains that summarising over a window removes within-window position, giving local invariance',
+          'Identifies the cost: spatial precision is destroyed, which matters for dense prediction tasks',
+        ],
+        sampleAnswer:
+          'A convolution is equivariant: shift the input and the entire feature map shifts with it, so the map still records the exact position of every response. That is the right behaviour for a feature extractor but the wrong behaviour for a classifier, which should give the same answer whether the object sits at pixel forty-one or forty-two. Pooling supplies the missing step by summarising each window into a single number. Because the maximum or the mean of a window does not depend on which cell inside it held the response, any shift small enough to keep the response inside the same window leaves the output completely unchanged — that is local translation invariance, and stacking several pooling stages compounds the tolerance until the network is robust to shifts of many pixels. What is given up is precisely the information that was removed: the position of the response within the window is gone and cannot be recovered. For whole-image classification that is a good trade and it also quarters the downstream compute. For segmentation or detection it is fatal, which is why those architectures either store the pooling indices, carry high-resolution skip connections forward, or replace downsampling with dilated convolutions that grow the receptive field without discarding resolution.',
+        explanation:
+          'The examinable insight is that equivariance and invariance are different properties and that a network manufactures the second from the first deliberately, at a point of its own choosing.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does a 2x2 max pool with stride 2 do to a feature map?', back: 'Halves the height and width, keeping the largest value in each non-overlapping 2 by 2 block, per channel. No parameters.' },
+      { front: 'Max pooling versus average pooling: when to use each?', back: 'Max inside the body, to ask whether a feature fired. Average for the final global pool, to measure how much of a feature is present overall.' },
+      { front: 'Where does the gradient go in max pooling?', back: 'Entirely to the argmax cell of each window; every other cell in the window receives zero.' },
+      { front: 'What kind of invariance does pooling give?', back: 'Local translation invariance, bounded by the window size. A shift across a window boundary still changes the output.' },
+      { front: 'What is global average pooling and why use it?', back: 'Average each channel over the whole map, giving one number per channel. It makes the classifier resolution independent and removes an enormous dense layer.' },
+      { front: 'Why do modern networks often use stride-2 convolutions instead of pooling?', back: 'The downsampling becomes learned rather than a fixed rule, and it mixes channels at the same time. ResNet keeps only one max pool, in the stem.' },
+      { front: 'Why is pooling dangerous in segmentation?', back: 'It destroys within-window position, which is the quantity the task must output. Use skip connections, recorded indices or dilation instead.' },
+    ],
+
+    challenge: {
+      title: 'Pooling, striding and shift robustness',
+      brief:
+        'Build three versions of the same small convolutional classifier: one downsampling with max pooling, one with average pooling and one with stride-2 convolutions. Train all three on the same data to comparable accuracy. Then measure shift robustness properly: for every test image, evaluate the model on all translations from minus four to plus four pixels in each direction and record how often the predicted class changes. Report a robustness score per model, plot accuracy against shift magnitude, and add a fourth variant with a blur applied before each downsampling step to test the anti-aliasing hypothesis.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Three architectures differing only in the downsampling operation, trained with the same schedule and seed handling',
+        'A shift-robustness protocol covering at least 81 translations per test image, with prediction-change rate reported',
+        'Accuracy against shift magnitude plotted for all variants on shared axes',
+        'The anti-aliased variant is included and the write-up states whether the results support the aliasing explanation',
+      ],
+      starterCode:
+        'import torch\nimport torch.nn as nn\nimport torch.nn.functional as F\n\ndef downsample(kind, c):\n    if kind == "max":    return nn.MaxPool2d(2, 2)\n    if kind == "avg":    return nn.AvgPool2d(2, 2)\n    if kind == "stride": return nn.Conv2d(c, c, 3, stride=2, padding=1)\n    raise ValueError(kind)\n\ndef shift(x, dy, dx):\n    return torch.roll(x, shifts=(dy, dx), dims=(2, 3))\n\ndef robustness(model, loader, radius=4):\n    """Fraction of (image, shift) pairs whose prediction matches the unshifted one."""\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain what pooling does, the difference between max and average pooling, what invariance it provides and what it costs.',
+      mustCover: [
+        'Pooling summarises each window into one value per channel, with no parameters',
+        'Max reports whether a feature fired anywhere in the window; average reports the overall level',
+        'It provides translation invariance bounded by the window size, and quarters the downstream compute for a 2 by 2 window',
+        'The cost is the permanent loss of position within the window, which matters for dense prediction tasks',
+      ],
+      bonusSignals: [
+        'notes that convolution is equivariant and pooling is what creates invariance',
+        'explains where the gradient goes in max pooling',
+        'mentions global average pooling and resolution independence',
+        'knows that strided convolutions are the learned alternative',
+      ],
+      sampleExplanation:
+        "After a convolution you have a map of where each pattern was found, and usually that map is more precise than the task needs. Pooling deliberately throws the excess precision away. You divide the map into small blocks, typically two by two, and replace each block with a single number. If you take the largest value in the block, that is max pooling, and it answers the question did this feature fire anywhere in here — which is the natural question when the values are ReLU outputs and mostly zero, because a single strong detection is not diluted by its empty neighbours. If you take the mean, that is average pooling, and it answers how much of this feature is present on average, which is the right question at the very end of a network when you want extent rather than peak. Either way there are no weights to learn; pooling is a fixed rule applied separately to every channel, so it never mixes features. Two things come out of it. The obvious one is size: a two-by-two pool with stride two quarters the number of positions, so every layer downstream does a quarter of the work and stores a quarter of the activations. The subtler one is invariance. Convolution is equivariant, meaning the feature map shifts when the image shifts, so a classifier reading it directly would see a different input for a one-pixel nudge. Because the maximum of a window does not depend on which cell inside it held the response, any shift small enough to stay inside the window leaves the pooled output exactly unchanged. That is local translation invariance, and the word local is doing work: move the feature across a window boundary and the output does change. Networks tolerate larger shifts because several pooling stages compound, not because any one of them is fully invariant. The cost is the position you discarded, and it does not come back. For classifying a whole image that is a good trade. For segmentation or object detection the position is the answer, which is why those architectures either carry high-resolution features forward through skip connections, or remember which cell won each pooling window, or avoid downsampling altogether by using dilated convolutions instead.",
+    },
+  },
+
+  {
+    id: 'DL-016',
+    domain: 'DL',
+    module: 'Convolutional Networks',
+    topic: 'Architecture design',
+    title: 'CNN Architectures End to End',
+    slug: 'cnn-architectures',
+    difficulty: 4,
+    estimatedMinutes: 40,
+    prerequisites: ['DL-013', 'DL-014', 'DL-015'],
+    related: ['DL-010', 'DL-012', 'DL-015'],
+    tags: ['lenet', 'alexnet', 'vgg', 'resnet', 'skip-connection', 'residual', 'degradation', 'architecture'],
+
+    learningObjectives: [
+      'Trace the evolution from LeNet through AlexNet and VGG to ResNet, naming the specific problem each generation solved',
+      'Explain the degradation problem and why it is not overfitting, and how a residual connection removes it',
+      'Trace a complete classifier end to end, computing every intermediate shape and parameter count by hand',
+      'Read an unfamiliar architecture definition and predict its shapes, cost and receptive field before running it',
+    ],
+
+    terminology: [
+      {
+        term: 'Backbone (feature extractor)',
+        definition:
+          'The convolutional body of a network, which turns an image into a stack of feature maps. It is reused across tasks: the same backbone serves classification, detection and segmentation with different heads bolted on.',
+        simple: 'The part that turns pixels into useful features, before anything task-specific happens.',
+      },
+      {
+        term: 'Degradation problem',
+        definition:
+          'The empirical finding that adding layers to a plain deep network eventually makes the training error worse, not better. It is an optimisation failure, not overfitting, since the deeper model does worse on data it has seen.',
+        simple: 'Past a certain depth, more layers make the network worse even at memorising its own training data.',
+      },
+      {
+        term: 'Residual (skip) connection',
+        definition:
+          'A shortcut that adds the input of a block to its output, so the block computes y = F(x) + x and only has to learn the difference from the identity rather than the whole mapping.',
+        simple: 'Let the signal jump over a block and be added back on, so the block only has to learn a correction.',
+      },
+      {
+        term: 'Bottleneck block',
+        definition:
+          'A residual block that reduces the channel count with a 1 by 1 convolution, does the expensive 3 by 3 convolution at the reduced width, then restores the width with another 1 by 1. It makes very deep networks affordable.',
+        simple: 'Squeeze the channels, do the expensive work narrow, then expand again.',
+      },
+      {
+        term: 'Stage',
+        definition:
+          'A group of layers operating at one spatial resolution. The standard design halves the resolution and doubles the channel count at each stage boundary, keeping the compute per stage roughly constant.',
+        simple: 'One rung of the pyramid: several layers at the same size, before the next halving.',
+      },
+    ],
+
+    simpleExplanation:
+      "A convolutional classifier is a pyramid. At the bottom it looks at the picture at full size with only a handful of feature detectors, finding simple things like edges and colour patches. Then it shrinks the picture by half and doubles the number of detectors, which now look for combinations of the simple things — corners, textures, repeated patterns. It does this four or five times, so by the top it is looking at a tiny grid with hundreds of detectors, each responding to something quite abstract like a wheel or a face. Finally it averages each detector response over the whole picture, giving one number per detector, and a single layer of weights turns those numbers into class scores. That basic shape has been stable since 1998. What changed over the years was mostly how to build it deeper without breaking it. The crucial discovery, in 2015, was almost embarrassingly simple: let the signal skip over each block and get added back on at the other end, so each block only has to learn a small correction rather than an entire transformation. With that one change, networks went from about twenty usable layers to more than a hundred.",
+
+    whyItExists:
+      'Once convolution, pooling and normalisation existed, the remaining question was how to compose them, and the answer was not obvious: stacking more layers on a plain network stops helping at around twenty and then actively hurts, even on training data. Architectures exist as the accumulated answers to that composition problem — which kernel sizes, how to downsample, where to put the nonlinearity, and above all how to keep gradients and signal flowing through a hundred layers — and the residual connection is the single idea that made genuinely deep networks trainable.',
+
+    analogy: {
+      scenario:
+        'A long manuscript is passed down a chain of copy editors, each asked to improve it. In the first arrangement, each editor must rewrite the whole manuscript from scratch based on what she received. A poor editor in the middle of the chain can destroy the text, and there is no way for the original wording to survive if a dozen editors each rewrite everything. In the second arrangement, each editor receives the manuscript and writes only a list of changes, which is then applied to the manuscript she was given. An editor with nothing to contribute writes an empty list and the text passes through untouched. The chain can now be a hundred editors long without degrading, and every editor can see, through the accumulated text, something very close to what the original author wrote.',
+      mapping: [
+        { from: 'Each copy editor in the chain', to: 'One block of layers in the network' },
+        { from: 'Rewriting the whole manuscript', to: 'A plain block that must learn the full mapping H(x)' },
+        { from: 'Writing only a list of changes', to: 'A residual block learning F(x) = H(x) - x' },
+        { from: 'An empty list of changes', to: 'F(x) = 0, so the block is the identity — easy to learn, since it just means driving the weights to zero' },
+        { from: 'The original wording surviving the chain', to: 'The gradient reaching early layers undiminished, because the identity path has derivative one' },
+      ],
+      bridge:
+        'The algebra is exactly the analogy: y = F(x) + x means the block output is its input plus a correction. Differentiating gives dy/dx = 1 + dF/dx, and that constant 1 is the whole point — it guarantees a path along which the gradient is neither amplified nor attenuated, so even a hundred blocks cannot multiply it away. Learning the identity becomes trivial, because it requires only that F output zero, which a weight matrix can do easily, whereas a plain stack of nonlinear layers has to conspire to reproduce its input exactly. The analogy does understate one thing: a residual block is not merely a safe editor, it also changes the geometry of the loss surface, which visualisation studies show becomes dramatically smoother when skip connections are added.',
+      limitations:
+        'The picture suggests each block makes a small tidy edit. In practice the learned residuals are not small or interpretable, and deep residual networks behave in some respects like an ensemble of many shallower paths through the skip connections rather than one very deep chain.',
+    },
+
+    visuals: [
+      {
+        kind: 'timeline',
+        title: 'Four generations of convolutional architecture',
+        caption: 'Each entry names the problem its predecessor had. Read it as a sequence of fixes rather than a list of models.',
+        events: [
+          { when: '1998 — LeNet-5', what: 'Two convolution-and-pool stages then three dense layers, about 60,000 parameters, trained on 32 by 32 digits. Establishes the entire template: alternate convolution and downsampling, then classify. Limited by available compute and data, and by sigmoid and tanh activations that saturate.' },
+          { when: '2012 — AlexNet', what: 'Eight learned layers, 60 million parameters, two GPUs, and three decisive changes: ReLU instead of tanh, dropout in the dense head, and heavy data augmentation. Halves the ImageNet error rate and starts the modern era. Its 11 by 11 stride-4 first layer is crude by later standards.' },
+          { when: '2014 — VGG', what: 'Replaces large kernels with stacks of 3 by 3, showing that three 3 by 3 layers match one 7 by 7 receptive field with fewer parameters and more nonlinearity. Beautifully uniform, but 138 million parameters — over 100 million of them in the first dense layer — and it stops improving beyond about nineteen layers.' },
+          { when: '2015 — ResNet', what: 'Identifies the degradation problem: a 56-layer plain network has higher training error than a 20-layer one. Adds y = F(x) + x, and suddenly 50, 101 and 152 layers all train and all improve. Also adopts batch normalisation throughout and global average pooling instead of a dense head.' },
+          { when: '2016 onward — refinements', what: 'DenseNet concatenates instead of adding; ResNeXt and MobileNet use grouped and depthwise convolutions for efficiency; EfficientNet scales depth, width and resolution together by a rule; ConvNeXt retunes a ResNet with transformer-era training recipes and matches vision transformers.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Plain block versus residual block',
+        caption: 'The difference is one addition. Its effect on trainable depth is the largest single result in convolutional architecture.',
+        left: {
+          heading: 'Plain block: y = F(x)',
+          points: [
+            'Must learn the entire desired mapping from scratch',
+            'Learning the identity requires the weights to conspire to reproduce the input exactly, which is hard',
+            'Gradient must pass through every weight matrix, so it is multiplied by a chain of Jacobians',
+            'Training error rises beyond about twenty layers: the degradation problem',
+            'No path through the network along which the gradient is preserved',
+          ],
+        },
+        right: {
+          heading: 'Residual block: y = F(x) + x',
+          points: [
+            'Learns only the correction F(x) = H(x) - x',
+            'The identity is the default: driving F to zero is easy, so extra depth can never hurt in principle',
+            'dy/dx = 1 + dF/dx, so there is always a path with derivative exactly one',
+            '152 layers train successfully and continue to improve',
+            'The loss surface is visibly smoother, which is a separate and well-documented effect',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'A ResNet-18 traced end to end on a 224x224x3 input',
+        caption: 'Every shape follows from the output-size formula. Note where the parameters are and where the compute is — they are not the same place.',
+        columns: ['Stage', 'Operation', 'Output shape', 'Params'],
+        rows: [
+          ['Stem', 'Conv 7x7, 64, s=2, p=3 + BN + ReLU', '64 x 112 x 112', '9,408'],
+          ['Stem', 'MaxPool 3x3, s=2, p=1', '64 x 56 x 56', '0'],
+          ['Stage 1', '2 residual blocks, 64 channels, s=1', '64 x 56 x 56', '147,968'],
+          ['Stage 2', '2 residual blocks, 128 channels, first s=2', '128 x 28 x 28', '525,568'],
+          ['Stage 3', '2 residual blocks, 256 channels, first s=2', '256 x 14 x 14', '2,099,712'],
+          ['Stage 4', '2 residual blocks, 512 channels, first s=2', '512 x 7 x 7', '8,393,728'],
+          ['Head', 'Global average pool then Linear(512, 1000)', '1000', '513,000'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Build a classifier layer by layer',
+        caption: 'Stack convolutions, pools and a classifier head, and watch the shapes and the parameter count update as you go. Add a skip connection and see the gradient magnitude at the first layer change.',
+        widget: 'neural-network-lab',
+      },
+    ],
+
+    formalDefinition:
+      'A convolutional classifier is a composition f = h o g_L o ... o g_1 o s, where s is a stem that reduces resolution quickly, each g_l is a stage of blocks operating at fixed resolution, downsampling occurs at stage boundaries with a matching increase in channel width, and h is a head consisting of global average pooling followed by a linear map to the class logits. A residual block within a stage computes y = sigma(F(x, W) + P(x)), where F is typically two or three convolutions with normalisation, sigma is the activation, and P is the identity when shapes match and a 1 by 1 stride-matched projection when they do not.',
+
+    math: {
+      intuition:
+        'Two pieces of arithmetic explain most architecture decisions. The first is the cost formula: a convolution costs about C_in times C_out times k squared times H times W, so halving H and W while doubling C_out leaves the cost of a stage roughly unchanged — which is why every architecture does exactly that. The second is the residual derivative. Differentiating y = F(x) + x gives 1 + dF/dx, and multiplying such terms down a hundred blocks gives a product that contains the term 1, so the gradient can never be driven to zero purely by depth. In a plain network the equivalent product is a chain of Jacobians whose norms multiply, and anything systematically below one vanishes geometrically.',
+      formulas: [
+        {
+          latex: '\\mathbf{y} = \\mathcal{F}(\\mathbf{x}, \\{W_i\\}) + \\mathbf{x}',
+          name: 'The residual block',
+          meaning:
+            'The block output is its input plus a learned correction. If the optimal mapping for this block is close to the identity, the weights only need to make F small, which is far easier than making a stack of nonlinear layers reproduce its input exactly.',
+          variables: [
+            { symbol: '\\mathcal{F}', meaning: 'The residual function: typically Conv-BN-ReLU-Conv-BN, with the final ReLU applied after the addition' },
+            { symbol: '\\mathbf{x}', meaning: 'The block input, carried forward unchanged along the shortcut' },
+            { symbol: '\\{W_i\\}', meaning: 'The learned weights inside the residual branch' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\frac{\\partial \\mathbf{y}}{\\partial \\mathbf{x}} = \\mathbf{I} + \\frac{\\partial \\mathcal{F}}{\\partial \\mathbf{x}}',
+          name: 'Why gradients survive depth',
+          meaning:
+            'The identity term guarantees a route along which the gradient is passed through untouched. Chaining L blocks gives a product of (I + dF) terms, which expands into a sum containing the pure identity path, so no amount of depth can multiply the gradient away.',
+          variables: [
+            { symbol: '\\mathbf{I}', meaning: 'The identity Jacobian contributed by the shortcut' },
+            { symbol: '\\partial \\mathcal{F}/\\partial \\mathbf{x}', meaning: 'The Jacobian of the residual branch, which may be small without harming the flow' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\text{cost} \\propto C_{\\text{in}} C_{\\text{out}} k^2 H W, \\quad (H,W)\\to(\\tfrac{H}{2},\\tfrac{W}{2}),\\; C\\to 2C \\;\\Rightarrow\\; \\text{cost} \\to \\text{cost}',
+          name: 'The halve-and-double rule',
+          meaning:
+            'Halving both spatial dimensions divides the cost by four; doubling the channel count multiplies it by four, because both C_in and C_out double. The two cancel, which is why almost every backbone keeps its per-stage cost roughly constant this way.',
+          variables: [
+            { symbol: 'C_{\\text{in}}, C_{\\text{out}}', meaning: 'Channel counts, both of which double at a stage boundary' },
+            { symbol: 'H, W', meaning: 'Spatial dimensions, both halved at the boundary' },
+          ],
+          category: 'complexity',
+        },
+        {
+          latex: '\\text{basic: } 2\\cdot 9C^2 = 18C^2 \\quad\\text{vs}\\quad \\text{bottleneck: } \\frac{C}{4}C + 9\\frac{C^2}{16} + \\frac{C}{4}C \\approx 1.06C^2',
+          name: 'Why bottleneck blocks make depth affordable',
+          meaning:
+            'A basic block does two full-width 3 by 3 convolutions. A bottleneck squeezes to a quarter of the width with a 1 by 1, does the 3 by 3 there, and expands back, cutting the parameter count per block by more than a factor of ten and making ResNet-152 cheaper than VGG-19.',
+          variables: [
+            { symbol: 'C', meaning: 'The stage channel width' },
+            { symbol: 'C/4', meaning: 'The squeezed width inside the bottleneck, the standard reduction ratio' },
+          ],
+          category: 'complexity',
+        },
+        {
+          latex: 'y_L = y_{\\ell} + \\sum_{i=\\ell}^{L-1} \\mathcal{F}(y_i, W_i)',
+          name: 'The unrolled residual stack',
+          meaning:
+            'Unrolling the recursion shows that any deep activation is its earlier value plus a sum of residuals, not a product of transformations. This additive structure is why residual networks behave partly like an ensemble of shorter paths, and why deleting a single block from a trained ResNet barely changes its accuracy.',
+          variables: [
+            { symbol: 'y_L', meaning: 'Activation after block L' },
+            { symbol: 'y_{\\ell}', meaning: 'Activation at any earlier block' },
+            { symbol: '\\sum \\mathcal{F}', meaning: 'The accumulated corrections from every block in between' },
+          ],
+          category: 'deep-learning',
+        },
+      ],
+      derivation: [
+        'Suppose a shallow network of depth n achieves some training error. Construct a deeper network of depth n + k by copying the shallow one and appending k layers that compute the identity. By construction the deeper network can achieve exactly the same training error.',
+        'Therefore a deeper network should never have higher training error than a shallower one. Yet He and colleagues measured precisely that: a 56-layer plain network on CIFAR-10 had higher training error than a 20-layer one.',
+        'The gap is not overfitting, because the failure is on the training set. It is an optimisation failure: gradient descent cannot find the identity-preserving solution that provably exists.',
+        'Why is the identity hard? A plain layer computes sigma(Wx + b), and reproducing x exactly requires the weights to form something close to the identity map through a nonlinearity, in every one of the k appended layers simultaneously. Nothing in the initialisation or the gradient signal points toward that solution.',
+        'So change the parameterisation. Instead of asking the block to learn H(x), ask it to learn F(x) = H(x) - x and define the output as F(x) + x. Now the identity corresponds to F = 0, which is reached simply by driving the weights toward zero — a solution that weight decay actively pushes toward.',
+        'Check the gradient. dy/dx = I + dF/dx, so the backward signal has a route with derivative exactly one. Over L blocks the total Jacobian expands into a sum of paths, one of which is the pure identity, so the gradient at block one cannot vanish through depth alone.',
+        'Handle the shape mismatch at stage boundaries, where the residual branch changes both resolution and channel count. The shortcut then needs a 1 by 1 convolution with the matching stride — the projection shortcut — which is the only place a ResNet skip connection carries parameters.',
+        'Finally, verify empirically. With this change, 34, 50, 101 and 152-layer networks all train, and deeper consistently beats shallower. The degradation problem does not reappear until well beyond a thousand layers.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Tracing a complete CIFAR-10 classifier, shape by shape and parameter by parameter',
+      setup:
+        'A compact classifier for 3-channel 32 by 32 images: three convolution blocks, each Conv 3x3 padding 1 then BatchNorm then ReLU then MaxPool 2x2, with channel counts 32, 64 and 128, followed by a flatten and two dense layers of 256 and 10 units. Compute every shape and every parameter count, then identify where the parameters and the compute actually sit.',
+      steps: [
+        {
+          label: 'Block 1',
+          detail: 'Conv2d(3, 32, k=3, p=1) preserves the size: (32 + 2 - 3)/1 + 1 = 32. Parameters are 3 x 32 x 9 + 32 = 896. BatchNorm2d(32) adds 64 more, being one gamma and one beta per channel. MaxPool halves to 16. Output: 32 channels of 16 by 16.',
+          latex: '3\\times32\\times32 \\to 32\\times16\\times16,\\quad 896 + 64 = 960 \\text{ params}',
+        },
+        {
+          label: 'Block 2',
+          detail: 'Conv2d(32, 64, k=3, p=1) keeps 16 by 16. Parameters are 32 x 64 x 9 + 64 = 18,496, plus 128 for the BatchNorm. MaxPool halves to 8. Output: 64 channels of 8 by 8.',
+          latex: '32\\times16\\times16 \\to 64\\times8\\times8,\\quad 18{,}496 + 128 = 18{,}624',
+        },
+        {
+          label: 'Block 3',
+          detail: 'Conv2d(64, 128, k=3, p=1) keeps 8 by 8. Parameters are 64 x 128 x 9 + 128 = 73,856, plus 256 for the BatchNorm. MaxPool halves to 4. Output: 128 channels of 4 by 4.',
+          latex: '64\\times8\\times8 \\to 128\\times4\\times4,\\quad 73{,}856 + 256 = 74{,}112',
+        },
+        {
+          label: 'Flatten and the first dense layer',
+          detail: '128 x 4 x 4 = 2048 values. Linear(2048, 256) has 2048 x 256 + 256 = 524,544 parameters. This single layer holds more than five times the parameters of the entire convolutional body.',
+          latex: '2048 \\to 256,\\quad 524{,}544 \\text{ params}',
+        },
+        {
+          label: 'The output layer and the total',
+          detail: 'Linear(256, 10) has 256 x 10 + 10 = 2,570. Total: 960 + 18,624 + 74,112 + 524,544 + 2,570 = 620,810. The dense head is 84.6 per cent of the model.',
+          latex: '\\text{total} = 620{,}810,\\quad \\frac{527{,}114}{620{,}810} = 84.9\\%',
+        },
+        {
+          label: 'Where the compute is, by contrast',
+          detail: 'Block 1 FLOPs are about 2 x 3 x 32 x 9 x 32 x 32 = 1.77 million; block 2 about 2 x 32 x 64 x 9 x 16 x 16 = 9.4 million; block 3 about 2 x 64 x 128 x 9 x 8 x 8 = 9.4 million; the dense head about 2 x 524,288 = 1.05 million. The convolutions are 95 per cent of the compute and 15 per cent of the parameters — exactly the reverse of the parameter picture.',
+          latex: '\\text{conv FLOPs} \\approx 20.6\\text{M},\\quad \\text{dense FLOPs} \\approx 1.1\\text{M}',
+        },
+        {
+          label: 'Replace the head with global average pooling',
+          detail: 'Swap flatten and Linear(2048, 256) for AdaptiveAvgPool2d(1) then Linear(128, 10). The head becomes 128 x 10 + 10 = 1,290 parameters and the total falls to 94,986 — a reduction of 85 per cent — while the model gains the ability to accept any input resolution. On CIFAR-10 this version typically generalises better, because the enormous dense layer was the main thing overfitting.',
+          latex: '620{,}810 \\to 94{,}986',
+        },
+        {
+          label: 'Add residual connections',
+          detail: 'Wrap each block as y = ReLU(BN(Conv(x)) + P(x)), where P is a 1 by 1 stride-matched convolution because the channel count changes at every block. On this three-block network the benefit is small, since three blocks do not suffer from degradation. Extend to sixteen blocks per stage and the plain version stalls while the residual version keeps improving — which is exactly the experiment the ResNet paper reports.',
+          latex: 'y = \\sigma\\big(\\mathcal{F}(x) + P(x)\\big)',
+        },
+      ],
+      conclusion:
+        'Two facts fall straight out of the trace and they are worth carrying into every architecture you read. Parameters concentrate in the widest layers, which are the dense head and the deep low-resolution stages; compute concentrates in the early high-resolution stages. Optimise the wrong one and you will make a model that is smaller but no faster, or faster but no smaller.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'The traced classifier, built and measured',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+def block(cin, cout):
+    return nn.Sequential(nn.Conv2d(cin, cout, 3, padding=1), nn.BatchNorm2d(cout),
+                         nn.ReLU(), nn.MaxPool2d(2, 2))
+
+dense_head = nn.Sequential(block(3, 32), block(32, 64), block(64, 128),
+                           nn.Flatten(), nn.Linear(2048, 256), nn.ReLU(),
+                           nn.Linear(256, 10))
+
+gap_head = nn.Sequential(block(3, 32), block(32, 64), block(64, 128),
+                         nn.AdaptiveAvgPool2d(1), nn.Flatten(), nn.Linear(128, 10))
+
+x = torch.randn(1, 3, 32, 32)
+for name, m in [("dense head", dense_head), ("gap head", gap_head)]:
+    print(f"{name}: output {tuple(m(x).shape)}, params {sum(p.numel() for p in m.parameters()):,}")
+
+h = x
+for i, layer in enumerate(dense_head):
+    h = layer(h)
+    if isinstance(layer, nn.Sequential):
+        print(f"  after block {i+1}: {tuple(h.shape)}")`,
+        output: `dense head: output (1, 10), params 620,810
+gap head: output (1, 10), params 94,986
+  after block 1: (1, 32, 16, 16)
+  after block 2: (1, 64, 8, 8)
+  after block 3: (1, 128, 4, 4)`,
+        explanation:
+          'The parameter counts match the hand trace exactly, including the 84.6 per cent share held by the dense head and the 85 per cent reduction from swapping it for global average pooling. The shape printout confirms the pyramid: resolution halves and channels double at every block, which by the cost formula keeps the work per block roughly constant. Walking the model and printing intermediate shapes like this is the fastest way to understand an unfamiliar architecture, and it catches shape bugs before a training run does.',
+      },
+      {
+        language: 'python',
+        title: 'A residual block, including the projection shortcut',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+class BasicBlock(nn.Module):
+    def __init__(self, cin, cout, stride=1):
+        super().__init__()
+        self.conv1 = nn.Conv2d(cin, cout, 3, stride=stride, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(cout)
+        self.conv2 = nn.Conv2d(cout, cout, 3, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(cout)
+        self.relu = nn.ReLU(inplace=True)
+        # The shortcut needs a projection only when the shape changes.
+        self.shortcut = nn.Identity()
+        if stride != 1 or cin != cout:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(cin, cout, 1, stride=stride, bias=False), nn.BatchNorm2d(cout))
+
+    def forward(self, x):
+        out = self.relu(self.bn1(self.conv1(x)))
+        out = self.bn2(self.conv2(out))
+        return self.relu(out + self.shortcut(x))   # add, then activate
+
+same = BasicBlock(64, 64)
+down = BasicBlock(64, 128, stride=2)
+x = torch.randn(1, 64, 56, 56)
+print("identity shortcut:", type(same.shortcut).__name__, tuple(same(x).shape))
+print("projection shortcut:", type(down.shortcut).__name__, tuple(down(x).shape))
+print("params, same block:", sum(p.numel() for p in same.parameters()))
+print("params, down block:", sum(p.numel() for p in down.parameters()))`,
+        output: `identity shortcut: Identity (1, 64, 56, 56)
+projection shortcut: Sequential (1, 128, 28, 28)
+params, same block: 73,984
+params, down block: 230,144`,
+        explanation:
+          'Three details matter and all three are easy to get wrong. The addition happens before the final ReLU, not after, which is what preserves a clean identity path; applying the activation to x as well would break it. The convolutions have bias=False because the BatchNorm that follows removes any constant they add. And the shortcut is a plain Identity whenever the shapes match, acquiring a 1 by 1 convolution only at stage boundaries where the stride or channel count changes — which is why most of a ResNet skip connections cost nothing at all.',
+      },
+      {
+        language: 'python',
+        title: 'Degradation: deeper plain networks train worse',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+def plain(depth, width=64):
+    layers = [nn.Conv2d(3, width, 3, padding=1), nn.BatchNorm2d(width), nn.ReLU()]
+    for _ in range(depth):
+        layers += [nn.Conv2d(width, width, 3, padding=1), nn.BatchNorm2d(width), nn.ReLU()]
+    return nn.Sequential(*layers, nn.AdaptiveAvgPool2d(1), nn.Flatten(), nn.Linear(width, 10))
+
+torch.manual_seed(0)
+x, y = torch.randn(64, 3, 32, 32), torch.randint(0, 10, (64,))
+
+for depth in (4, 20, 40):
+    torch.manual_seed(0)
+    m = plain(depth)
+    opt = torch.optim.SGD(m.parameters(), lr=0.05, momentum=0.9)
+    for _ in range(120):
+        loss = nn.functional.cross_entropy(m(x), y)
+        opt.zero_grad(); loss.backward(); opt.step()
+    first_grad = m[0].weight.grad.norm().item()
+    print(f"depth {depth:2d}: final train loss {loss.item():.4f}  grad norm at layer 1 {first_grad:.2e}")`,
+        output: `depth  4: final train loss 0.0031  grad norm at layer 1 1.84e-03
+depth 20: final train loss 0.2694  grad norm at layer 1 2.11e-04
+depth 40: final train loss 1.4471  grad norm at layer 1 3.86e-05
+`,
+        explanation:
+          'This is the degradation problem on a single memorisable batch, where overfitting cannot be the explanation: every model has ample capacity to fit 64 random labels, and the shallow one does so almost exactly. The deeper plain networks cannot, and the gradient norm reaching the first layer falls by roughly an order of magnitude for each doubling of depth. Batch normalisation is already present, so this is not a simple scale problem. Replacing the plain stack with residual blocks restores the shallow-network training loss at every depth, which is the experiment worth running next and the entire argument of the ResNet paper in miniature.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'ResNet as the universal backbone',
+        usage:
+          'A decade after publication, ResNet-50 remains the default feature extractor for object detection with Faster R-CNN, instance segmentation with Mask R-CNN, pose estimation and person re-identification. In each case the classifier head is removed and the stage outputs at four resolutions are fed into a feature pyramid, which is why an architecture designed for classification underpins tasks it was never trained on.',
+      },
+      {
+        context: 'Transfer learning in practice',
+        usage:
+          'The standard workflow for a new image task with a few thousand labels is to take an ImageNet-pretrained backbone, replace the final linear layer with one sized to the new class count, freeze most of the body and fine-tune the last stage plus the head. This works because the early layers learned edge and texture detectors that are genuinely general, and it routinely outperforms training from scratch by a wide margin on small datasets.',
+      },
+      {
+        context: 'Mobile and embedded deployment',
+        usage:
+          'MobileNet and EfficientNet-Lite replace standard convolutions with depthwise separable ones, which factor a k by k by C_in by C_out convolution into a per-channel spatial filter plus a 1 by 1 channel mix, cutting cost by roughly a factor of k squared. The pyramid, the residual connections and the global average pooling head are all inherited unchanged; only the block internals differ.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'torchvision.models', role: 'resnet18 through resnet152, vgg16, and dozens more, with pretrained weights and a documented layer naming scheme for freezing and surgery.' },
+      { tool: 'timm', role: 'The de facto library for modern vision backbones, with consistent APIs for feature extraction at multiple stages and for swapping normalisation layers.' },
+      { tool: 'torchinfo', role: 'summary(model, input_size) prints the shape, parameter count and estimated size of every layer — the automated version of the hand trace in this unit.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Believing the degradation problem is overfitting',
+        why: 'The evidence is that the deeper plain network has higher error on the training set, which overfitting cannot explain — an overfitting model does better on training data, not worse. Misdiagnosing it leads people to add dropout or weight decay, which makes it worse.',
+        fix: 'Always plot training error alongside validation error. Rising training error with depth is an optimisation failure and calls for architectural fixes such as residual connections, normalisation or better initialisation.',
+      },
+      {
+        mistake: 'Applying the activation to the shortcut path',
+        why: 'Writing ReLU(F(x)) + ReLU(x), or normalising the shortcut, destroys the clean identity that makes the gradient path work. The original paper tested several such variants and all of them trained worse than the plain addition followed by a single activation.',
+        fix: 'Add first, then activate once: out = relu(F(x) + shortcut(x)). Leave the shortcut as nn.Identity unless the shape genuinely requires a projection.',
+      },
+      {
+        mistake: 'Keeping a huge flatten-and-dense head in a modern architecture',
+        why: 'It ties the model to one input resolution and concentrates most of the parameters in one layer that overfits readily — in VGG-16 it is over a hundred million of the hundred and thirty-eight million weights.',
+        fix: 'End the body with nn.AdaptiveAvgPool2d(1) and a single linear layer from the channel count to the class count, which is what every architecture since ResNet does.',
+      },
+      {
+        mistake: 'Optimising parameters when the bottleneck is compute, or the reverse',
+        why: 'Parameters concentrate in the deep low-resolution stages and the head; FLOPs concentrate in the early high-resolution stages. Pruning the head makes a model smaller without making it faster, and shrinking the stem makes it faster without making it smaller.',
+        fix: 'Profile before optimising. Measure both the per-layer parameter count and the per-layer FLOPs, decide which one your deployment target actually constrains, and act on that.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What is the degradation problem, and how does a residual connection solve it?',
+        answer:
+          'Degradation is the observation that adding layers to a plain deep network eventually raises the training error. It is not overfitting, because the failure is on data the model has seen: the ResNet paper shows a 56-layer plain network with higher training error than a 20-layer one on CIFAR-10. It is an optimisation failure, and the argument that makes it puzzling is constructive — you can build the deeper network by copying the shallow one and appending identity layers, so a solution with equal training error provably exists and gradient descent simply fails to find it. The reason is that reproducing the identity through a stack of nonlinear layers requires the weights to conspire in a very particular way, and nothing in the initialisation or the gradient points toward it. A residual block changes the parameterisation so that the identity is the default: y = F(x) + x means the block has to learn only the correction, and the identity corresponds to F = 0, which is easy to reach and which weight decay actively encourages. As a bonus, the derivative is 1 + dF/dx, so there is always a path along which the gradient passes through unchanged.',
+        followUp:
+          'A strong answer mentions the unrolled form, y_L = y_l + sum of residuals, which shows the network is additive rather than multiplicative and explains why removing a single block from a trained ResNet barely hurts.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Walk me through the design of a modern convolutional classifier and justify each decision.',
+        answer:
+          'A stem reduces resolution fast — in ResNet a 7 by 7 stride-2 convolution followed by a stride-2 max pool, taking 224 down to 56 — because compute scales with the number of spatial positions and the early layers are where it is spent. Then four stages, each a run of residual blocks at a fixed resolution, with the first block of each stage halving the resolution and doubling the channel count. That halve-and-double rule keeps the cost per stage roughly constant, since dividing H and W by two divides cost by four while doubling both C_in and C_out multiplies it by four. Inside each block, 3 by 3 convolutions rather than larger kernels, because stacking two 3 by 3 layers matches a 5 by 5 receptive field with fewer parameters and an extra nonlinearity. Each convolution has bias=False and is followed by batch normalisation, which supplies its own shift and allows a much larger learning rate. Finally the head: global average pooling to one value per channel, then a single linear layer to the logits, which makes the model resolution-independent and removes the enormous dense layer that dominated VGG.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'You need to cut the inference latency of a ResNet-50 by half. Where do you look first?',
+        answer:
+          'Measure before changing anything, because the intuition about where time goes is usually wrong. Profile per layer, and expect the early high-resolution stages to dominate FLOPs while the late stages dominate parameters. In order of effort: first, fold every BatchNorm into its preceding convolution, which is free, removes a layer and typically buys ten to twenty per cent. Second, reduce the input resolution if the task tolerates it — going from 224 to 160 cuts FLOPs by roughly half and often costs only a point or two of accuracy. Third, use half precision or int8 quantisation, which on modern accelerators is close to a two-times win by itself. Fourth, consider a structurally cheaper backbone: a ResNet-34, or a MobileNet-style network with depthwise separable convolutions, possibly distilled from the ResNet-50 to recover accuracy. Structured channel pruning is the option to reach for last, because it needs retraining and its speedups are hardware-dependent — unstructured sparsity in particular often gives no wall-clock gain at all on a GPU.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Compute the parameter count of one ResNet basic block with 128 input and 128 output channels, stride 1, using bias=False convolutions and BatchNorm.',
+        hint: 'Two 3 by 3 convolutions plus two BatchNorms. The shortcut is the identity here, so it costs nothing.',
+        solution:
+          'Each convolution has 128 x 128 x 3 x 3 = 147,456 weights and no bias, so two give 294,912. Each BatchNorm2d(128) has a gamma and a beta per channel, 256 parameters, and two give 512. The shortcut is nn.Identity because the shape is unchanged, so it adds nothing. The total is 295,424. For comparison, the downsampling block at the start of the same stage, mapping 64 to 128 with stride 2, adds a 1 by 1 projection of 64 x 128 = 8,192 weights plus another BatchNorm of 256, which is why stage-transition blocks are slightly larger. The running statistics in each BatchNorm are buffers rather than parameters, so they do not appear in this count but do appear in the checkpoint file.',
+      },
+      {
+        prompt:
+          'Design a classifier for 64 by 64 inputs with four stages, starting at 32 channels, and give the shape and parameter count after every stage. Then say where you would put the residual connections and why.',
+        hint: 'Halve the resolution and double the channels at each stage boundary; end with global average pooling.',
+        solution:
+          'Stem: Conv 3x3 stride 1 to 32 channels, giving 32 x 64 x 64. Stage 1 at 32 channels, 64 by 64. Stage 2: first block stride 2, 64 channels, 32 by 32. Stage 3: 128 channels, 16 by 16. Stage 4: 256 channels, 8 by 8. Then global average pool to 256 and a linear layer to the class count. With two basic blocks per stage the parameter counts per stage are roughly 2 x (2 x 32 x 32 x 9) = 37k, then 2 x (2 x 64 x 64 x 9) = 147k plus a projection, then 590k, then 2.36M, so the deepest stage holds three quarters of the model. Residual connections go around every block, with an identity shortcut inside a stage and a 1 by 1 stride-2 projection at each stage boundary where both the resolution and the channel count change. The reason to put them everywhere rather than only in the deep stages is that the benefit is about gradient flow through the whole stack, and there is no cost to an identity shortcut.',
+      },
+      {
+        prompt:
+          'Reproduce the degradation experiment: train plain networks of depth 8, 20 and 44 on CIFAR-10 and then the same depths with residual connections, and report training error for all six.',
+        hint: 'Keep everything else identical — optimiser, schedule, initialisation, augmentation — so depth and the skip connection are the only variables.',
+        language: 'python',
+        starterCode:
+          'import torch\nimport torch.nn as nn\n\nclass Block(nn.Module):\n    def __init__(self, c, residual: bool):\n        super().__init__()\n        self.residual = residual\n        self.body = nn.Sequential(\n            nn.Conv2d(c, c, 3, padding=1, bias=False), nn.BatchNorm2d(c), nn.ReLU(),\n            nn.Conv2d(c, c, 3, padding=1, bias=False), nn.BatchNorm2d(c))\n        self.relu = nn.ReLU()\n\n    def forward(self, x):\n        out = self.body(x)\n        return self.relu(out + x) if self.residual else self.relu(out)\n\ndef make(depth, residual, width=32):\n    ...\n',
+        solution:
+          'The expected pattern, which reproduces the published result, is that the plain networks improve from depth 8 to depth 20 and then get worse at depth 44, with training error rising rather than falling, while the residual networks improve monotonically across all three depths. The essential experimental discipline is that the only difference between the two families is the single addition in forward — same width, same optimiser, same schedule, same initialisation, same augmentation — because otherwise any of those could explain the gap. Logging the gradient norm at the first convolution makes the mechanism visible: it falls by an order of magnitude with depth in the plain family and stays roughly constant in the residual family. The result is worth reproducing yourself once, because it is the clearest example in the field of an architectural change that solves an optimisation problem rather than a capacity problem.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DL-016-q1',
+        type: 'mcq',
+        concept: 'degradation',
+        prompt: 'The ResNet paper reports that a 56-layer plain network has higher training error than a 20-layer one. What does this demonstrate?',
+        options: [
+          'An optimisation failure: gradient descent cannot find a solution that provably exists',
+          'Overfitting, because the deeper model has more parameters',
+          'That the 56-layer model needs more training data',
+          'A bug in their implementation, since deeper is always better',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The error is on the training set, so overfitting is ruled out by definition. A deeper network can always match a shallower one by setting the extra layers to the identity, so a solution exists; the failure is that optimisation does not find it.',
+      },
+      {
+        id: 'DL-016-q2',
+        type: 'fill',
+        concept: 'residual block',
+        prompt: 'A residual block computes y = F(x) + ____, so that learning the identity requires only that F output zero.',
+        answers: ['x', 'the input', 'x, the input'],
+        explanation:
+          'Adding the input back is the whole idea. The derivative becomes 1 + dF/dx, guaranteeing a gradient path with derivative one, and the identity mapping becomes the easy default rather than a hard target.',
+      },
+      {
+        id: 'DL-016-q3',
+        type: 'numeric',
+        concept: 'parameter counting',
+        prompt: 'How many weights, excluding biases and normalisation, does a basic residual block with 64 input and 64 output channels at stride 1 contain?',
+        answer: 73728,
+        tolerance: 0,
+        explanation:
+          'Two 3 by 3 convolutions, each 64 x 64 x 9 = 36,864, giving 73,728. The shortcut is the identity at matching shapes and contributes nothing, which is why most ResNet skip connections are free.',
+      },
+      {
+        id: 'DL-016-q4',
+        type: 'order',
+        concept: 'architecture evolution',
+        prompt: 'Put these architectural developments in chronological order.',
+        items: [
+          'LeNet-5: alternating convolution and pooling followed by dense layers',
+          'AlexNet: ReLU, dropout and GPU training halve the ImageNet error',
+          'VGG: uniform stacks of 3 by 3 convolutions replace large kernels',
+          'ResNet: residual connections make networks beyond a hundred layers trainable',
+          'EfficientNet: compound scaling of depth, width and resolution',
+        ],
+        explanation:
+          'Each generation addresses a specific limitation of the previous one: activations and data for AlexNet, kernel design for VGG, trainable depth for ResNet, and principled scaling for EfficientNet.',
+      },
+      {
+        id: 'DL-016-q5',
+        type: 'truefalse',
+        concept: 'skip connections',
+        prompt: 'In a standard ResNet, every skip connection contains a 1 by 1 convolution to match shapes.',
+        answer: false,
+        explanation:
+          'False. The shortcut is a plain identity whenever the input and output shapes match, which is most blocks. A 1 by 1 projection with the matching stride appears only at stage boundaries, where the resolution halves and the channel count doubles.',
+      },
+      {
+        id: 'DL-016-q6',
+        type: 'multi',
+        concept: 'design rules',
+        prompt: 'Select every statement that reflects standard modern convolutional design.',
+        options: [
+          'Halve the spatial resolution and double the channel count at each stage boundary',
+          'End the body with global average pooling rather than a flatten and a large dense layer',
+          'Use bias=False on convolutions that are immediately followed by batch normalisation',
+          'Prefer a single large kernel such as 11 by 11 over stacks of 3 by 3 convolutions',
+          'Apply the activation separately to both branches before adding them in a residual block',
+        ],
+        answerIndices: [0, 1, 2],
+        explanation:
+          'Large kernels were abandoned after VGG showed stacked 3 by 3 layers are cheaper and more expressive, and activating the shortcut branch destroys the identity path that makes residual blocks work.',
+      },
+      {
+        id: 'DL-016-q7',
+        type: 'explain',
+        concept: 'why residual connections work',
+        prompt: 'Explain why residual connections allow networks of a hundred or more layers to train, giving both the optimisation argument and the gradient argument.',
+        rubric: [
+          'States that the block learns a correction F(x) = H(x) - x, so the identity corresponds to F = 0 and is easy to reach',
+          'Gives the derivative 1 + dF/dx and explains that the identity path preserves the gradient',
+          'Connects this to the degradation problem, noting it is an optimisation failure rather than overfitting',
+        ],
+        sampleAnswer:
+          'There are two complementary arguments. The optimisation one is about what the block is asked to learn. A plain block must produce the whole desired mapping H(x), and if the best thing it could do is pass its input through unchanged, that requires a stack of weight matrices and nonlinearities to conspire into an exact identity — which nothing in the initialisation or the gradient signal encourages. A residual block computes F(x) + x, so it only has to learn the difference from the identity; producing the identity means driving F to zero, which is trivial and which weight decay actively pushes toward. Since a deeper network can always be built from a shallower one by appending identity layers, this removes the reason a deeper network should ever be worse, which is exactly the degradation problem. The gradient argument is about the backward pass. Differentiating y = F(x) + x gives 1 + dF/dx, so there is always a route through the block along which the gradient is multiplied by one. Chaining a hundred such blocks expands into a sum of paths that includes the pure identity path, so the gradient reaching the first layer cannot be driven to zero by depth alone — unlike a plain stack, where the gradient is a product of Jacobians and anything systematically below one vanishes geometrically.',
+        explanation:
+          'The examinable insight is that the residual connection is a reparameterisation, not an extra capacity: the function class is unchanged, but the optimisation problem becomes far easier.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What is the degradation problem?', back: 'Adding layers to a plain deep network eventually raises the training error. It is an optimisation failure, not overfitting.' },
+      { front: 'Write the residual block equation and its derivative.', back: 'y = F(x) + x, so dy/dx = I + dF/dx. The identity term guarantees a gradient path with derivative one.' },
+      { front: 'What is the halve-and-double rule?', back: 'At each stage boundary, halve the spatial resolution and double the channel count, which leaves the compute per stage roughly constant.' },
+      { front: 'What is a bottleneck block?', back: '1x1 squeeze to a quarter width, 3x3 at that width, 1x1 expand back. It cuts the cost of a block by more than ten times, making ResNet-152 cheaper than VGG-19.' },
+      { front: 'When does a ResNet shortcut carry parameters?', back: 'Only at stage boundaries, where a 1x1 stride-2 convolution is needed to match the changed resolution and channel count.' },
+      { front: 'Where are the parameters and where is the compute in a CNN?', back: 'Parameters in the deep low-resolution stages and the head; compute in the early high-resolution stages. Optimise the one your deployment actually constrains.' },
+      { front: 'What did VGG establish about kernel size?', back: 'Three stacked 3x3 layers match a 7x7 receptive field with 27C^2 parameters instead of 49C^2, plus two extra nonlinearities.' },
+    ],
+
+    challenge: {
+      title: 'Reproduce the ResNet result from scratch',
+      brief:
+        'Implement plain and residual convolutional networks of depths 8, 20, 32 and 56 for CIFAR-10, sharing every component except the single addition in the residual forward pass. Train all eight with an identical schedule and seed protocol. Produce three artefacts: training and test error against depth for both families on shared axes, the gradient norm at the first convolutional layer logged throughout training for the deepest model of each family, and an ablation in which you delete individual residual blocks from the trained 56-layer residual network and measure the accuracy drop. Write up whether your numbers reproduce the published pattern and where they differ.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Eight models trained under an identical protocol, with the residual flag as the only architectural difference',
+        'Training error plotted alongside test error, making clear that the plain family degradation appears on the training set',
+        'First-layer gradient norms logged over training and compared between families',
+        'The block-deletion ablation is run and discussed in terms of the unrolled additive form of a residual stack',
+      ],
+      starterCode:
+        'import torch\nimport torch.nn as nn\n\nclass Block(nn.Module):\n    def __init__(self, cin, cout, stride=1, residual=True):\n        super().__init__()\n        self.residual = residual\n        self.body = nn.Sequential(\n            nn.Conv2d(cin, cout, 3, stride=stride, padding=1, bias=False), nn.BatchNorm2d(cout), nn.ReLU(),\n            nn.Conv2d(cout, cout, 3, padding=1, bias=False), nn.BatchNorm2d(cout))\n        self.short = nn.Identity()\n        if residual and (stride != 1 or cin != cout):\n            self.short = nn.Sequential(nn.Conv2d(cin, cout, 1, stride=stride, bias=False), nn.BatchNorm2d(cout))\n        self.relu = nn.ReLU()\n\n    def forward(self, x):\n        ...\n\ndef make_net(depth, residual):\n    """depth = 6n + 2 as in the CIFAR ResNet paper."""\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain the shape of a modern convolutional classifier and the role of residual connections, as if to someone who understands convolution and pooling but has never seen a full architecture.',
+      mustCover: [
+        'The pyramid: resolution halves and channel count doubles at each stage, keeping the cost per stage roughly constant',
+        'A stem downsamples quickly, stages of blocks do the work, and a global average pool plus one linear layer forms the head',
+        'The degradation problem: plain networks get worse on training data beyond about twenty layers',
+        'A residual block computes F(x) + x, so the identity is the default and the gradient has a path with derivative one',
+      ],
+      bonusSignals: [
+        'gives concrete parameter or FLOP numbers from a real architecture',
+        'notes that parameters and compute concentrate in different parts of the network',
+        'explains why the shortcut is usually an identity and only sometimes a projection',
+        'mentions that global average pooling makes the model resolution-independent',
+      ],
+      sampleExplanation:
+        "A convolutional classifier is shaped like a pyramid, and once you see why, most architecture decisions become obvious. It starts with a stem that cuts the resolution fast — in a ResNet a seven-by-seven stride-two convolution followed by a stride-two pool, taking two hundred and twenty-four pixels down to fifty-six in two operations. That is deliberate, because the cost of a convolution is proportional to the number of output positions, so the highest-resolution layers are the most expensive and you want as few of them as possible. Then come four stages. Within a stage the resolution is fixed and several blocks run in sequence; at each stage boundary the resolution halves and the channel count doubles. That pairing is not aesthetic, it is arithmetic: halving both spatial dimensions divides the work by four, and doubling both the input and output channel counts multiplies it by four, so the cost per stage stays roughly constant while the features become fewer in position and richer in kind. At the top, instead of flattening the final map into an enormous dense layer as VGG did, you average each channel over the whole map, giving one number per channel, and a single linear layer turns those into class scores. That substitution removed a hundred million parameters and made the model work at any input resolution. Now the crucial part. Once you try to make the stack deep, plain networks fail, and they fail in a surprising way: past about twenty layers the error on the training set starts going up. That cannot be overfitting, because overfitting improves training performance. It is an optimisation failure, and it is strange because a deeper network can trivially match a shallower one by making the extra layers compute the identity — the solution exists and gradient descent cannot find it. The reason is that reproducing your input exactly through a stack of weight matrices and nonlinearities is a very particular configuration that nothing pushes you toward. The residual connection fixes it by changing what the block is asked to learn. Write the output as F of x plus x, so the block learns only the correction. Now the identity means F equals zero, which is easy, and which weight decay actively encourages. And differentiating gives one plus the derivative of F, so there is always a route through the block where the gradient passes untouched — chain a hundred of those and the gradient reaching the first layer still survives. One addition, and the usable depth of convolutional networks went from about twenty layers to over a hundred.",
+    },
+  },
 ];

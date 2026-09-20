@@ -18,7 +18,7 @@ ln -s "$ROOT/node_modules" "$SCRATCH/node_modules" 2>/dev/null || true
 
 for f in "$SCRATCH"/src/data/curriculum/*.ts; do
   case "$f" in
-    */index.ts) continue ;;
+    */index.ts|*/links.ts) continue ;;
   esac
   printf "import type { LearningUnit } from '@/types/curriculum';\n\nexport const UNITS: LearningUnit[] = [];\n" > "$f"
 done

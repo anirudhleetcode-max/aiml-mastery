@@ -286,6 +286,10 @@ export default function DistributionExplorer() {
   const dist = DISTS.find((d) => d.key === key) ?? DISTS[0];
   const p = allParams[dist.key];
   const [dLo, dHi] = dist.domain(p);
+  // Discrete bars are centred on integers, so the drawn range is padded by half
+  // a step at each end — otherwise the first and last bars are sliced in two.
+  const vLo = dist.discrete ? dLo - 0.5 : dLo;
+  const vHi = dist.discrete ? dHi + 0.5 : dHi;
 
   // A new distribution is a new question: put the band back where it can be seen.
   React.useEffect(() => {
@@ -342,7 +346,7 @@ export default function DistributionExplorer() {
       const muted = resolve('var(--viz-cat-none)', '#7c8496');
 
       const base = PAD.t + plotH;
-      const x = (v: number) => PAD.l + ((v - dLo) / (dHi - dLo)) * plotW;
+      const x = (v: number) => PAD.l + ((v - vLo) / (vHi - vLo)) * plotW;
 
       let yMax = 0;
       if (dist.discrete) {
@@ -491,7 +495,7 @@ export default function DistributionExplorer() {
       ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
       ctx.fillText(dist.discrete ? 'probability P(X = k)' : 'density (not probability)', PAD.l + 2, PAD.t + 1);
     },
-    [dist, p, b0, b1, dLo, dHi, draws],
+    [dist, p, b0, b1, vLo, vHi, draws],
   );
 
   /* ----------------------------------------------------------- CDF plot --- */
@@ -508,7 +512,7 @@ export default function DistributionExplorer() {
       const series = resolve('var(--viz-series)', '#8164f7');
       const info = resolve('var(--viz-cat-learning)', '#3987e5');
 
-      const x = (v: number) => PAD.l + ((v - dLo) / (dHi - dLo)) * plotW;
+      const x = (v: number) => PAD.l + ((v - vLo) / (vHi - vLo)) * plotW;
       const y = (v: number) => PAD.t + plotH - v * plotH;
 
       ctx.font = '10.5px ui-sans-serif, system-ui, sans-serif';
@@ -600,7 +604,7 @@ export default function DistributionExplorer() {
       ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
       ctx.fillText('CDF: P(X ≤ x)', PAD.l + 2, h - 5);
     },
-    [dist, p, b0, b1, dLo, dHi],
+    [dist, p, b0, b1, vLo, vHi],
   );
 
   /* ----------------------------------------------------------- dragging --- */
@@ -614,9 +618,9 @@ export default function DistributionExplorer() {
       if (!el || plotW <= 0) return null;
       const rect = el.getBoundingClientRect();
       const t = Math.min(1, Math.max(0, (clientX - rect.left - PAD.l) / plotW));
-      return dLo + t * (dHi - dLo);
+      return Math.min(dHi, Math.max(dLo, vLo + t * (vHi - vLo)));
     },
-    [density.canvasRef, density.size.w, dLo, dHi],
+    [density.canvasRef, density.size.w, dLo, dHi, vLo, vHi],
   );
 
   const moveHandle = React.useCallback(

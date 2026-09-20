@@ -15,6 +15,7 @@ import { UNITS as NLP } from './nlp';
 import { UNITS as CV } from './cv';
 import { UNITS as GEN } from './genai';
 import { UNITS as OPS } from './mlops';
+import { CROSS_LINKS } from './links';
 
 const DOMAIN_UNITS: Record<DomainId, LearningUnit[]> = {
   PY,
@@ -33,8 +34,30 @@ const DOMAIN_UNITS: Record<DomainId, LearningUnit[]> = {
   OPS,
 };
 
-/** Every unit in curriculum order. This is the single source of truth. */
-export const ALL_UNITS: LearningUnit[] = DOMAINS.flatMap((d) => DOMAIN_UNITS[d.id]);
+/**
+ * Every unit in curriculum order, with the cross-domain link overlay applied.
+ *
+ * Domain files are authored independently and only know their own units, so
+ * the edges *between* domains live in `links.ts` and are merged in here.
+ * Unknown ids are dropped rather than crashing the app; the verifier reports
+ * them, which is the right place for that to be an error.
+ */
+export const ALL_UNITS: LearningUnit[] = (() => {
+  const units = DOMAINS.flatMap((d) => DOMAIN_UNITS[d.id]);
+  const known = new Set(units.map((u) => u.id));
+
+  return units.map((unit) => {
+    const extra = CROSS_LINKS[unit.id];
+    if (!extra) return unit;
+    const merge = (own: UnitId[] | undefined, added: UnitId[] | undefined) =>
+      [...new Set([...(own ?? []), ...(added ?? []).filter((id) => known.has(id))])];
+    return {
+      ...unit,
+      prerequisites: merge(unit.prerequisites, extra.prerequisites),
+      related: merge(unit.related, extra.related),
+    };
+  });
+})();
 
 export const UNIT_BY_ID: ReadonlyMap<UnitId, LearningUnit> = new Map(ALL_UNITS.map((u) => [u.id, u]));
 export const UNIT_BY_SLUG: ReadonlyMap<string, LearningUnit> = new Map(ALL_UNITS.map((u) => [u.slug, u]));

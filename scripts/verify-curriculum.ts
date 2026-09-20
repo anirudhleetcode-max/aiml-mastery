@@ -10,6 +10,7 @@
  */
 import { ALL_UNITS, DOMAIN_UNIT_COUNTS, UNIT_BY_ID, UNIT_INDEX } from '../src/data/curriculum';
 import { DOMAINS, PLANNED_UNITS } from '../src/data/domains';
+import { CROSS_LINKS } from '../src/data/curriculum/links';
 import { TOTAL_UNITS, WIDGET_IDS, type LearningUnit } from '../src/types/curriculum';
 
 /** `--domain=ML` checks a single domain in isolation, for authoring in progress. */
@@ -47,6 +48,20 @@ for (const d of DOMAINS) {
   const planned = PLANNED_UNITS[d.id];
   if (actual !== planned) {
     errors.push(`DOMAIN ${d.id}: planned ${planned} units, authored ${actual}`);
+  }
+}
+
+/* Every id named in the cross-domain overlay must exist, or an edge the
+   curriculum claims to have silently does not. */
+if (!domainArg) {
+  for (const [unitId, link] of Object.entries(CROSS_LINKS)) {
+    if (!UNIT_BY_ID.has(unitId)) {
+      errors.push(`CROSS_LINKS: "${unitId}" is not a real unit`);
+      continue;
+    }
+    for (const id of [...(link.prerequisites ?? []), ...(link.related ?? [])]) {
+      if (!UNIT_BY_ID.has(id)) errors.push(`CROSS_LINKS[${unitId}]: "${id}" is not a real unit`);
+    }
   }
 }
 
