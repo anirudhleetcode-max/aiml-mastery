@@ -85,6 +85,7 @@ export const eventSchema = z.discriminatedUnion('type', [
         streakReminder: z.boolean().optional(),
         weeklySummary: z.boolean().optional(),
         achievementAlerts: z.boolean().optional(),
+        goalReminder: z.boolean().optional(),
       })
       .optional(),
   }),

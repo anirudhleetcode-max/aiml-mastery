@@ -263,12 +263,15 @@ export interface NotificationPrefs {
   weeklySummary: boolean;
   /** Notify when an achievement unlocks. */
   achievementAlerts: boolean;
+  /** Notify about the day's remaining goal. */
+  goalReminder: boolean;
 }
 
 export type NotificationKind =
   | 'lesson-waiting'
   | 'test-due'
   | 'revision-due'
+  | 'goal-progress'
   | 'streak-risk'
   | 'improvement'
   | 'mastery'

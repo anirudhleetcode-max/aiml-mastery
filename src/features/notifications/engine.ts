@@ -140,6 +140,26 @@ export function computeDueNotifications(state: FullState, o: Overview): Candidat
     }
   }
 
+  /* ---- the day's goal, while there is still a day left ---- */
+  if (!beforeStart && prefs.goalReminder && !o.goals.dayComplete && o.goals.dailyUnits.target > 0) {
+    const unitsLeft = Math.max(0, Math.ceil(o.goals.dailyUnits.target - o.goals.dailyUnits.current));
+    const minutesLeft = Math.max(0, Math.ceil(o.goals.dailyMinutes.target - o.goals.dailyMinutes.current));
+    // Only worth saying once the learner has started; nagging someone who has
+    // not opened the app yet is what `lesson-waiting` already does.
+    if (o.goals.dailyMinutes.current > 0) {
+      out.push({
+        kind: 'goal-progress',
+        title: unitsLeft === 0 ? `${minutesLeft} minutes short of today's goal` : `${unitsLeft} to go today`,
+        body:
+          unitsLeft === 0
+            ? 'The lessons are done — the remaining minutes are review and practice.'
+            : `${o.goals.dailyUnits.current} of ${o.goals.dailyUnits.target} done, about ${minutesLeft} minutes left in the plan.`,
+        href: '/today',
+        dedupeKey: `goal-progress-${today}`,
+      });
+    }
+  }
+
   /* ---- revision that has come due ---- */
   if (!beforeStart && prefs.studyReminder && o.dueReviews.length > 0) {
     const overdue = o.dueReviews.filter(
@@ -228,6 +248,7 @@ export async function refreshNotifications(userId: string, state: FullState, o: 
     'streak-risk',
     'test-due',
     'revision-due',
+    'goal-progress',
     'weak-topic',
     'lesson-waiting',
     'schedule-recalculated',

@@ -30,6 +30,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   streakReminder: true,
   weeklySummary: true,
   achievementAlerts: true,
+  goalReminder: true,
 };
 
 export interface UISettings {

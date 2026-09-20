@@ -156,10 +156,17 @@ test.describe('password reset', () => {
 
     await page.goto(`/reset-password?token=${token}`);
     await setNewPassword(page, 'short');
-    // Scoped to the form: Next renders its own always-present
-    // `__next-route-announcer__` with role="alert", which an unscoped
-    // query resolves to first.
-    await expect(page.locator('form').getByRole('alert')).toContainText(/10 characters/i);
+
+    // The field carries `minLength`, so the browser refuses to submit and no
+    // request is made — the page simply stays put with the field marked
+    // invalid. That is the convenience layer; the server enforces the same
+    // rule on a request that skips the browser entirely, which is asserted in
+    // tests/unit/auth-flows.test.ts against a real database.
+    await expect(page.getByRole('heading', { name: 'Choose a new password' })).toBeVisible();
+    const tooShort = await page
+      .getByLabel('New password', { exact: true })
+      .evaluate((el) => (el as HTMLInputElement).validity.tooShort);
+    expect(tooShort).toBe(true);
 
     // The rejected password did not spend the link, so the learner does not
     // have to go back to their inbox for a typo.

@@ -1,6 +1,7 @@
 import { ALL_UNITS, UNIT_BY_ID, allUnitMeta, type UnitMeta } from '@/data/curriculum';
 import { DOMAINS } from '@/data/domains';
 import { bucketFor, computeMastery, isWeak, requirementsFor } from '@/features/progress/mastery';
+import { computeGoals, type GoalSet } from './goals';
 import {
   buildRecoveryPlan, buildSchedule, computePace, COURSE_END, COURSE_START,
   type PaceReport, type RecoveryPlan, type Schedule,
@@ -31,6 +32,8 @@ export interface DomainStat {
 
 export interface Overview {
   today: string;
+  /** Daily and weekly targets, derived from the plan rather than stored. */
+  goals: GoalSet;
   totals: {
     total: number;
     completed: number;
@@ -203,8 +206,16 @@ export function buildOverview(state: FullState, todayOverride?: string): Overvie
 
   const totalStudySeconds = Object.values(state.activity).reduce((acc, a) => acc + a.studySeconds, 0);
 
+  const goals = computeGoals(state, {
+    today,
+    plannedMinutes: todayPlan.reduce((acc, t) => acc + t.unit.estimatedMinutes, 0),
+    plannedUnits: todayPlan.length,
+    requiredPace: pace.requiredPace,
+  });
+
   return {
     today,
+    goals,
     totals: {
       total: ALL_UNITS.length,
       completed: completedUnitIds.size,
