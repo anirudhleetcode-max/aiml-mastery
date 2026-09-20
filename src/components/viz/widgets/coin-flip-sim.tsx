@@ -171,7 +171,6 @@ export default function CoinFlipSim() {
       const run = runRef.current;
       // Axis stops at the next power of ten, so it only ever steps, never jitters.
       const decades = Math.max(1, Math.ceil(Math.log10(Math.max(10, run.n))));
-      const xMax = Math.pow(10, decades);
       const x = (v: number) => pad.l + (Math.log10(Math.max(1, v)) / decades) * plotW;
       const y = (v: number) => pad.t + plotH - clamp01(v) * plotH;
 

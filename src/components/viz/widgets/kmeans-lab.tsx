@@ -127,7 +127,7 @@ function initCentroids(pts: Pt[], k: number, seed: number): Pt[] {
 /** Runs k-means to convergence; used for the elbow plot, not for the animation. */
 function runToConvergence(pts: Pt[], k: number, seed: number): number {
   let centroids = initCentroids(pts, k, seed);
-  let assign = new Array<number>(pts.length).fill(0);
+  const assign = new Array<number>(pts.length).fill(0);
   for (let it = 0; it < 60; it++) {
     let changed = false;
     for (let i = 0; i < pts.length; i++) {
