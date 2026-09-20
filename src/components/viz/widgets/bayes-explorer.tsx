@@ -52,7 +52,6 @@ function makeResolve() {
 
 const POP = 10_000;
 const COLS = 100;
-const ROWS = 100;
 
 interface Counts {
   sick: number;
@@ -80,13 +79,6 @@ function countsFor(prevalence: number, sensitivity: number, specificity: number)
  * the false positives into the band that dwarfs it.
  */
 type Group = 'tp' | 'fn' | 'fp' | 'tn';
-
-function groupAt(i: number, c: Counts): Group {
-  if (i < c.tp) return 'tp';
-  if (i < c.tp + c.fn) return 'fn';
-  if (i < c.tp + c.fn + c.fp) return 'fp';
-  return 'tn';
-}
 
 const GROUP_LABEL: Record<Group, string> = {
   tp: 'True positive — has the disease, test says positive',

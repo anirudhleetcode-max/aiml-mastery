@@ -9483,4 +9483,3 @@ shrinkage + depth    CV accuracy 0.8893 (+/- 0.0091)
     },
   },
 
-];
