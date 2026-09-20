@@ -7,6 +7,7 @@ import { UNIT_BY_ID } from '@/data/curriculum';
 import { DOMAIN_BY_ID } from '@/data/domains';
 import { Stat } from '@/components/ui/misc';
 import { NotesView, type NoteRow, type NoteUnitMeta } from '@/components/notes/notes-view';
+import { relativeTime } from '@/lib/format';
 import type { LearningUnit } from '@/types/curriculum';
 
 export const metadata: Metadata = { title: 'Notes' };
@@ -69,13 +70,7 @@ export default async function NotesPage() {
           <Stat label="Words written" value={words.toLocaleString('en-US')} />
           <Stat
             label="Last edited"
-            value={
-              <span className="text-base leading-snug">
-                {lastEdited
-                  ? new Date(lastEdited).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                  : '—'}
-              </span>
-            }
+            value={<span className="text-base leading-snug">{lastEdited ? relativeTime(lastEdited) : '—'}</span>}
             className="col-span-2 lg:col-span-1"
           />
         </div>

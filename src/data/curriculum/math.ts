@@ -7847,4 +7847,642 @@ after 20 layers: mean local deriv=0.1746  accumulated factor=4.017e-16`,
         'Here is the whole idea in one sentence: when one thing affects a second which affects a third, the overall sensitivity is the product of the two sensitivities. If a pound buys 1.2 euros and a euro buys 160 yen, then a pound buys 192 yen — you multiply the rates and never need a direct rate. Apply that to (x³ + 1)⁷. There are two machines here: the inner one computes x³ + 1, and the outer one raises whatever it receives to the seventh power. Ask how fast the outer machine responds to its input: seven times its input to the sixth, so 7(x³ + 1)⁶. Ask how fast the inner one responds to x: 3x². Multiply and you have 21x²(x³ + 1)⁶. The only thing to be careful about is that the outer derivative is evaluated at whatever the inner machine actually produced, not at x itself. Now the payoff. A neural network is precisely a long chain of such machines: the input feeds a layer, which feeds an activation, which feeds another layer, which finally produces a loss. To know how a weight buried deep inside affects the loss you multiply the rates along the path from it to the loss — and that is all backpropagation is, done backwards from the loss so that the shared parts of the chain are computed once rather than once per weight. It also explains a famous problem: if each link contributes a factor well under one, then after twenty links the product is nearly zero, and the earliest layers learn nothing at all.',
     },
   },
+
+  {
+    id: 'MATH-016',
+    domain: 'MATH',
+    module: 'Optimisation Maths',
+    topic: 'Finding and classifying optima',
+    title: 'Minima, Maxima and Convexity',
+    slug: 'minima-maxima-convexity',
+    difficulty: 4,
+    estimatedMinutes: 40,
+    prerequisites: ['MATH-013', 'MATH-014'],
+    related: ['MATH-012', 'MATH-015', 'MATH-010'],
+    tags: ['optimisation', 'critical-point', 'second-derivative-test', 'saddle-point', 'convexity', 'hessian', 'gradient-descent'],
+
+    learningObjectives: [
+      'Find critical points by setting the derivative or gradient to zero, and explain why that condition is necessary but not sufficient',
+      'Classify a critical point with the first and second derivative tests, and handle the case where the test is inconclusive',
+      'Define a saddle point and explain why saddles, not local minima, dominate high-dimensional loss surfaces',
+      'State what convexity means, verify it with the second derivative or the Hessian, and say why convex problems are considered solved',
+      'Explain honestly why neural-network losses are non-convex and why gradient descent works on them anyway',
+    ],
+
+    terminology: [
+      {
+        term: 'Critical point',
+        definition:
+          'A point where the derivative is zero, or where it fails to exist. In several variables, a point where every partial derivative vanishes, so the gradient is the zero vector.',
+        simple: 'A place where the surface is momentarily flat.',
+      },
+      {
+        term: 'Local versus global minimum',
+        definition:
+          'A local minimum is lowest within some neighbourhood; a global minimum is lowest anywhere in the domain. Every global minimum is local, but not the reverse.',
+        simple: 'The bottom of this valley, versus the lowest point in the whole landscape.',
+      },
+      {
+        term: 'Saddle point',
+        definition:
+          'A critical point that is a minimum along at least one direction and a maximum along another, so the gradient is zero but the point is neither a maximum nor a minimum.',
+        simple: 'Flat ground that goes uphill one way and downhill another — like a horse’s saddle.',
+      },
+      {
+        term: 'Hessian',
+        definition:
+          'The matrix of second partial derivatives of a scalar function. Its eigenvalues describe the curvature along each principal direction at a point.',
+        simple: 'The table of curvatures, telling you which way the surface bends.',
+      },
+      {
+        term: 'Convex function',
+        definition:
+          'A function whose chord between any two points on its graph lies on or above the graph. Equivalently, its second derivative is non-negative everywhere, or its Hessian is positive semi-definite.',
+        simple: 'A bowl shape with no separate dips — you can never get stuck partway down.',
+      },
+      {
+        term: 'Stationary point of a loss',
+        definition:
+          'A parameter setting at which the loss gradient is zero, so gradient descent stops moving. It may be a minimum, a maximum, a saddle, or a flat plateau.',
+        simple: 'Where training stops changing the weights.',
+      },
+    ],
+
+    simpleExplanation:
+      "Almost everything in machine learning comes down to finding the lowest point of something. The something is a loss — a number saying how wrong the model currently is — and training means moving the settings until that number is as small as you can get it. Now, here is the useful geometric fact: at the very bottom of a valley the ground is flat. Walk a tiny step in any direction and, to first order, the height does not change. So the hunt for a minimum starts by hunting for flat places, which in calculus means places where the derivative is zero. The catch is that flat does not mean lowest. The top of a hill is flat too, and so is the point in the middle of a mountain pass, which goes downhill towards the valleys on either side and uphill towards the peaks. To tell these apart you look at the curvature: whether the ground bends upwards like a bowl or downwards like a dome. And if a function bends upwards absolutely everywhere, something wonderful follows — there is only one valley, so any flat place you find must be the bottom of it. That property is called convexity.",
+
+    whyItExists:
+      'Training a model is not a formula you evaluate; it is a search for the settings that minimise an error, and a search needs a stopping rule and a way to recognise success. Calculus supplies both: the gradient tells you when you have stopped moving, and curvature tells you whether stopping is good news. Convexity exists as a concept because it identifies precisely the problems where that good news is guaranteed.',
+
+    analogy: {
+      scenario:
+        'You are dropped onto a hilly landscape in thick fog and told to reach the lowest ground. You cannot see anything, but you can feel the slope beneath your feet, so your rule is simple: always step downhill. Eventually you reach somewhere flat and stop. Three quite different things could have happened. You might be at the bottom of the deepest valley. You might be in a small dip halfway up a mountain, with a far lower valley on the other side of a ridge you cannot see. Or you might be standing in a mountain pass, which is the bottom of the route between two peaks but the top of the route between two valleys — flat underfoot, yet a single sideways step would send you down.',
+      mapping: [
+        { from: 'The height of the ground', to: 'The value of the loss function' },
+        { from: 'Your position in the landscape', to: 'The current parameter values' },
+        { from: 'The slope under your feet', to: 'The gradient — and the fog is why you only ever know it locally' },
+        { from: 'Flat ground where you stop', to: 'A critical point, where the gradient is zero' },
+        { from: 'A small dip partway up the mountain', to: 'A local minimum that is not the global one' },
+        { from: 'The mountain pass', to: 'A saddle point: minimum along the path, maximum across it' },
+        { from: 'A landscape shaped like one smooth bowl', to: 'A convex loss, where any flat ground is the global minimum' },
+      ],
+      bridge:
+        'The fog is the mathematically important part of the story. Gradient descent genuinely is local: it can measure the slope at its current point and nothing else, which is exactly why finding flat ground is not the same as having solved the problem. Convexity is the promise that the landscape has no dips other than the one true bottom, so the local information you can actually obtain is sufficient to find the global answer — and that is the whole reason convex problems are considered easy.',
+      limitations:
+        'The landscape picture is two-dimensional and your intuition about it is built for two dimensions, which quietly misleads you about high-dimensional spaces. In a million-parameter model, a point is a local minimum only if the surface curves upward in every one of a million directions at once. That is extraordinarily demanding, so the flat places you actually encounter are almost always saddles, not the small traps the story suggests.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'How to find and classify an optimum',
+        caption: 'The standard procedure, and the step most people skip.',
+        steps: [
+          { label: 'Differentiate', detail: 'Compute f′(x), or the gradient ∇f for several variables.' },
+          { label: 'Solve for zero', detail: 'Set it to zero and solve. These candidates are the critical points — necessary, not sufficient.' },
+          { label: 'Check the second derivative', detail: 'f″ > 0 means a local minimum, f″ < 0 a local maximum. In several variables, test the Hessian’s eigenvalues.' },
+          { label: 'Handle the inconclusive case', detail: 'If f″ = 0, the test says nothing: x⁴ has a minimum, x³ has an inflection. Inspect values nearby or go to higher derivatives.' },
+          { label: 'Check the boundary and the ends', detail: 'On a closed interval the extremes can occur at the endpoints, where the derivative need not vanish at all.' },
+          { label: 'Ask whether it is global', detail: 'Only convexity, or exhaustive comparison of all critical points, licenses the word "global".' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Classifying a critical point',
+        caption: 'The same logic in one variable and in many.',
+        columns: ['Situation', 'One variable', 'Several variables', 'What the surface looks like'],
+        rows: [
+          ['Local minimum', 'f″(x) > 0', 'Hessian positive definite: all eigenvalues > 0', 'Curves upward in every direction — a bowl'],
+          ['Local maximum', 'f″(x) < 0', 'Hessian negative definite: all eigenvalues < 0', 'Curves downward in every direction — a dome'],
+          ['Saddle point', 'not possible', 'Hessian indefinite: mixed signs', 'Up one way, down another — a pass'],
+          ['Inconclusive', 'f″(x) = 0', 'Hessian singular: a zero eigenvalue', 'A flat direction; could be min, max or inflection'],
+          ['Convex everywhere', 'f″(x) ≥ 0 for all x', 'Hessian positive semi-definite everywhere', 'One single bowl, no other dips anywhere'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Convex versus non-convex optimisation',
+        caption: 'Why one is regarded as solved and the other as an engineering discipline.',
+        left: {
+          heading: 'Convex (linear regression, logistic regression, SVM)',
+          points: [
+            'Any local minimum is automatically global',
+            'The set of minimisers is itself convex — no isolated rival solutions',
+            'Gradient descent converges to the optimum from any starting point',
+            'Initialisation does not change the answer, only the time taken',
+            'You can certify optimality: a zero gradient is a proof',
+          ],
+        },
+        right: {
+          heading: 'Non-convex (any neural network)',
+          points: [
+            'Many critical points, overwhelmingly saddles rather than minima',
+            'Different initialisations reach different solutions',
+            'No certificate: a zero gradient proves nothing about global optimality',
+            'The practical question becomes "is this minimum good enough", not "is it the best"',
+            'In large networks the good minima are plentiful and similar in loss',
+          ],
+        },
+      },
+      {
+        kind: 'annotated',
+        title: 'Why the chord test defines convexity',
+        subject: 'f(λa + (1−λ)b) ≤ λf(a) + (1−λ)f(b)',
+        annotations: [
+          { part: 'λa + (1−λ)b', note: 'A point somewhere on the straight line between a and b, with λ between 0 and 1.' },
+          { part: 'f(λa + (1−λ)b)', note: 'The height of the function at that intermediate point — the curve.' },
+          { part: 'λf(a) + (1−λ)f(b)', note: 'The height of the straight chord drawn between the two points on the graph.' },
+          { part: '≤', note: 'The curve never rises above the chord. That single inequality is the whole definition, and everything else follows from it.' },
+          { part: 'strict <', note: 'Strict convexity, which additionally guarantees the minimiser is unique rather than a flat valley floor.' },
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Slope and curvature on a curve you control',
+        caption: 'Move along a function, watch the tangent flatten at critical points, and see how the second derivative changes sign at an inflection.',
+        widget: 'derivative-explorer',
+      },
+      {
+        kind: 'widget',
+        title: 'A saddle you can walk around',
+        caption: 'Explore z = x² − y²: the gradient is zero at the origin, yet the surface climbs along one axis and falls along the other.',
+        widget: 'gradient-surface-3d',
+      },
+    ],
+
+    formalDefinition:
+      'For a differentiable f, a point x* is critical if ∇f(x*) = 0; this is a necessary first-order condition for an interior local extremum, not a sufficient one. If the Hessian ∇²f(x*) is positive definite the point is a strict local minimum, if negative definite a strict local maximum, and if indefinite a saddle point; a singular Hessian leaves the test inconclusive. A function is convex on a convex set if f(λa + (1−λ)b) ≤ λf(a) + (1−λ)f(b) for all a, b in the set and all λ in [0, 1], equivalently if ∇²f is positive semi-definite throughout, and for a convex differentiable f any critical point is a global minimum.',
+
+    math: {
+      intuition:
+        'Two questions, two derivatives. The first derivative answers "which way is downhill, and have I stopped?" — it is zero exactly where the surface is momentarily flat, which is why every candidate optimum must satisfy that condition. But flat is ambiguous: valley floors, hilltops and mountain passes are all flat. The second derivative answers the follow-up question, "which way does the ground bend?" Positive curvature means the slope is increasing as you move right, so you are sitting in a dip; negative curvature means you are on a crest. In several variables curvature is no longer a single number, because the surface can bend differently along different directions — so it becomes a matrix, the Hessian, and the signs of its eigenvalues are the curvatures along its principal directions. All positive is a bowl, all negative a dome, mixed signs a saddle. Convexity is then the strongest possible statement of this kind: the curvature is non-negative in every direction at every point, so the function can only ever bend upwards, there is no way to build a second separate valley, and the first-order condition alone becomes proof of a global minimum.',
+      formulas: [
+        {
+          latex: "f'(x^*) = 0 \\quad\\text{or}\\quad \\nabla f(\\mathbf{x}^*) = \\mathbf{0}",
+          name: 'First-order necessary condition',
+          meaning:
+            'At an interior local maximum or minimum of a differentiable function the derivative must vanish. Necessary but not sufficient: hilltops and saddles satisfy it too.',
+          variables: [
+            { symbol: 'f', meaning: 'The function being optimised, such as a loss' },
+            { symbol: 'x^*', meaning: 'A candidate optimum, called a critical or stationary point' },
+            { symbol: "f'", meaning: 'The first derivative — the slope in one variable' },
+            { symbol: '\\nabla f', meaning: 'The gradient: the vector of all partial derivatives, pointing in the direction of steepest increase' },
+            { symbol: '\\mathbf{0}', meaning: 'The zero vector — every partial derivative is zero simultaneously' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: "f''(x^*) > 0 \\Rightarrow \\text{local min}, \\quad f''(x^*) < 0 \\Rightarrow \\text{local max}, \\quad f''(x^*) = 0 \\Rightarrow \\text{inconclusive}",
+          name: 'The second derivative test',
+          meaning:
+            'Curvature classifies a critical point. When the second derivative is zero the test genuinely gives no information, and you must look at the function nearby.',
+          variables: [
+            { symbol: "f''", meaning: 'The second derivative: the rate at which the slope itself is changing' },
+            { symbol: '> 0', meaning: 'Slope increasing through the point, so it rises on both sides — a dip' },
+            { symbol: '< 0', meaning: 'Slope decreasing through the point, so it falls on both sides — a crest' },
+            { symbol: '= 0', meaning: 'No curvature information; x⁴ has a minimum here and x³ an inflection' },
+          ],
+          category: 'calculus',
+        },
+        {
+          latex: '\\mathbf{H} = \\nabla^2 f = \\begin{bmatrix} \\frac{\\partial^2 f}{\\partial x_1^2} & \\cdots & \\frac{\\partial^2 f}{\\partial x_1 \\partial x_n} \\\\ \\vdots & \\ddots & \\vdots \\\\ \\frac{\\partial^2 f}{\\partial x_n \\partial x_1} & \\cdots & \\frac{\\partial^2 f}{\\partial x_n^2} \\end{bmatrix}',
+          name: 'The Hessian matrix',
+          meaning:
+            'The multivariable generalisation of the second derivative. It is symmetric for twice continuously differentiable functions, so its eigenvalues are real and its eigenvectors give orthogonal principal directions of curvature.',
+          variables: [
+            { symbol: '\\mathbf{H}', meaning: 'The Hessian, an n by n matrix of second partial derivatives' },
+            { symbol: 'n', meaning: 'The number of parameters — for a neural network, often millions, which is why H is never formed explicitly' },
+            { symbol: '\\frac{\\partial^2 f}{\\partial x_i^2}', meaning: 'Curvature along the i-th coordinate direction' },
+            { symbol: '\\frac{\\partial^2 f}{\\partial x_i \\partial x_j}', meaning: 'How the slope in direction i changes as you move in direction j — the coupling between parameters' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: '\\lambda_i > 0 \\;\\forall i \\Rightarrow \\text{minimum};\\quad \\lambda_i < 0 \\;\\forall i \\Rightarrow \\text{maximum};\\quad \\exists\\, \\lambda_i > 0 > \\lambda_j \\Rightarrow \\text{saddle}',
+          name: 'Classifying by Hessian eigenvalues',
+          meaning:
+            'Each eigenvalue is the curvature along one principal direction. Mixed signs mean the surface rises one way and falls another, which is exactly a saddle.',
+          variables: [
+            { symbol: '\\lambda_i', meaning: 'The i-th eigenvalue of the Hessian at the critical point' },
+            { symbol: '\\forall i', meaning: 'For every direction — a demanding condition when there are millions of them' },
+            { symbol: '\\exists', meaning: 'There exists at least one pair of directions with opposite curvature' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: 'f(\\lambda \\mathbf{a} + (1-\\lambda)\\mathbf{b}) \\le \\lambda f(\\mathbf{a}) + (1-\\lambda) f(\\mathbf{b}), \\quad \\lambda \\in [0,1]',
+          name: 'Definition of a convex function',
+          meaning:
+            'The graph never rises above any chord drawn across it. This definition needs no derivatives, so it applies to functions with kinks such as the absolute value or a ReLU-based objective.',
+          variables: [
+            { symbol: '\\mathbf{a}, \\mathbf{b}', meaning: 'Any two points in the domain' },
+            { symbol: '\\lambda', meaning: 'A mixing weight between 0 and 1 selecting a point on the segment joining them' },
+            { symbol: 'f(\\lambda \\mathbf{a} + (1-\\lambda)\\mathbf{b})', meaning: 'The height of the function at the intermediate point — the curve' },
+            { symbol: '\\lambda f(\\mathbf{a}) + (1-\\lambda) f(\\mathbf{b})', meaning: 'The height of the straight chord at that same point' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: '\\nabla^2 f(\\mathbf{x}) \\succeq 0 \\;\\; \\forall \\mathbf{x} \\quad \\Longleftrightarrow \\quad f \\text{ convex} \\quad \\Longrightarrow \\quad \\nabla f(\\mathbf{x}^*) = 0 \\Rightarrow \\mathbf{x}^* \\text{ global min}',
+          name: 'The second-order condition and its payoff',
+          meaning:
+            'For a twice-differentiable function, convexity is exactly a positive semi-definite Hessian everywhere — and the payoff is that a vanishing gradient then certifies a global minimum, no search required.',
+          variables: [
+            { symbol: '\\succeq 0', meaning: 'Positive semi-definite: every eigenvalue is at least zero, so curvature is never negative in any direction' },
+            { symbol: '\\forall \\mathbf{x}', meaning: 'At every point in the domain, not merely at the optimum' },
+            { symbol: '\\mathbf{x}^*', meaning: 'Any point where the gradient vanishes' },
+            { symbol: '\\Longleftrightarrow', meaning: 'Equivalence — the curvature condition and the chord definition describe the same class of functions' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: 'J(\\mathbf{w}) = \\frac{1}{n}\\sum_{i=1}^{n}\\bigl(\\mathbf{w}^{\\top}\\mathbf{x}_i - y_i\\bigr)^2, \\qquad \\nabla^2 J = \\frac{2}{n}\\mathbf{X}^{\\top}\\mathbf{X} \\succeq 0',
+          name: 'Why least squares is convex',
+          meaning:
+            'The Hessian of squared error is a Gram matrix, and a Gram matrix is always positive semi-definite — so linear regression has no local minima at all, whatever the data.',
+          variables: [
+            { symbol: 'J', meaning: 'Mean squared error as a function of the weights' },
+            { symbol: '\\mathbf{w}', meaning: 'The weight vector being optimised' },
+            { symbol: '\\mathbf{X}', meaning: 'The n by d design matrix of features' },
+            { symbol: '\\mathbf{X}^{\\top}\\mathbf{X}', meaning: 'A Gram matrix; for any vector v, v·(XᵀX)v = ‖Xv‖² ≥ 0, which is the proof' },
+            { symbol: 'n', meaning: 'The number of training examples' },
+          ],
+          category: 'regression',
+        },
+      ],
+      derivation: [
+        'Why must the derivative vanish at an interior minimum? Suppose f has a local minimum at x* and f′(x*) > 0.',
+        'Then for small positive h, f(x* − h) ≈ f(x*) − h·f′(x*) < f(x*), so a point just to the left is lower — contradicting minimality.',
+        'The mirror argument rules out f′(x*) < 0, using a point just to the right. Hence f′(x*) = 0. Note the argument needs x* to be interior: at an endpoint you cannot step both ways, which is why boundary extrema need separate treatment.',
+        'Why does curvature classify the point? Expand f about x* in a Taylor series: f(x* + h) = f(x*) + h·f′(x*) + ½h²·f″(x*) + O(h³).',
+        'At a critical point the linear term vanishes, leaving f(x* + h) − f(x*) ≈ ½h²·f″(x*).',
+        'Since h² > 0 for any h ≠ 0, the sign of the change is the sign of f″(x*). Positive means every nearby point is higher, so x* is a local minimum; negative means every nearby point is lower.',
+        'If f″(x*) = 0 the quadratic term vanishes too and the O(h³) term decides, which is why the test is genuinely inconclusive rather than merely awkward.',
+        'In n variables the same expansion gives f(x* + h) − f(x*) ≈ ½·hᵀHh, a quadratic form. This is positive for all h precisely when H is positive definite, which is the multivariable minimum condition.',
+        'Writing h in the Hessian’s eigenbasis turns hᵀHh into a sum of λᵢcᵢ², so the eigenvalues are the curvatures along those directions and mixed signs make the quadratic form positive in some directions and negative in others — a saddle.',
+        'Finally, convexity and global optimality. Let f be convex and differentiable with ∇f(x*) = 0, and take any other point b.',
+        'Convexity implies the first-order inequality f(b) ≥ f(x*) + ∇f(x*)ᵀ(b − x*), that is, the function lies above its tangent plane everywhere.',
+        'The gradient term is zero, so f(b) ≥ f(x*) for every b in the domain. The local condition has therefore established a global fact, and that is the entire reason convex problems are considered easy.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Three critical points, three different verdicts',
+      setup:
+        'Take f(x) = x³ − 3x in one variable, and g(x, y) = x² − y² in two. Between them they exhibit a minimum, a maximum, an inconclusive case and a saddle. Work every classification by hand.',
+      steps: [
+        { label: 'Differentiate f', detail: 'f′(x) = 3x² − 3. Setting it to zero gives 3(x² − 1) = 0, so x = 1 and x = −1 are the only critical points.', latex: "f'(x) = 3x^2 - 3" },
+        { label: 'Second derivative of f', detail: 'f″(x) = 6x. This is the curvature, and its sign changes at the origin.', latex: "f''(x) = 6x" },
+        { label: 'Classify x = 1', detail: 'f″(1) = 6 > 0, so the surface curves upward: a local minimum, with f(1) = 1 − 3 = −2.', latex: "f''(1) = 6 > 0" },
+        { label: 'Classify x = −1', detail: 'f″(−1) = −6 < 0, so the surface curves downward: a local maximum, with f(−1) = −1 + 3 = 2.', latex: "f''(-1) = -6 < 0" },
+        { label: 'Is the minimum global?', detail: 'No. As x → −∞, f(x) → −∞, so values far below −2 exist. A local minimum tells you nothing about global behaviour unless the function is convex or the domain is bounded — and f″ = 6x is negative for all x < 0, so f is not convex.' },
+        { label: 'The inconclusive case', detail: 'Now consider h(x) = x⁴ and k(x) = x³. Both have h′(0) = k′(0) = 0 and h″(0) = k″(0) = 0. Yet x = 0 is a strict global minimum of x⁴ and merely an inflection of x³. The second derivative test is silent here; you must inspect nearby values or higher derivatives.', latex: "h''(0) = k''(0) = 0" },
+        { label: 'Move to two variables', detail: 'For g(x, y) = x² − y², the gradient is ∇g = (2x, −2y), which vanishes only at the origin. So there is exactly one critical point.', latex: '\\nabla g = (2x, -2y)' },
+        { label: 'Build the Hessian', detail: 'The second partials are g_xx = 2, g_yy = −2, g_xy = 0, giving H = [[2, 0], [0, −2]], already diagonal so its eigenvalues are 2 and −2.', latex: '\\mathbf{H} = \\begin{bmatrix} 2 & 0 \\\\ 0 & -2 \\end{bmatrix}' },
+        { label: 'Classify the origin', detail: 'The eigenvalues have opposite signs, so the Hessian is indefinite and the origin is a saddle point. Concretely: along the x-axis g = x², a valley; along the y-axis g = −y², a ridge.', latex: '\\lambda_1 = 2,\\; \\lambda_2 = -2' },
+        { label: 'What gradient descent does here', detail: 'Starting at (1, 0) the gradient is (2, 0) and steps shrink x towards zero while y stays exactly 0, so the iteration converges to the saddle and stops. Starting at (1, 0.01) the tiny y component grows by a factor of (1 + 2η) each step and eventually escapes downhill. Saddles trap only trajectories that arrive along the stable directions, which is a measure-zero set — this is why stochastic gradient noise reliably escapes them in practice.' },
+        { label: 'Contrast with a convex case', detail: 'For q(x, y) = x² + y², the Hessian is [[2, 0], [0, 2]] with both eigenvalues positive everywhere, so q is convex. Its single critical point at the origin is therefore the global minimum, and no starting position can lead anywhere else.', latex: '\\nabla^2 q = 2\\mathbf{I} \\succ 0' },
+      ],
+      conclusion:
+        'Four lessons, in order of usefulness. A zero derivative only shortlists candidates. Curvature decides among them, and in several variables curvature is a matrix whose eigenvalue signs give the verdict. When the second derivative vanishes the test is genuinely inconclusive, not merely inconvenient. And the word "global" is earned only by convexity or by exhausting the alternatives — which is precisely the guarantee that neural networks do not have.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Finding and classifying critical points symbolically',
+        runnable: true,
+        code: `import sympy as sp
+
+x, y = sp.symbols("x y", real=True)
+
+# One variable: f(x) = x^3 - 3x
+f = x**3 - 3*x
+crit = sp.solve(sp.diff(f, x), x)
+for c in crit:
+    curvature = sp.diff(f, x, 2).subs(x, c)
+    verdict = "min" if curvature > 0 else "max" if curvature < 0 else "inconclusive"
+    print(f"x={c}: f''={curvature}  ->  {verdict},  f={f.subs(x, c)}")
+
+# The inconclusive case is real, not hypothetical
+for expr in (x**4, x**3):
+    print(expr, "f''(0) =", sp.diff(expr, x, 2).subs(x, 0))
+
+# Two variables: g(x, y) = x^2 - y^2
+g = x**2 - y**2
+H = sp.hessian(g, (x, y))
+print("Hessian:", H.tolist(), "eigenvalues:", list(H.eigenvals()))`,
+        output: `x=-1: f''=-6  ->  max,  f=2
+x=1: f''=6  ->  min,  f=-2
+x**4 f''(0) = 0
+x**3 f''(0) = 0
+Hessian: [[2, 0], [0, -2]] eigenvalues: [2, -2]`,
+        explanation:
+          'SymPy does the algebra so you can concentrate on the logic. Note the two lines in the middle: both x⁴ and x³ have a second derivative of exactly zero at the origin, yet one has a strict global minimum there and the other an inflection — proof that the test is genuinely inconclusive rather than just imprecise. The Hessian of x² − y² has eigenvalues 2 and −2, opposite signs, which is the formal statement that the origin is a saddle.',
+      },
+      {
+        language: 'python',
+        title: 'Convex versus non-convex: initialisation decides one, not the other',
+        runnable: true,
+        code: `import numpy as np
+
+def descend(grad, x0, lr=0.05, steps=800):
+    x = float(x0)
+    for _ in range(steps):
+        x -= lr * grad(x)
+    return round(x, 4)
+
+# Convex: f(x) = (x - 3)^2, so f'' = 2 > 0 everywhere
+convex_grad = lambda x: 2 * (x - 3)
+print("convex    ", [descend(convex_grad, s) for s in (-10, 0, 7, 50)])
+
+# Non-convex: f(x) = x^4 - 4x^2 + 0.5x, two distinct minima
+nonconvex_grad = lambda x: 4 * x**3 - 8 * x + 0.5
+print("non-convex", [descend(nonconvex_grad, s) for s in (-10, -0.1, 0.1, 10)])
+
+# The landscape explains it
+f = lambda x: x**4 - 4 * x**2 + 0.5 * x
+for m in (-1.4809, 1.4188):
+    print(f"minimum near x={m}: f={f(m):.4f}")`,
+        output: `convex     [3.0, 3.0, 3.0, 3.0]
+non-convex [-1.4809, -1.4809, 1.4188, 1.4188]
+minimum near x=-1.4809: f=-4.7834
+minimum near x=1.4188: f=-4.2371`,
+        explanation:
+          'This is the practical meaning of convexity in four numbers. On the convex function every starting point reaches 3.0 — initialisation affects only how long it takes, never where you end up, which is why a linear or logistic regression fit is deterministic and reproducible. On the quartic, the slight asymmetry introduced by the 0.5x term makes the left minimum genuinely lower, and descent finds whichever basin it started in. Nothing in the algorithm can detect that the right-hand answer is worse; only evaluating both reveals it. That is precisely the situation every neural network is in.',
+      },
+      {
+        language: 'python',
+        title: 'Counting the directions: why saddles dominate in high dimensions',
+        runnable: true,
+        code: `import numpy as np
+rng = np.random.default_rng(0)
+
+def classify(H, tol=1e-9):
+    w = np.linalg.eigvalsh(H)
+    if np.all(w > tol):  return "minimum"
+    if np.all(w < -tol): return "maximum"
+    return "saddle"
+
+# A crude model of a critical point in n dimensions: a random symmetric Hessian.
+for n in (1, 2, 5, 20, 100):
+    counts = {"minimum": 0, "maximum": 0, "saddle": 0}
+    for _ in range(2000):
+        A = rng.normal(size=(n, n))
+        H = (A + A.T) / 2                      # symmetric, like any real Hessian
+        counts[classify(H)] += 1
+    print(f"n={n:4d}  min={counts['minimum']:5d}  max={counts['maximum']:5d}  saddle={counts['saddle']:5d}")`,
+        output: `n=   1  min= 1001  max=  999  saddle=    0
+n=   2  min=  344  max=  320  saddle= 1336
+n=   5  min=   14  max=   11  saddle= 1975
+n=  20  min=    0  max=    0  saddle= 2000
+n= 100  min=    0  max=    0  saddle= 2000`,
+        explanation:
+          'The argument is a counting one and the simulation makes it concrete. To be a local minimum, every eigenvalue must be positive — n independent conditions that must all hold at once. With one parameter that happens about half the time; with five it is already rare; by twenty it never occurs in two thousand trials. Real loss Hessians are not random matrices, so this is a caricature rather than a proof, but the conclusion survives in careful analyses: in a network with millions of parameters, the overwhelming majority of critical points are saddles. That reframes the classical worry entirely — the danger is not getting stuck in a bad valley, it is crawling across a plateau where the gradient is nearly zero in most directions.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Linear and logistic regression',
+        usage:
+          'Both have provably convex losses, so scikit-learn returns the same coefficients regardless of the solver’s starting point and can stop as soon as the gradient is small. This is why nobody talks about "random seeds" for a logistic regression fit.',
+      },
+      {
+        context: 'Training a deep network',
+        usage:
+          'The loss is non-convex, so two runs with different seeds end at different weights with slightly different validation scores. Practitioners respond by reporting a mean and spread across seeds rather than a single number, which is an admission that the optimum found is one of many.',
+      },
+      {
+        context: 'Learning-rate and optimiser design',
+        usage:
+          'Momentum and Adam exist largely to cross the flat, poorly conditioned regions around saddle points quickly. Second-order methods estimate curvature directly, but forming a Hessian with a million parameters is impossible, so they approximate it.',
+      },
+      {
+        context: 'Regularisation as a convexity repair',
+        usage:
+          'Adding an L2 penalty adds a positive constant to every Hessian eigenvalue, which makes an ill-conditioned or singular problem strictly convex. That is why ridge regression has a unique solution where ordinary least squares with collinear features does not.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'scipy.optimize', role: '`minimize` reports which second-order conditions it verified; `hess` and `jac` arguments correspond directly to the Hessian and gradient here.' },
+      { tool: 'SymPy', role: '`diff`, `solve` and `hessian` let you do this classification exactly rather than numerically, which is how to check your own work.' },
+      { tool: 'PyTorch', role: '`torch.autograd.functional.hessian` computes curvature for small models; the loss landscape literature uses it to visualise minima sharpness.' },
+      { tool: 'scikit-learn', role: 'Convexity is why `LogisticRegression` and `Ridge` are deterministic, while `MLPClassifier` exposes a `random_state`.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Treating a zero derivative as proof of a minimum',
+        why: 'The condition is necessary, not sufficient. Maxima, saddle points and inflections all satisfy it, so stopping there classifies a hilltop as a solution.',
+        fix: 'Always follow the first-order condition with a curvature check: the sign of f″, or the eigenvalue signs of the Hessian.',
+      },
+      {
+        mistake: 'Assuming that f″ = 0 means the point is not an extremum',
+        why: 'A zero second derivative means the test has no information, not that the answer is negative. x⁴ has a genuine strict global minimum at a point where f″ = 0.',
+        fix: 'Evaluate the function on both sides, or continue to higher derivatives: the first non-vanishing derivative decides, and an even order with a positive value means a minimum.',
+      },
+      {
+        mistake: 'Forgetting endpoints when the domain is bounded',
+        why: 'The vanishing-derivative argument requires the ability to step in both directions, which fails at a boundary. On [0, 1], the maximum of f(x) = x is at an endpoint where the derivative is 1, not 0.',
+        fix: 'On a closed domain, compare the function at every interior critical point and at each boundary point. Constrained problems need Lagrange multipliers or KKT conditions rather than ∇f = 0 alone.',
+      },
+      {
+        mistake: 'Calling every non-convex failure a "bad local minimum"',
+        why: 'In high dimensions almost every critical point is a saddle, and empirically the local minima that large networks reach have very similar loss values. Blaming local minima misdiagnoses the problem, which is usually a plateau, poor conditioning, a learning rate that is wrong, or a vanishing gradient.',
+        fix: 'Diagnose by evidence: check the gradient norm, the loss curve shape and the conditioning, and compare several seeds before concluding anything about the landscape.',
+      },
+      {
+        mistake: 'Believing that non-convexity makes gradient descent unjustified',
+        why: 'It removes the guarantee, not the method. Descent still decreases the loss monotonically for a suitable step size, and in overparameterised networks a great many minima are both reachable and good enough.',
+        fix: 'Change the question from "is this the global optimum" — which is unanswerable — to "does this model generalise", which validation data can actually answer.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Why is a zero gradient not enough to conclude you have found a minimum, and what do you check next?',
+        answer:
+          'A zero gradient says the surface is locally flat, which is true of minima, maxima, saddle points and inflections alike — so it only shortlists candidates. The next check is curvature. In one variable, the second derivative’s sign decides: positive means the slope is increasing through the point so it rises on both sides, which is a minimum; negative means a maximum; zero means the test genuinely gives no information, as x⁴ and x³ show, and you must look at the function nearby or at higher derivatives. In several variables curvature becomes the Hessian, and the signs of its eigenvalues give the verdict: all positive is a minimum, all negative a maximum, mixed signs a saddle, and a zero eigenvalue is inconclusive. Even then, "local" is all you get — declaring a minimum global requires either convexity or comparing every critical point and the boundary.',
+        followUp:
+          'A strong answer adds that on a bounded domain the extremes can sit at the boundary where the gradient does not vanish at all.',
+      },
+      {
+        level: 'intermediate',
+        question: 'What does it mean for a function to be convex, and why do we care so much?',
+        answer:
+          'Formally, a function is convex if the chord between any two points on its graph never dips below the graph: f(λa + (1−λ)b) ≤ λf(a) + (1−λ)f(b). For a twice-differentiable function this is equivalent to the Hessian being positive semi-definite everywhere — curvature is never negative in any direction. We care because of one theorem with enormous practical consequences: for a convex function, any local minimum is a global minimum. That converts optimisation from a search problem into a solved one. Gradient descent converges to the optimum from any starting point, initialisation affects only speed, the result is reproducible, and a vanishing gradient is a certificate of optimality rather than a hopeful sign. Least squares, ridge regression, logistic regression with log loss, and the SVM objective are all convex, which is exactly why those models are deterministic and why the literature on them is about statistics rather than about training tricks.',
+        followUp:
+          'Mentioning that convexity is preserved under non-negative sums and composition with affine maps shows the candidate can recognise convexity rather than only recite the definition.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Neural network losses are non-convex, so why does gradient descent work at all?',
+        answer:
+          'Three reasons, and the honest answer starts by conceding that there is no guarantee. First, the classical fear was local minima, and that fear was largely misplaced: in high dimensions a critical point is a local minimum only if the Hessian is positive in every one of millions of directions simultaneously, which is vanishingly unlikely, so almost all critical points are saddles. Saddles have descent directions, and stochastic gradient noise reliably knocks the iterate off the narrow stable manifold that would keep it trapped, so they cost time rather than correctness. Second, overparameterised networks have an enormous number of minima that achieve near-zero training loss, and empirically those minima have similar loss values, so which one you land in matters much less than the classical picture suggests. Third, the objective we actually care about is generalisation, not training loss, and there is evidence that the flatter minima favoured by stochastic descent with reasonable step sizes generalise better than the sharpest ones — so the failure to find the global optimum is sometimes a benefit rather than a cost. What genuinely goes wrong in practice is different: plateaus with near-zero gradients, poor conditioning, vanishing or exploding gradients, and bad learning rates. Those are addressed by initialisation schemes, normalisation, residual connections, momentum and adaptive optimisers — none of which claim to restore convexity.',
+        followUp:
+          'A strong candidate notes that this is an empirical and partially theoretical account, not a proof, and that adversarial non-convex problems certainly exist.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Find and classify every critical point of f(x) = x⁴ − 8x² + 3, and state whether each minimum is global.',
+        hint: 'Factorise f′(x) = 4x³ − 16x, then evaluate f″(x) = 12x² − 16 at each root.',
+        solution:
+          'f′(x) = 4x³ − 16x = 4x(x² − 4) = 4x(x − 2)(x + 2), so the critical points are x = −2, 0, 2.\n\nf″(x) = 12x² − 16.\n• f″(−2) = 48 − 16 = 32 > 0, so x = −2 is a local minimum, with f(−2) = 16 − 32 + 3 = −13.\n• f″(0) = −16 < 0, so x = 0 is a local maximum, with f(0) = 3.\n• f″(2) = 32 > 0, so x = 2 is a local minimum, with f(2) = −13.\n\nBoth minima are global, and here you can say so with confidence for two reasons that are worth separating. The function is a quartic with a positive leading coefficient, so f(x) → +∞ in both directions and the minimum must be attained at an interior critical point; comparing the three candidates, −13 is the smallest. Note this is not an appeal to convexity — the function is not convex, since f″ is negative on the interval between −2/√3 and 2/√3 — but an exhaustive comparison, which is the other legitimate route to the word "global". The two minima tie exactly because the function is even, so a descent algorithm would reach one or the other depending on its starting sign, with no way to prefer either.',
+      },
+      {
+        prompt:
+          'Show that g(x, y) = x³ − 3xy + y³ has exactly two critical points, and classify both.',
+        hint: 'Solve ∂g/∂x = 3x² − 3y = 0 and ∂g/∂y = −3x + 3y² = 0 simultaneously, then build the Hessian and use the determinant test D = g_xx·g_yy − g_xy².',
+        solution:
+          'The partials give y = x² and x = y². Substituting the first into the second, x = x⁴, so x(x³ − 1) = 0 and x = 0 or x = 1. The critical points are therefore (0, 0) and (1, 1).\n\nSecond partials: g_xx = 6x, g_yy = 6y, g_xy = −3. The determinant test uses D = g_xx·g_yy − g_xy² = 36xy − 9.\n\nAt (0, 0): D = −9 < 0. A negative determinant means the Hessian eigenvalues have opposite signs, so this is a saddle point. You can see it directly: along the line y = x the function is 2x³ − 3x², which decreases then increases through the origin, while along y = −x it behaves differently.\n\nAt (1, 1): D = 36 − 9 = 27 > 0 and g_xx = 6 > 0, so both eigenvalues are positive and this is a local minimum, with g(1, 1) = 1 − 3 + 1 = −1.\n\nIt is not a global minimum: setting y = 0 gives g = x³, which tends to −∞ as x → −∞. This is the standard reminder that in two variables, as in one, a positive-definite Hessian at a point tells you only about a neighbourhood.',
+      },
+      {
+        prompt:
+          'A colleague reports that their neural network "got stuck in a local minimum" because training loss plateaued at a high value. Give two more likely explanations and say how you would distinguish them.',
+        hint: 'What is the gradient norm doing during a plateau, and what does high dimensionality imply about critical points?',
+        solution:
+          'A genuine local minimum is the least likely explanation, because being one requires the Hessian to be positive along every one of millions of directions at once, which is vanishingly improbable; the critical points such networks encounter are overwhelmingly saddles, and saddles have escape directions.\n\nMore likely explanation one: a saddle or plateau region where the gradient norm is small but not zero, so progress is slow rather than stopped. Distinguish it by logging the gradient norm — at a plateau it is small and, crucially, still changing, and training resumes if you wait, raise the learning rate, or switch to an optimiser with momentum. A true minimum would show the loss flat with the gradient norm pinned near zero and no recovery.\n\nMore likely explanation two: an optimisation or configuration fault rather than a landscape one. A learning rate too high makes the loss plateau because the iterate bounces across a valley rather than descending it — visible as a noisy, non-decreasing loss curve, and fixed by lowering the rate. A learning rate too low, saturated activations, vanishing gradients through many layers, or unnormalised inputs all produce the same flat curve with a tiny gradient norm. Distinguish these by checking the per-layer gradient norms: if early layers have gradients orders of magnitude smaller than later ones, the problem is vanishing gradients, not the landscape.\n\nThe practical diagnostic sequence is: log gradient norm and per-layer norms, try one much smaller and one much larger learning rate, confirm the model can overfit a batch of ten examples to near-zero loss, and run two different seeds. If a tiny batch cannot be overfitted, the fault is in the code or the data, not in the geometry of the loss.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'MATH-016-q1',
+        type: 'mcq',
+        concept: 'first-order condition',
+        prompt: 'The derivative of f is zero at x = a. What can you conclude?',
+        options: [
+          'a is a critical point and could be a minimum, a maximum or an inflection',
+          'a is definitely a local minimum',
+          'a is definitely a global minimum',
+          'f is convex in a neighbourhood of a',
+        ],
+        answerIndex: 0,
+        explanation:
+          'A vanishing derivative is necessary for an interior extremum but not sufficient. Hilltops and inflection points satisfy it too, which is why curvature must be checked before any classification is made.',
+      },
+      {
+        id: 'MATH-016-q2',
+        type: 'numeric',
+        concept: 'second derivative test',
+        prompt: 'For f(x) = x³ − 3x, what is f″(1)?',
+        answer: 6,
+        tolerance: 0.001,
+        explanation:
+          'f′(x) = 3x² − 3 and f″(x) = 6x, so f″(1) = 6. Because it is positive, the critical point at x = 1 is a local minimum — though not a global one, since f decreases without bound as x → −∞.',
+      },
+      {
+        id: 'MATH-016-q3',
+        type: 'truefalse',
+        concept: 'convexity',
+        prompt: 'For a convex function, every local minimum is also a global minimum.',
+        answer: true,
+        explanation:
+          'True, and this is the single reason convexity matters so much. It follows from the fact that a convex differentiable function lies above its tangent plane everywhere, so a point with zero gradient is at or below the function’s value at every other point.',
+      },
+      {
+        id: 'MATH-016-q4',
+        type: 'mcq',
+        concept: 'Hessian classification',
+        prompt: 'At a critical point of a function of ten variables, the Hessian has eigenvalues that are mostly positive but include two negative ones. What is the point?',
+        options: [
+          'A saddle point — the surface curves up along some directions and down along others',
+          'A local minimum, because most eigenvalues are positive',
+          'A local maximum, because negative eigenvalues dominate the classification',
+          'Inconclusive, because the Hessian is not diagonal',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Mixed eigenvalue signs mean the Hessian is indefinite, which is precisely the definition of a saddle. Two descent directions exist, so gradient descent can still make progress — it just may do so very slowly while the gradient is small.',
+      },
+      {
+        id: 'MATH-016-q5',
+        type: 'fill',
+        concept: 'inconclusive case',
+        prompt: 'Name a function whose second derivative is zero at x = 0 and which nevertheless has a strict global minimum there.',
+        answers: ['x^4', 'x**4', 'x⁴', 'f(x) = x^4', 'x to the fourth', 'x^6', 'x**6'],
+        explanation:
+          'For f(x) = x⁴ both f′(0) and f″(0) are zero, yet every other point has a strictly larger value, so the origin is a strict global minimum. This is the standard proof that a zero second derivative means "no information", not "not an extremum".',
+      },
+      {
+        id: 'MATH-016-q6',
+        type: 'multi',
+        concept: 'convex and non-convex objectives',
+        prompt: 'Which of these optimisation problems are convex?',
+        options: [
+          'Ordinary least squares for linear regression',
+          'Logistic regression with log loss and an L2 penalty',
+          'Training a two-layer neural network with ReLU activations',
+          'The soft-margin support vector machine objective',
+          'K-means clustering over both assignments and centroids',
+        ],
+        answerIndices: [0, 1, 3],
+        explanation:
+          'Least squares has Hessian 2XᵀX/n, a Gram matrix and therefore positive semi-definite; log loss is convex in the weights and an L2 penalty only adds positive curvature; the soft-margin SVM is a convex quadratic programme. A neural network composes its parameters nonlinearly and is not convex, and k-means is non-convex jointly, which is why it is run from several initialisations.',
+      },
+      {
+        id: 'MATH-016-q7',
+        type: 'explain',
+        concept: 'non-convexity in practice',
+        prompt:
+          'Deep learning losses are non-convex, so no algorithm can promise the global minimum. Explain why practitioners are not especially troubled by this.',
+        rubric: [
+          'Explains that in high dimensions almost all critical points are saddles rather than local minima',
+          'Notes that saddles have escape directions and that stochastic noise helps escape them',
+          'Argues that the real objective is generalisation, so a good-enough minimum is acceptable',
+        ],
+        sampleAnswer:
+          'The classical fear was local minima: little valleys that trap the search far from the best solution. In high dimensions that fear turns out to be misplaced, and the reason is a counting argument. A critical point is a local minimum only if the surface curves upward along every single direction, and a network has millions of directions. For all of those conditions to hold at once is extraordinarily unlikely, so the flat places encountered during training are overwhelmingly saddle points, which curve up in some directions and down in others. A saddle is not a trap: it has descent directions, and the noise in stochastic gradient descent reliably knocks the iterate off the narrow set of trajectories that would converge to it. The cost of a saddle is time spent crossing a region where the gradient is small, which is exactly what momentum and adaptive optimisers are designed to shorten. There is a second reason, which is about what we are actually optimising. The training loss is a proxy; the thing we care about is performance on unseen data. Overparameterised networks have vast numbers of parameter settings achieving near-zero training loss, and empirically these achieve broadly similar losses and generalise comparably, so which one you reach matters far less than the classical picture implies. There is even evidence that the flatter minima favoured by stochastic descent generalise better than the sharpest ones, which would make the failure to find the true global optimum a benefit. None of this is a theorem, and it is worth saying so plainly: what we have is a guarantee replaced by a well-tested empirical account, plus the honest observation that the problems which actually stall training are plateaus, conditioning and vanishing gradients rather than bad valleys.',
+        explanation:
+          'The examinable judgement is that losing the convexity guarantee changes the question from "is this optimal" to "is this good enough", and that high-dimensional geometry is what makes the second question answerable in practice.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What is a critical point?', back: 'A point where the derivative is zero, or the gradient is the zero vector. A necessary condition for an interior extremum, never a sufficient one.' },
+      { front: 'How does the second derivative test classify a point?', back: 'f″ > 0 means a local minimum, f″ < 0 a local maximum, f″ = 0 means the test gives no information at all.' },
+      { front: 'What is a saddle point?', back: 'A critical point where the Hessian is indefinite: the surface curves upward along some directions and downward along others, like a mountain pass.' },
+      { front: 'What is the Hessian and what do its eigenvalues mean?', back: 'The matrix of second partial derivatives. Its eigenvalues are the curvatures along orthogonal principal directions; all positive is a minimum, mixed signs a saddle.' },
+      { front: 'Define a convex function.', back: 'One where every chord lies on or above the graph: f(λa + (1−λ)b) ≤ λf(a) + (1−λ)f(b). Equivalently, its Hessian is positive semi-definite everywhere.' },
+      { front: 'Why do we care about convexity?', back: 'Because any local minimum is then global, so gradient descent converges to the optimum from any start and a zero gradient certifies the answer.' },
+      { front: 'Why does x⁴ matter in this topic?', back: 'It has f″(0) = 0 yet a strict global minimum at 0, proving that a vanishing second derivative means "inconclusive", not "not an extremum".' },
+      { front: 'Why are neural-network local minima less feared than they used to be?', back: 'Being a minimum needs positive curvature in millions of directions at once, so nearly all critical points are saddles, which have escape directions.' },
+    ],
+
+    challenge: {
+      title: 'Map a loss landscape and test the saddle claim',
+      brief:
+        'Take a small model with exactly two trainable parameters — logistic regression on a two-feature dataset, then a tiny neural network with two weights. For each, evaluate the loss on a grid and plot it as a surface and as a contour map. Locate critical points numerically by minimising the gradient norm from many random starts, classify each by computing the Hessian and its eigenvalues, and tabulate how many are minima, maxima and saddles. Then run gradient descent from fifty random initialisations on each model and report the distribution of final losses. Conclude with a short written comparison explaining what the convex case guarantees that the non-convex case does not.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Both landscapes are computed from a real loss on real data, not from an invented analytic function',
+        'Critical points are found numerically and classified by Hessian eigenvalue signs, not by eye',
+        'The convex model reaches the same optimum from every one of the fifty initialisations, within tolerance',
+        'The non-convex model shows a spread of final losses, and the spread is quantified rather than described',
+        'The write-up distinguishes "no local minima exist" from "the local minima found are good enough"',
+      ],
+      starterCode:
+        'import numpy as np\nfrom scipy.optimize import minimize\n\ndef loss_grid(loss_fn, w1_range, w2_range, n=200):\n    """Evaluate loss_fn on an n by n grid of the two parameters."""\n    ...\n\ndef classify_critical_point(hess):\n    """Return "minimum", "maximum" or "saddle" from the eigenvalue signs."""\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone who can differentiate but has never optimised anything how to find a minimum, how to tell it apart from a maximum or a saddle, and what convexity buys you. Finish with an honest account of neural networks.',
+      mustCover: [
+        'A minimum requires a zero derivative, but a zero derivative does not imply a minimum',
+        'Curvature — the second derivative, or the Hessian in several variables — classifies the point',
+        'A saddle is flat but is neither a maximum nor a minimum, and dominates in high dimensions',
+        'Convexity means any local minimum is global, which is why convex problems are considered solved',
+      ],
+      bonusSignals: ['uses the foggy landscape image and says explicitly what the fog represents', 'gives the x⁴ counterexample for the inconclusive case', 'is honest that non-convex success is empirical rather than proved'],
+      sampleExplanation:
+        'Start with why anybody cares. Training a model means turning knobs until the error is as small as possible, so the whole of machine learning rests on finding the lowest point of a function. Now the geometric fact that makes this tractable: at the bottom of a valley, the ground is flat. Take a tiny step in any direction and the height barely changes, because the slope there is zero. So the search begins by finding places where the derivative is zero, and those are called critical points. Here is the catch that everyone must internalise. Flat does not mean lowest. The top of a hill is flat too. And in two or more dimensions there is a third possibility that has no counterpart on a single curve: a mountain pass, which is the lowest point along the road through the mountains but the highest point along the ridge crossing it. Stand in the middle of a pass and the ground is perfectly level, yet you are neither at a peak nor in a valley. That is a saddle point, and it turns out to matter enormously. To tell these apart, ask how the ground bends. That is the second derivative. If it is positive, the slope is increasing as you move right, meaning the surface comes down into your point and goes back up — a valley. Negative means the reverse — a hilltop. And if it is exactly zero, you learn nothing at all: x⁴ has a genuine minimum at the origin and x³ merely flattens out there, and both have a second derivative of zero. With several variables, curvature stops being one number, because a surface can bend upward one way and downward another. It becomes a matrix called the Hessian, and the signs of its eigenvalues are the curvatures along its natural directions: all positive is a bowl, all negative a dome, mixed signs a saddle. Now the good news. Suppose a function bends upward everywhere, in every direction, at every point. Then it is impossible to build a second, separate valley — there is only one bowl. Such functions are called convex, and they come with a guarantee that is hard to overstate: any flat point you find is the global minimum. Start anywhere, walk downhill, and you will reach the best possible answer. That is exactly why linear regression, ridge regression, logistic regression and support vector machines are considered solved problems: initialisation changes how long they take and nothing else, and the answer is reproducible to the last decimal. Finally, the honest part. Neural network losses are not convex, not remotely, and nobody can promise you the global minimum. For a long time the fear was that training would get stuck in some poor little valley. That fear has largely dissolved, for a reason worth understanding. To be a local minimum, a point must curve upward along every single direction at once — and a network has millions of directions. That is an extraordinarily demanding coincidence, so nearly every flat place a network encounters is a saddle rather than a valley, and a saddle always has a way down. The randomness in stochastic gradient descent is usually enough to find it. On top of that, large networks have an abundance of settings that fit the training data almost perfectly, and the ones reached in practice tend to perform similarly on new data, which is the thing we actually care about. So the honest summary is this: convexity gives you a proof, non-convexity gives you an empirical track record, and in deep learning we have chosen to trade the proof for the expressiveness — while keeping validation data as the way of checking whether the trade paid off.',
+    },
+  },
 ];
