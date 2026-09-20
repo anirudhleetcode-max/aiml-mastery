@@ -21,28 +21,31 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  profile          Profile?
-  state            LearnerMeta?
-  progress         UnitProgress[]
-  assessments      Assessment[]
-  xpTransactions   XpTransaction[]
-  achievements     UserAchievement[]
-  mistakes         Mistake[]
-  notes            Note[]
-  teachingAttempts TeachingAttempt[]
-  sessions         StudySession[]
-  activity         DayActivity[]
-  notifications    Notification[]
-  appliedEvents    AppliedEvent[]
-  authSessions     AuthSession[]
+  profile           Profile?
+  state             LearnerMeta?
+  progress          UnitProgress[]
+  assessments       Assessment[]
+  xpTransactions    XpTransaction[]
+  achievements      UserAchievement[]
+  mistakes          Mistake[]
+  notes             Note[]
+  teachingAttempts  TeachingAttempt[]
+  sessions          StudySession[]
+  activity          DayActivity[]
+  notifications     Notification[]
+  appliedEvents     AppliedEvent[]
+  authSessions      AuthSession[]
+  flashcardReviews  FlashcardReview[]
+  interviewAttempts InterviewAttempt[]
+  labCompletions    LabCompletion[]
 }
 
 /// Server-side session records, so a token can be revoked rather than only expiring.
 model AuthSession {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
   expiresAt DateTime
   revokedAt DateTime?
   userAgent String?
@@ -51,75 +54,75 @@ model AuthSession {
 }
 
 model Profile {
-  id                  String   @id @default(cuid())
-  userId              String   @unique
-  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name                String
-  studyBudget         Int      @default(60)
-  preferredStudyTime  String   @default("19:00")
-  experience          String   @default("complete-beginner")
-  targetRole          String   @default("ai-ml-intern")
-  startDate           String   @default("2026-09-20")
-  endDate             String   @default("2026-12-31")
-  timezone            String   @default("UTC")
-  onboardedAt         DateTime?
+  id                 String    @id @default(cuid())
+  userId             String    @unique
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name               String
+  studyBudget        Int       @default(60)
+  preferredStudyTime String    @default("19:00")
+  experience         String    @default("complete-beginner")
+  targetRole         String    @default("ai-ml-intern")
+  startDate          String    @default("2026-09-20")
+  endDate            String    @default("2026-12-31")
+  timezone           String    @default("UTC")
+  onboardedAt        DateTime?
   /// JSON blob of NotificationPrefs.
-  notificationPrefs   String   @default("{}")
+  notificationPrefs  String    @default("{}")
   /// JSON array of paused ISO dates.
-  pausedDates         String   @default("[]")
-  theme               String   @default("dark")
-  reduceMotion        Boolean  @default(false)
-  highContrast        Boolean  @default(false)
-  fontScale           Int      @default(100)
-  updatedAt           DateTime @updatedAt
+  pausedDates        String    @default("[]")
+  theme              String    @default("dark")
+  reduceMotion       Boolean   @default(false)
+  highContrast       Boolean   @default(false)
+  fontScale          Int       @default(100)
+  updatedAt          DateTime  @updatedAt
 }
 
 /// Scalar learner state that does not belong to a per-unit or per-event row.
 model LearnerMeta {
-  id                String @id @default(cuid())
-  userId            String @unique
-  user              User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  xp                Int    @default(0)
-  revision          Int    @default(0)
-  streakCurrent     Int    @default(0)
-  streakLongest     Int    @default(0)
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  xp                Int      @default(0)
+  revision          Int      @default(0)
+  streakCurrent     Int      @default(0)
+  streakLongest     Int      @default(0)
   streakLastDate    String?
-  testStreak        Int    @default(0)
-  longestTestStreak Int    @default(0)
-  teachingStreak    Int    @default(0)
-  freezesRemaining  Int    @default(2)
-  disciplineScore   Int    @default(80)
-  testsDue          Int    @default(0)
-  testsCompleted    Int    @default(0)
-  testsMissed       Int    @default(0)
+  testStreak        Int      @default(0)
+  longestTestStreak Int      @default(0)
+  teachingStreak    Int      @default(0)
+  freezesRemaining  Int      @default(2)
+  disciplineScore   Int      @default(80)
+  testsDue          Int      @default(0)
+  testsCompleted    Int      @default(0)
+  testsMissed       Int      @default(0)
   updatedAt         DateTime @updatedAt
 }
 
 model UnitProgress {
-  id                String  @id @default(cuid())
-  userId            String
-  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  unitId            String
-  mastery           String  @default("NOT_STARTED")
-  bestScore         Float   @default(0)
-  lastScore         Float   @default(0)
-  attempts          Int     @default(0)
-  practiceCompleted Int     @default(0)
+  id                 String    @id @default(cuid())
+  userId             String
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unitId             String
+  mastery            String    @default("NOT_STARTED")
+  bestScore          Float     @default(0)
+  lastScore          Float     @default(0)
+  attempts           Int       @default(0)
+  practiceCompleted  Int       @default(0)
   /// JSON array of completed practice indices, so the count cannot be inflated
   /// by repeating the same item.
-  practiceDone      String  @default("[]")
-  challengeCompleted Boolean @default(false)
-  teachingScore     Float?
-  lessonCompletedAt DateTime?
-  lastStudiedAt     DateTime?
-  timeSpentSeconds  Int     @default(0)
-  nextReviewAt      String?
-  reviewStep        Int     @default(0)
-  weak              Boolean @default(false)
-  skipped           Boolean @default(false)
-  bookmarked        Boolean @default(false)
-  flaggedDifficult  Boolean @default(false)
-  updatedAt         DateTime @updatedAt
+  practiceDone       String    @default("[]")
+  challengeCompleted Boolean   @default(false)
+  teachingScore      Float?
+  lessonCompletedAt  DateTime?
+  lastStudiedAt      DateTime?
+  timeSpentSeconds   Int       @default(0)
+  nextReviewAt       String?
+  reviewStep         Int       @default(0)
+  weak               Boolean   @default(false)
+  skipped            Boolean   @default(false)
+  bookmarked         Boolean   @default(false)
+  flaggedDifficult   Boolean   @default(false)
+  updatedAt          DateTime  @updatedAt
 
   @@unique([userId, unitId])
   @@index([userId, nextReviewAt])
@@ -245,16 +248,16 @@ model StudySession {
 
 /// One row per calendar day, powering the heatmap and daily/weekly reports.
 model DayActivity {
-  id             String @id @default(cuid())
+  id             String  @id @default(cuid())
   userId         String
-  user           User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   date           String
-  unitsCompleted Int    @default(0)
-  xp             Int    @default(0)
-  studySeconds   Int    @default(0)
+  unitsCompleted Int     @default(0)
+  xp             Int     @default(0)
+  studySeconds   Int     @default(0)
   testScore      Float?
   testTaken      Boolean @default(false)
-  teachBacks     Int    @default(0)
+  teachBacks     Int     @default(0)
 
   @@unique([userId, date])
   @@index([userId, date])
@@ -287,4 +290,73 @@ model AppliedEvent {
 
   @@unique([userId, eventId])
   @@index([userId, appliedAt])
+}
+
+/// One row per flashcard the learner has actually graded.
+///
+/// Flashcards were previously reviewed entirely in component state, so the
+/// session's verdict evaporated on navigation: nothing scheduled a card for
+/// another pass and nothing could report how many had been reviewed. Cards are
+/// addressed by (unitId, cardIndex) because a flashcard has no id of its own
+/// in the curriculum schema, and the index is stable for a given unit.
+model FlashcardReview {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unitId         String
+  cardIndex      Int
+  /// "known" or "again" — the learner's own verdict, which is the only signal
+  /// a recall check can produce.
+  lastGrade      String
+  timesSeen      Int      @default(0)
+  timesKnown     Int      @default(0)
+  timesAgain     Int      @default(0)
+  /// Rung on the REVIEW_STEPS ladder shared with unit review scheduling.
+  reviewStep     Int      @default(0)
+  nextReviewAt   String
+  lastReviewedAt DateTime @default(now())
+
+  @@unique([userId, unitId, cardIndex])
+  @@index([userId, nextReviewAt])
+}
+
+/// One row per interview question the learner has attempted.
+///
+/// The curriculum carries 660 interview questions that were only ever rendered
+/// inside their own lesson. This records an attempt so they can be practised
+/// across units, weak areas can be found, and readiness can be computed from
+/// evidence rather than asserted.
+model InterviewAttempt {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unitId        String
+  /// Index of the question within the unit's interviewQuestions array.
+  questionIndex Int
+  /// Self-assessed confidence after seeing the model answer: the honest signal
+  /// available for an open-ended question with no machine-checkable answer.
+  confidence    String
+  /// Seconds spent before revealing the answer, which is itself diagnostic.
+  seconds       Int      @default(0)
+  attempts      Int      @default(1)
+  lastAttemptAt DateTime @default(now())
+
+  @@unique([userId, unitId, questionIndex])
+  @@index([userId, confidence])
+}
+
+/// One row per lab a learner has worked through to its stated objective.
+model LabCompletion {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  labId       String
+  /// Checklist indices the learner has ticked, as JSON, so a count cannot be
+  /// inflated by ticking the same step repeatedly.
+  stepsDone   String    @default("[]")
+  completedAt DateTime?
+  seconds     Int       @default(0)
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([userId, labId])
 }

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Award, BarChart3, BookMarked, BookOpen, Bot, Calendar, FlaskConical, GraduationCap,
-  LayoutDashboard, Map, NotebookPen, Settings, Sigma, SpellCheck, Target, Network,
+  LayoutDashboard, Map, MessagesSquare, NotebookPen, Settings, Sigma, SpellCheck, Target, Network,
   ClipboardList, Eraser, Layers,
 } from 'lucide-react';
 import { Logo } from '@/components/layout/logo';
@@ -36,6 +36,7 @@ export const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { href: '/tests', label: 'Tests', icon: Calendar },
       { href: '/flashcards', label: 'Flashcards', icon: BookMarked },
       { href: '/mistakes', label: 'My mistakes', icon: Eraser },
+      { href: '/interview', label: 'Interview prep', icon: MessagesSquare },
       { href: '/teach', label: 'Teacher mode', icon: GraduationCap },
     ],
   },

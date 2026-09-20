@@ -4,11 +4,12 @@ import { ALL_UNITS, UNIT_BY_ID } from '@/data/curriculum';
 import { DOMAINS } from '@/data/domains';
 import { computeMastery, isWeak, requirementsFor } from '@/features/progress/mastery';
 import { newlyUnlocked } from '@/features/progress/achievements';
-import { scheduleReview } from '@/features/revision/spaced';
+import { REVIEW_STEPS, scheduleReview } from '@/features/revision/spaced';
 import { gradeQuestion, type Response as GradeResponse } from '@/features/testing/scoring';
 import { evaluateTeaching } from '@/features/teaching/evaluate';
 import { recordActivity, effectiveStreak } from '@/features/streak/streak';
 import { ACHIEVEMENT_BY_ID } from '@/data/achievements';
+import { LAB_BY_ID } from '@/data/labs';
 import { XP_VALUES, awardsForAssessment, updateDiscipline } from '@/features/xp/rules';
 import { addDays, dateKey } from '@/lib/format';
 import type { LearnerEvent } from './events';
@@ -576,6 +577,185 @@ export async function applyEvents(userId: string, events: LearnerEvent[]): Promi
                 ...(e.notifications ? { notificationPrefs: JSON.stringify({ ...prefs, ...e.notifications }) } : {}),
               },
             });
+            break;
+          }
+
+          case 'flashcard-reviewed': {
+            const unit = UNIT_BY_ID.get(e.unitId);
+            // Bound the index against the real deck so a crafted request
+            // cannot create rows for cards that do not exist.
+            if (!unit || e.cardIndex >= unit.flashcards.length) break;
+
+            const key = { userId_unitId_cardIndex: { userId, unitId: e.unitId, cardIndex: e.cardIndex } };
+            const existing = await tx.flashcardReview.findUnique({ where: key });
+
+            // The same ladder as unit review, so a card and its unit do not
+            // drift onto contradictory schedules.
+            const step = e.grade === 'known' ? Math.min(REVIEW_STEPS.length - 1, (existing?.reviewStep ?? -1) + 1) : 0;
+            const nextReviewAt = addDays(day, REVIEW_STEPS[step]!);
+
+            await tx.flashcardReview.upsert({
+              where: key,
+              create: {
+                userId,
+                unitId: e.unitId,
+                cardIndex: e.cardIndex,
+                lastGrade: e.grade,
+                timesSeen: 1,
+                timesKnown: e.grade === 'known' ? 1 : 0,
+                timesAgain: e.grade === 'again' ? 1 : 0,
+                reviewStep: step,
+                nextReviewAt,
+                lastReviewedAt: safeAt,
+              },
+              update: {
+                lastGrade: e.grade,
+                timesSeen: { increment: 1 },
+                timesKnown: e.grade === 'known' ? { increment: 1 } : undefined,
+                timesAgain: e.grade === 'again' ? { increment: 1 } : undefined,
+                reviewStep: step,
+                nextReviewAt,
+                lastReviewedAt: safeAt,
+              },
+            });
+
+            // XP for the first grading of a card only. Re-grading the same
+            // card reschedules it but cannot be farmed for points.
+            if (!existing) {
+              xpDelta += await awardXP(
+                tx,
+                userId,
+                [{
+                  reason: 'flashcard-session',
+                  amount: XP_VALUES['flashcard-session'],
+                  detail: `Flashcard: ${unit.title}`,
+                  unitId: unit.id,
+                }],
+                safeAt,
+                effects,
+              );
+              await bumpActivity(tx, userId, day, { xp: XP_VALUES['flashcard-session'] });
+            }
+            break;
+          }
+
+          case 'interview-attempted': {
+            const unit = UNIT_BY_ID.get(e.unitId);
+            if (!unit || e.questionIndex >= unit.interviewQuestions.length) break;
+
+            const key = {
+              userId_unitId_questionIndex: { userId, unitId: e.unitId, questionIndex: e.questionIndex },
+            };
+            const existing = await tx.interviewAttempt.findUnique({ where: key });
+
+            await tx.interviewAttempt.upsert({
+              where: key,
+              create: {
+                userId,
+                unitId: e.unitId,
+                questionIndex: e.questionIndex,
+                confidence: e.confidence,
+                seconds: e.seconds,
+                attempts: 1,
+                lastAttemptAt: safeAt,
+              },
+              update: {
+                confidence: e.confidence,
+                seconds: { increment: e.seconds },
+                attempts: { increment: 1 },
+                lastAttemptAt: safeAt,
+              },
+            });
+
+            if (!existing) {
+              xpDelta += await awardXP(
+                tx,
+                userId,
+                [{
+                  reason: 'interview-answered',
+                  amount: XP_VALUES['interview-answered'],
+                  detail: `Interview: ${unit.title}`,
+                  unitId: unit.id,
+                }],
+                safeAt,
+                effects,
+              );
+              await bumpActivity(tx, userId, day, { xp: XP_VALUES['interview-answered'] });
+            }
+            break;
+          }
+
+          case 'lab-step-completed': {
+            const lab = LAB_BY_ID.get(e.labId);
+            if (!lab || e.stepIndex >= lab.steps.length) break;
+
+            const key = { userId_labId: { userId, labId: e.labId } };
+            const existing = await tx.labCompletion.findUnique({ where: key });
+
+            // Same guard as practice: store which steps, derive the count, so
+            // ticking one step repeatedly cannot complete a lab.
+            let done: number[] = [];
+            try {
+              done = JSON.parse(existing?.stepsDone ?? '[]') as number[];
+            } catch {
+              done = [];
+            }
+            const set = new Set(done.filter((n) => Number.isInteger(n) && n >= 0 && n < lab.steps.length));
+            set.add(e.stepIndex);
+            const indices = [...set].sort((a, b) => a - b);
+
+            await tx.labCompletion.upsert({
+              where: key,
+              create: { userId, labId: e.labId, stepsDone: JSON.stringify(indices) },
+              update: { stepsDone: JSON.stringify(indices) },
+            });
+            break;
+          }
+
+          case 'lab-completed': {
+            const lab = LAB_BY_ID.get(e.labId);
+            if (!lab) break;
+
+            const key = { userId_labId: { userId, labId: e.labId } };
+            const existing = await tx.labCompletion.findUnique({ where: key });
+
+            // Completion is earned by working the steps, not by pressing a
+            // button: a lab only closes once every step is ticked.
+            let done: number[] = [];
+            try {
+              done = JSON.parse(existing?.stepsDone ?? '[]') as number[];
+            } catch {
+              done = [];
+            }
+            const complete = new Set(done).size >= lab.steps.length;
+            if (!complete) break;
+
+            const alreadyDone = existing?.completedAt != null;
+            await tx.labCompletion.upsert({
+              where: key,
+              create: {
+                userId,
+                labId: e.labId,
+                stepsDone: JSON.stringify(done),
+                completedAt: safeAt,
+                seconds: e.seconds,
+              },
+              update: {
+                completedAt: existing?.completedAt ?? safeAt,
+                seconds: { increment: e.seconds },
+              },
+            });
+
+            if (!alreadyDone) {
+              xpDelta += await awardXP(
+                tx,
+                userId,
+                [{ reason: 'lab-complete', amount: XP_VALUES['lab-complete'], detail: `Lab: ${lab.title}` }],
+                safeAt,
+                effects,
+              );
+              await bumpActivity(tx, userId, day, { xp: XP_VALUES['lab-complete'] });
+            }
             break;
           }
 

@@ -3,6 +3,9 @@ import type {
   AppNotification,
   AssessmentResult,
   DayActivity,
+  FlashcardReviewState,
+  InterviewAttemptState,
+  LabProgressState,
   LearnerProfile,
   LearnerState,
   MistakeEntry,
@@ -70,6 +73,9 @@ export async function loadState(userId: string): Promise<FullState | null> {
         take: 250,
         include: { answers: true },
       },
+      flashcardReviews: true,
+      interviewAttempts: true,
+      labCompletions: true,
     },
   });
 
@@ -207,7 +213,38 @@ export async function loadState(userId: string): Promise<FullState | null> {
     dedupeKey: n.dedupeKey,
   }));
 
+  const flashcardReviews: FlashcardReviewState[] = user.flashcardReviews.map((r) => ({
+    unitId: r.unitId,
+    cardIndex: r.cardIndex,
+    lastGrade: r.lastGrade === 'again' ? 'again' : 'known',
+    timesSeen: r.timesSeen,
+    timesKnown: r.timesKnown,
+    timesAgain: r.timesAgain,
+    reviewStep: r.reviewStep,
+    nextReviewAt: r.nextReviewAt,
+    lastReviewedAt: r.lastReviewedAt.toISOString(),
+  }));
+
+  const interviewAttempts: InterviewAttemptState[] = user.interviewAttempts.map((r) => ({
+    unitId: r.unitId,
+    questionIndex: r.questionIndex,
+    confidence: (r.confidence === 'confident' || r.confidence === 'shaky' ? r.confidence : 'lost'),
+    seconds: r.seconds,
+    attempts: r.attempts,
+    lastAttemptAt: r.lastAttemptAt.toISOString(),
+  }));
+
+  const labs: LabProgressState[] = user.labCompletions.map((r) => ({
+    labId: r.labId,
+    stepsDone: parseJSON<number[]>(r.stepsDone, []),
+    completedAt: r.completedAt?.toISOString() ?? null,
+    seconds: r.seconds,
+  }));
+
   return {
+    flashcardReviews,
+    interviewAttempts,
+    labs,
     email: user.email,
     profile,
     units,

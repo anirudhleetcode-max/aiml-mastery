@@ -5,6 +5,9 @@ import { ArrowLeft, BookOpen } from 'lucide-react';
 import { LAB_BY_ID, LABS } from '@/data/labs';
 import { DOMAIN_BY_ID, domainColor } from '@/data/domains';
 import { WidgetMount } from '@/components/viz/widget-mount';
+import { LabChecklist } from '@/components/labs/lab-checklist';
+import { requireUser } from '@/lib/auth/guard';
+import { loadState } from '@/lib/sync/state';
 import { Button } from '@/components/ui/button';
 import { getUnit } from '@/data/curriculum';
 
@@ -18,6 +21,10 @@ export default async function LabPage({ params }: { params: Promise<{ lab: strin
   const { lab } = await params;
   const entry = LAB_BY_ID.get(lab);
   if (!entry) notFound();
+
+  const user = await requireUser();
+  const state = await loadState(user.id);
+  const progress = state?.labs.find((l) => l.labId === entry.id);
 
   const domain = DOMAIN_BY_ID[entry.domain];
   const unit = getUnit(entry.unitSlug);
@@ -47,6 +54,13 @@ export default async function LabPage({ params }: { params: Promise<{ lab: strin
       </header>
 
       <WidgetMount widget={entry.id} />
+
+      <LabChecklist
+        labId={entry.id}
+        steps={entry.steps}
+        initialDone={progress?.stepsDone ?? []}
+        initiallyComplete={progress?.completedAt != null}
+      />
 
       {unit && (
         <section className="rounded-xl border border-line bg-surface p-5">

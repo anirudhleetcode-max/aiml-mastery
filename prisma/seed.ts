@@ -12,6 +12,7 @@ import { DEFAULT_NOTIFICATION_PREFS } from '../src/lib/sync/state';
 import { computeMastery, requirementsFor } from '../src/features/progress/mastery';
 import { addDays, dateKey } from '../src/lib/format';
 import { emptyUnitProgress } from '../src/types/progress';
+import { XP_VALUES } from '../src/features/xp/rules';
 
 const prisma = new PrismaClient();
 
@@ -64,7 +65,9 @@ async function main() {
       },
       state: {
         create: {
-          xp: 8450,
+          // Set below from the sum of the seeded transactions, so the demo
+          // learner's total is the sum of its own recorded history.
+          xp: 0,
           revision: 1,
           streakCurrent: 12,
           streakLongest: 14,
@@ -130,6 +133,61 @@ async function main() {
         flaggedDifficult: i % 13 === 0,
       },
     });
+
+    // A real learner earns a transaction for every lesson and every piece of
+    // practice. Seeding the progress row without them left meta.xp higher
+    // than the ledger it is supposed to summarise, which made the headline
+    // number partly invented — exactly what this app must not do.
+    await prisma.xpTransaction.create({
+      data: {
+        id: `seed_xp_lesson_${unit.id}`,
+        userId: user.id,
+        amount: XP_VALUES['lesson-complete'],
+        reason: 'lesson-complete',
+        detail: `Lesson: ${unit.title}`,
+        unitId: unit.id,
+        createdAt: new Date(p.lessonCompletedAt!),
+      },
+    });
+    if (p.practiceCompleted > 0) {
+      await prisma.xpTransaction.create({
+        data: {
+          id: `seed_xp_practice_${unit.id}`,
+          userId: user.id,
+          amount: XP_VALUES['practice-complete'] * p.practiceCompleted,
+          reason: 'practice-complete',
+          detail: `Practice: ${unit.title}`,
+          unitId: unit.id,
+          createdAt: new Date(p.lastStudiedAt!),
+        },
+      });
+    }
+    if (p.teachingScore != null) {
+      await prisma.xpTransaction.create({
+        data: {
+          id: `seed_xp_teach_${unit.id}`,
+          userId: user.id,
+          amount: XP_VALUES.teaching,
+          reason: 'teaching',
+          detail: `Taught back: ${unit.title}`,
+          unitId: unit.id,
+          createdAt: new Date(p.lastStudiedAt!),
+        },
+      });
+    }
+    if (p.challengeCompleted) {
+      await prisma.xpTransaction.create({
+        data: {
+          id: `seed_xp_challenge_${unit.id}`,
+          userId: user.id,
+          amount: XP_VALUES.challenge,
+          reason: 'challenge',
+          detail: `Challenge: ${unit.title}`,
+          unitId: unit.id,
+          createdAt: new Date(p.lastStudiedAt!),
+        },
+      });
+    }
   }
 
   /* ---- daily activity, assessments, XP ---- */
@@ -292,8 +350,20 @@ async function main() {
     ],
   });
 
+  // meta.xp is the sum of the ledger, not a number chosen to look good. A
+  // learner's headline total must always be explainable by the transactions
+  // behind it, and the same has to be true of the demo account.
+  const ledger = await prisma.xpTransaction.aggregate({
+    where: { userId: user.id },
+    _sum: { amount: true },
+  });
+  const totalXp = Math.max(0, ledger._sum.amount ?? 0);
+  await prisma.learnerMeta.update({ where: { userId: user.id }, data: { xp: totalXp } });
+
   console.log(`  Demo learner ready — ${DEMO_EMAIL} / ${DEMO_PASSWORD}`);
-  console.log(`  ${COMPLETED}/${ALL_UNITS.length} units complete, 8,450 XP, 12-day streak.`);
+  console.log(
+    `  ${COMPLETED}/${ALL_UNITS.length} units complete, ${totalXp.toLocaleString('en-GB')} XP, 12-day streak.`,
+  );
 }
 
 function correctText(q: (typeof ALL_UNITS)[number]['quiz'][number]): string {

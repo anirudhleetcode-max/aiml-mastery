@@ -223,3 +223,224 @@ describe('the sync write path', () => {
     expect(result.state.xp).toBe(before.state.xp);
   });
 });
+
+/**
+ * The three surfaces added after the first release — flashcards, interview
+ * practice and labs — all write through the same event path, so the same
+ * properties have to hold: the server bounds every index against the real
+ * curriculum, and XP is awarded for genuinely new work rather than for
+ * repeating an action.
+ */
+describe('flashcard review', () => {
+  it('records a verdict and schedules the card', async () => {
+    const result = await applyEvents(userId, [
+      envelope('fc-1', { type: 'flashcard-reviewed', unitId: firstUnit.id, cardIndex: 0, grade: 'known' }),
+    ]);
+    expect(result.applied).toEqual(['fc-1']);
+
+    const row = result.state.flashcardReviews.find((r) => r.unitId === firstUnit.id && r.cardIndex === 0);
+    expect(row).toBeTruthy();
+    expect(row!.lastGrade).toBe('known');
+    expect(row!.timesKnown).toBe(1);
+    // "known" advances one rung, so the card is not due again today.
+    expect(row!.nextReviewAt > new Date().toISOString().slice(0, 10)).toBe(true);
+  });
+
+  it('sends a card you could not recall back to the shortest interval', async () => {
+    await applyEvents(userId, [
+      envelope('fc-2', { type: 'flashcard-reviewed', unitId: firstUnit.id, cardIndex: 1, grade: 'known' }),
+      envelope('fc-3', { type: 'flashcard-reviewed', unitId: firstUnit.id, cardIndex: 1, grade: 'known' }),
+    ]);
+    const climbed = (await applyEvents(userId, [])).state.flashcardReviews.find(
+      (r) => r.unitId === firstUnit.id && r.cardIndex === 1,
+    )!;
+    expect(climbed.reviewStep).toBeGreaterThan(0);
+
+    const after = await applyEvents(userId, [
+      envelope('fc-4', { type: 'flashcard-reviewed', unitId: firstUnit.id, cardIndex: 1, grade: 'again' }),
+    ]);
+    const dropped = after.state.flashcardReviews.find((r) => r.unitId === firstUnit.id && r.cardIndex === 1)!;
+    expect(dropped.reviewStep).toBe(0);
+    expect(dropped.timesAgain).toBe(1);
+  });
+
+  it('awards XP for a card once, however often it is regraded', async () => {
+    const before = (await applyEvents(userId, [])).state.xp;
+    await applyEvents(userId, [
+      envelope('fc-5', { type: 'flashcard-reviewed', unitId: firstUnit.id, cardIndex: 2, grade: 'known' }),
+    ]);
+    const afterFirst = (await applyEvents(userId, [])).state.xp;
+    expect(afterFirst).toBeGreaterThan(before);
+
+    await applyEvents(userId, [
+      envelope('fc-6', { type: 'flashcard-reviewed', unitId: firstUnit.id, cardIndex: 2, grade: 'again' }),
+      envelope('fc-7', { type: 'flashcard-reviewed', unitId: firstUnit.id, cardIndex: 2, grade: 'known' }),
+    ]);
+    expect((await applyEvents(userId, [])).state.xp).toBe(afterFirst);
+  });
+
+  it('ignores a card index the unit does not have', async () => {
+    const result = await applyEvents(userId, [
+      envelope('fc-bad', { type: 'flashcard-reviewed', unitId: firstUnit.id, cardIndex: 59, grade: 'known' }),
+    ]);
+    expect(result.state.flashcardReviews.some((r) => r.cardIndex === 59)).toBe(false);
+  });
+});
+
+describe('interview practice', () => {
+  it('records a confidence verdict', async () => {
+    await applyEvents(userId, [
+      envelope('iv-1', {
+        type: 'interview-attempted',
+        unitId: firstUnit.id,
+        questionIndex: 0,
+        confidence: 'shaky',
+        seconds: 45,
+      }),
+    ]);
+    const row = (await applyEvents(userId, [])).state.interviewAttempts.find(
+      (a) => a.unitId === firstUnit.id && a.questionIndex === 0,
+    );
+    expect(row).toBeTruthy();
+    expect(row!.confidence).toBe('shaky');
+    expect(row!.seconds).toBe(45);
+  });
+
+  it('updates the verdict on a second attempt without double-awarding XP', async () => {
+    const before = (await applyEvents(userId, [])).state.xp;
+    await applyEvents(userId, [
+      envelope('iv-2', {
+        type: 'interview-attempted',
+        unitId: firstUnit.id,
+        questionIndex: 0,
+        confidence: 'confident',
+        seconds: 20,
+      }),
+    ]);
+    const after = await applyEvents(userId, []);
+    const row = after.state.interviewAttempts.find((a) => a.unitId === firstUnit.id && a.questionIndex === 0)!;
+    expect(row.confidence).toBe('confident');
+    expect(row.attempts).toBe(2);
+    expect(after.state.xp).toBe(before);
+  });
+
+  it('ignores a question index the unit does not have', async () => {
+    await applyEvents(userId, [
+      envelope('iv-bad', {
+        type: 'interview-attempted',
+        unitId: firstUnit.id,
+        questionIndex: 39,
+        confidence: 'confident',
+        seconds: 1,
+      }),
+    ]);
+    const rows = (await applyEvents(userId, [])).state.interviewAttempts;
+    expect(rows.some((a) => a.questionIndex === 39)).toBe(false);
+  });
+});
+
+describe('labs', () => {
+  it('will not complete a lab whose steps are unfinished', async () => {
+    const { LABS } = await import('@/data/labs');
+    const lab = LABS[0]!;
+
+    await applyEvents(userId, [
+      envelope('lab-1', { type: 'lab-step-completed', labId: lab.id, stepIndex: 0 }),
+      envelope('lab-2', { type: 'lab-completed', labId: lab.id, seconds: 300 }),
+    ]);
+
+    const row = (await applyEvents(userId, [])).state.labs.find((l) => l.labId === lab.id);
+    expect(row).toBeTruthy();
+    expect(row!.stepsDone).toEqual([0]);
+    // The completion event was applied but refused to close an unfinished lab.
+    expect(row!.completedAt).toBeNull();
+  });
+
+  it('completes once every step is ticked, and awards XP once', async () => {
+    const { LABS } = await import('@/data/labs');
+    const lab = LABS[0]!;
+    const before = (await applyEvents(userId, [])).state.xp;
+
+    await applyEvents(
+      userId,
+      lab.steps.map((_, i) =>
+        envelope(`lab-step-${i}`, { type: 'lab-step-completed', labId: lab.id, stepIndex: i }),
+      ),
+    );
+    await applyEvents(userId, [envelope('lab-done', { type: 'lab-completed', labId: lab.id, seconds: 300 })]);
+
+    const done = await applyEvents(userId, []);
+    const row = done.state.labs.find((l) => l.labId === lab.id)!;
+    expect(row.stepsDone).toHaveLength(lab.steps.length);
+    expect(row.completedAt).toBeTruthy();
+    expect(done.state.xp).toBeGreaterThan(before);
+
+    // Completing it again must not pay twice.
+    await applyEvents(userId, [envelope('lab-done-2', { type: 'lab-completed', labId: lab.id, seconds: 60 })]);
+    expect((await applyEvents(userId, [])).state.xp).toBe(done.state.xp);
+  });
+
+  it('cannot inflate the step count by ticking one step repeatedly', async () => {
+    const { LABS } = await import('@/data/labs');
+    const lab = LABS[1]!;
+    await applyEvents(userId, [
+      envelope('rep-1', { type: 'lab-step-completed', labId: lab.id, stepIndex: 0 }),
+      envelope('rep-2', { type: 'lab-step-completed', labId: lab.id, stepIndex: 0 }),
+      envelope('rep-3', { type: 'lab-step-completed', labId: lab.id, stepIndex: 0 }),
+    ]);
+    const row = (await applyEvents(userId, [])).state.labs.find((l) => l.labId === lab.id)!;
+    expect(row.stepsDone).toEqual([0]);
+  });
+
+  it('ignores an unknown lab id', async () => {
+    await applyEvents(userId, [
+      envelope('lab-unknown', { type: 'lab-step-completed', labId: 'not-a-lab', stepIndex: 0 }),
+    ]);
+    expect((await applyEvents(userId, [])).state.labs.some((l) => l.labId === 'not-a-lab')).toBe(false);
+  });
+});
+
+/**
+ * The headline XP number must always be the sum of the transactions behind it.
+ *
+ * This is not a nicety: XP is the most visible number in the product, and a
+ * total that cannot be explained by its own ledger is invented data however
+ * plausible it looks. The seed asserted a total 2,775 higher than the
+ * transactions it wrote, which went unnoticed precisely because nobody was
+ * checking the two against each other.
+ */
+describe('XP integrity', () => {
+  it('keeps meta.xp equal to the sum of the ledger after every kind of award', async () => {
+    const { ALL_UNITS } = await import('@/data/curriculum');
+    const { LABS } = await import('@/data/labs');
+    const unit = ALL_UNITS[12]!;
+    const lab = LABS[2]!;
+
+    await applyEvents(userId, [
+      envelope('inv-lesson', { type: 'lesson-completed', unitId: unit.id, seconds: 600 }),
+      envelope('inv-practice', { type: 'practice-completed', unitId: unit.id, practiceIndex: 0 }),
+      envelope('inv-challenge', { type: 'challenge-completed', unitId: unit.id }),
+      envelope('inv-card', { type: 'flashcard-reviewed', unitId: unit.id, cardIndex: 0, grade: 'known' }),
+      envelope('inv-interview', {
+        type: 'interview-attempted',
+        unitId: unit.id,
+        questionIndex: 0,
+        confidence: 'confident',
+        seconds: 30,
+      }),
+      ...lab.steps.map((_, i) =>
+        envelope(`inv-lab-${i}`, { type: 'lab-step-completed', labId: lab.id, stepIndex: i }),
+      ),
+      envelope('inv-lab-done', { type: 'lab-completed', labId: lab.id, seconds: 120 }),
+    ]);
+
+    const ledger = await prisma.xpTransaction.aggregate({ where: { userId }, _sum: { amount: true } });
+    const meta = await prisma.learnerMeta.findUnique({ where: { userId } });
+    expect(meta?.xp).toBe(Math.max(0, ledger._sum.amount ?? 0));
+  });
+
+  it('never lets the balance go negative', async () => {
+    const meta = await prisma.learnerMeta.findUnique({ where: { userId } });
+    expect(meta!.xp).toBeGreaterThanOrEqual(0);
+  });
+});

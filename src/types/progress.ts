@@ -154,6 +154,9 @@ export type XPReason =
   | 'domain-complete'
   | 'domain-mastered'
   | 'review-complete'
+  | 'flashcard-session'
+  | 'interview-answered'
+  | 'lab-complete'
   | 'achievement'
   | 'missed-test'
   | 'missed-test-overdue';
@@ -316,6 +319,38 @@ export interface AchievementState {
 }
 
 /** Everything the app persists for one learner. */
+/** One graded flashcard, scheduled on the same ladder as unit review. */
+export interface FlashcardReviewState {
+  unitId: string;
+  cardIndex: number;
+  lastGrade: 'known' | 'again';
+  timesSeen: number;
+  timesKnown: number;
+  timesAgain: number;
+  reviewStep: number;
+  nextReviewAt: string;
+  lastReviewedAt: string;
+}
+
+/** Self-assessed confidence on one interview question. */
+export type InterviewConfidence = 'confident' | 'shaky' | 'lost';
+
+export interface InterviewAttemptState {
+  unitId: string;
+  questionIndex: number;
+  confidence: InterviewConfidence;
+  seconds: number;
+  attempts: number;
+  lastAttemptAt: string;
+}
+
+export interface LabProgressState {
+  labId: string;
+  stepsDone: number[];
+  completedAt: string | null;
+  seconds: number;
+}
+
 export interface LearnerState {
   profile: LearnerProfile;
   units: Record<UnitId, UnitProgress>;
@@ -338,4 +373,7 @@ export interface LearnerState {
   updatedAt: string;
   /** Monotonic counter used to resolve offline/online sync conflicts. */
   revision: number;
+  flashcardReviews: FlashcardReviewState[];
+  interviewAttempts: InterviewAttemptState[];
+  labs: LabProgressState[];
 }

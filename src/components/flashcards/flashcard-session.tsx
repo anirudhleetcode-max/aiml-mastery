@@ -12,6 +12,7 @@ import { ProgressBar } from '@/components/ui/progress';
 import { EmptyState } from '@/components/ui/misc';
 import { pct } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import { useLearnerStore } from '@/lib/store/learner';
 
 export interface DeckUnit {
   unitId: string;
@@ -22,7 +23,8 @@ export interface DeckUnit {
   bookmarked: boolean;
   weak: boolean;
   due: boolean;
-  cards: { front: string; back: string }[];
+  /** `due` is per card: never graded, or scheduled for today or earlier. */
+  cards: { front: string; back: string; due: boolean }[];
 }
 
 interface SessionCard {
@@ -72,8 +74,11 @@ function shuffled<T>(items: T[], seed: number): T[] {
 /**
  * A study session across the whole curriculum.
  *
- * Nothing here is graded or recorded: judging your own recall honestly only
- * works if it costs nothing, so the session lives entirely in this component.
+ * Each verdict is recorded and schedules the card on the same ladder unit
+ * review uses, so a card you could not recall comes back tomorrow and one you
+ * knew comes back later. Grading is still the learner's own call — recall has
+ * no machine-checkable form — but it now has consequences, which is the only
+ * thing that makes honest grading worth anything.
  */
 export function FlashcardSession({
   units,
@@ -87,6 +92,7 @@ export function FlashcardSession({
 }) {
   const decks = React.useMemo(() => {
     const counts = {
+      dueCards: units.reduce((a, u) => a + u.cards.filter((c) => c.due).length, 0),
       bookmarked: units.filter((u) => u.bookmarked).length,
       weak: units.filter((u) => u.weak).length,
       due: units.filter((u) => u.due).length,
@@ -101,7 +107,12 @@ export function FlashcardSession({
     ];
     if (counts.bookmarked > 0) list.push({ id: 'bookmarked', label: `Bookmarked units (${counts.bookmarked})` });
     if (counts.weak > 0) list.push({ id: 'weak', label: `Units you are weak on (${counts.weak})` });
-    if (counts.due > 0) list.push({ id: 'due', label: `Due for review (${counts.due})` });
+    if (counts.dueCards > 0) {
+      // Listed first because it is the deck a returning learner wants: the
+      // individual cards their own grading has scheduled for today.
+      list.unshift({ id: 'due-cards', label: `Cards due now (${counts.dueCards})` });
+    }
+    if (counts.due > 0) list.push({ id: 'due', label: `Units due for review (${counts.due})` });
     for (const d of domains) {
       const n = units.filter((u) => u.domainId === d.id).length;
       if (n > 0) list.push({ id: `domain:${d.id}`, label: `${d.name} (${n})` });
@@ -119,18 +130,24 @@ export function FlashcardSession({
       if (deck === 'bookmarked') return u.bookmarked;
       if (deck === 'weak') return u.weak;
       if (deck === 'due') return u.due;
+      if (deck === 'due-cards') return u.cards.some((c) => c.due);
       if (deck.startsWith('domain:')) return u.domainId === deck.slice(7);
       return true;
     });
     const flat = selected.flatMap((u) =>
-      u.cards.map((c, i) => ({
-        key: `${u.unitId}:${i}`,
-        front: c.front,
-        back: c.back,
-        unitTitle: u.title,
-        unitSlug: u.slug,
-        domainId: u.domainId,
-      })),
+      u.cards
+        // The card-level deck narrows to the individual cards that are due,
+        // not merely to units containing one.
+        .map((c, i) => ({ c, i }))
+        .filter(({ c }) => (deck === 'due-cards' ? c.due : true))
+        .map(({ c, i }) => ({
+          key: `${u.unitId}:${i}`,
+          front: c.front,
+          back: c.back,
+          unitTitle: u.title,
+          unitSlug: u.slug,
+          domainId: u.domainId,
+        })),
     );
     return shuffle ? shuffled(flat, seed) : flat;
   }, [units, deck, shuffle, seed]);
@@ -138,6 +155,7 @@ export function FlashcardSession({
   // The session is derived from the deck during render rather than in an
   // effect, so the first card is on screen in the server-rendered HTML instead
   // of appearing a frame later.
+  const emit = useLearnerStore((s) => s.emit);
   const [session, setSession] = React.useState<Session>(() => freshSession(cards));
   let current = session;
   if (current.source !== cards) {
@@ -153,6 +171,16 @@ export function FlashcardSession({
   const finished = queue.length > 0 && position >= queue.length;
 
   function mark(kind: 'known' | 'again') {
+    const key = current.queue[current.position];
+    if (key) {
+      // `unitId:index` is the card's address; the server bounds the index
+      // against the real deck, so a stale key records nothing.
+      const [unitId, rawIndex] = key.split(':');
+      const cardIndex = Number(rawIndex);
+      if (unitId && Number.isInteger(cardIndex) && cardIndex >= 0) {
+        emit({ type: 'flashcard-reviewed', unitId, cardIndex, grade: kind });
+      }
+    }
     setSession((s) => {
       const key = s.queue[s.position];
       if (!key) return s;

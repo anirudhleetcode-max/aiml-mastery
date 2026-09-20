@@ -88,6 +88,34 @@ export const eventSchema = z.discriminatedUnion('type', [
       .optional(),
   }),
   z.object({ type: z.literal('notification-read'), id: z.string().max(80).nullable() }),
+
+  // A flashcard has no id of its own in the curriculum schema, so it is
+  // addressed by its position in the unit's deck. The server bounds the index
+  // against the real deck, so an out-of-range index records nothing.
+  z.object({
+    type: z.literal('flashcard-reviewed'),
+    unitId,
+    cardIndex: z.number().int().min(0).max(60),
+    grade: z.enum(['known', 'again']),
+  }),
+
+  // Confidence rather than correctness: an interview answer is prose, and the
+  // learner comparing their answer with the model one is the only honest
+  // signal available without a grader.
+  z.object({
+    type: z.literal('interview-attempted'),
+    unitId,
+    questionIndex: z.number().int().min(0).max(40),
+    confidence: z.enum(['confident', 'shaky', 'lost']),
+    seconds: seconds.default(0),
+  }),
+
+  z.object({
+    type: z.literal('lab-step-completed'),
+    labId: z.string().max(80),
+    stepIndex: z.number().int().min(0).max(40),
+  }),
+  z.object({ type: z.literal('lab-completed'), labId: z.string().max(80), seconds: seconds.default(0) }),
   z.object({ type: z.literal('schedule-paused'), date: isoDate, paused: z.boolean() }),
   z.object({ type: z.literal('unit-reset'), unitId }),
 ]);

@@ -25,6 +25,11 @@ export const XP_VALUES: Record<XPReason, number> = {
   'domain-complete': 1000,
   'domain-mastered': 2500,
   'review-complete': 30,
+  // Small by design. Reviewing a card is a second's work, and a rate worth
+  // farming would turn the deck into a slot machine — which §82 rules out.
+  'flashcard-session': 2,
+  'interview-answered': 15,
+  'lab-complete': 80,
   achievement: 150,
   'missed-test': -100,
   'missed-test-overdue': -200,
@@ -43,6 +48,9 @@ export const XP_LABELS: Record<XPReason, string> = {
   'domain-complete': 'Domain completed',
   'domain-mastered': 'Domain mastered',
   'review-complete': 'Review completed',
+  'flashcard-session': 'Flashcard reviewed',
+  'interview-answered': 'Interview question practised',
+  'lab-complete': 'Lab completed',
   achievement: 'Achievement unlocked',
   'missed-test': 'Daily test missed',
   'missed-test-overdue': 'Daily test overdue',
