@@ -11,7 +11,6 @@ import { useLearnerStore } from '@/lib/store/learner';
 import { domainColor } from '@/data/domains';
 import { dateKey, formatMinutes, formatXP, pct } from '@/lib/format';
 import { MASTERY_META } from '@/types/progress';
-import type { DomainId } from '@/types/curriculum';
 import { cn } from '@/lib/cn';
 import type { ResettableUnit, SettingsData } from './types';
 
@@ -216,7 +215,7 @@ export function DataSection({ data }: { data: SettingsData }) {
                       <span
                         aria-hidden
                         className="h-8 w-1 shrink-0 rounded-full"
-                        style={{ background: domainColor(u.domain as DomainId) }}
+                        style={{ background: domainColor(u.domain) }}
                       />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[13px] font-medium text-ink">{u.title}</span>

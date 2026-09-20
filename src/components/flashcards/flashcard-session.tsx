@@ -36,6 +36,27 @@ interface SessionCard {
 
 type DeckId = string;
 
+interface Session {
+  /** Identity of the deck this session was built from. */
+  source: SessionCard[];
+  queue: string[];
+  position: number;
+  flipped: boolean;
+  known: Set<string>;
+  again: Set<string>;
+}
+
+function freshSession(source: SessionCard[], queue?: string[]): Session {
+  return {
+    source,
+    queue: queue ?? source.map((c) => c.key),
+    position: 0,
+    flipped: false,
+    known: new Set(),
+    again: new Set(),
+  };
+}
+
 /** Deterministic shuffle so a re-render never reorders the deck mid-session. */
 function shuffled<T>(items: T[], seed: number): T[] {
   const out = [...items];
@@ -70,7 +91,14 @@ export function FlashcardSession({
       weak: units.filter((u) => u.weak).length,
       due: units.filter((u) => u.due).length,
     };
-    const list: { id: DeckId; label: string }[] = [{ id: 'all', label: `Everything you have started (${units.length} units)` }];
+    const list: { id: DeckId; label: string }[] = [
+      {
+        id: 'all',
+        label: fallback
+          ? `The opening domain (${units.length} units)`
+          : `Everything you have started (${units.length} units)`,
+      },
+    ];
     if (counts.bookmarked > 0) list.push({ id: 'bookmarked', label: `Bookmarked units (${counts.bookmarked})` });
     if (counts.weak > 0) list.push({ id: 'weak', label: `Units you are weak on (${counts.weak})` });
     if (counts.due > 0) list.push({ id: 'due', label: `Due for review (${counts.due})` });
@@ -79,7 +107,7 @@ export function FlashcardSession({
       if (n > 0) list.push({ id: `domain:${d.id}`, label: `${d.name} (${n})` });
     }
     return list;
-  }, [units, domains]);
+  }, [units, domains, fallback]);
 
   const [deck, setDeck] = React.useState<DeckId>('all');
   const [shuffle, setShuffle] = React.useState(true);
@@ -107,20 +135,17 @@ export function FlashcardSession({
     return shuffle ? shuffled(flat, seed) : flat;
   }, [units, deck, shuffle, seed]);
 
-  const [queue, setQueue] = React.useState<string[]>([]);
-  const [position, setPosition] = React.useState(0);
-  const [flipped, setFlipped] = React.useState(false);
-  const [known, setKnown] = React.useState<Set<string>>(new Set());
-  const [again, setAgain] = React.useState<Set<string>>(new Set());
+  // The session is derived from the deck during render rather than in an
+  // effect, so the first card is on screen in the server-rendered HTML instead
+  // of appearing a frame later.
+  const [session, setSession] = React.useState<Session>(() => freshSession(cards));
+  let current = session;
+  if (current.source !== cards) {
+    current = freshSession(cards);
+    setSession(current);
+  }
 
-  // Any change to the deck starts a clean session.
-  React.useEffect(() => {
-    setQueue(cards.map((c) => c.key));
-    setPosition(0);
-    setFlipped(false);
-    setKnown(new Set());
-    setAgain(new Set());
-  }, [cards]);
+  const { queue, position, flipped, known, again } = current;
 
   const byKey = React.useMemo(() => new Map(cards.map((c) => [c.key, c])), [cards]);
   const currentKey = queue[position];
@@ -128,18 +153,26 @@ export function FlashcardSession({
   const finished = queue.length > 0 && position >= queue.length;
 
   function mark(kind: 'known' | 'again') {
-    if (!currentKey) return;
-    (kind === 'known' ? setKnown : setAgain)((s) => new Set(s).add(currentKey));
-    setFlipped(false);
-    setPosition((p) => p + 1);
+    setSession((s) => {
+      const key = s.queue[s.position];
+      if (!key) return s;
+      const next = new Set(kind === 'known' ? s.known : s.again).add(key);
+      return {
+        ...s,
+        known: kind === 'known' ? next : s.known,
+        again: kind === 'again' ? next : s.again,
+        flipped: false,
+        position: s.position + 1,
+      };
+    });
+  }
+
+  function setFlipped(update: (f: boolean) => boolean) {
+    setSession((s) => ({ ...s, flipped: update(s.flipped) }));
   }
 
   function restart(keys: string[]) {
-    setQueue(keys);
-    setPosition(0);
-    setFlipped(false);
-    setKnown(new Set());
-    setAgain(new Set());
+    setSession(freshSession(cards, keys));
   }
 
   const deckSelectId = React.useId();

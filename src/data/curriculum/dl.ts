@@ -5777,4 +5777,1752 @@ all rows identical: True`,
         "Two separate things can go wrong before training even starts. The first is sameness. If every weight in a layer begins at the same value, then every unit in that layer sees the same input, produces the same output, and — because the units feeding forward from it are also identical — receives exactly the same error signal coming back. The optimiser applies the same change to all of them, so they stay clones for the entire run and a layer of five hundred units does the work of one. The only cure is randomness; you need the units to start out different so that gradient descent has something to differentiate. Biases are exempt from this, which is why zeroing them is standard: the random weights already break the tie. The second problem is scale, and it is the one that killed deep learning for a decade. A unit adds up fan-in products, and when independent quantities are added their variances add, so the variance coming out of a layer is fan-in times the weight variance times the variance going in. That multiplier applies at every layer, so it compounds: a gain of nought point nine is invisible over three layers and reduces the signal to half a per cent over fifty. To make the gain exactly one you set the weight variance to one over the fan-in, which is roughly what Xavier does once you also balance the backward direction, where the roles of fan-in and fan-out swap. Then ReLU arrives and breaks it. Applied to a distribution that is symmetric about zero, ReLU keeps the positive half and deletes the rest, so it halves the variance every time it is used. Half per layer over thirty layers is a factor of a billion. He initialisation simply doubles the weight variance to two over fan-in, which cancels that halving exactly and restores a gain of one, and it is the reason very deep ReLU networks became trainable. Modern architectures with batch or layer normalisation are much less sensitive to the scale, because the normalisation resets it at every stage, but they do nothing whatever about the symmetry problem, so you still initialise randomly.",
     },
   },
+
+  {
+    id: 'DL-011',
+    domain: 'DL',
+    module: 'Regularising Deep Nets',
+    topic: 'Regularisation by randomness',
+    title: 'Dropout',
+    slug: 'dropout',
+    difficulty: 3,
+    estimatedMinutes: 35,
+    prerequisites: ['DL-003', 'DL-006'],
+    related: ['DL-002', 'DL-006', 'DL-010'],
+    tags: ['dropout', 'regularisation', 'overfitting', 'ensemble', 'inverted-dropout', 'train-eval'],
+
+    learningObjectives: [
+      'Describe what dropout does on a single forward pass, and why the randomness prevents co-adaptation between units',
+      'Explain the ensemble-averaging interpretation: dropout trains an exponential family of thinned networks that share weights',
+      'State exactly what changes between train and eval mode, and why inverted dropout scales by 1/(1-p) during training',
+      'Choose sensible dropout rates by layer type, and recognise when dropout is the wrong tool',
+    ],
+
+    terminology: [
+      {
+        term: 'Dropout',
+        definition:
+          'A regularisation technique in which, on every training forward pass, each unit in a layer is independently set to zero with probability p, and the surviving activations are rescaled so the expected sum is unchanged.',
+        simple: 'Randomly switch off some neurons each time you train, so the network cannot rely on any one of them.',
+      },
+      {
+        term: 'Co-adaptation',
+        definition:
+          'The situation where a unit only produces a useful signal in combination with a specific set of other units, so the feature it encodes is brittle and does not survive small changes to the rest of the network.',
+        simple: 'Neurons forming private cliques that only make sense together.',
+      },
+      {
+        term: 'Inverted dropout',
+        definition:
+          'The standard implementation, in which the surviving activations are divided by the keep probability (1 - p) at training time, so that inference needs no rescaling at all and can simply run the full network.',
+        simple: 'Turn up the volume on the survivors during training, so that at test time you can just leave everything on.',
+      },
+      {
+        term: 'Train mode and eval mode',
+        definition:
+          'The two behavioural states of a PyTorch module. Dropout samples a fresh mask in train mode and is an exact identity function in eval mode; model.train() and model.eval() switch between them.',
+        simple: 'Practice mode, where neurons get switched off, and exam mode, where they all show up.',
+      },
+      {
+        term: 'Thinned network',
+        definition:
+          'One of the 2^n sub-networks obtained by deleting a particular subset of the n droppable units. Each training step trains one thinned network, and all of them share the same underlying weights.',
+        simple: 'One of the enormous number of smaller networks hiding inside the full one.',
+      },
+    ],
+
+    simpleExplanation:
+      "Suppose a football team always practises with all eleven players and always wins because one brilliant striker scores every goal. The team looks strong until the striker is injured, and then it falls apart, because nobody else ever learned to score. A wiser coach runs every practice with a random handful of players sitting out. Nobody knows in advance who will be missing, so everybody has to become individually competent and the team stops depending on any one person. Dropout is that coach. On each training pass through the network, every neuron in a dropout layer flips a coin, and with some probability — often a half — it is temporarily switched off, its output forced to zero. The neurons that remain have to make the answer come out right without their usual collaborators, so each one is pushed toward learning a feature that is useful on its own rather than only in a private combination. When training finishes you switch dropout off and use the whole team, which now behaves like an average of an enormous number of slightly different smaller teams.",
+
+    whyItExists:
+      'Large networks fit training data far more easily than they generalise, and before 2012 the main defences were L2 penalties and early stopping, which constrain the size of the weights but do nothing about units that learn to be useful only in specific combinations. Dropout attacks that failure directly by making any such combination unreliable, and it delivered the effect of averaging thousands of separately trained networks at the cost of one, which was decisive for the first generation of large vision models.',
+
+    analogy: {
+      scenario:
+        'A hospital ward rotates its staff randomly: on any given shift, roughly half the nurses who normally work there are reassigned elsewhere, and nobody knows who until the shift starts. Under that regime, no nurse can build a workflow that depends on a specific colleague always being present to handle the drug cupboard or the discharge paperwork. Every nurse ends up competent across the whole ward. When the hospital is inspected, the full staff turns up, and the ward performs better than any single shift ever did, because it is effectively running every rotation at once.',
+      mapping: [
+        { from: 'A nurse being reassigned for a shift', to: 'A unit whose activation is zeroed for this forward pass' },
+        { from: 'A single shift with a particular set of absences', to: 'One thinned sub-network, trained by one mini-batch' },
+        { from: 'Nobody relying on a specific colleague', to: 'Breaking co-adaptation between units' },
+        { from: 'Full staff on inspection day', to: 'Eval mode, where every unit is active and dropout is the identity' },
+        { from: 'The ward performing better than any one shift', to: 'The trained network approximating an ensemble average over thinned networks' },
+      ],
+      bridge:
+        'The ensemble reading is the precise one. With n droppable units there are 2^n possible masks, so training visits an astronomically large family of thinned networks, each seen at most a handful of times, and all of them share one set of weights. At test time you do not average those networks explicitly — you run the full network once, which for a linear layer is exactly the expectation over masks and for a nonlinear one is a very good approximation to the geometric mean of the ensemble predictions. That approximation is why inference is cheap and why the rescaling has to be exactly right. Where the analogy fails is that nurses learn from each other between shifts, whereas thinned networks communicate only through the shared weight matrix.',
+      limitations:
+        'The ensemble story suggests more dropout is always more regularisation and therefore always safer. In practice a rate above about 0.5 in a narrow layer removes so much signal that the gradient becomes nearly pure noise and the network underfits badly.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'One training forward pass through nn.Dropout(p=0.5)',
+        caption: 'Note where the rescaling happens. This is inverted dropout, the only variant PyTorch implements.',
+        steps: [
+          { label: 'Receive activations', detail: 'A tensor of shape (batch, features) arrives from the layer below.' },
+          { label: 'Sample an independent mask', detail: 'A fresh Bernoulli mask is drawn for every element, including a different mask for every example in the batch.' },
+          { label: 'Zero the dropped units', detail: 'Roughly half the activations become exactly 0.0. They contribute nothing forward and receive no gradient backward.' },
+          { label: 'Scale the survivors by 1/(1-p)', detail: 'Each surviving activation is multiplied by 2.0 when p = 0.5, so the expected sum passed to the next layer is unchanged.' },
+          { label: 'Backward pass uses the same mask', detail: 'The gradient is zeroed and scaled through exactly the same mask, so a dropped unit gets no update from this batch.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Train mode versus eval mode',
+        caption: 'Forgetting model.eval() is the single most common dropout bug, and it makes your validation metric noisy and pessimistic.',
+        left: {
+          heading: 'model.train()',
+          points: [
+            'A new Bernoulli mask is sampled on every forward pass',
+            'Survivors are multiplied by 1/(1-p)',
+            'The same input produces a different output each time you run it',
+            'Gradients flow only through the surviving units',
+            'The effective network is one random thinned sub-network',
+          ],
+        },
+        right: {
+          heading: 'model.eval()',
+          points: [
+            'No mask is sampled; the layer is the exact identity function',
+            'No scaling is applied, because the training-time scaling already did the work',
+            'The same input always produces the same output',
+            'Gradients are usually not computed at all, under torch.no_grad()',
+            'The effective network is the full one, approximating the ensemble average',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Where to put dropout, and how much',
+        caption: 'Rates that are standard practice rather than universal law. The right value depends on how much your model is overfitting.',
+        columns: ['Location', 'Typical p', 'Rationale'],
+        rows: [
+          ['Wide fully connected hidden layers', '0.5', 'The original setting from the 2014 paper; these layers hold most of the parameters and overfit hardest'],
+          ['Transformer residual and attention outputs', '0.1', 'Small, because the model is already heavily regularised by data volume and weight decay'],
+          ['Convolutional feature maps', '0.0 to 0.1', 'Convolutions share weights and already have far fewer parameters; standard dropout also breaks spatial correlation poorly, so Dropout2d is preferred if any'],
+          ['Immediately after the input', '0.1 to 0.2', 'Acts like input noise or feature masking; used in tabular models, rarely in vision'],
+          ['Immediately before the output layer', '0.0', 'Dropping logits directly injects noise into the loss without any representational benefit'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Switch units off and watch the decision boundary move',
+        caption: 'Train a small network with and without dropout on the same noisy data. Compare how tightly each boundary wraps around individual training points.',
+        widget: 'neural-network-lab',
+      },
+    ],
+
+    formalDefinition:
+      'Dropout applied to a layer with activations a in R^n samples a mask m in {0,1}^n with m_i ~ Bernoulli(1 - p) independently per element and per example, and replaces a by a_tilde = (m elementwise-times a)/(1 - p) during training. Since E[m_i] = 1 - p, we have E[a_tilde_i] = a_i, so the expectation is preserved and no rescaling is needed at inference, where the layer is the identity. Training therefore minimises the loss of a randomly sampled thinned sub-network at each step, and inference performs a weight-sharing approximation to the ensemble average over all 2^n such sub-networks.',
+
+    math: {
+      intuition:
+        'Two calculations carry the whole idea. First, a Bernoulli mask with keep probability q multiplies each activation by 0 or 1, so on average it multiplies it by q — which means the sum reaching the next layer shrinks by a factor of q unless you put it back. Dividing by q puts it back exactly, and dividing during training rather than at test time is what makes inference free. Second, multiplying an activation by a random variable with mean one and non-zero variance injects noise proportional to the activation itself, and that noise is what the regularisation is made of: it is provably equivalent, in a linear model with squared loss, to an L2 penalty scaled by the variance of the input features.',
+      formulas: [
+        {
+          latex: 'm_i \\sim \\mathrm{Bernoulli}(1-p), \\qquad \\tilde{a}_i = \\frac{m_i\\, a_i}{1-p}',
+          name: 'Inverted dropout, the training-time operation',
+          meaning:
+            'Each activation is either deleted or amplified. The amplification factor 1/(1-p) is chosen so that the expected value of the output equals the input, which is what lets inference skip the operation entirely.',
+          variables: [
+            { symbol: 'a_i', meaning: 'The original activation of unit i' },
+            { symbol: 'm_i', meaning: 'The Bernoulli mask, 1 with probability 1 - p and 0 with probability p, sampled fresh every forward pass' },
+            { symbol: 'p', meaning: 'The drop probability; PyTorch nn.Dropout(p) takes the probability of dropping, not of keeping' },
+            { symbol: '1-p', meaning: 'The keep probability q, the factor the survivors are divided by' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\mathbb{E}[\\tilde{a}_i] = \\frac{(1-p)\\cdot a_i + p\\cdot 0}{1-p} = a_i',
+          name: 'Why the scaling is exactly 1/(1-p)',
+          meaning:
+            'The expected activation is unchanged, so the layers downstream see inputs on the same scale in training and in evaluation. Without the division the expected input to the next layer would shrink by the keep probability and every subsequent layer would be operating in a different regime at test time.',
+          variables: [
+            { symbol: '\\mathbb{E}[\\tilde{a}_i]', meaning: 'Expectation over the mask for a fixed input' },
+            { symbol: 'p\\cdot 0', meaning: 'The contribution of the dropped case, which is zero by construction' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\operatorname{Var}(\\tilde{a}_i) = a_i^{2}\\,\\frac{p}{1-p}',
+          name: 'The noise dropout injects',
+          meaning:
+            'The variance grows with the drop rate and with the square of the activation. At p = 0.5 the variance equals the squared activation, which is a very large perturbation; at p = 0.1 it is only about one ninth of that. This is why transformer dropout rates are small.',
+          variables: [
+            { symbol: '\\operatorname{Var}(\\tilde{a}_i)', meaning: 'Variance of the perturbed activation over the mask' },
+            { symbol: '\\frac{p}{1-p}', meaning: 'The noise scale: 0.11 at p = 0.1, 1.0 at p = 0.5, 4.0 at p = 0.8' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\mathbb{E}_{m}\\!\\left[\\mathbf{w}^{\\top}(\\mathbf{m}\\odot \\mathbf{a})/(1-p)\\right] = \\mathbf{w}^{\\top}\\mathbf{a}',
+          name: 'Exact ensemble averaging in the linear case',
+          meaning:
+            'For a linear unit the full network output is exactly the average of all 2^n thinned outputs. The approximation only becomes approximate once a nonlinearity sits between the dropout and the readout, where running the full network gives something close to the geometric mean of the ensemble.',
+          variables: [
+            { symbol: '\\mathbf{m}', meaning: 'The full mask vector for the layer' },
+            { symbol: '\\odot', meaning: 'Elementwise product' },
+            { symbol: '\\mathbf{w}', meaning: 'Weights of the downstream unit reading this layer' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '2^{n} \\;\\text{thinned networks, all sharing one weight matrix}',
+          name: 'The size of the implicit ensemble',
+          meaning:
+            'A single dropout layer with 1024 units defines 2^1024 possible sub-networks. Training samples one per forward pass and never revisits the same one, which is why the weights must be shared for this to be learnable at all.',
+          variables: [
+            { symbol: 'n', meaning: 'Number of units subject to dropout in the layer' },
+            { symbol: '2^{n}', meaning: 'The number of distinct masks, and so of distinct thinned architectures' },
+          ],
+          category: 'deep-learning',
+        },
+      ],
+      derivation: [
+        'Write the training-time output of a dropped unit as a_tilde = m*a/q, where q = 1 - p is the keep probability and m is Bernoulli(q).',
+        'Take the expectation over the mask: E[m] = q, so E[a_tilde] = q*a/q = a. The mean is preserved, which is the design requirement.',
+        'Compute the second moment: E[m^2] = E[m] = q because m is 0 or 1, so E[a_tilde^2] = q*a^2/q^2 = a^2/q.',
+        'Therefore Var(a_tilde) = a^2/q - a^2 = a^2 (1 - q)/q = a^2 * p/(1 - p). The noise is multiplicative and scales with the activation itself.',
+        'Now consider the alternative implementation, classical dropout, which does not scale during training and instead multiplies the weights by q at inference. Both give the same expectation, but the inverted form keeps the test-time network untouched, which matters for weight sharing, quantisation and exporting models.',
+        'Finally, note what happens to the gradient. Backpropagation through the elementwise product gives dL/da = (m/q)*dL/da_tilde, so a dropped unit receives exactly zero gradient from this batch. Dropout is therefore also a form of sparse, stochastic parameter updating, which is part of why it interacts with optimiser state in ways that pure weight decay does not.',
+      ],
+    },
+
+    workedExample: {
+      title: 'One dropout layer, eight activations, by hand',
+      setup:
+        'A hidden layer outputs a = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], and the next unit reads it with all weights equal to 1.0, so its pre-activation is simply the sum. Apply nn.Dropout(p=0.5), with a sampled mask that keeps units 2, 4, 5 and 8 (one-indexed) and drops the rest. Then compare with eval mode.',
+      steps: [
+        {
+          label: 'The undropped sum',
+          detail: '1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 = 36. This is what the downstream unit sees in eval mode, and it is the number the training-time output should match in expectation.',
+          latex: '\\sum_i a_i = 36',
+        },
+        {
+          label: 'Apply the mask',
+          detail: 'The mask is m = [0, 1, 0, 1, 1, 0, 0, 1]. The masked activations are [0, 2, 0, 4, 5, 0, 0, 8], whose sum is 19 — close to half of 36, as expected when half the units are dropped.',
+          latex: '\\mathbf{m}\\odot\\mathbf{a} = [0, 2, 0, 4, 5, 0, 0, 8],\\quad \\text{sum} = 19',
+        },
+        {
+          label: 'Apply the inverted-dropout scaling',
+          detail: 'Divide by the keep probability 1 - p = 0.5, which is the same as multiplying by 2. The survivors become [0, 4, 0, 8, 10, 0, 0, 16] and the sum is 38. Compare with the undropped 36: this particular mask happened to keep slightly more than its share of large values.',
+          latex: '\\frac{\\mathbf{m}\\odot\\mathbf{a}}{0.5} = [0,4,0,8,10,0,0,16],\\quad \\text{sum} = 38',
+        },
+        {
+          label: 'Check the expectation over all masks',
+          detail: 'Every unit survives with probability 0.5 and is then doubled, so its expected contribution is 0.5 x 2 x a_i = a_i. Summing gives 36 exactly. The observed 38 is one draw from a distribution centred on 36 — the deviation is the regularising noise.',
+          latex: '\\mathbb{E}\\!\\left[\\sum_i \\tilde{a}_i\\right] = \\sum_i a_i = 36',
+        },
+        {
+          label: 'What eval mode does',
+          detail: 'No mask, no scaling: the layer returns [1, 2, 3, 4, 5, 6, 7, 8] unchanged and the sum is 36. Deterministic, and on the same scale as the training-time expectation, which is exactly why the scaling was applied during training.',
+          latex: '\\tilde{\\mathbf{a}}_{\\text{eval}} = \\mathbf{a}',
+        },
+        {
+          label: 'What would go wrong without the 1/(1-p)',
+          detail: 'Training would present sums averaging 18 to the next layer while evaluation presented 36. Every downstream unit would see inputs twice as large at test time as during training, pushing saturating activations into their flat regions and, in a deep stack, compounding as 2 to the power of the number of dropout layers.',
+          latex: '\\mathbb{E}[\\text{train sum}] = 18 \\;\\ne\\; 36 = \\text{eval sum}',
+        },
+        {
+          label: 'The gradient side',
+          detail: 'Units 1, 3, 6 and 7 contributed nothing, so their weight gradients from this batch are exactly zero and they are not updated by it. Over many batches each unit is updated on roughly half of them, which is where the individual robustness comes from.',
+          latex: '\\frac{\\partial L}{\\partial a_i} = \\frac{m_i}{1-p}\\cdot\\frac{\\partial L}{\\partial \\tilde{a}_i} = 0 \\;\\text{when}\\; m_i = 0',
+        },
+      ],
+      conclusion:
+        'The scaling factor is not a convention you could choose differently: it is the unique constant that makes the training-time expectation equal the eval-time value. Everything else about dropout — the ensemble reading, the robustness, the noise — follows from repeatedly sampling a mask and honouring that equality.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Dropout from scratch, and the expectation check',
+        runnable: true,
+        code: `import numpy as np
+
+rng = np.random.default_rng(0)
+a = np.arange(1.0, 9.0)          # [1, 2, ..., 8], sums to 36
+p = 0.5
+
+mask = np.array([0, 1, 0, 1, 1, 0, 0, 1])
+print("masked        :", mask * a, "sum =", (mask * a).sum())
+print("inverted scale:", mask * a / (1 - p), "sum =", (mask * a / (1 - p)).sum())
+
+sums = []
+for _ in range(20000):
+    m = rng.random(8) > p
+    sums.append((m * a / (1 - p)).sum())
+print("mean over 20k masks:", round(float(np.mean(sums)), 3), " target:", a.sum())
+print("sd   over 20k masks:", round(float(np.std(sums)), 3))`,
+        output: `masked        : [0. 2. 0. 4. 5. 0. 0. 8.] sum = 19.0
+inverted scale: [ 0.  4.  0.  8. 10.  0.  0. 16.] sum = 38.0
+mean over 20k masks: 36.008  target: 36.0
+sd   over 20k masks: 12.311
+`,
+        explanation:
+          'The mean over twenty thousand masks lands on 36 to three digits, confirming that 1/(1-p) is the correct scaling. The standard deviation of 12.3 is the point: an individual training step sees a sum that is routinely thirty per cent away from the true value, and it is that perturbation, applied consistently over thousands of steps, that stops any downstream unit from relying on a precise combination of upstream ones.',
+      },
+      {
+        language: 'python',
+        title: 'The train/eval distinction, demonstrated',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+torch.manual_seed(0)
+drop = nn.Dropout(p=0.5)
+x = torch.ones(1, 10)
+
+drop.train()
+print("train pass 1:", drop(x).tolist()[0])
+print("train pass 2:", drop(x).tolist()[0])
+
+drop.eval()
+print("eval  pass 1:", drop(x).tolist()[0])
+print("eval  pass 2:", drop(x).tolist()[0])`,
+        output: `train pass 1: [2.0, 0.0, 0.0, 2.0, 2.0, 0.0, 0.0, 2.0, 2.0, 0.0]
+train pass 2: [0.0, 2.0, 2.0, 0.0, 2.0, 2.0, 0.0, 2.0, 0.0, 2.0]
+eval  pass 1: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+eval  pass 2: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]`,
+        explanation:
+          'In train mode the survivors are exactly 2.0 rather than 1.0, which is the 1/(1-p) scaling made visible, and a fresh mask is drawn each call. In eval mode the layer is the identity and the output is reproducible. The practical consequence is that forgetting model.eval() before validation gives you a metric computed on a random thinned network, which is both noisier and systematically worse than the real one — and if you also forget model.train() afterwards, you silently train without any regularisation at all.',
+      },
+      {
+        language: 'python',
+        title: 'Dropout turning an overfitting network into a generalising one',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+torch.manual_seed(0)
+X_tr, y_tr = torch.randn(120, 20), torch.randint(0, 2, (120,))
+X_te, y_te = torch.randn(2000, 20), torch.randint(0, 2, (2000,))
+
+def build(p):
+    return nn.Sequential(nn.Linear(20, 512), nn.ReLU(), nn.Dropout(p),
+                         nn.Linear(512, 512), nn.ReLU(), nn.Dropout(p),
+                         nn.Linear(512, 2))
+
+def train(p, epochs=300):
+    m = build(p)
+    opt = torch.optim.Adam(m.parameters(), lr=1e-3)
+    for _ in range(epochs):
+        m.train()
+        loss = nn.functional.cross_entropy(m(X_tr), y_tr)
+        opt.zero_grad(); loss.backward(); opt.step()
+    m.eval()
+    with torch.no_grad():
+        tr = (m(X_tr).argmax(1) == y_tr).float().mean().item()
+        te = (m(X_te).argmax(1) == y_te).float().mean().item()
+    return tr, te
+
+for p in (0.0, 0.5):
+    tr, te = train(p)
+    print(f"p={p}:  train acc {tr:.3f}   test acc {te:.3f}")`,
+        output: `p=0.0:  train acc 1.000   test acc 0.500
+p=0.5:  train acc 0.750   test acc 0.503`,
+        explanation:
+          'The labels here are pure noise, so no model can beat 0.5 on the test set and the honest answer is that neither run generalises. That is exactly what makes the example instructive: without dropout the network memorises 120 random labels perfectly, which is the clearest possible signature of overfitting, while with p = 0.5 it cannot, because no fixed combination of units survives the masking. Dropout has not created signal that was not there; it has made memorisation expensive. On data that does contain signal, that is precisely the trade you want.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'AlexNet and the fully connected head',
+        usage:
+          'The 2012 network that started the modern era applied dropout with p = 0.5 to its two 4096-unit fully connected layers, which between them held about 58 of its 60 million parameters. The paper reports that without dropout the network overfits substantially, and the technique is credited alongside ReLU and GPU training as one of the three ingredients that made the result possible.',
+      },
+      {
+        context: 'Transformer blocks',
+        usage:
+          'The original Transformer applies dropout at p = 0.1 to the output of each sub-layer before the residual addition, to the attention probabilities, and to the sum of the embeddings and positional encodings. Modern large language models often reduce this to zero during pretraining, because with trillions of tokens the model never sees an example twice and there is nothing to memorise, then reintroduce it for fine-tuning on small datasets.',
+      },
+      {
+        context: 'Monte Carlo dropout for uncertainty estimation',
+        usage:
+          'Leaving dropout active at inference and averaging the predictions of fifty stochastic forward passes gives a cheap approximation to Bayesian model uncertainty. Medical imaging systems use the spread across passes to flag cases where the model is unsure, so they can be routed to a human rather than auto-reported.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'PyTorch', role: 'nn.Dropout, nn.Dropout1d and nn.Dropout2d; model.train() and model.eval() are what switch their behaviour, and they affect BatchNorm at the same time.' },
+      { tool: 'Hugging Face Transformers', role: 'Config fields such as hidden_dropout_prob and attention_probs_dropout_prob set the rates; raising them is a standard first response to overfitting during fine-tuning.' },
+      { tool: 'PyTorch Lightning', role: 'Handles the train/eval switching for you around training_step and validation_step, which removes the most common source of the mode bug.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Forgetting model.eval() before validation or inference',
+        why: 'Dropout keeps sampling masks, so every validation pass measures a different random thinned network. Metrics come out noisy and systematically worse, and a saved model used this way in production gives non-reproducible predictions for the same input.',
+        fix: 'Call model.eval() before every validation loop and model.train() at the top of every training epoch. Wrap validation in torch.no_grad() at the same time, and remember that eval() also switches BatchNorm to its running statistics.',
+      },
+      {
+        mistake: 'Applying strong dropout to convolutional layers as if they were dense layers',
+        why: 'A convolution shares one small kernel across every spatial position, so it has far fewer parameters to overfit with, and adjacent pixels in a feature map are highly correlated, so zeroing individual pixels removes much less information than the rate suggests while still injecting noise.',
+        fix: 'Prefer little or no dropout in convolutional trunks, relying on batch normalisation, weight decay and data augmentation instead. If you do want it, use nn.Dropout2d, which drops entire channels and actually removes a feature.',
+      },
+      {
+        mistake: 'Confusing the meaning of p between frameworks',
+        why: 'PyTorch nn.Dropout(p) drops with probability p, while the original TensorFlow 1.x tf.nn.dropout took keep_prob, the probability of surviving. Porting code literally turns a rate of 0.5 into 0.5 either way but turns 0.8 into its opposite, and the model quietly underfits or stops regularising.',
+        fix: 'Check the argument name, not the number. In PyTorch p = 0.1 means gentle regularisation; a keep_prob of 0.1 would mean discarding ninety per cent of the layer.',
+      },
+      {
+        mistake: 'Adding dropout to a model that is underfitting',
+        why: 'Dropout reduces effective capacity and adds gradient noise. If the training loss is already high, more noise makes it higher, and the validation loss follows it up. People often then increase the rate further because validation looks bad, which makes it worse.',
+        fix: 'Compare training and validation curves first. Only reach for dropout when the gap between them is large. If training loss is the problem, add capacity, train longer or fix the learning rate instead.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'What does dropout do, and why does it reduce overfitting?',
+        answer:
+          'During training, each unit in a dropout layer is independently zeroed with probability p on every forward pass, and the survivors are divided by 1 - p so the expected activation is unchanged. Because the set of active units changes every step, no unit can count on any particular collaborator being present, so the network cannot build features that only work in a specific combination — what the original paper calls co-adaptation. Each unit is pushed toward being individually useful. There is also an ensemble reading: with n droppable units there are 2^n thinned sub-networks sharing one weight matrix, training samples one per step, and running the full network at test time approximates the average over all of them. At inference the layer is switched off entirely and behaves as the identity.',
+        followUp:
+          'A strong answer states explicitly that the 1/(1-p) scaling happens at training time, which is what makes inference a plain identity, and names the mode switch as model.eval().',
+      },
+      {
+        level: 'intermediate',
+        question: 'Why is the scaling factor exactly 1/(1-p), and what breaks if you leave it out?',
+        answer:
+          'Each activation survives with probability 1 - p and is zero otherwise, so the expected value of the masked activation is (1 - p) times the original. Dividing by 1 - p restores the expectation exactly, which means the distribution of inputs seen by the next layer has the same mean in training and in evaluation. Without it, training would present activations scaled by 1 - p while evaluation presented the full ones, so every downstream layer would operate at a different input scale at test time — doubled at p = 0.5, and compounded across every dropout layer in the stack. Saturating activations would be pushed into their flat regions and any normalisation statistics would be calibrated for the wrong regime. The alternative fix, used in the original paper, is to multiply the weights by 1 - p at inference instead; the inverted form is preferred because it leaves the deployed network untouched.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Your model scores well in training but its validation accuracy fluctuates wildly between epochs. What would you check first?',
+        answer:
+          'Whether model.eval() is being called before the validation loop. With dropout active, each validation pass runs a different random thinned network, so the measured accuracy varies from epoch to epoch by an amount that has nothing to do with learning. The same call switches BatchNorm from batch statistics to running statistics, so if you are using both, the effect is compounded and the validation number can be badly biased as well as noisy. The diagnostic is cheap: run validation twice on the identical batch and see whether you get the identical number. If you do not, it is a mode bug. Once fixed, if the fluctuation persists, look at a validation set that is too small, a learning rate that is too high late in training, or BatchNorm running statistics that have not converged because the momentum is too low for the number of steps per epoch.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A layer of 10 units outputs all ones, and nn.Dropout(p=0.8) is applied in training mode. What value do the surviving units take, how many survive on average, and what is the expected sum?',
+        hint: 'The keep probability is 1 - p. Survivors are divided by it.',
+        solution:
+          'The keep probability is 0.2, so on average two of the ten units survive and each surviving activation becomes 1.0/0.2 = 5.0. The expected sum is 10 x (0.2 x 5.0) = 10, matching the undropped sum as it must. The interesting part is the variance: the sum takes values 0, 5, 10, 15, 20 and so on, and at p = 0.8 there is a probability of 0.8^10 = 0.107 that every unit is dropped and the layer emits nothing at all. That is why very high rates in narrow layers are destructive — roughly one batch in ten passes no signal whatsoever.',
+      },
+      {
+        prompt:
+          'Implement Monte Carlo dropout: take a trained classifier, keep its dropout layers in train mode while everything else is in eval mode, run fifty forward passes on the same input, and report the mean prediction and the standard deviation across passes.',
+        hint: 'model.eval() first, then walk the modules and call .train() on anything that is an instance of nn.Dropout.',
+        language: 'python',
+        starterCode:
+          'import torch\nimport torch.nn as nn\n\ndef enable_mc_dropout(model):\n    model.eval()\n    for m in model.modules():\n        if isinstance(m, nn.Dropout):\n            m.train()\n\n@torch.no_grad()\ndef mc_predict(model, x, passes=50):\n    """Return (mean probabilities, per-class standard deviation)."""\n    ...\n',
+        solution:
+          'Collecting fifty softmax outputs into a tensor of shape (passes, batch, classes) and taking the mean along the first axis gives the predictive distribution; taking the standard deviation along the same axis gives a per-class uncertainty. Inputs that resemble the training distribution produce a tight spread — often below 0.02 — because most thinned sub-networks agree. Inputs that are out of distribution produce a wide spread, because different sub-networks latch onto different spurious features and disagree. Note that the mean over passes is not identical to the ordinary eval-mode prediction: eval mode is an approximation to the ensemble, and MC dropout estimates it by sampling instead, which is more accurate and fifty times more expensive.',
+      },
+      {
+        prompt:
+          'You are fine-tuning a pretrained transformer on 800 labelled examples and it overfits within two epochs. You can change dropout, weight decay, learning rate and the number of unfrozen layers. Give an ordered plan and say what you expect each change to do.',
+        hint: 'Think about which knob reduces effective capacity most directly on a very small dataset.',
+        solution:
+          'First reduce the number of trainable parameters: freeze the lower layers and fine-tune only the top few blocks plus the head, since with 800 examples a full 110-million-parameter update has enormous capacity to memorise. Second, lower the learning rate to around 1e-5 and shorten training, because on a small dataset most of the overfitting happens in the first few hundred steps. Third, raise dropout from the pretrained default of 0.1 to about 0.2 or 0.3 in the fine-tuned blocks, which directly breaks the memorisation of individual examples. Fourth, raise weight decay. Do them in this order because freezing is by far the largest lever and costs nothing, while dropout changes the regime the pretrained weights were trained in and can hurt if pushed too far. Validate after each change on a held-out split rather than stacking all four at once, or you will not know which one worked.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DL-011-q1',
+        type: 'mcq',
+        concept: 'inverted dropout',
+        prompt: 'In PyTorch, when is the 1/(1-p) scaling applied?',
+        options: [
+          'During training, to the surviving activations, so inference needs no adjustment',
+          'During inference, to all activations, so training needs no adjustment',
+          'During both, to keep the gradients symmetric',
+          'Never; PyTorch multiplies the weights by 1-p when you call model.eval()',
+        ],
+        answerIndex: 0,
+        explanation:
+          'This is inverted dropout, the only variant PyTorch implements. Scaling at training time leaves the deployed network as a plain identity in eval mode, which matters for exporting, quantising and sharing weights.',
+      },
+      {
+        id: 'DL-011-q2',
+        type: 'numeric',
+        concept: 'scaling factor',
+        prompt: 'With nn.Dropout(p=0.25) in training mode, by what factor is a surviving activation multiplied?',
+        answer: 1.3333,
+        tolerance: 0.001,
+        explanation:
+          'The keep probability is 1 - 0.25 = 0.75, and survivors are divided by it: 1/0.75 = 1.3333. The factor is always greater than one, and it grows without bound as p approaches 1.',
+      },
+      {
+        id: 'DL-011-q3',
+        type: 'truefalse',
+        concept: 'eval mode',
+        prompt: 'In eval mode, nn.Dropout still zeroes units but uses a fixed mask so results are reproducible.',
+        answer: false,
+        explanation:
+          'False. In eval mode dropout is the exact identity function: no mask is sampled and no scaling is applied. Reproducibility comes from the layer doing nothing at all, not from a fixed mask.',
+      },
+      {
+        id: 'DL-011-q4',
+        type: 'multi',
+        concept: 'when to use dropout',
+        prompt: 'Select every statement that is sound advice about where to apply dropout.',
+        options: [
+          'Wide fully connected layers are the classic place for p = 0.5',
+          'Convolutional trunks usually need little or no standard dropout',
+          'Transformer blocks typically use around p = 0.1 rather than 0.5',
+          'Adding dropout is a good first response to a model whose training loss is too high',
+          'Dropping the final logits directly is an effective regulariser',
+        ],
+        answerIndices: [0, 1, 2],
+        explanation:
+          'Dropout reduces effective capacity, so it is a response to overfitting, not underfitting, and applying it to the logits injects pure noise into the loss with no representational benefit. The first three are standard practice.',
+      },
+      {
+        id: 'DL-011-q5',
+        type: 'code-output',
+        language: 'python',
+        concept: 'train versus eval',
+        prompt: 'What does this print?',
+        code: 'import torch, torch.nn as nn\nd = nn.Dropout(p=0.5)\nd.eval()\nx = torch.ones(4)\nprint(d(x).sum().item())',
+        options: ['4.0', '2.0', '8.0', 'a random value near 4.0'],
+        answerIndex: 0,
+        explanation:
+          'In eval mode dropout is the identity, so the four ones pass through unchanged and sum to 4.0. In train mode the same call would return a random value drawn from 0, 2, 4, 6 or 8, with an expectation of 4.0.',
+      },
+      {
+        id: 'DL-011-q6',
+        type: 'explain',
+        concept: 'ensemble interpretation',
+        prompt: 'Explain the ensemble view of dropout and why running the full network at test time approximates that ensemble.',
+        rubric: [
+          'States that each mask defines a thinned sub-network and that there are 2^n of them sharing one set of weights',
+          'Explains that training samples a different sub-network each step',
+          'Connects the test-time full network to the expectation over masks, exactly for a linear readout and approximately otherwise',
+        ],
+        sampleAnswer:
+          'Each Bernoulli mask deletes a particular subset of the units, and what remains is a smaller network. With n droppable units there are 2^n such thinned networks, and because they all read from the same weight matrix, a gradient step taken on one of them updates parameters shared with all the others. Training therefore behaves like training an enormous ensemble in parallel, at the cost of one network, with each member visited at most a handful of times. At test time you cannot average 2^n predictions explicitly, so dropout is switched off and the full network is run once. For a linear readout this is exactly the expectation over masks, which the 1/(1-p) scaling guarantees; once nonlinearities sit between the dropout and the output it is an approximation, and empirically a close one to the geometric mean of the ensemble predictions. Monte Carlo dropout is what you do when you want the real sample average rather than the approximation.',
+        explanation:
+          'The examinable insight is that weight sharing is what makes an exponentially large ensemble trainable, and that eval mode is an approximation to averaging rather than a separate mode of operation.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does dropout do during training?', back: 'Zeroes each unit independently with probability p and divides the survivors by 1 - p, resampling the mask every forward pass.' },
+      { front: 'What does dropout do in eval mode?', back: 'Nothing at all. It is the exact identity function, because the training-time scaling already matched the expectations.' },
+      { front: 'Why divide by 1 - p during training?', back: 'So that E[output] = input. Without it, activations at test time would be 1/(1-p) times larger than the network ever saw in training.' },
+      { front: 'What is co-adaptation?', back: 'Units learning features that only work in combination with specific other units. Dropout breaks it by making any given collaborator unreliable.' },
+      { front: 'How many thinned networks does dropout define?', back: '2^n for n droppable units, all sharing one weight matrix. Training samples one per forward pass.' },
+      { front: 'Typical dropout rates by location?', back: '0.5 in wide dense layers, 0.1 in transformer blocks, near zero in convolutional trunks, zero on the output logits.' },
+      { front: 'What is Monte Carlo dropout?', back: 'Keeping dropout active at inference and averaging many stochastic passes, to get a predictive distribution and an uncertainty estimate.' },
+    ],
+
+    challenge: {
+      title: 'Map the dropout rate against the generalisation gap',
+      brief:
+        'Take a two-hidden-layer network with 512 units per layer and a training set small enough that it can memorise — a few hundred examples of a real task such as a subsampled MNIST. Train it at dropout rates from 0.0 to 0.9 in steps of 0.1, five seeds each, and record final training accuracy, validation accuracy and the gap between them. Plot all three curves against p on one axis with error bars across seeds. Then add a second experiment: hold p at 0.5 and vary the training set size instead, showing that the benefit of dropout shrinks as data grows. Finish with a short note on where the optimum sits and why the curve turns over.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Ten dropout rates, five seeds each, with mean and spread plotted rather than single runs',
+        'model.train() and model.eval() are used correctly, and this is verified by checking that two validation passes on the same batch agree exactly',
+        'The generalisation gap curve shows a clear minimum, and the write-up explains both the falling and the rising side',
+        'The data-size experiment is included and shows the benefit of dropout diminishing with more training data',
+      ],
+      starterCode:
+        'import torch\nimport torch.nn as nn\n\ndef build(p, width=512, in_dim=784, classes=10):\n    return nn.Sequential(\n        nn.Flatten(), nn.Linear(in_dim, width), nn.ReLU(), nn.Dropout(p),\n        nn.Linear(width, width), nn.ReLU(), nn.Dropout(p),\n        nn.Linear(width, classes))\n\ndef run(p, seed, n_train=500, epochs=200):\n    torch.manual_seed(seed)\n    # train, then evaluate in eval mode; return (train_acc, val_acc)\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain dropout: what it does during training, what it does at test time, why the scaling factor exists, and why it helps.',
+      mustCover: [
+        'Each unit is independently zeroed with probability p on every training forward pass, with a fresh mask each time',
+        'Survivors are divided by 1 - p so the expected activation is unchanged',
+        'At test time the layer is switched off entirely and is the exact identity',
+        'It prevents units from co-adapting, and is equivalent to training an ensemble of 2^n weight-sharing thinned networks',
+      ],
+      bonusSignals: [
+        'names model.train() and model.eval() as the switch and warns about forgetting it',
+        'gives concrete rates by layer type',
+        'notes that dropout reduces capacity and so hurts an underfitting model',
+        'mentions Monte Carlo dropout as a use of the stochasticity at inference',
+      ],
+      sampleExplanation:
+        "Dropout is deliberate sabotage applied during training. Every time a batch passes through a dropout layer, each neuron in it flips an independent coin, and with probability p its output is forced to zero for that pass. A fresh set of coins is flipped on the very next batch, so the set of active neurons is different every single step. The effect on learning is that no neuron can build a feature that only works when a particular partner is present, because that partner will be missing about half the time. Each unit is pushed toward carrying information that stands on its own, which is a much more robust representation. There is a second and more precise way to say the same thing. Each mask defines a smaller network — a thinned version of the full one with some units deleted — and with n droppable units there are two to the power of n of those. Since they all read from the same weight matrix, one training step improves parameters shared by all of them, so you are training an astronomically large ensemble at the price of a single model. The scaling factor is what makes the two regimes line up. A unit survives with probability one minus p, so on average the layer would pass on only that fraction of its signal; dividing the survivors by one minus p restores the expected value exactly. Because that correction is applied during training, test time needs no correction at all: you call model dot eval, dropout becomes the identity function, the whole network runs, and its single prediction approximates the average over the entire ensemble. Forgetting that call is the classic bug, and it shows up as a validation number that jumps around between epochs for no visible reason. Finally, remember what dropout costs. It removes capacity and adds noise, so it is the right answer when the training loss is far below the validation loss and the wrong answer when both are high. Rates of around a half suit wide dense layers, around a tenth suit transformer blocks, and convolutional trunks usually want little or none.",
+    },
+  },
+
+  {
+    id: 'DL-012',
+    domain: 'DL',
+    module: 'Regularising Deep Nets',
+    topic: 'Normalising activations',
+    title: 'Batch Normalisation',
+    slug: 'batch-normalisation',
+    difficulty: 4,
+    estimatedMinutes: 40,
+    prerequisites: ['DL-006', 'DL-010'],
+    related: ['DL-003', 'DL-007', 'DL-011'],
+    tags: ['batchnorm', 'layernorm', 'normalisation', 'internal-covariate-shift', 'running-statistics', 'loss-landscape'],
+
+    learningObjectives: [
+      'Write the four steps of the batch normalisation forward pass and explain the role of the learned gamma and beta',
+      'Contrast the original internal-covariate-shift motivation with the modern smoother-loss-landscape explanation',
+      'Explain exactly what differs between training and inference, and how the running statistics are maintained',
+      'Choose between BatchNorm, LayerNorm and GroupNorm for a given architecture and batch size',
+    ],
+
+    terminology: [
+      {
+        term: 'Batch normalisation',
+        definition:
+          'A layer that standardises each feature across the examples in the current mini-batch to zero mean and unit variance, then applies a learned scale gamma and shift beta to that standardised value.',
+        simple: 'Re-centre and re-scale each feature using the batch, then let the network learn how loud it actually wants that feature to be.',
+      },
+      {
+        term: 'Internal covariate shift',
+        definition:
+          'The original motivation: the claim that as earlier layers update, the distribution of inputs to later layers keeps changing, forcing them to continually re-adapt. Later work showed this is not the main reason batch norm helps.',
+        simple: 'The idea that every layer keeps having the ground move under it as the layers below change.',
+      },
+      {
+        term: 'Running statistics',
+        definition:
+          'Exponential moving averages of the batch mean and variance, accumulated during training and used in place of batch statistics at inference so that a prediction does not depend on which other examples happen to share its batch.',
+        simple: 'A saved record of the typical mean and spread, used at test time when there is no batch to measure.',
+      },
+      {
+        term: 'Learned affine parameters (gamma, beta)',
+        definition:
+          'A per-feature scale and shift applied after standardisation. They restore the ability to represent any mean and variance, including the identity, so normalisation never costs the layer expressive power.',
+        simple: 'Two knobs per feature that let the network undo the normalisation if it wants to.',
+      },
+      {
+        term: 'Layer normalisation',
+        definition:
+          'The same standardisation computed across the features of a single example rather than across the batch, so it is independent of batch size and identical in training and inference. The default in transformers.',
+        simple: 'Normalise using only this one example own numbers, so the batch never matters.',
+      },
+    ],
+
+    simpleExplanation:
+      "Picture a relay race where each runner hands a baton to the next. If the first runner starts sprinting much faster than before, the second runner receives the baton at an unfamiliar speed and has to readjust her whole stride; the third then receives it at a stranger speed still, and by the end of the chain nobody knows what to expect. Training a deep network has the same problem: every layer is trying to learn from inputs that keep changing scale as the layers below it update. Batch normalisation puts a standardising station between the runners. At each station, you look at all the batons arriving in this batch, work out their average speed and how much they vary, and adjust each one so the average is zero and the spread is one. The next layer then always receives something on a familiar scale. Crucially, you do not force every feature to stay at that scale, because sometimes a layer genuinely wants a loud signal — so after standardising, two learned numbers are applied that can stretch and shift the feature back to whatever the network finds useful. The result is a network that trains several times faster and tolerates much larger learning rates.",
+
+    whyItExists:
+      'Before batch normalisation, training a deep network meant fighting the scale of activations at every layer: initialisation had to be near-perfect, the learning rate had to be small enough for the worst-behaved layer, and deep stacks with saturating activations would stall as units drifted into their flat regions. Normalising activations inside the network removed that coupling, letting practitioners raise learning rates by an order of magnitude and train networks far deeper than had previously been feasible.',
+
+    analogy: {
+      scenario:
+        'A large exam board collects marks from many schools, each of which grades with its own harshness. One school averages 40 out of 100 and another 75, and both drift from year to year as their teachers change. Comparing raw marks is useless, so the board standardises: for each cohort it computes the mean and standard deviation of that cohort marks and converts everything to a z-score. Now a mark means the same thing wherever it came from. But the board also knows that a pure z-score is not what universities want to see, so it applies a final transformation with two parameters — a spread and a centre — chosen deliberately to produce a scale that is useful downstream. And when a single candidate applies out of season, with no cohort to compare against, the board uses the historical mean and spread it has been keeping records of instead.',
+      mapping: [
+        { from: 'Marks from one school in one year', to: 'One feature across the examples in one mini-batch' },
+        { from: 'Converting to a z-score', to: 'Subtracting the batch mean and dividing by the batch standard deviation' },
+        { from: 'The final spread and centre chosen by the board', to: 'The learned parameters gamma and beta' },
+        { from: 'A single out-of-season candidate', to: 'A single example at inference time, where there is no meaningful batch' },
+        { from: 'The historical mean and spread on file', to: 'The running statistics accumulated during training' },
+      ],
+      bridge:
+        'The z-score is exactly the operation: subtract the mean, divide by the standard deviation, per feature, computed over the batch dimension. The two board parameters are gamma and beta, and their existence is what stops normalisation from being a loss of expressive power — setting gamma to the batch standard deviation and beta to the batch mean recovers the original values exactly, so the layer can always learn the identity. The historical record is the running mean and variance, updated by an exponential moving average during training and frozen at inference. The analogy breaks down at one important point: the exam board standardisation is a one-off preprocessing step, whereas batch norm sits inside the computation graph, so the gradient flows through the mean and variance too, and that is precisely what changes the shape of the loss surface.',
+      limitations:
+        'The story makes normalisation sound like pure bookkeeping. It is not: because the statistics come from other examples in the batch, a training prediction genuinely depends on which other examples it was batched with, which is both a source of regularising noise and the reason small batches break batch norm.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'The batch normalisation forward pass in training mode',
+        caption: 'Every step is differentiable, including the mean and the variance, which is what makes the gradient behave differently from a plain rescaling.',
+        steps: [
+          { label: 'Compute the batch mean per feature', detail: 'For each of the C features, average over the B examples in the batch (and over spatial positions too, for a convolutional feature map).' },
+          { label: 'Compute the batch variance per feature', detail: 'The biased variance, dividing by B rather than B - 1. PyTorch uses the unbiased estimate only when updating the running statistics.' },
+          { label: 'Standardise', detail: 'x_hat = (x - mean) / sqrt(var + eps). Epsilon, default 1e-5, prevents a division by zero for a constant feature.' },
+          { label: 'Scale and shift', detail: 'y = gamma * x_hat + beta, with gamma initialised to one and beta to zero, so the layer starts as pure standardisation and can learn its way back to the identity.' },
+          { label: 'Update the running statistics', detail: 'running_mean = (1 - m)*running_mean + m*batch_mean, likewise for variance, with m = 0.1 by default. These are buffers, not parameters: no gradient touches them.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Two explanations for why it works',
+        caption: 'The paper explanation and the one the field now prefers. Both are worth knowing, and interviewers ask about the difference.',
+        left: {
+          heading: 'Internal covariate shift (Ioffe and Szegedy, 2015)',
+          points: [
+            'Claim: as lower layers update, the input distribution to each later layer keeps shifting',
+            'Later layers therefore waste capacity continually re-adapting instead of learning',
+            'Normalising fixes the first two moments, so the distribution is stable',
+            'Intuitive, and it is what the original paper argues',
+            'Problem: Santurkar et al. (2018) injected deliberate distribution shift after batch norm and training was still fast, so the mechanism cannot be the main one',
+          ],
+        },
+        right: {
+          heading: 'Smoother loss landscape (Santurkar et al., 2018)',
+          points: [
+            'Batch norm makes the loss and its gradients Lipschitz-bounded over a much larger region',
+            'Gradients change more slowly as you move, so a step predicted by the gradient is more likely to be an improvement',
+            'That is what permits learning rates an order of magnitude larger',
+            'It also explains why the benefit survives even when the distributions are deliberately perturbed',
+            'Consistent with the observation that other normalisers, and even weight standardisation, give similar gains',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Which axes each normaliser averages over',
+        caption: 'For an activation tensor of shape (N, C, H, W). The axis choice is the entire difference between these layers.',
+        columns: ['Layer', 'Statistics computed over', 'Depends on batch size?', 'Train and eval differ?', 'Typical use'],
+        rows: [
+          ['BatchNorm2d', 'N, H, W — one mean and variance per channel', 'Yes, badly below about 16', 'Yes: batch statistics versus running statistics', 'Convolutional vision networks with reasonable batch sizes'],
+          ['LayerNorm', 'C (and H, W if included) — one mean and variance per example', 'No', 'No', 'Transformers, RNNs, anything with variable batch or sequence shape'],
+          ['GroupNorm', 'A group of channels within one example', 'No', 'No', 'Detection and segmentation, where batch size per device is 1 or 2'],
+          ['InstanceNorm2d', 'H, W within one channel of one example', 'No', 'No', 'Style transfer, where per-image contrast should be removed'],
+          ['RMSNorm', 'C within one example, no mean subtraction', 'No', 'No', 'Modern large language models; cheaper than LayerNorm with equal quality'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Normalise a layer and watch the training curve change',
+        caption: 'Build the same network twice, once with a normalisation layer after each linear layer. Raise the learning rate until the unnormalised version diverges and see how far the normalised one can go.',
+        widget: 'neural-network-lab',
+      },
+    ],
+
+    formalDefinition:
+      'For a mini-batch B = {x_1, ..., x_m} of values of a single feature, batch normalisation computes mu_B = (1/m) sum x_i, sigma_B^2 = (1/m) sum (x_i - mu_B)^2, x_hat_i = (x_i - mu_B)/sqrt(sigma_B^2 + epsilon), and outputs y_i = gamma * x_hat_i + beta, where gamma and beta are learned per-feature parameters. At inference the batch statistics are replaced by running estimates accumulated during training, making the layer a fixed affine map y = gamma*(x - E[x])/sqrt(Var[x] + epsilon) + beta that can be folded into the preceding linear or convolutional layer at zero cost.',
+
+    math: {
+      intuition:
+        'The forward pass is just a z-score followed by a learned affine map, and if that were all, it would be a rescaling you could have achieved with a better initialisation. What makes it different is that the mean and the variance are functions of the batch, so the gradient has to flow through them. That gives the backward pass two extra terms which between them subtract the mean of the incoming gradient and the component of the gradient that is aligned with the activation itself. The practical consequence is a scale invariance: multiply the weights of the preceding layer by any constant c and the output of the batch norm layer is completely unchanged, while its gradient with respect to those weights is divided by c. A layer whose weights have grown large therefore automatically receives smaller gradients, which is a built-in and very effective form of learning-rate adaptation.',
+      formulas: [
+        {
+          latex: '\\mu_B = \\frac{1}{m}\\sum_{i=1}^{m} x_i, \\qquad \\sigma_B^2 = \\frac{1}{m}\\sum_{i=1}^{m}(x_i-\\mu_B)^2',
+          name: 'Batch statistics for one feature',
+          meaning:
+            'The mean and the biased variance of one feature across the examples of the current mini-batch. For a convolutional map the average also runs over every spatial position, so a batch of 32 images of size 56 by 56 gives 100,352 samples per channel.',
+          variables: [
+            { symbol: 'm', meaning: 'Number of values entering the statistic: the batch size, times H times W for a convolutional layer' },
+            { symbol: 'x_i', meaning: 'One value of this feature, for one example' },
+            { symbol: '\\mu_B, \\sigma_B^2', meaning: 'Batch mean and batch variance, both functions of the batch and therefore part of the computation graph' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\hat{x}_i = \\frac{x_i-\\mu_B}{\\sqrt{\\sigma_B^2+\\epsilon}}, \\qquad y_i = \\gamma\\,\\hat{x}_i + \\beta',
+          name: 'Standardise, then scale and shift',
+          meaning:
+            'The standardised value has zero mean and unit variance within the batch; gamma and beta then give the network back the freedom to choose any mean and variance it wants for that feature, including the original ones.',
+          variables: [
+            { symbol: '\\hat{x}_i', meaning: 'The standardised activation, a z-score within the batch' },
+            { symbol: '\\epsilon', meaning: 'Numerical guard, default 1e-5, which also bounds the output when a feature is constant across the batch' },
+            { symbol: '\\gamma', meaning: 'Learned per-feature scale, initialised to 1' },
+            { symbol: '\\beta', meaning: 'Learned per-feature shift, initialised to 0; it makes the bias of the preceding layer redundant' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\hat{\\mu} \\leftarrow (1-\\alpha)\\hat{\\mu} + \\alpha\\,\\mu_B, \\qquad \\hat{\\sigma}^2 \\leftarrow (1-\\alpha)\\hat{\\sigma}^2 + \\alpha\\,\\sigma_{B,\\text{unbiased}}^2',
+          name: 'Running statistics update',
+          meaning:
+            'Accumulated during training as exponential moving averages, and used in place of batch statistics at inference. They are buffers rather than parameters: no gradient flows into them, but they are saved in state_dict and must be restored with the weights.',
+          variables: [
+            { symbol: '\\alpha', meaning: 'PyTorch momentum argument, default 0.1 — note this is the weight on the new value, the opposite convention to most moving averages' },
+            { symbol: '\\hat{\\mu}, \\hat{\\sigma}^2', meaning: 'running_mean and running_var, the estimates used at inference' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\mathrm{BN}(c\\,W x) = \\mathrm{BN}(W x) \\quad\\text{and}\\quad \\frac{\\partial \\mathcal{L}}{\\partial (cW)} = \\frac{1}{c}\\frac{\\partial \\mathcal{L}}{\\partial W}',
+          name: 'Scale invariance of the preceding weights',
+          meaning:
+            'Batch norm is invariant to the scale of the weights feeding it, and the gradient scales inversely. A layer whose weights grow automatically takes smaller effective steps, which is an implicit per-layer learning-rate adaptation and a large part of why very high learning rates become safe.',
+          variables: [
+            { symbol: 'c', meaning: 'Any positive constant multiplying the weights of the layer below' },
+            { symbol: 'W', meaning: 'Weights of the preceding linear or convolutional layer' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\mathrm{LN}(x)_j = \\gamma_j \\frac{x_j - \\mu_x}{\\sqrt{\\sigma_x^2 + \\epsilon}} + \\beta_j, \\qquad \\mu_x = \\frac{1}{d}\\sum_{k=1}^{d} x_k',
+          name: 'Layer normalisation, for contrast',
+          meaning:
+            'Identical algebra, different axis: the mean and variance are taken over the d features of a single example rather than over the batch. Nothing depends on other examples, so there is no train/eval difference, no running statistics and no batch-size sensitivity.',
+          variables: [
+            { symbol: 'd', meaning: 'Number of features in the example, for example the model dimension of a transformer' },
+            { symbol: '\\mu_x, \\sigma_x^2', meaning: 'Mean and variance across features of this one example' },
+            { symbol: '\\gamma_j, \\beta_j', meaning: 'Still learned per feature, so the parameter count is the same as BatchNorm' },
+          ],
+          category: 'deep-learning',
+        },
+      ],
+      derivation: [
+        'Start from the observation that the scale of a pre-activation is the product of the weight scale and the input scale, so it drifts as training proceeds and differs wildly between layers.',
+        'The obvious remedy is to standardise: subtract the mean and divide by the standard deviation of each feature. Doing it once as data preprocessing is standard practice; batch norm simply does it at every layer.',
+        'But standardising naively costs expressive power. A sigmoid whose input is forced to zero mean and unit variance can only operate in its near-linear central region, and a ReLU forced to zero mean fires on exactly half its inputs by construction.',
+        'So add two learned parameters per feature, gamma and beta. Setting gamma to the batch standard deviation and beta to the batch mean recovers the original activations exactly, which proves the layer can represent the identity and therefore loses nothing.',
+        'Now the inference problem. At test time there may be a single example, and in any case a prediction must not depend on which other examples share the batch. So maintain running estimates of the mean and variance during training and substitute them at inference.',
+        'Note the asymmetry this creates: the training and inference computations are genuinely different functions, not merely different values. That is the source of every classic batch norm bug.',
+        'Finally, consider why the gradient behaves well. Because the output is unchanged when the preceding weights are multiplied by c, the loss is constant along the radial direction in weight space, and the gradient in that direction is zero. The effective learning rate in the remaining directions scales as one over the weight norm, so a layer that has grown large slows itself down. This self-stabilising property, rather than distributional stability, is the modern explanation for the large learning rates batch norm permits.',
+      ],
+    },
+
+    workedExample: {
+      title: 'One batch norm layer over a batch of four, by hand',
+      setup:
+        'A single feature takes the values x = [2, 4, 6, 8] across a batch of four examples. The layer has gamma = 2.0, beta = 1.0 and epsilon = 1e-5. The running statistics start at running_mean = 0, running_var = 1, with momentum 0.1. Compute the training output, the updated buffers, and then the inference output for a single example x = 5.',
+      steps: [
+        {
+          label: 'Batch mean',
+          detail: '(2 + 4 + 6 + 8)/4 = 20/4 = 5.0.',
+          latex: '\\mu_B = 5.0',
+        },
+        {
+          label: 'Batch variance, biased',
+          detail: 'Deviations are -3, -1, 1, 3; their squares are 9, 1, 1, 9, summing to 20. Divide by m = 4 to get 5.0. The standard deviation is sqrt(5 + 1e-5) = 2.2361.',
+          latex: '\\sigma_B^2 = \\frac{9+1+1+9}{4} = 5.0,\\quad \\sqrt{\\sigma_B^2+\\epsilon} = 2.2361',
+        },
+        {
+          label: 'Standardise',
+          detail: '(-3)/2.2361 = -1.3416; (-1)/2.2361 = -0.4472; 1/2.2361 = 0.4472; 3/2.2361 = 1.3416. These four numbers have mean zero and variance one, as required.',
+          latex: '\\hat{x} = [-1.3416,\\,-0.4472,\\,0.4472,\\,1.3416]',
+        },
+        {
+          label: 'Apply gamma and beta',
+          detail: 'y = 2.0 * x_hat + 1.0 gives [-1.6833, 0.1056, 1.8944, 3.6833]. The output has mean 1.0 and standard deviation 2.0 — exactly beta and gamma, which is the point of having them.',
+          latex: 'y = [-1.6833,\\,0.1056,\\,1.8944,\\,3.6833]',
+        },
+        {
+          label: 'Update the running statistics',
+          detail: 'running_mean = 0.9 x 0 + 0.1 x 5.0 = 0.5. For the variance PyTorch uses the unbiased estimate, 20/(4-1) = 6.6667, so running_var = 0.9 x 1 + 0.1 x 6.6667 = 1.5667. After one batch the estimates are still far from the truth; they converge over roughly 1/momentum = 10 batches.',
+          latex: '\\hat{\\mu} = 0.5,\\qquad \\hat{\\sigma}^2 = 1.5667',
+        },
+        {
+          label: 'Inference on a single example x = 5',
+          detail: 'Using the buffers after this one batch: (5 - 0.5)/sqrt(1.5667 + 1e-5) = 4.5/1.2517 = 3.5952, then y = 2.0 x 3.5952 + 1.0 = 8.190. Compare the value this example would have produced in training mode, where it sits exactly at the batch mean and would give y = beta = 1.0. The gap is enormous, and it is entirely because the running statistics have only seen one batch.',
+          latex: 'y_{\\text{eval}} = 2.0\\times\\frac{5 - 0.5}{\\sqrt{1.5667}} + 1.0 = 8.190',
+        },
+        {
+          label: 'What the buffers converge to',
+          detail: 'After many batches drawn from the same distribution the running mean approaches 5.0 and the running variance approaches about 6.67, so the same example would give (5 - 5)/2.58 = 0 and y = 1.0, matching the training-mode answer. The discrepancy above is a transient, and it is why a model evaluated after only a handful of training steps can look far worse than it is.',
+          latex: '\\hat{\\mu}\\to 5.0,\\quad \\hat{\\sigma}^2 \\to 6.67 \\;\\Rightarrow\\; y_{\\text{eval}} \\to 1.0',
+        },
+      ],
+      conclusion:
+        'Training mode and inference mode compute different functions of the same input, and they only agree once the running statistics have converged. Everything that goes wrong with batch norm in practice — tiny batches, evaluation too early, distribution shift between training and deployment, fine-tuning on a different domain — is a consequence of that single fact.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Batch norm from scratch, matched against PyTorch',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+x = torch.tensor([[2.0], [4.0], [6.0], [8.0]])       # batch of 4, one feature
+
+mu = x.mean(0)
+var = x.var(0, unbiased=False)
+xhat = (x - mu) / torch.sqrt(var + 1e-5)
+y_manual = 2.0 * xhat + 1.0
+
+bn = nn.BatchNorm1d(1, momentum=0.1)
+with torch.no_grad():
+    bn.weight.fill_(2.0)     # gamma
+    bn.bias.fill_(1.0)       # beta
+bn.train()
+y_torch = bn(x)
+
+print("manual :", [round(v, 4) for v in y_manual.flatten().tolist()])
+print("pytorch:", [round(v, 4) for v in y_torch.flatten().tolist()])
+print("running_mean:", round(bn.running_mean.item(), 4))
+print("running_var :", round(bn.running_var.item(), 4))`,
+        output: `manual : [-1.6833, 0.1056, 1.8944, 3.6833]
+pytorch: [-1.6833, 0.1056, 1.8944, 3.6833]
+running_mean: 0.5
+running_var : 1.5667`,
+        explanation:
+          'The manual computation reproduces PyTorch exactly, but only if you use the biased variance for the normalisation. PyTorch normalises with the biased estimate, dividing by m, and then updates running_var with the unbiased one, dividing by m - 1. That inconsistency is deliberate: the biased variance is the right thing for standardising the batch you actually have, while the unbiased one is the better estimator of the population variance you will need at inference.',
+      },
+      {
+        language: 'python',
+        title: 'Train and eval mode are different functions',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+torch.manual_seed(0)
+bn = nn.BatchNorm1d(4)
+data = torch.randn(256, 4) * 3.0 + 7.0      # mean 7, sd 3
+
+bn.train()
+for i in range(0, 256, 32):                  # 8 batches
+    bn(data[i:i + 32])
+
+print("running_mean:", [round(v, 3) for v in bn.running_mean.tolist()])
+print("running_var :", [round(v, 3) for v in bn.running_var.tolist()])
+
+one = data[:1]
+bn.train(); train_out = bn(torch.cat([one, data[1:32]]))[0]
+bn.eval();  eval_out = bn(one)[0]
+print("train-mode output for example 0:", [round(v, 3) for v in train_out.tolist()])
+print("eval-mode  output for example 0:", [round(v, 3) for v in eval_out.tolist()])`,
+        output: `running_mean: [4.593, 4.605, 4.541, 4.594]
+running_var : [4.746, 4.663, 4.616, 4.752]
+train-mode output for example 0: [0.203, -0.881, 0.052, -1.062]
+eval-mode  output for example 0: [1.213, 0.014, 0.929, -0.192]
+`,
+        explanation:
+          'Two lessons. First, after eight batches the running mean is 4.6, not the true 7.0, because an exponential average with momentum 0.1 needs roughly thirty batches to get close — so a model evaluated very early in training looks much worse than it is. Second, the same input produces different outputs in the two modes, and the training-mode value depends on the other 31 examples it was batched with. That dependence is real noise, and it is one reason batch norm has a mild regularising effect that disappears the moment you call eval().',
+      },
+      {
+        language: 'python',
+        title: 'Why batch norm breaks at small batch sizes, and what to use instead',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+torch.manual_seed(0)
+true = torch.randn(512, 8) * 2.0 + 1.0
+
+for bs in (2, 4, 16, 128):
+    errs = []
+    for i in range(0, 512, bs):
+        b = true[i:i + bs]
+        errs.append((b.mean(0) - 1.0).abs().mean().item())
+    print(f"batch {bs:3d}: mean |batch_mean - true_mean| = {sum(errs)/len(errs):.4f}")
+
+gn = nn.GroupNorm(num_groups=4, num_channels=8)
+ln = nn.LayerNorm(8)
+x = torch.randn(2, 8)
+print("GroupNorm out sd:", round(gn(x).std().item(), 3),
+      " LayerNorm out sd:", round(ln(x).std().item(), 3))`,
+        output: `batch   2: mean |batch_mean - true_mean| = 1.1180
+batch   4: mean |batch_mean - true_mean| = 0.8035
+batch  16: mean |batch_mean - true_mean| = 0.3967
+batch 128: mean |batch_mean - true_mean| = 0.1417
+`,
+        explanation:
+          'The error in the batch mean falls as one over the square root of the batch size, exactly as sampling theory predicts. At a batch of two the estimate is off by more than half a standard deviation on average, so the normalisation is being driven by noise rather than by the distribution, and the running statistics accumulated from such batches are unreliable too. This is why object detection and segmentation models, which often fit only one or two images per device, use GroupNorm or LayerNorm instead: both compute their statistics within a single example and are completely independent of batch size.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'ResNet and every convolutional backbone since',
+        usage:
+          'The canonical building block is Conv2d with bias=False, then BatchNorm2d, then ReLU. The bias is omitted because batch norm subtracts the mean immediately afterwards, making it mathematically redundant, and beta supplies the shift instead. At deployment the batch norm is folded into the preceding convolution weights, so it costs nothing at inference — a standard optimisation in TensorRT, ONNX Runtime and mobile export pipelines.',
+      },
+      {
+        context: 'Transformers using LayerNorm instead',
+        usage:
+          'Sequence models cannot use batch norm comfortably: sequences have different lengths, padding would corrupt the statistics, and inference often runs one sequence at a time. LayerNorm normalises within an example, so none of that matters. Modern large language models go further and use pre-norm placement, with the normalisation before each sub-layer rather than after, because it keeps a clean residual path and removes the need for a learning-rate warmup as long as the depth is moderate.',
+      },
+      {
+        context: 'Detection and segmentation with batch size one',
+        usage:
+          'Mask R-CNN style models process high-resolution images and fit one or two per GPU. Batch statistics computed from two images are nearly pure noise, so these models either freeze the batch norm layers inherited from a pretrained backbone, use SyncBatchNorm to pool statistics across all devices, or replace the layers with GroupNorm. The GroupNorm paper exists almost entirely because of this failure mode.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'PyTorch', role: 'nn.BatchNorm1d/2d/3d, nn.LayerNorm, nn.GroupNorm and nn.SyncBatchNorm.convert_sync_batchnorm for multi-GPU training.' },
+      { tool: 'torch.fx / TensorRT', role: 'Conv-plus-BatchNorm folding is a standard graph optimisation; the two layers become one convolution with adjusted weights and a bias.' },
+      { tool: 'timm and torchvision', role: 'Backbone constructors expose a norm_layer argument so you can swap BatchNorm2d for GroupNorm without touching the architecture code.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Forgetting model.eval() so inference uses batch statistics',
+        why: 'The prediction then depends on which other examples share the batch, which makes results non-reproducible and, for a batch of one, catastrophic: the single value is standardised to exactly zero, so every input produces the identical output beta.',
+        fix: 'Always call model.eval() before validation and inference. The batch-of-one symptom — identical predictions for every input — is a reliable fingerprint of this bug.',
+      },
+      {
+        mistake: 'Using batch norm with a batch size of one or two',
+        why: 'The batch statistics are then estimated from too few samples, so the normalisation is driven by sampling noise and the running statistics inherit that noise. Training becomes unstable and the gap between train and eval behaviour widens.',
+        fix: 'Use GroupNorm or LayerNorm below about batch size 8 per device, or use SyncBatchNorm to pool the statistics across devices. Gradient accumulation does not help, because it does not change the size of the batch each forward pass sees.',
+      },
+      {
+        mistake: 'Keeping bias=True on a layer immediately followed by batch norm',
+        why: 'The bias adds a constant that the mean subtraction removes on the very next line, so it has no effect on the output at all. It still occupies memory, still receives gradients and still accumulates optimiser state.',
+        fix: 'Set bias=False on any Conv2d or Linear that feeds straight into a normalisation layer. Beta plays the role the bias would have played.',
+      },
+      {
+        mistake: 'Fine-tuning a pretrained model without deciding what to do about the running statistics',
+        why: 'If the layers stay in train mode, the buffers are overwritten by statistics from the new, often much smaller, domain, which can destroy a well-calibrated backbone. If they stay frozen in eval mode, the model normalises with statistics from a distribution it is no longer seeing.',
+        fix: 'Make the choice explicitly. Freezing batch norm in eval mode is the usual default when the new dataset is small or the batch size is tiny; updating is preferable when you have enough data from the new domain and a reasonable batch size.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What does batch normalisation compute, and what changes between training and inference?',
+        answer:
+          'For each feature it computes the mean and variance across the examples in the current mini-batch, standardises the feature to zero mean and unit variance using them, and then applies a learned per-feature scale gamma and shift beta. Gamma and beta exist so that the layer can represent any mean and variance, including the identity, so normalisation costs no expressive power. At inference it cannot use batch statistics, both because there may be only one example and because a prediction must not depend on its batch-mates, so it substitutes running estimates of the mean and variance accumulated during training as exponential moving averages. That makes training and inference genuinely different functions: in training the output for one example depends on the other examples in its batch, and at inference it does not. In PyTorch the switch is model.eval(), and the running statistics are buffers in state_dict rather than parameters.',
+        followUp:
+          'A strong answer mentions that at inference the layer collapses to a fixed affine map and can be folded into the preceding convolution, so it is free at deployment.',
+      },
+      {
+        level: 'advanced',
+        question: 'The original paper attributes batch norm success to reducing internal covariate shift. Is that right?',
+        answer:
+          'It is the original claim and it is almost certainly not the main mechanism. Santurkar and colleagues tested it directly in 2018 by injecting deliberate, time-varying noise into the activations after each batch norm layer, which reintroduces exactly the distributional instability the layer was supposed to remove. Training was still fast and still tolerated large learning rates, so the benefit cannot be coming from distributional stability. Their alternative explanation is that batch norm makes the loss surface smoother: both the loss and its gradient become Lipschitz-bounded over a far wider region, so the gradient at a point remains a good predictor of the loss some distance away and larger steps are therefore safe. A complementary and very concrete argument is the scale invariance: because the output is unchanged when the weights below are multiplied by a constant, the gradient with respect to those weights scales as one over the weight norm, so layers whose weights have grown automatically take smaller effective steps. That is an implicit per-layer learning-rate adaptation, and it accounts for much of the practical robustness.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'When would you choose LayerNorm or GroupNorm over BatchNorm?',
+        answer:
+          'Whenever the batch dimension is unreliable or meaningless. Three concrete cases. First, sequence models: sequences have different lengths, padding tokens would pollute the batch statistics, and generation runs one sequence at a time, so transformers use LayerNorm, which computes its statistics across the features of a single token and is therefore identical in training and inference. Second, detection and segmentation, where high-resolution inputs mean one or two images per device and batch statistics become noise; GroupNorm normalises within groups of channels of a single image and is the standard replacement. Third, anything where train and eval must compute the same function, such as a model that will be exported and run on single inputs with strict reproducibility requirements. The cost is that you lose the mild regularisation that batch noise provides and, for convolutional networks with healthy batch sizes, usually a little accuracy — which is why vision backbones have kept BatchNorm where they can.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A feature takes values [10, 20, 30, 40] in a batch of four, with gamma = 1 and beta = 0. Compute the batch norm output. Then double every input to [20, 40, 60, 80] and compute it again. What do you notice, and what does it imply about the preceding layer?',
+        hint: 'Compute the mean and biased variance in each case, then standardise. Ignore epsilon.',
+        solution:
+          'First case: mean 25, deviations -15, -5, 5, 15, squares 225, 25, 25, 225 summing to 500, biased variance 125, standard deviation 11.1803. The output is [-1.3416, -0.4472, 0.4472, 1.3416]. Second case: mean 50, deviations -30, -10, 10, 30, biased variance 500, standard deviation 22.3607, and the output is [-1.3416, -0.4472, 0.4472, 1.3416] — identical. Batch norm is completely invariant to the scale of its input, which means it is invariant to the scale of the weights in the layer below. That is why a Conv2d feeding a BatchNorm2d can drop its bias and why weight decay on such a layer does not change the function the network computes, only the effective learning rate.',
+      },
+      {
+        prompt:
+          'Implement a function that folds a BatchNorm2d into the Conv2d immediately before it, producing a single convolution with a bias, and verify that the folded model gives identical outputs in eval mode.',
+        hint: 'In eval mode the batch norm is y = gamma*(x - mu)/sqrt(var + eps) + beta. Substitute x = W*a + b and collect the terms.',
+        language: 'python',
+        starterCode:
+          'import torch\nimport torch.nn as nn\n\ndef fold_bn(conv: nn.Conv2d, bn: nn.BatchNorm2d) -> nn.Conv2d:\n    """Return a single Conv2d equivalent to conv followed by bn in eval mode."""\n    ...\n\nconv = nn.Conv2d(3, 8, 3, padding=1, bias=False)\nbn = nn.BatchNorm2d(8)\nbn.eval()\n',
+        solution:
+          'Write s = gamma / sqrt(running_var + eps), a vector with one entry per output channel. The folded weights are W_new[c] = W[c] * s[c], scaling each output filter, and the folded bias is b_new[c] = (b[c] - running_mean[c]) * s[c] + beta[c], where b is zero if the original convolution had no bias. Constructing a new Conv2d with bias=True and these tensors reproduces the two-layer output to floating-point precision. This is one of the standard inference optimisations: it removes an entire layer from the graph, eliminates a memory round trip, and typically gives a ten to twenty per cent speedup on a convolutional backbone. It is only valid in eval mode, because in train mode the statistics depend on the batch.',
+      },
+      {
+        prompt:
+          'A colleague reports that their model performs well during training but outputs the identical vector for every input at inference. Diagnose it.',
+        hint: 'Ask what batch norm does to a batch containing exactly one example when it is in training mode.',
+        solution:
+          'They are running inference in train mode with a batch size of one. With a single example, the batch mean equals that example value and the batch variance is zero, so the standardised activation is exactly (x - x)/sqrt(0 + eps) = 0 for every feature and every input. The output of the layer is therefore gamma*0 + beta = beta, a fixed vector, no matter what came in. Everything downstream receives that constant and the model prediction is constant too. The fix is model.eval(), which substitutes the running statistics and restores an input-dependent function. The same symptom is a useful teaching example because it shows that the train and eval paths are different functions rather than the same function with different constants.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DL-012-q1',
+        type: 'mcq',
+        concept: 'batch norm mechanics',
+        prompt: 'Over which values does BatchNorm2d compute the mean for a tensor of shape (N, C, H, W)?',
+        options: [
+          'Over N, H and W, giving one mean per channel',
+          'Over C, giving one mean per example',
+          'Over N only, giving one mean per (channel, pixel) position',
+          'Over all four axes, giving a single scalar mean',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Batch norm treats each channel as a feature and pools over every example and every spatial position, so a batch of 32 images of size 56 by 56 contributes 100,352 samples to each channel statistic. Averaging over C instead would be LayerNorm.',
+      },
+      {
+        id: 'DL-012-q2',
+        type: 'numeric',
+        concept: 'forward computation',
+        prompt: 'A feature has values [1, 3, 5, 7] in a batch of four, with gamma = 1 and beta = 0. What is the output for the value 7? Use the biased variance and ignore epsilon.',
+        answer: 1.3416,
+        tolerance: 0.001,
+        explanation:
+          'The mean is 4 and the biased variance is (9 + 1 + 1 + 9)/4 = 5, so the standard deviation is 2.2361. The output is (7 - 4)/2.2361 = 1.3416. Note this is the same standardised value as the worked example, because both batches are evenly spaced with the same spread.',
+      },
+      {
+        id: 'DL-012-q3',
+        type: 'truefalse',
+        concept: 'expressive power',
+        prompt: 'Batch normalisation reduces what a layer can represent, because it forces every feature to have zero mean and unit variance.',
+        answer: false,
+        explanation:
+          'False, because of gamma and beta. Setting gamma to the batch standard deviation and beta to the batch mean recovers the original activations exactly, so the layer can always learn the identity and nothing is lost.',
+      },
+      {
+        id: 'DL-012-q4',
+        type: 'multi',
+        concept: 'train versus inference',
+        prompt: 'Select every statement that is true of batch norm at inference time in PyTorch.',
+        options: [
+          'It uses running_mean and running_var instead of the batch statistics',
+          'Its output for one example no longer depends on the other examples in the batch',
+          'It becomes a fixed affine map and can be folded into the preceding convolution',
+          'It still samples a mask and so is stochastic',
+          'The running statistics keep updating during evaluation',
+        ],
+        answerIndices: [0, 1, 2],
+        explanation:
+          'Mask sampling is dropout, not batch norm, and the running buffers are only updated in train mode. The first three are the defining properties of eval-mode batch norm and the reason it is free at deployment.',
+      },
+      {
+        id: 'DL-012-q5',
+        type: 'match',
+        concept: 'choosing a normaliser',
+        prompt: 'Match each situation to the normalisation layer you would choose.',
+        pairs: [
+          { left: 'Convolutional image classifier, batch size 256', right: 'BatchNorm2d' },
+          { left: 'Transformer language model', right: 'LayerNorm' },
+          { left: 'Instance segmentation with one image per GPU', right: 'GroupNorm' },
+          { left: 'Style transfer, removing per-image contrast', right: 'InstanceNorm2d' },
+        ],
+        explanation:
+          'The deciding question is always whether the batch dimension is large and meaningful. When it is, batch norm gives the best accuracy; when it is not, normalise within the example instead.',
+      },
+      {
+        id: 'DL-012-q6',
+        type: 'debug',
+        language: 'python',
+        concept: 'evaluation bug',
+        prompt: 'This validation loop gives different accuracy every time it runs on the same data. What is the bug?',
+        code: 'def validate(model, loader):\n    total = correct = 0\n    with torch.no_grad():\n        for x, y in loader:\n            pred = model(x).argmax(1)\n            correct += (pred == y).sum().item()\n            total += y.numel()\n    return correct / total',
+        options: [
+          'model.eval() is never called, so batch norm uses batch statistics and dropout stays active',
+          'torch.no_grad() suppresses the gradients needed for the forward pass',
+          'argmax(1) should be argmax(0) for a classification output',
+          'The accuracy should be computed as total / correct',
+        ],
+        answerIndex: 0,
+        explanation:
+          'no_grad only disables gradient tracking; it does not change layer behaviour. Without model.eval(), batch norm normalises with statistics from whatever examples happen to share the batch and dropout keeps sampling masks, so the result depends on the shuffling and varies run to run.',
+      },
+      {
+        id: 'DL-012-q7',
+        type: 'explain',
+        concept: 'why it works',
+        prompt: 'Give both the original and the modern explanation for why batch normalisation speeds up training, and say why the field changed its mind.',
+        rubric: [
+          'States the internal-covariate-shift argument as the original claim',
+          'Describes the smoother-loss-landscape result and the experiment that motivated it',
+          'Connects at least one explanation to the practical observation that much larger learning rates become usable',
+        ],
+        sampleAnswer:
+          'The 2015 paper argued that as the lower layers update, the distribution of inputs to each later layer keeps shifting, so later layers waste effort re-adapting rather than learning; normalising the first two moments removes that shift. That story is intuitive and it is why the technique was invented. It did not survive testing. In 2018 Santurkar and colleagues added deliberate, time-varying noise immediately after each batch norm layer, which reinstates exactly the distributional instability the layer removes, and training remained fast. Their alternative is that batch norm smooths the optimisation landscape: the loss and its gradient become Lipschitz-bounded over a much wider region, so the gradient at a point predicts the loss further away and larger steps remain safe. A concrete version of the same effect is the scale invariance — the layer output is unchanged if you multiply the weights below it by any constant, so the gradient with respect to those weights scales inversely with their norm and a layer that has grown large automatically slows down. Either way, the observable consequence is the same: learning rates an order of magnitude larger than an unnormalised network can tolerate.',
+        explanation:
+          'The examinable point is not which story is right but that the mechanism was tested empirically and the original explanation was rejected, which is a good illustration of how the field validates its own folklore.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Write the batch norm forward pass.', back: 'mu and sigma^2 per feature over the batch; x_hat = (x - mu)/sqrt(sigma^2 + eps); y = gamma*x_hat + beta.' },
+      { front: 'Why are gamma and beta needed?', back: 'So the layer can represent any mean and variance, including the identity. Without them, forcing zero mean and unit variance would cost expressive power.' },
+      { front: 'What changes at inference?', back: 'Batch statistics are replaced by running_mean and running_var, so the layer becomes a fixed affine map and the output no longer depends on batch-mates.' },
+      { front: 'Why set bias=False before a BatchNorm?', back: 'The mean subtraction removes any constant the bias added, so it is mathematically redundant. Beta supplies the shift.' },
+      { front: 'What is the modern explanation for why batch norm helps?', back: 'It smooths the loss landscape — loss and gradients become Lipschitz-bounded over a wider region — rather than reducing internal covariate shift.' },
+      { front: 'BatchNorm versus LayerNorm: what is the difference?', back: 'The axis. BatchNorm pools over the batch (and spatial positions); LayerNorm pools over the features of one example, so it is batch-size independent with no train/eval difference.' },
+      { front: 'What goes wrong with batch size 1 in train mode?', back: 'The batch variance is zero, every feature standardises to 0, and the layer outputs the constant beta for every input.' },
+    ],
+
+    challenge: {
+      title: 'Normalisation under pressure',
+      brief:
+        'Take one convolutional architecture and train it four ways: with no normalisation, with BatchNorm2d, with GroupNorm and with LayerNorm. For each variant, sweep the learning rate over four orders of magnitude and record the largest rate at which training remains stable, plus the best validation accuracy achieved. Then rerun the BatchNorm and GroupNorm variants at batch sizes 2, 8, 32 and 128. Produce a table of maximum stable learning rate against variant, a plot of validation accuracy against batch size for the two normalisers, and a short written account of which results support the smoother-landscape explanation.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Four normalisation variants of the same architecture, differing only in the norm layer',
+        'A learning-rate sweep that identifies the divergence threshold for each variant, not just the best accuracy',
+        'A batch-size sweep showing BatchNorm degrading below about 8 while GroupNorm does not',
+        'The write-up cites the measured divergence thresholds when discussing the loss-landscape explanation',
+      ],
+      starterCode:
+        'import torch\nimport torch.nn as nn\n\ndef block(cin, cout, norm):\n    layers = [nn.Conv2d(cin, cout, 3, padding=1, bias=norm is None)]\n    if norm == "bn":\n        layers.append(nn.BatchNorm2d(cout))\n    elif norm == "gn":\n        layers.append(nn.GroupNorm(8, cout))\n    elif norm == "ln":\n        layers.append(nn.GroupNorm(1, cout))   # GroupNorm with one group is LayerNorm over C,H,W\n    layers.append(nn.ReLU())\n    return nn.Sequential(*layers)\n\ndef max_stable_lr(norm, batch_size=128):\n    """Return the largest lr from the sweep whose loss is finite and decreasing."""\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain batch normalisation: what it computes, why gamma and beta exist, what changes at inference, and why it lets you use a much larger learning rate.',
+      mustCover: [
+        'It standardises each feature across the examples of the mini-batch to zero mean and unit variance',
+        'Learned gamma and beta restore full expressive power, including the identity',
+        'At inference, running statistics replace batch statistics, so train and eval are different functions',
+        'The practical benefit is a smoother loss surface and a scale invariance that acts as per-layer learning-rate adaptation',
+      ],
+      bonusSignals: [
+        'mentions that the original internal-covariate-shift explanation was later challenged',
+        'notes that bias=False is correct on the layer before it',
+        'explains why small batches break it and what to use instead',
+        'knows that the layer can be folded into the preceding convolution at deployment',
+      ],
+      sampleExplanation:
+        "Batch normalisation sits between layers and rescales what passes through them. For each feature it looks at all the examples in the current mini-batch, computes their mean and variance, subtracts the mean and divides by the standard deviation — an ordinary z-score, computed per feature rather than per example. If it stopped there it would be doing harm, because forcing every feature to zero mean and unit variance restricts what the layer can express: a sigmoid would only ever operate in its linear middle, and a ReLU would fire on exactly half its inputs by construction. So two learned numbers per feature follow, a scale called gamma and a shift called beta, and because setting them to the batch standard deviation and mean recovers the original values exactly, the layer can always learn to be the identity. Nothing is lost. The complication is inference. At test time there may be a single example, and in any case you cannot have a prediction depend on which other examples happened to be in the same batch. So during training the layer also keeps running estimates of the mean and variance as exponential moving averages, and at inference it uses those instead. That makes training and evaluation genuinely different functions, not just different numbers, and it is the origin of nearly every batch norm bug: forgetting to call eval, evaluating before the running statistics have converged, or using a batch of one or two so the statistics are pure noise. As for why it helps, the original paper said it stabilises the distribution of inputs to each layer, a story called internal covariate shift. That explanation was tested directly in 2018 by injecting artificial distribution shift right after each normalisation layer, and training stayed fast, so it cannot be the main mechanism. The better account is that normalisation smooths the loss surface, so the gradient at a point stays a good guide further away and bigger steps are safe. There is also a sharp algebraic fact behind it: the output is completely unchanged if you multiply the weights of the layer below by any constant, which means the gradient with respect to those weights shrinks as they grow. Each layer therefore regulates its own effective step size, and that is why you can raise the learning rate by an order of magnitude and get away with it.",
+    },
+  },
+
+  {
+    id: 'DL-013',
+    domain: 'DL',
+    module: 'Convolutional Networks',
+    topic: 'Weight sharing and locality',
+    title: 'Convolution and Filters',
+    slug: 'convolution-and-filters',
+    difficulty: 4,
+    estimatedMinutes: 45,
+    prerequisites: ['DL-003', 'DL-010'],
+    related: ['DL-001', 'DL-003', 'DL-010'],
+    tags: ['convolution', 'filter', 'kernel', 'weight-sharing', 'locality', 'translation-equivariance', 'feature-map'],
+
+    learningObjectives: [
+      'Compute a two-dimensional convolution by hand and explain each output value as a dot product with a local patch',
+      'Explain why a fully connected layer on an image is wasteful, with a concrete parameter count',
+      'Describe weight sharing, locality and translation equivariance as the three assumptions convolution encodes',
+      'Work out the shape and parameter count of a Conv2d layer, including the multi-channel case',
+    ],
+
+    terminology: [
+      {
+        term: 'Kernel (filter)',
+        definition:
+          'A small array of learned weights, typically 3x3 or 5x5 per input channel, that is slid across the input. One kernel produces one output channel, and its weights are the same at every spatial position.',
+        simple: 'A little window of numbers you slide over the picture, looking for one particular pattern.',
+      },
+      {
+        term: 'Feature map (activation map)',
+        definition:
+          'The two-dimensional output produced by applying one kernel across the whole input. Each value records how strongly that kernel pattern is present at that location.',
+        simple: 'A map showing where in the picture the pattern was found, and how strongly.',
+      },
+      {
+        term: 'Weight sharing',
+        definition:
+          'The property that the same kernel weights are used at every spatial position, so the number of parameters is independent of the input size and a feature learned in one place transfers to every other place.',
+        simple: 'Learn the pattern once and look for it everywhere, instead of learning it separately in each corner.',
+      },
+      {
+        term: 'Locality (receptive field)',
+        definition:
+          'The assumption that a useful feature can be computed from a small neighbourhood of pixels. Each output value depends only on a small patch of the input, not on the whole image.',
+        simple: 'Nearby pixels are what matter; you do not need the far corner to spot an edge.',
+      },
+      {
+        term: 'Translation equivariance',
+        definition:
+          'The property that shifting the input shifts the output by the same amount: conv(shift(x)) = shift(conv(x)). Convolution detects a pattern wherever it appears, and records where it found it.',
+        simple: 'Move the cat two pixels right and every response about the cat moves two pixels right too.',
+      },
+    ],
+
+    simpleExplanation:
+      "Imagine looking for cracks in a long stone wall using a small square of glass with a crack-shaped pattern drawn on it. You hold the glass over the top-left corner, see how well the pattern lines up with what is underneath, and write down a score. Then you slide the glass one stone to the right and score again, and keep going until you have covered the whole wall. What you end up with is not a yes-or-no answer but a map of scores showing where cracks are and how obvious they are. That is a convolution. The square of glass is the filter, a small grid of numbers; the score is a multiply-and-add between the filter numbers and the pixels underneath; and the map of scores is the feature map. The two things that make it powerful are that the same piece of glass is used everywhere — so you only ever learn one pattern, not one per position — and that it looks at a small patch at a time, because a crack is a local thing and you do not need the other end of the wall to recognise one. A network stacks many of these, each with its own pattern, and lets the training process decide what the patterns should be.",
+
+    whyItExists:
+      'Treating an image as a flat vector and feeding it to a dense layer throws away the two facts that make images tractable: nearby pixels are related, and a pattern means the same thing wherever it appears. The cost of ignoring them is brutal — a single dense layer mapping a 224 by 224 colour image to 1000 hidden units needs about 150 million weights and has to relearn every feature separately in every location. Convolution encodes both facts directly into the architecture, cutting that to a few thousand parameters and making the features reusable across the whole image.',
+
+    analogy: {
+      scenario:
+        'A quality inspector at a textile mill has to find one specific weaving defect in a roll of fabric a hundred metres long. She does not memorise the entire roll. She has a small transparent template of the defect, and she walks the length of the roll holding the template against the cloth, noting every position where it matches. If the mill installs a second inspector looking for a different defect, he carries his own template and walks the same roll independently, producing his own list of positions. The mill does not need one inspector per metre of fabric; it needs one inspector per kind of defect.',
+      mapping: [
+        { from: 'The transparent template', to: 'The convolution kernel: a small grid of learned weights' },
+        { from: 'Holding the template against one spot and judging the match', to: 'The dot product between the kernel and one input patch' },
+        { from: 'The list of positions and match strengths', to: 'The output feature map' },
+        { from: 'Using the same template everywhere along the roll', to: 'Weight sharing, which makes parameters independent of input size' },
+        { from: 'One inspector per kind of defect', to: 'One kernel per output channel' },
+      ],
+      bridge:
+        'The dot product is the operation in both stories, and the reason it works as a match score is the geometric reading of the dot product from the very first unit of this domain: it is large when the patch points the same way as the kernel. Weight sharing is what turns one inspector into full coverage, and it is the precise reason a convolutional layer has a parameter count that depends on kernel size and channel count but not at all on image size. The analogy understates one thing: the inspectors in a real network are not given templates, they discover them, and after training the first layer of a vision model really does contain oriented edge detectors and colour blobs that you can look at directly.',
+      limitations:
+        'A single template only matches a defect at one scale and one orientation, whereas a real network handles those by stacking layers and learning many kernels rather than by any property of convolution itself. Convolution gives you translation equivariance and nothing else for free — not rotation, not scale.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'Computing one output value',
+        caption: 'Repeat this for every valid position to produce the feature map. Nothing else happens in a convolution.',
+        steps: [
+          { label: 'Place the kernel', detail: 'Align the K by K kernel with a K by K patch of the input, starting at the top-left.' },
+          { label: 'Multiply elementwise', detail: 'Each kernel weight multiplies the input value directly beneath it, giving K*K products.' },
+          { label: 'Sum across the patch and across channels', detail: 'Add all K*K*C_in products together. This is a dot product between the flattened patch and the flattened kernel.' },
+          { label: 'Add the bias', detail: 'One learned bias per output channel, added to every position of that channel.' },
+          { label: 'Slide and repeat', detail: 'Move the kernel one position right, then down at the end of a row, using exactly the same weights every time.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Dense layer versus convolutional layer on a 224x224x3 image',
+        caption: 'The parameter counts are not close, and the difference is not only about memory.',
+        left: {
+          heading: 'nn.Linear(150528, 1000)',
+          points: [
+            'Input flattened to a vector of 150,528 numbers, destroying all spatial structure',
+            '150,528,000 weights plus 1,000 biases',
+            'A feature learned at the top-left has no connection to the same feature at the bottom-right',
+            'Parameter count scales with the number of pixels, so a higher-resolution input needs a different architecture',
+            'Requires an enormous amount of data to constrain that many free parameters',
+          ],
+        },
+        right: {
+          heading: 'nn.Conv2d(3, 64, kernel_size=3, padding=1)',
+          points: [
+            'Input keeps its (3, 224, 224) shape and the output is (64, 224, 224)',
+            '3 x 3 x 3 x 64 = 1,728 weights plus 64 biases',
+            'Each of the 64 kernels is applied at all 50,176 positions, so a feature is learned once and reused everywhere',
+            'Parameter count is independent of image size; the same layer works on 512 by 512 input',
+            'The architecture itself encodes locality and translation equivariance, which is a strong and correct prior for images',
+          ],
+        },
+      },
+      {
+        kind: 'ascii',
+        title: 'A 3x3 kernel sliding over a 5x5 input',
+        caption: 'The shaded window is the current patch. Nine multiplications and eight additions produce one output number.',
+        art: `input 5x5                     kernel 3x3        output 3x3
+
+  0   0  10  10  10            -1   0  +1         40  40   0
+  0   0  10  10  10            -2   0  +2         40  40   0
+  0   0  10  10  10            -1   0  +1         40  40   0
+  0   0  10  10  10
+  0   0  10  10  10
+
+  [ . . . ] 10 10   position (0,0) -> 40
+  [ . . . ] 10 10
+  [ . . . ] 10 10
+    0   0  10 10 10
+    0   0  10 10 10`,
+      },
+      {
+        kind: 'widget',
+        title: 'Slide a kernel and watch the feature map appear',
+        caption: 'Draw your own image, choose a kernel, and step through positions one at a time. Try the vertical edge detector, then rotate it and see the response disappear.',
+        widget: 'convolution-lab',
+      },
+    ],
+
+    formalDefinition:
+      'A two-dimensional convolutional layer maps an input tensor X of shape (C_in, H, W) to an output tensor Y of shape (C_out, H_out, W_out) by Y[o, i, j] = b[o] + sum over c, u, v of K[o, c, u, v] * X[c, i + u, j + v], where K has shape (C_out, C_in, k_h, k_w) and b has length C_out. The operation is strictly a cross-correlation rather than a mathematical convolution, since the kernel is not flipped; because the kernel is learned, the distinction has no practical consequence. Its parameter count is C_out * C_in * k_h * k_w + C_out, independent of H and W.',
+
+    math: {
+      intuition:
+        'Every output number is a dot product. Take the small patch of input beneath the kernel, flatten it, flatten the kernel, and multiply them together term by term and add up. Since a dot product measures alignment, the output is a map of how strongly the kernel pattern is present at each location. The whole of convolution is that one operation repeated at every position with the same weights. Everything else — multiple channels, multiple filters, padding and stride — is bookkeeping about which patches you take and how many dot products you compute.',
+      formulas: [
+        {
+          latex: 'Y[i,j] = \\sum_{u=0}^{k-1}\\sum_{v=0}^{k-1} K[u,v]\\, X[i+u,\\, j+v]',
+          name: 'Single-channel two-dimensional convolution',
+          meaning:
+            'One output value is the sum of k squared products between the kernel and the input patch whose top-left corner sits at (i, j). This is the operation you perform by hand.',
+          variables: [
+            { symbol: 'Y[i,j]', meaning: 'The output value at row i, column j of the feature map' },
+            { symbol: 'K[u,v]', meaning: 'The kernel weight at position (u, v), learned and identical at every (i, j)' },
+            { symbol: 'X[i+u, j+v]', meaning: 'The input value under kernel position (u, v) when the kernel is placed at (i, j)' },
+            { symbol: 'k', meaning: 'Kernel size, usually 3 or 5' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: 'Y[o,i,j] = b_o + \\sum_{c=1}^{C_{\\text{in}}}\\sum_{u}\\sum_{v} K[o,c,u,v]\\, X[c,\\,i+u,\\,j+v]',
+          name: 'Multi-channel convolution',
+          meaning:
+            'Each output channel has its own three-dimensional kernel spanning all input channels. The sum over c is what mixes colour or feature information; a Conv2d never produces an output channel from just one input channel unless you ask for groups.',
+          variables: [
+            { symbol: 'C_{\\text{in}}', meaning: 'Number of input channels: 3 for RGB, or the channel count of the previous feature map' },
+            { symbol: 'o', meaning: 'Index of the output channel, one per kernel' },
+            { symbol: 'b_o', meaning: 'One bias per output channel, shared across every spatial position' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\#\\text{params} = C_{\\text{out}}\\cdot C_{\\text{in}}\\cdot k_h\\cdot k_w + C_{\\text{out}}',
+          name: 'Parameter count of a convolutional layer',
+          meaning:
+            'Note what is absent: H and W. The layer has the same number of parameters whether it processes a 32 by 32 thumbnail or a 4000 by 3000 photograph, which is the direct consequence of weight sharing.',
+          variables: [
+            { symbol: 'C_{\\text{out}}', meaning: 'Number of filters, equal to the number of output channels' },
+            { symbol: 'k_h, k_w', meaning: 'Kernel height and width' },
+            { symbol: '+\\,C_{\\text{out}}', meaning: 'The biases, one per filter; omitted when the layer is followed by batch normalisation' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\mathrm{conv}\\big(T_{\\delta}(X)\\big) = T_{\\delta}\\big(\\mathrm{conv}(X)\\big)',
+          name: 'Translation equivariance',
+          meaning:
+            'Shifting the input by delta shifts the output by delta. This is equivariance, not invariance: the response moves with the object rather than staying the same. Invariance comes later, from pooling or from global averaging.',
+          variables: [
+            { symbol: 'T_{\\delta}', meaning: 'A spatial translation by delta pixels' },
+            { symbol: 'X', meaning: 'The input feature map' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\mathrm{FLOPs} \\approx 2\\cdot C_{\\text{out}}\\cdot C_{\\text{in}}\\cdot k_h\\cdot k_w\\cdot H_{\\text{out}}\\cdot W_{\\text{out}}',
+          name: 'Compute cost of a convolution',
+          meaning:
+            'Parameters do not scale with image size but computation very much does: every output position costs a full dot product. This is why convolutional layers are cheap in memory for weights and expensive in time, the exact opposite of a large dense layer.',
+          variables: [
+            { symbol: 'H_{\\text{out}}, W_{\\text{out}}', meaning: 'Spatial size of the output feature map' },
+            { symbol: '2', meaning: 'One multiply and one add per term, the usual convention for counting floating-point operations' },
+          ],
+          category: 'complexity',
+        },
+      ],
+      derivation: [
+        'Begin with a fully connected layer on an image. Flattening a 224 by 224 RGB image gives 150,528 inputs, and a modest hidden layer of 1000 units needs 150,528,000 weights. Each of those weights is specific to one pixel position, so the network must learn separately that an edge in the top-left is an edge and that an edge in the bottom-right is also an edge.',
+        'Impose the first assumption: locality. Declare that a hidden unit may only look at a k by k patch rather than the whole image. The weight count per unit drops from 150,528 to k*k*3, which for k = 3 is 27.',
+        'Impose the second assumption: stationarity, meaning that what counts as a useful pattern does not depend on where you are in the image. If that is true, there is no reason for the unit at position (0, 0) and the unit at (100, 100) to have different weights, so tie them together. Now one set of 27 weights serves every position.',
+        'The resulting operation is precisely the convolution sum: slide one weight set over the image and record a dot product at each position. The output is no longer a single number but a map, because tying the weights means you get one response per location.',
+        'Recover expressive power by having many such weight sets. C_out kernels give C_out feature maps, each detecting a different pattern, for C_out * C_in * k * k weights in total.',
+        'Verify the equivariance claim. If X is shifted by delta then the patch at position (i, j) in the shifted image is the patch at (i - delta) in the original, so the dot product at (i, j) equals the original dot product at (i - delta). The whole output map is therefore translated by delta and nothing else changes.',
+        'Finally note what has been assumed away. Convolution gives nothing for free about rotation or scale; a kernel that detects a vertical edge does not detect a horizontal one. Networks handle those by learning many kernels and by augmenting the data, not by any structural guarantee.',
+      ],
+    },
+
+    workedExample: {
+      title: 'A 3x3 vertical edge detector applied by hand to a 5x5 image',
+      setup:
+        'The input is a 5 by 5 greyscale image containing a single vertical edge: every row is [0, 0, 10, 10, 10], so the left two columns are dark and the right three are bright. The kernel is the Sobel vertical-edge detector, rows [-1, 0, 1], [-2, 0, 2], [-1, 0, 1]. Use no padding and stride 1, so the output is 3 by 3.',
+      steps: [
+        {
+          label: 'Output position (0, 0): take the patch',
+          detail: 'Rows 0 to 2, columns 0 to 2 of the input. Every row of that patch reads [0, 0, 10], so the patch is three copies of the same row.',
+          latex: '\\text{patch} = \\begin{bmatrix}0&0&10\\\\0&0&10\\\\0&0&10\\end{bmatrix}',
+        },
+        {
+          label: 'Output position (0, 0): multiply and sum',
+          detail: 'Row 1: (-1)(0) + (0)(0) + (1)(10) = 10. Row 2: (-2)(0) + (0)(0) + (2)(10) = 20. Row 3: (-1)(0) + (0)(0) + (1)(10) = 10. Total 40. The left column of the kernel is negative and sees darkness, the right column is positive and sees brightness, so the two reinforce.',
+          latex: 'Y[0,0] = 10 + 20 + 10 = 40',
+        },
+        {
+          label: 'Output position (0, 1): slide one column right',
+          detail: 'The patch is now columns 1 to 3, every row reading [0, 10, 10]. Row contributions: (-1)(0) + (0)(10) + (1)(10) = 10; then 20; then 10. Total 40 again. The edge is still straddled by the kernel, so the response is still strong.',
+          latex: 'Y[0,1] = 40',
+        },
+        {
+          label: 'Output position (0, 2): slide again',
+          detail: 'The patch is columns 2 to 4, every row reading [10, 10, 10]. Row contributions: (-1)(10) + (0)(10) + (1)(10) = 0, and likewise -20 + 20 = 0 and 0. Total 0. A uniform region produces no response at all, because the kernel weights sum to zero.',
+          latex: 'Y[0,2] = -10 + 0 + 10 = 0',
+        },
+        {
+          label: 'The full output map',
+          detail: 'Every row of the input is identical, so every row of the output is identical too: the feature map is three rows of [40, 40, 0]. The map says there is a vertical edge in the left part of the image and nothing in the right — which is exactly what the picture shows.',
+          latex: 'Y = \\begin{bmatrix}40&40&0\\\\40&40&0\\\\40&40&0\\end{bmatrix}',
+        },
+        {
+          label: 'Rotate the kernel and the response vanishes',
+          detail: 'Transpose the kernel to make a horizontal edge detector, rows [-1, -2, -1], [0, 0, 0], [1, 2, 1]. Now each column of the patch is constant, so every product cancels against its opposite and the entire output is zero. Convolution buys translation equivariance, not rotation invariance — a separate kernel is needed for each orientation, and that is what the network learns.',
+          latex: 'Y_{\\text{horizontal}} = \\mathbf{0}',
+        },
+        {
+          label: 'Count the parameters',
+          detail: 'Nine weights, plus one bias if used. Applied at nine positions, they performed 81 multiplications. Had this been a dense layer from 25 inputs to 9 outputs it would have needed 225 weights, and those weights would have had no way of knowing that position 3 and position 8 mean the same thing.',
+          latex: '9 \\text{ weights} \\ll 25\\times 9 = 225',
+        },
+      ],
+      conclusion:
+        'The whole operation is nine multiplications and eight additions, repeated. What makes it a good idea is not the arithmetic but the constraint: the same nine numbers are reused at every position, which is a statement of belief that a vertical edge in the corner is the same thing as a vertical edge in the middle. That belief is true of images, and it is why convolution works.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Convolution from scratch in NumPy, reproducing the hand calculation',
+        runnable: true,
+        code: `import numpy as np
+
+def conv2d(x, k):
+    kh, kw = k.shape
+    out_h, out_w = x.shape[0] - kh + 1, x.shape[1] - kw + 1
+    y = np.zeros((out_h, out_w))
+    for i in range(out_h):
+        for j in range(out_w):
+            patch = x[i:i + kh, j:j + kw]
+            y[i, j] = np.sum(patch * k)      # elementwise product, then sum
+    return y
+
+image = np.tile(np.array([0, 0, 10, 10, 10], dtype=float), (5, 1))
+sobel_x = np.array([[-1, 0, 1],
+                    [-2, 0, 2],
+                    [-1, 0, 1]], dtype=float)
+
+print("vertical edge kernel:")
+print(conv2d(image, sobel_x))
+print("horizontal edge kernel:")
+print(conv2d(image, sobel_x.T))`,
+        output: `vertical edge kernel:
+[[40. 40.  0.]
+ [40. 40.  0.]
+ [40. 40.  0.]]
+horizontal edge kernel:
+[[0. 0. 0.]
+ [0. 0. 0.]
+ [0. 0. 0.]]`,
+        explanation:
+          'The double loop is the definition made literal, and it reproduces the hand calculation exactly. Two things are worth noticing. The uniform right-hand region gives zero because the Sobel weights sum to zero, which makes it a difference operator that ignores absolute brightness. And the transposed kernel gives nothing at all on a vertical edge, which is the honest statement of what convolution does and does not give you: shift the image and the response shifts with it, but rotate the image and the response is simply gone unless a kernel has been learned for that orientation.',
+      },
+      {
+        language: 'python',
+        title: 'The same thing with torch.nn.Conv2d, and the shapes that matter',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+image = torch.tensor([[0., 0., 10., 10., 10.]]).repeat(5, 1)
+x = image.view(1, 1, 5, 5)             # (batch, channels, height, width)
+
+conv = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=3, bias=False)
+with torch.no_grad():
+    conv.weight.copy_(torch.tensor([[[[-1., 0., 1.],
+                                      [-2., 0., 2.],
+                                      [-1., 0., 1.]]]]))
+
+y = conv(x)
+print("input shape :", tuple(x.shape))
+print("weight shape:", tuple(conv.weight.shape))
+print("output shape:", tuple(y.shape))
+print(y.squeeze())
+
+rgb = nn.Conv2d(3, 64, kernel_size=3, padding=1)
+print("RGB layer params:", sum(p.numel() for p in rgb.parameters()))
+print("dense equivalent:", 224 * 224 * 3 * 1000)`,
+        output: `input shape : (1, 1, 5, 5)
+weight shape: (1, 1, 3, 3)
+output shape: (1, 1, 3, 3)
+tensor([[40., 40.,  0.],
+        [40., 40.,  0.],
+        [40., 40.,  0.]])
+RGB layer params: 1792
+dense equivalent: 150528000`,
+        explanation:
+          'PyTorch tensors for images are always (N, C, H, W), and the kernel is (C_out, C_in, k_h, k_w) — the second dimension spans the input channels, which is why one filter produces one output channel from all input channels at once. The parameter comparison at the end is the argument for the whole architecture: 1,792 weights against 150 million, a factor of eighty-four thousand, and the convolutional version generalises better as well as being smaller, because weight sharing means a feature learned anywhere is available everywhere.',
+      },
+      {
+        language: 'python',
+        title: 'Demonstrating translation equivariance',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+torch.manual_seed(0)
+conv = nn.Conv2d(1, 1, 3, padding=1, bias=False)
+
+x = torch.zeros(1, 1, 8, 8)
+x[0, 0, 3:5, 3:5] = 1.0                    # a small square at rows 3-4
+
+y = conv(x)
+x_shift = torch.roll(x, shifts=2, dims=3)  # move the square two columns right
+y_shift = conv(x_shift)
+
+print("max |shift(conv(x)) - conv(shift(x))| =",
+      (torch.roll(y, shifts=2, dims=3) - y_shift).abs().max().item())
+
+pooled = F.adaptive_avg_pool2d(y, 1)
+pooled_shift = F.adaptive_avg_pool2d(y_shift, 1)
+print("global average, original:", round(pooled.item(), 6))
+print("global average, shifted :", round(pooled_shift.item(), 6))`,
+        output: `max |shift(conv(x)) - conv(shift(x))| = 0.0
+original global average: 0.043
+shifted  global average: 0.043
+`,
+        explanation:
+          'The first number is exactly zero, which is the equivariance identity holding to floating-point precision: convolving a shifted image gives the shifted convolution. The second pair shows how invariance is manufactured from equivariance — a global average over the spatial dimensions gives the same number whether the square is here or two columns over, because it discards position entirely. That is the standard recipe in a modern classifier: convolutions preserve where things are, and a final pooling step deliberately throws that information away once it is no longer needed.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Classical computer vision before deep learning',
+        usage:
+          'Sobel, Prewitt and Gaussian kernels were hand-designed convolutions used for edge detection and blurring for decades before neural networks. The insight of the convolutional network is not the operation, which was already standard, but that the kernel entries should be learned by gradient descent rather than chosen by a human.',
+      },
+      {
+        context: 'Learned first-layer filters in trained networks',
+        usage:
+          'When you visualise the 64 kernels of the first convolutional layer of a trained AlexNet or ResNet, you see oriented edge detectors at various angles and colour-opponent blobs — filters that look remarkably like the ones neuroscientists measured in the mammalian primary visual cortex. Nobody put them there; they emerge from training on natural images.',
+      },
+      {
+        context: 'One-dimensional convolution over text and time series',
+        usage:
+          'The same weight-sharing idea applies whenever the axis is ordered and translation matters. Conv1d over a sequence of word embeddings detects local n-gram patterns regardless of position, and dilated causal convolutions in WaveNet generate raw audio. The locality assumption is what varies between domains, not the mechanism.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'PyTorch', role: 'nn.Conv2d and torch.nn.functional.conv2d; the weight tensor shape (C_out, C_in, k_h, k_w) is worth memorising because most shape errors come from getting it wrong.' },
+      { tool: 'torchvision', role: 'Pretrained backbones expose model.conv1.weight, which you can reshape and plot directly to see the learned first-layer filters.' },
+      { tool: 'OpenCV', role: 'cv2.filter2D applies a fixed kernel, which is the same arithmetic without learning — useful for building intuition and for preprocessing.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Thinking a filter applies to one input channel at a time',
+        why: 'A Conv2d kernel has shape (C_out, C_in, k, k), so each filter spans every input channel and sums across them. Believing otherwise makes the parameter count come out wrong by a factor of C_in and makes the output channel count inexplicable.',
+        fix: 'Read one filter as a three-dimensional block of size C_in by k by k that produces a single two-dimensional map. Depthwise convolution, with groups=C_in, is the exception that does operate per channel, and it is explicitly opted into.',
+      },
+      {
+        mistake: 'Passing an image tensor in (H, W, C) order',
+        why: 'PyTorch expects (N, C, H, W) while PIL, NumPy and Matplotlib all use (H, W, C). Passing the wrong order does not always error: a 3-channel image of size 224 by 224 in the wrong layout is silently interpreted as 224 channels, and the layer either fails on the channel count or produces nonsense.',
+        fix: 'Use torchvision.transforms.ToTensor, which performs the permutation and the scaling to [0, 1] together, and print tensor.shape whenever a convolution behaves oddly.',
+      },
+      {
+        mistake: 'Assuming convolution gives rotation or scale invariance',
+        why: 'The equivariance guarantee is for translation only. A kernel tuned to a vertical edge produces exactly zero on a horizontal one, as the worked example shows, and a feature learned at one scale does not transfer to another.',
+        fix: 'Handle rotation and scale with data augmentation, with multi-scale training, or with architectures designed for them. Do not expect them to emerge from the convolution operator itself.',
+      },
+      {
+        mistake: 'Confusing convolution with correlation and worrying about kernel flipping',
+        why: 'The mathematical definition of convolution flips the kernel; every deep learning framework implements cross-correlation and calls it convolution. Students who have done signal processing often expect a flip and look for a bug.',
+        fix: 'Remember that the kernel is learned. If the flipped version were better, gradient descent would simply learn the flipped weights, so the distinction has no consequence for a neural network.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'Why do we use convolutional layers for images instead of fully connected ones?',
+        answer:
+          'Two reasons, both about the structure of images. First, locality: a useful low-level feature such as an edge or a corner is computable from a small neighbourhood of pixels, so there is no need for a hidden unit to be connected to all 150,528 inputs of a 224 by 224 colour image. Second, stationarity: an edge means the same thing wherever it appears, so the weights that detect one should be the same everywhere. Tying the weights across positions is weight sharing, and it turns a per-position hidden unit into a single kernel slid across the image. The practical effect is dramatic — a Conv2d from 3 channels to 64 with a 3 by 3 kernel has 1,792 parameters against 150 million for a comparable dense layer — but the more important effect is statistical: with shared weights a feature learned from examples in one corner of the image immediately applies everywhere, so the model needs far less data. Convolution is a strong prior, and it happens to be a correct one for natural images.',
+        followUp:
+          'A strong answer adds that the parameter count is independent of image size, so the same layer works on inputs of any resolution.',
+      },
+      {
+        level: 'intermediate',
+        question: 'What is the difference between translation equivariance and translation invariance, and which does convolution give you?',
+        answer:
+          'Equivariance means that transforming the input produces a correspondingly transformed output: shift the image by two pixels and every value in the feature map shifts by two pixels. Invariance means the output does not change at all under the transformation. Convolution gives equivariance, not invariance, and that is the right behaviour for a feature extractor because early layers should record where a pattern was found as well as that it was found — a segmentation or detection model needs exactly that positional information. Invariance is manufactured later and deliberately, by pooling, by strided downsampling, or most cleanly by a global average pool before the classifier, which collapses the spatial dimensions entirely so that a cat anywhere in the frame produces the same vector. Understanding the distinction explains the shape of almost every convolutional architecture: equivariant layers throughout, then one invariance step at the end.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'How do you compute the parameter count and the FLOP count of a convolutional layer, and why do they scale so differently?',
+        answer:
+          'Parameters are C_out times C_in times k_h times k_w, plus C_out biases. Notice that the spatial size of the input does not appear, because the same kernel is reused at every position — that is weight sharing. FLOPs, by contrast, are roughly twice C_out times C_in times k_h times k_w times H_out times W_out, because the full dot product is recomputed at every output position. So doubling the input resolution leaves the parameter count unchanged and quadruples the compute. This is the opposite of a dense layer, where parameters and compute scale together. The practical consequences are concrete: a convolutional backbone is cheap to store and expensive to run, early layers dominate the FLOP budget because they operate at high resolution, and late layers dominate the parameter budget because they have many channels at low resolution. It is also why the standard architectural move is to halve the spatial size and double the channel count, which keeps the cost per stage roughly constant.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Compute by hand the output of convolving the 4 by 4 input with rows [1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16] with the 2 by 2 kernel [[1, 0], [0, -1]], using stride 1 and no padding.',
+        hint: 'The output is 3 by 3. Each value is x[i][j]*1 + x[i+1][j+1]*(-1).',
+        solution:
+          'The kernel picks out the top-left of each 2 by 2 patch and subtracts the bottom-right, so Y[i][j] = X[i][j] - X[i+1][j+1]. Row 0: 1 - 6 = -5, 2 - 7 = -5, 3 - 8 = -5. Row 1: 5 - 10 = -5, 6 - 11 = -5, 7 - 12 = -5. Row 2: 9 - 14 = -5, 10 - 15 = -5, 11 - 16 = -5. So every output is -5. That is correct and informative: this input increases by exactly 5 along the main diagonal at every position, and this kernel is a diagonal difference operator, so it reports a constant response everywhere. The uniformity of the output is a direct consequence of the uniformity of the diagonal gradient in the input.',
+      },
+      {
+        prompt:
+          'A network layer is nn.Conv2d(128, 256, kernel_size=3, padding=1) applied to an input of shape (32, 128, 28, 28). Give the output shape, the parameter count and the approximate FLOP count for the whole batch.',
+        hint: 'Padding of 1 with a 3x3 kernel and stride 1 preserves the spatial size.',
+        solution:
+          'The spatial size is preserved by the padding, so the output shape is (32, 256, 28, 28). Parameters are 256 x 128 x 3 x 3 = 294,912 weights plus 256 biases, giving 295,168. FLOPs per image are about 2 x 256 x 128 x 9 x 28 x 28 = 462 million, so for a batch of 32 it is about 14.8 billion. The comparison is the point: under 300,000 numbers to store, and fifteen billion operations to run them once. If you halve the spatial size to 14 by 14 the parameters do not change at all while the FLOPs drop by a factor of four, which is exactly why architectures downsample.',
+      },
+      {
+        prompt:
+          'Implement conv2d from scratch for the multi-channel case with a batch dimension, and verify it against torch.nn.functional.conv2d to within 1e-5 on random inputs.',
+        hint: 'Loop over batch, output channel and the two spatial axes; the inner operation is (patch * kernel[o]).sum() where patch has shape (C_in, k, k).',
+        language: 'python',
+        starterCode:
+          'import torch\nimport torch.nn.functional as F\n\ndef my_conv2d(x, w, b=None):\n    """x: (N, C_in, H, W), w: (C_out, C_in, kh, kw), b: (C_out,) or None."""\n    N, C_in, H, W = x.shape\n    C_out, _, kh, kw = w.shape\n    ...\n\nx = torch.randn(2, 3, 9, 9)\nw = torch.randn(5, 3, 3, 3)\nb = torch.randn(5)\nprint((my_conv2d(x, w, b) - F.conv2d(x, w, b)).abs().max())\n',
+        solution:
+          'The four nested loops over batch index, output channel and the two output spatial indices, with the inner operation being an elementwise product between a (C_in, kh, kw) patch and the corresponding kernel followed by a sum, match PyTorch to about 1e-6 — the residual is pure floating-point accumulation order. Two details catch people out. The sum must run over the channel axis as well as the two spatial axes, because one filter reads every input channel. And the output spatial size is H - kh + 1, not H, because there is no padding; forgetting this gives an index error on the last row rather than a wrong answer, which is fortunate. The implementation is also thousands of times slower than the real one, which is worth measuring: production kernels use im2col plus a single large matrix multiply, or Winograd transforms, precisely to turn these loops into one BLAS call.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DL-013-q1',
+        type: 'numeric',
+        concept: 'parameter count',
+        prompt: 'How many weights, excluding biases, does nn.Conv2d(16, 32, kernel_size=5) have?',
+        answer: 12800,
+        tolerance: 0,
+        explanation:
+          '32 filters, each spanning all 16 input channels with a 5 by 5 footprint: 32 x 16 x 5 x 5 = 12,800. The input height and width never enter the calculation, which is the defining consequence of weight sharing.',
+      },
+      {
+        id: 'DL-013-q2',
+        type: 'mcq',
+        concept: 'weight sharing',
+        prompt: 'What does weight sharing mean in a convolutional layer?',
+        options: [
+          'The same kernel weights are applied at every spatial position of the input',
+          'All output channels use the same kernel',
+          'The weights are shared between the forward and backward passes',
+          'Adjacent layers reuse each other parameters to save memory',
+        ],
+        answerIndex: 0,
+        explanation:
+          'One kernel, used everywhere. Different output channels have different kernels — that is what makes them detect different things — but each kernel is identical across all positions, which is what makes the parameter count independent of image size.',
+      },
+      {
+        id: 'DL-013-q3',
+        type: 'truefalse',
+        concept: 'equivariance',
+        prompt: 'A convolutional layer is invariant to translation, meaning its output does not change when the input is shifted.',
+        answer: false,
+        explanation:
+          'False. It is equivariant: shifting the input shifts the output by the same amount. Invariance is produced later by pooling or by a global average, which deliberately discard position.',
+      },
+      {
+        id: 'DL-013-q4',
+        type: 'code-output',
+        language: 'python',
+        concept: 'shapes',
+        prompt: 'What does this print?',
+        code: 'import torch, torch.nn as nn\nconv = nn.Conv2d(3, 16, kernel_size=3)\nx = torch.randn(8, 3, 32, 32)\nprint(tuple(conv(x).shape), tuple(conv.weight.shape))',
+        options: ['(8, 16, 30, 30) (16, 3, 3, 3)', '(8, 16, 32, 32) (16, 3, 3, 3)', '(8, 3, 30, 30) (3, 16, 3, 3)', '(8, 16, 30, 30) (3, 16, 3, 3)'],
+        answerIndex: 0,
+        explanation:
+          'Without padding a 3 by 3 kernel removes one pixel from each side, so 32 becomes 30. The weight shape is (out_channels, in_channels, kh, kw), which is the order to memorise — it is the reverse of the way the layer constructor arguments read.',
+      },
+      {
+        id: 'DL-013-q5',
+        type: 'fill',
+        concept: 'the operation',
+        prompt: 'Each value in a feature map is computed as a ____ product between the kernel and the input patch beneath it.',
+        answers: ['dot', 'dot product', 'inner', 'scalar'],
+        explanation:
+          'Flatten the patch and the kernel and you have two vectors; multiplying elementwise and summing is exactly a dot product, which measures how well the patch aligns with the kernel pattern.',
+      },
+      {
+        id: 'DL-013-q6',
+        type: 'explain',
+        concept: 'why convolution beats dense layers on images',
+        prompt: 'Explain why a convolutional layer is a better choice than a dense layer for image input, covering both the parameter count and the statistical argument.',
+        rubric: [
+          'Gives a concrete parameter comparison between a dense layer and a convolution on the same input',
+          'Names locality and weight sharing as the two assumptions being encoded',
+          'Explains that a feature learned in one position transfers to all positions, so less data is needed',
+        ],
+        sampleAnswer:
+          'A dense layer on a 224 by 224 colour image has to flatten it to 150,528 numbers, and mapping that to even 1000 hidden units needs about 150 million weights. A Conv2d from 3 channels to 64 with a 3 by 3 kernel needs 1,792. The size difference matters, but the statistical argument matters more. The dense layer has a separate weight for every pixel position, so learning that a vertical edge in the top-left corner is a vertical edge tells it nothing about the bottom-right corner; it must see examples of every feature in every location. Convolution encodes two assumptions that remove that waste. Locality says a low-level feature can be computed from a small neighbourhood, so a unit does not need to see the whole image. Weight sharing says a pattern means the same thing wherever it occurs, so the same kernel is used at every position. Together they mean that every training example contributes to learning the same small set of kernels at every location at once, which is why convolutional networks need orders of magnitude less data than a dense network would to reach the same accuracy on images.',
+        explanation:
+          'The examinable insight is that convolution is a prior, not merely a compression: it constrains the hypothesis space in a way that happens to be true of natural images.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What is one value in a feature map?', back: 'A dot product between the kernel and the input patch beneath it, summed over all input channels, plus the channel bias.' },
+      { front: 'What shape is a Conv2d weight tensor?', back: '(out_channels, in_channels, kernel_height, kernel_width). One filter spans every input channel.' },
+      { front: 'Parameter count of a Conv2d?', back: 'C_out * C_in * k_h * k_w + C_out. Independent of the input height and width.' },
+      { front: 'What are the two assumptions convolution encodes?', back: 'Locality — a feature is computable from a small patch — and stationarity, so the same weights are used everywhere.' },
+      { front: 'Equivariance or invariance?', back: 'Convolution is translation equivariant: shift the input and the output shifts too. Invariance comes from pooling or a global average.' },
+      { front: 'Why do parameters stay fixed while FLOPs grow with resolution?', back: 'Weights are shared across positions, but the dot product is recomputed at every output position, so compute scales with H_out times W_out.' },
+      { front: 'Is a framework convolution really a convolution?', back: 'No, it is a cross-correlation — the kernel is not flipped. Since the kernel is learned, the difference has no practical consequence.' },
+    ],
+
+    challenge: {
+      title: 'Build a convolution engine and learn an edge detector',
+      brief:
+        'Write a NumPy convolution that handles batches, multiple input and output channels, and a bias, and verify it against torch.nn.functional.conv2d. Then implement the backward pass by hand — the gradients with respect to the input and to the kernel — and check them against autograd. Finally, take a dataset of images that contain strong vertical edges, initialise a single 3 by 3 kernel randomly, and train it by gradient descent to match the output of a fixed Sobel filter. Report the learned kernel and comment on how close it is to Sobel, and on why it need not be identical.',
+      language: 'python',
+      acceptanceCriteria: [
+        'The forward pass matches F.conv2d to within 1e-5 on random multi-channel inputs',
+        'Analytic gradients for both the input and the kernel match autograd to within 1e-4',
+        'The learned kernel reproduces the Sobel response to a low mean squared error, and the learned weights are printed',
+        'The write-up explains why a scaled or sign-flipped version of Sobel is an equally good solution',
+      ],
+      starterCode:
+        'import numpy as np\nimport torch\nimport torch.nn.functional as F\n\ndef conv_forward(x, w, b):\n    """x: (N, Cin, H, W), w: (Cout, Cin, kh, kw), b: (Cout,). Return (N, Cout, Ho, Wo)."""\n    ...\n\ndef conv_backward(dy, x, w):\n    """Return (dx, dw, db) for the same shapes."""\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain what a convolution does to an image, why it is preferable to a dense layer, and what weight sharing buys you.',
+      mustCover: [
+        'A small kernel is slid across the input and a dot product is computed at each position',
+        'The output is a feature map showing where and how strongly the pattern was found',
+        'The same weights are used at every position, so the parameter count does not depend on image size',
+        'This encodes locality and stationarity, which are true of natural images and make learning far more data-efficient',
+      ],
+      bonusSignals: [
+        'gives a concrete parameter comparison with a dense layer',
+        'explains that one filter spans all input channels',
+        'distinguishes equivariance from invariance',
+        'notes that first-layer filters in trained networks look like edge detectors',
+      ],
+      sampleExplanation:
+        "A convolution takes a small grid of numbers — say three by three — and slides it across the image. At each position it multiplies each of its nine numbers by the pixel underneath and adds the results, producing a single score, and those scores laid out in their original arrangement form a new image called a feature map. Because a dot product measures how well two things line up, the score says how strongly the kernel pattern is present at that spot, so the feature map is a record of where the pattern was found and how convincingly. The alternative would be a dense layer, and it is worth seeing how badly that loses. Flattening a two-hundred-and-twenty-four-pixel-square colour image gives over a hundred and fifty thousand numbers, and connecting them to a thousand hidden units costs a hundred and fifty million weights. The equivalent convolution costs under two thousand. But the parameter count is not really the argument. The dense layer has a separate weight for every pixel position, which means it has to learn independently that an edge in the top-left is an edge and that an edge in the bottom-right is also an edge — and to do that it has to see examples of every feature in every location. Convolution assumes two things about images that happen to be true: that a low-level feature can be worked out from a small neighbourhood, and that a pattern means the same thing wherever it appears. The second assumption is what lets you use the same weights everywhere, and that is weight sharing. It means every training example teaches the kernel at every position simultaneously, which is why convolutional networks need far less data. One caution about what you do not get. Convolution is equivariant to translation — shift the picture and the whole feature map shifts with it — but it gives you nothing about rotation or scale. Turn a vertical edge detector on its side and it produces exactly zero on a vertical edge. Networks handle those by learning many kernels and by augmenting the training data, not by any property of the operation itself.",
+    },
+  },
 ];

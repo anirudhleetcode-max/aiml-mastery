@@ -29,7 +29,7 @@ export function radiusFor(unlocks: number): number {
 const ANCHORS: Record<string, { x: number; y: number }> = Object.fromEntries(
   DOMAINS.map((d, i) => {
     const a = (i / DOMAINS.length) * Math.PI * 2 - Math.PI / 2;
-    return [d.id, { x: Math.cos(a) * WORLD * 0.38, y: Math.sin(a) * WORLD * 0.3 }];
+    return [d.id, { x: Math.cos(a) * WORLD * 0.42, y: Math.sin(a) * WORLD * 0.2 }];
   }),
 );
 
@@ -277,14 +277,14 @@ export function GraphCanvas({
     }
 
     /* labels — only where they can be read */
-    const labelZoom = view.k > 1.5;
+    const labelZoom = view.k > 1.15;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (const n of simNodesRef.current) {
       if (n.x == null || n.y == null) continue;
       const isNear = near ? near.has(n.id) : false;
       const big = n.node.unlocks >= 4;
-      const show = isNear || n.id === sel || (labelZoom && vis.has(n.id)) || (!near && big && view.k > 0.8);
+      const show = isNear || n.id === sel || (labelZoom && vis.has(n.id)) || (!near && big && view.k > 0.5);
       if (!show || !vis.has(n.id)) continue;
 
       const size = Math.max(9, 11 / view.k);
@@ -299,6 +299,9 @@ export function GraphCanvas({
     }
 
     ctx.restore();
+    // `canvasRef` comes from the sizing hook below and is stable for the
+    // lifetime of the component; everything else is read through refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const drawRef = React.useRef(drawNow);
@@ -470,10 +473,10 @@ export function GraphCanvas({
         'link',
         forceLink<SimNode, SimLink>(links)
           .id((d) => d.id)
-          .distance(46)
+          .distance(44)
           .strength(0.22),
       )
-      .force('charge', forceManyBody<SimNode>().strength(-95).distanceMax(460))
+      .force('charge', forceManyBody<SimNode>().strength(-85).distanceMax(460))
       .force(
         'collide',
         forceCollide<SimNode>()

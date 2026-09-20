@@ -91,7 +91,7 @@ export function GlossaryBrowser({
   return (
     <div className="space-y-5">
       {/* ------------------------------------------------------ controls */}
-      <div className="sticky top-0 z-10 -mx-4 space-y-3 border-b border-line bg-surface/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+      <div className="sticky top-16 z-20 -mx-4 space-y-3 border-b border-line bg-canvas/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative min-w-0 flex-1">
             <label htmlFor="glossary-search" className="sr-only">
@@ -196,7 +196,7 @@ export function GlossaryBrowser({
             key={group.letter}
             id={`glossary-${group.letter === '#' ? 'other' : group.letter}`}
             aria-labelledby={`glossary-heading-${group.letter === '#' ? 'other' : group.letter}`}
-            className="scroll-mt-44 sm:scroll-mt-40"
+            className="scroll-mt-72 sm:scroll-mt-56"
           >
             <h2
               id={`glossary-heading-${group.letter === '#' ? 'other' : group.letter}`}

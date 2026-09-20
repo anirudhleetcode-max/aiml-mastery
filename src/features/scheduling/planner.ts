@@ -50,15 +50,24 @@ export function buildSchedule(units: UnitMeta[], options: ScheduleOptions): Sche
     if (!paused.has(d)) dates.push(d);
   }
 
-  const capacityFor = (date: string) =>
-    Math.max(
-      15,
-      Math.round(Number(opts.dailyMinutes) * (isWeekend(date) ? opts.weekendFactor : 1)) - opts.assessmentReserve,
-    );
+  /* Weight each day: weekends carry less. If the curriculum does not fit the
+     learner's stated budget, every day is scaled up by the same factor rather
+     than the overflow being sprayed across the tail — that would scramble
+     curriculum order, and curriculum order is what keeps every prerequisite
+     ahead of its dependants. */
+  const weightFor = (date: string) => (isWeekend(date) ? opts.weekendFactor : 1);
+  const nominalPerWeight = Math.max(5, Number(opts.dailyMinutes) - opts.assessmentReserve);
+  const totalWeight = dates.reduce((a, d) => a + weightFor(d), 0);
+  const totalMinutes = units.reduce((a, u) => a + u.estimatedMinutes, 0);
+  const requiredPerWeight = totalWeight > 0 ? totalMinutes / totalWeight : nominalPerWeight;
+
+  const compressed = requiredPerWeight > nominalPerWeight;
+  const perWeight = Math.max(nominalPerWeight, requiredPerWeight);
+
+  const capacityFor = (date: string) => Math.max(15, Math.round(perWeight * weightFor(date)));
 
   const queue = [...units];
   const days: DailyPlan[] = [];
-  let compressed = false;
 
   for (let i = 0; i < dates.length; i++) {
     const date = dates[i]!;
@@ -88,27 +97,24 @@ export function buildSchedule(units: UnitMeta[], options: ScheduleOptions): Sche
     });
   }
 
-  // Never silently drop units: if the budget cannot absorb the curriculum,
-  // spread the remainder across the tail so the deadline tracker can show an
-  // honest — if demanding — required pace.
+  /* Rounding can leave a short tail with no day left. These are the last units
+     in curriculum order, so appending them in order from the last filled day
+     onward keeps every prerequisite ahead of its dependants. */
   if (queue.length > 0) {
-    compressed = true;
-    const tail = Math.min(days.length, Math.max(1, Math.ceil(days.length * 0.5)));
-    const startIndex = days.length - tail;
-    let cursor = 0;
+    let cursor = days.reduce((last, d, i) => (d.items.length > 0 ? i : last), 0);
     while (queue.length > 0) {
-      const day = days[startIndex + (cursor % tail)]!;
+      const day = days[Math.min(cursor, days.length - 1)]!;
       const next = queue.shift()!;
       day.items.push({ unitId: next.id, kind: 'learn', estimatedMinutes: next.estimatedMinutes });
       day.totalMinutes += next.estimatedMinutes;
       day.testRequired = true;
-      cursor++;
+      day.theme = themeFor(day.items, units);
+      if (day.items.length >= 6 && cursor < days.length - 1) cursor++;
     }
-    for (const d of days) d.theme = themeFor(d.items, units);
   }
 
   const studyDays = days.filter((d) => d.items.length > 0).length;
-  const totalMinutes = days.reduce((a, d) => a + d.totalMinutes, 0);
+  const scheduledMinutes = days.reduce((a, d) => a + d.totalMinutes, 0);
 
   return {
     days,
@@ -116,7 +122,7 @@ export function buildSchedule(units: UnitMeta[], options: ScheduleOptions): Sche
     totalDays: days.length,
     studyDays,
     compressed,
-    averageMinutesPerDay: studyDays ? Math.round(totalMinutes / studyDays) : 0,
+    averageMinutesPerDay: studyDays ? Math.round(scheduledMinutes / studyDays) : 0,
   };
 }
 

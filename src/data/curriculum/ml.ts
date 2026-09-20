@@ -6975,3 +6975,1265 @@ n= 32000   SVC(rbf)  22.41s acc 0.951   LinearSVC   0.24s acc 0.857
     },
   },
 
+  {
+    id: 'ML-013',
+    domain: 'ML',
+    module: 'Classification',
+    topic: 'Classification objectives',
+    title: 'Cross-Entropy and Classification Losses',
+    slug: 'cross-entropy-loss',
+    difficulty: 4,
+    estimatedMinutes: 35,
+    prerequisites: ['ML-009'],
+    related: ['ML-007', 'ML-011'],
+    tags: ['cross-entropy', 'log loss', 'softmax', 'proper scoring rule', 'brier score', 'hinge loss'],
+
+    learningObjectives: [
+      'Explain why accuracy cannot be used as a training objective and what cross-entropy provides instead',
+      'Compute binary and categorical cross-entropy by hand from predicted probabilities',
+      'Explain what a proper scoring rule is and why squared error on probabilities trains a classifier poorly',
+      'Choose among log loss, hinge loss, focal loss and class weighting for a given classification problem',
+    ],
+
+    terminology: [
+      {
+        term: 'Cross-entropy',
+        definition:
+          'The expected number of bits needed to encode outcomes from a true distribution p using a code optimised for a predicted distribution q, written H(p, q) = −Σ p(x) log q(x). For a one-hot label it reduces to the negative log of the probability assigned to the correct class.',
+        simple: 'How surprised the model was by the answer that actually happened.',
+      },
+      {
+        term: 'Log loss',
+        definition:
+          'The average cross-entropy over a dataset. Identical to the negative average log-likelihood of the observed labels under the model, which is why minimising it is maximum likelihood estimation.',
+        simple: 'The average surprise, and the standard score for probabilistic classifiers.',
+      },
+      {
+        term: 'Softmax',
+        definition:
+          'The function converting a vector of real-valued scores into a probability distribution: softmax(z)ₖ = e^{zₖ} / Σⱼ e^{zⱼ}. It generalises the sigmoid to more than two classes and is the standard output layer for multi-class models.',
+        simple: 'Turns a list of scores into probabilities that add up to one.',
+      },
+      {
+        term: 'Proper scoring rule',
+        definition:
+          'A loss whose expected value is minimised precisely when the predicted probabilities equal the true probabilities. Log loss and Brier score are proper; accuracy and hinge loss are not.',
+        simple: 'A score that can only be gamed by being honest.',
+      },
+      {
+        term: 'Logit',
+        definition:
+          'The raw, unnormalised score a model produces before the sigmoid or softmax is applied. Numerically stable implementations compute the loss directly from logits rather than from probabilities.',
+        simple: 'The score before it is squashed into a probability.',
+      },
+    ],
+
+    simpleExplanation:
+      'A classifier that says "90% chance of rain" is making a stronger claim than one that says "60% chance of rain", and when it rains we should reward the first more. When it does not rain, we should punish the first more too. Cross-entropy is the scoring rule that does exactly this: it takes the probability the model assigned to whatever actually happened, takes the logarithm, and flips the sign. Assign 0.9 to the correct answer and you lose 0.105. Assign 0.5 and you lose 0.693. Assign 0.01 and you lose 4.6 — confident and wrong is punished savagely, and as the assigned probability approaches zero the penalty grows without any upper bound. That unbounded punishment is the point. It makes the safest strategy honesty: a model minimising cross-entropy cannot improve its score by exaggerating its confidence, so the probabilities it reports end up meaning something. It is also why we do not train on accuracy. Accuracy only counts how many predictions land on the right side of a threshold, so nudging a probability from 0.51 to 0.99 changes nothing at all — and a loss that does not change gives gradient descent nothing to follow.',
+
+    whyItExists:
+      'Accuracy is a step function of the model parameters: it is flat almost everywhere and jumps discontinuously when a prediction crosses the threshold, so its gradient is zero or undefined and no gradient-based optimiser can use it. Cross-entropy is a smooth, convex surrogate that is minimised by the true probabilities, punishes confident errors without bound, and produces a gradient of exactly (prediction − label) when paired with a sigmoid or softmax output.',
+
+    analogy: {
+      scenario:
+        'A weather forecaster is paid under a contract designed by a suspicious insurer. Each day, the insurer looks at what the forecaster said about the weather that actually occurred and fines them the logarithm of that stated probability, with the sign flipped. Say 90% rain on a day it rains and the fine is small. Say 90% rain on a dry day and the fine is large. Say 99.9% on a day it does not rain and the fine is enormous. The forecaster quickly discovers something uncomfortable: there is no clever hedging strategy. Overstating confidence to look impressive is ruinous on the days you are wrong, and understating it to stay safe costs you every single day. The only way to minimise the long-run fine is to report exactly what you believe.',
+      mapping: [
+        { from: 'The probability the forecaster stated for what actually happened', to: 'The predicted probability of the true class, p_y' },
+        { from: 'The logarithm of that probability, negated, as the fine', to: 'Cross-entropy, −log p_y' },
+        { from: 'A ruinous fine for confident errors', to: 'The unbounded penalty as p_y approaches 0' },
+        { from: 'No hedging strategy beating honesty', to: 'Log loss is a proper scoring rule' },
+        { from: 'The long-run average fine', to: 'Average log loss over the dataset' },
+        { from: 'A contract that only asked "were you right?"', to: 'Accuracy — flat, gradient-free, and indifferent to confidence' },
+      ],
+      bridge:
+        'The contract is the loss function, and the forecaster is the optimiser. The reason this particular contract is used is not aesthetic: it is the only shape with the property that the expected fine is minimised exactly when the stated probabilities equal the true ones. That is what "proper scoring rule" means, and it is why a model trained on cross-entropy produces probabilities that can be interpreted rather than merely ranked. The contrast with an accuracy-based contract is equally instructive — under that contract, the forecaster is paid the same whether they say 51% or 99%, so they learn nothing from the days they were narrowly right.',
+      limitations:
+        'The story implies the forecaster has genuine beliefs to report honestly. A model has only whatever its functional form allows, so minimising log loss makes it as honest as its capacity and its training data permit — which on a small or biased sample can still be confidently wrong.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Compute the loss for your own predictions',
+        caption: 'Edit predicted probabilities and true labels, and watch log loss, Brier score and accuracy diverge from one another.',
+        widget: 'code-playground',
+      },
+      {
+        kind: 'flow',
+        title: 'From scores to a loss value',
+        steps: [
+          { label: 'Produce logits', detail: 'The model emits an unnormalised score per class, z ∈ ℝᴷ, with no constraint on range or sign.' },
+          { label: 'Normalise', detail: 'Sigmoid for two classes, softmax for K. The result is a valid probability distribution over the classes.' },
+          { label: 'Pick out the true class', detail: 'One-hot labels mean only one term survives the sum: the loss depends solely on the probability assigned to the correct class.' },
+          { label: 'Take −log', detail: 'Small probability on the true class means a large loss, and the penalty grows without bound as the probability approaches zero.' },
+          { label: 'Average and differentiate', detail: 'Averaging gives log loss. The gradient with respect to the logits is exactly (p − y), which is why this pairing is universal.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'What each loss value means',
+        caption: 'Log loss is reported in nats when using the natural logarithm. A useful reference point: predicting the base rate for every example on a balanced problem gives exactly ln 2 = 0.693.',
+        columns: ['Probability on the true class', 'Cross-entropy (nats)', 'Interpretation'],
+        rows: [
+          ['0.99', '0.010', 'Confident and correct — almost no penalty'],
+          ['0.90', '0.105', 'Comfortably correct'],
+          ['0.70', '0.357', 'Correct but uncertain'],
+          ['0.50', '0.693', 'Exactly the coin-flip baseline on a balanced problem'],
+          ['0.10', '2.303', 'Wrong and fairly confident about it'],
+          ['0.01', '4.605', 'Confidently wrong — one such example can dominate a batch'],
+          ['0.0001', '9.210', 'Why libraries clip probabilities away from zero'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Cross-entropy: strengths, weaknesses and when to reach for it',
+        caption: 'Reach for cross-entropy whenever you need calibrated probabilities or are training by gradient descent, which covers essentially all of logistic regression and deep learning. Reach past it for hinge loss when you want margin-based sparsity, or for a cost-sensitive loss when the two error types have wildly different prices.',
+        left: {
+          heading: 'Strengths',
+          points: [
+            'A proper scoring rule: minimised exactly at the true probabilities, so it rewards honest calibration',
+            'Convex in the logits for a linear model, giving a single global optimum',
+            'Paired with sigmoid or softmax, the gradient simplifies to (p − y) — no vanishing factor',
+            'Equivalent to maximum likelihood for the Bernoulli or categorical distribution, so it inherits that theory',
+            'Scores probabilities rather than thresholded decisions, so it detects degradation accuracy misses',
+            'Extends directly to multi-class and to multi-label problems',
+          ],
+        },
+        right: {
+          heading: 'Weaknesses',
+          points: [
+            'Unbounded, so a single confidently-wrong example can dominate a mini-batch gradient',
+            'Numerically fragile near 0 and 1 — requires clipping or, better, a from-logits implementation',
+            'Under heavy class imbalance the majority class dominates the sum unless weights are applied',
+            'Harder to explain to stakeholders than accuracy, and has no natural units',
+            'Does not encode asymmetric error costs unless you weight the classes explicitly',
+            'Mislabelled training examples are punished hardest, so it is sensitive to label noise',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'The classification loss family',
+        columns: ['Loss', 'Formula', 'Proper?', 'Use when'],
+        rows: [
+          ['Binary cross-entropy', '−[y log p + (1−y) log(1−p)]', 'Yes', 'Two classes, probabilities needed — the default'],
+          ['Categorical cross-entropy', '−Σₖ yₖ log pₖ', 'Yes', 'One label out of K classes, with softmax output'],
+          ['Brier score', '(p − y)²', 'Yes', 'Reporting calibration; bounded, so it is easier to communicate'],
+          ['Hinge', 'max(0, 1 − y·f)', 'No', 'Support vector machines; gives sparsity, not probabilities'],
+          ['Focal', '−(1 − p)^γ log p', 'No', 'Extreme imbalance, e.g. dense object detection — down-weights easy examples'],
+          ['Weighted cross-entropy', '−wᵧ log p_y', 'Yes, per class', 'Imbalance or asymmetric error costs stated in advance'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'For a predicted distribution q and a true distribution p over K classes, the cross-entropy is H(p, q) = −Σₖ pₖ log qₖ = H(p) + D_KL(p ‖ q), where H(p) is the entropy of the true distribution and D_KL is the Kullback-Leibler divergence. With one-hot labels H(p) = 0, so minimising cross-entropy is exactly minimising the KL divergence between the label distribution and the model. The empirical risk over n examples, L = −(1/n) Σᵢ Σₖ y_{ik} log p_{ik}, equals the negative average log-likelihood under a categorical model, making its minimiser the maximum likelihood estimate. When p = softmax(z), the gradient with respect to the logits is ∂L/∂z = p − y, and the loss is convex in z for a linear model. Log loss is a strictly proper scoring rule: E_{y∼p}[L(q, y)] is uniquely minimised at q = p.',
+
+    math: {
+      intuition:
+        'Information theory supplies the measuring stick. The surprise of an event of probability q is −log q: certain events carry no surprise, impossible ones carry infinite surprise. Cross-entropy is the average surprise your model experiences when reality is drawn from the true distribution but the model expected its own. That average is minimised exactly when the model matches reality, which is the whole justification for using it as a loss. The second piece of the story is mechanical: pairing this loss with a sigmoid or softmax makes the awkward derivative of the squashing function cancel exactly against the logarithm, leaving a gradient of simply (prediction − truth).',
+      formulas: [
+        {
+          latex: 'H(p, q) = -\\sum_{k=1}^{K} p_k \\log q_k = H(p) + D_{\\mathrm{KL}}(p \\,\\|\\, q)',
+          name: 'Cross-entropy and its decomposition',
+          meaning:
+            'Cross-entropy splits into the irreducible entropy of the truth plus the divergence between the model and the truth. Since one-hot labels have zero entropy, minimising cross-entropy is exactly minimising KL divergence — the model is being pushed to match the label distribution.',
+          variables: [
+            { symbol: 'p_k', meaning: 'True probability of class k; 1 for the observed class with one-hot labels' },
+            { symbol: 'q_k', meaning: 'Predicted probability of class k' },
+            { symbol: 'H(p)', meaning: 'Entropy of the true distribution — a constant the model cannot influence' },
+            { symbol: 'D_{\\mathrm{KL}}', meaning: 'Kullback-Leibler divergence, the extra cost of using q in place of p' },
+          ],
+          category: 'information-theory',
+        },
+        {
+          latex: 'L_{\\text{BCE}} = -\\frac{1}{n}\\sum_{i=1}^{n}\\Big[ y_i \\log p_i + (1 - y_i)\\log(1 - p_i) \\Big]',
+          name: 'Binary cross-entropy',
+          meaning:
+            'Only one term is active per example: −log p when the label is 1, −log(1 − p) when it is 0. The average over the dataset is what scikit-learn reports as `log_loss`.',
+          variables: [
+            { symbol: 'y_i', meaning: 'True label, 0 or 1' },
+            { symbol: 'p_i', meaning: 'Predicted probability that example i belongs to class 1' },
+            { symbol: 'n', meaning: 'Number of examples' },
+          ],
+          category: 'information-theory',
+        },
+        {
+          latex: '\\mathrm{softmax}(\\mathbf{z})_k = \\frac{e^{z_k}}{\\sum_{j=1}^{K} e^{z_j}}, \\qquad L = -\\log \\mathrm{softmax}(\\mathbf{z})_{y}',
+          name: 'Softmax and categorical cross-entropy',
+          meaning:
+            'Softmax exponentiates to make every score positive, then normalises so they sum to one. The loss picks out the single entry corresponding to the true class — every other prediction affects the loss only through the denominator.',
+          variables: [
+            { symbol: 'z_k', meaning: 'Logit (raw score) for class k' },
+            { symbol: 'K', meaning: 'Number of classes' },
+            { symbol: 'y', meaning: 'Index of the true class' },
+          ],
+          category: 'classification',
+        },
+        {
+          latex: '\\frac{\\partial L}{\\partial \\mathbf{z}} = \\mathbf{p} - \\mathbf{y}',
+          name: 'The gradient with respect to the logits',
+          meaning:
+            'The single most useful identity in classification. The Jacobian of the softmax cancels exactly against the derivative of the log, leaving the raw error. No vanishing factor appears, which is why confidently wrong predictions still produce a strong learning signal.',
+          variables: [
+            { symbol: '\\mathbf{p}', meaning: 'Vector of predicted probabilities' },
+            { symbol: '\\mathbf{y}', meaning: 'One-hot vector of the true label' },
+            { symbol: '\\mathbf{z}', meaning: 'Vector of logits' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: 'L_{\\text{focal}} = -(1 - p_y)^{\\gamma} \\log p_y',
+          name: 'Focal loss',
+          meaning:
+            'Cross-entropy multiplied by a factor that shrinks towards zero for examples the model already handles well. With γ = 2, an example at p = 0.9 contributes a hundredth of its usual weight, which lets rare hard examples survive a sum dominated by easy background.',
+          variables: [
+            { symbol: 'p_y', meaning: 'Predicted probability of the true class' },
+            { symbol: '\\gamma', meaning: 'Focusing parameter; 0 recovers ordinary cross-entropy, 2 is the common choice' },
+          ],
+          category: 'classification',
+        },
+        {
+          latex: '\\mathrm{Brier} = \\frac{1}{n}\\sum_{i=1}^{n}(p_i - y_i)^{2}',
+          name: 'Brier score',
+          meaning:
+            'Squared error applied to probabilities. Also a proper scoring rule, and bounded between 0 and 1, which makes it easier to communicate — but its gradient vanishes for confident errors, which is why it trains poorly.',
+          variables: [
+            { symbol: 'p_i', meaning: 'Predicted probability of the positive class' },
+            { symbol: 'y_i', meaning: 'True label, 0 or 1' },
+          ],
+          category: 'statistics',
+        },
+      ],
+      derivation: [
+        'Start from maximum likelihood. Under a Bernoulli model, the probability of observing label yᵢ given prediction pᵢ is pᵢ^{yᵢ}(1 − pᵢ)^{1−yᵢ}, which evaluates to pᵢ when yᵢ = 1 and 1 − pᵢ when yᵢ = 0.',
+        'Assuming independent examples, the likelihood of the whole dataset is the product of these terms. Products are awkward, so take the log: Σᵢ [yᵢ log pᵢ + (1 − yᵢ) log(1 − pᵢ)].',
+        'Maximising a log-likelihood is minimising its negative, and dividing by n keeps the scale independent of dataset size. That is binary cross-entropy — it was not invented as a loss, it is maximum likelihood written as something to minimise.',
+        'Now the gradient, for the multi-class case. With p = softmax(z), the Jacobian is ∂pₖ/∂zⱼ = pₖ(δₖⱼ − pⱼ), where δ is 1 when the indices match and 0 otherwise.',
+        'The loss is L = −Σₖ yₖ log pₖ, so ∂L/∂zⱼ = −Σₖ (yₖ/pₖ)·pₖ(δₖⱼ − pⱼ) = −Σₖ yₖ(δₖⱼ − pⱼ) = −yⱼ + pⱼ Σₖ yₖ.',
+        'Since the label vector is one-hot, Σₖ yₖ = 1, giving ∂L/∂zⱼ = pⱼ − yⱼ. Every pₖ cancelled. This is the identity that makes softmax and cross-entropy inseparable in practice.',
+        'Contrast this with squared error on the probabilities. There, ∂L/∂z = 2(p − y)·σ′(z) = 2(p − y)·p(1 − p). For a confidently wrong prediction with y = 1 and p = 0.01, the error factor is −0.99 but p(1 − p) = 0.0099, so the gradient is about 0.0098 — roughly a hundredth of what cross-entropy delivers. The model barely learns from its worst mistakes.',
+        'Next, propriety. Suppose the true probability of class 1 is π and the model reports q. The expected loss is −[π log q + (1 − π) log(1 − q)]. Differentiate with respect to q: −π/q + (1 − π)/(1 − q).',
+        'Set that to zero: π(1 − q) = (1 − π)q, so π − πq = q − πq, giving q = π. The second derivative π/q² + (1 − π)/(1 − q)² is strictly positive, so this is the unique minimum. The model cannot do better than reporting the truth, which is precisely what makes log loss a strictly proper scoring rule.',
+        'Finally, numerical stability. Computing softmax then taking a log overflows for large logits and underflows for small probabilities. Implementations use the log-sum-exp identity, log Σ e^{zⱼ} = m + log Σ e^{zⱼ − m} with m = max z, and compute the loss directly from logits. This is why PyTorch offers `CrossEntropyLoss` and `BCEWithLogitsLoss` rather than expecting you to apply softmax yourself, and why scikit-learn clips predicted probabilities into [ε, 1 − ε] before evaluating `log_loss`.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Scoring three forecasts by hand, then a multi-class prediction',
+      setup:
+        'Three binary predictions with their outcomes: (a) p = 0.9, y = 1; (b) p = 0.6, y = 0; (c) p = 0.02, y = 1. Compute the cross-entropy of each, the average log loss, and compare with accuracy and Brier score.',
+      steps: [
+        {
+          label: 'Example (a): confident and right',
+          detail: 'The label is 1, so the active term is −log p = −ln(0.9) = 0.105. Small penalty, as it should be.',
+          latex: 'L_a = -\\ln(0.9) = 0.105',
+        },
+        {
+          label: 'Example (b): mildly wrong',
+          detail: 'The label is 0, so the active term is −log(1 − p) = −ln(0.4) = 0.916. The model leaned the wrong way but hedged, so the penalty is moderate.',
+          latex: 'L_b = -\\ln(0.4) = 0.916',
+        },
+        {
+          label: 'Example (c): confidently wrong',
+          detail: 'The label is 1 and the model assigned it 0.02, so the loss is −ln(0.02) = 3.912. One example contributes more than thirty times the loss of example (a).',
+          latex: 'L_c = -\\ln(0.02) = 3.912',
+        },
+        {
+          label: 'Average log loss',
+          detail: '(0.105 + 0.916 + 3.912)/3 = 4.933/3 = 1.644. For reference, a model that predicted 0.5 for everything would score ln 2 = 0.693 — so this model is more than twice as bad as saying "I have no idea", entirely because of example (c).',
+          latex: 'L = \\frac{0.105 + 0.916 + 3.912}{3} = 1.644',
+        },
+        {
+          label: 'Compare with accuracy',
+          detail: 'At a 0.5 threshold the predictions are 1, 1, 0 against labels 1, 0, 1 — one correct out of three, so accuracy is 0.333. Accuracy cannot tell the difference between example (b), which was nearly right, and example (c), which was a disaster. Both simply count as wrong.',
+          latex: '\\text{accuracy} = 1/3 = 0.333',
+        },
+        {
+          label: 'Compare with Brier score',
+          detail: '[(0.9 − 1)² + (0.6 − 0)² + (0.02 − 1)²]/3 = [0.01 + 0.36 + 0.9604]/3 = 0.4435. Brier is also proper, and it does register the severity of (c) — but only up to a maximum of 1 per example, whereas cross-entropy for (c) could have been 9.2 had the prediction been 0.0001.',
+          latex: '\\text{Brier} = \\frac{0.01 + 0.36 + 0.9604}{3} = 0.4435',
+        },
+        {
+          label: 'Now a three-class example from logits',
+          detail: 'Logits z = (2.0, 1.0, 0.1). Exponentiate: e² = 7.389, e¹ = 2.718, e^0.1 = 1.105, summing to 11.212. Softmax gives p = (0.659, 0.242, 0.099).',
+          latex: '\\mathbf{p} = (0.659,\\, 0.242,\\, 0.099)',
+        },
+        {
+          label: 'Score it under two different truths',
+          detail: 'If the true class is 0, the loss is −ln(0.659) = 0.417. If the true class is 2, the loss is −ln(0.099) = 2.313. Note that only the true-class probability enters; the other two matter only through the normalising denominator.',
+          latex: 'L_{y=0} = 0.417, \\qquad L_{y=2} = 2.313',
+        },
+        {
+          label: 'Check the gradient identity',
+          detail: 'With true class 0, the one-hot label is (1, 0, 0) and the gradient with respect to the logits is p − y = (−0.341, 0.242, 0.099). The correct class is pushed up, the others down, and the magnitudes sum to zero — the softmax constraint enforced automatically.',
+          latex: '\\frac{\\partial L}{\\partial \\mathbf{z}} = (-0.341,\\, 0.242,\\, 0.099)',
+        },
+      ],
+      conclusion:
+        'Three numbers tell the story. Accuracy says one-third and stops. Brier says 0.44 and registers severity up to a ceiling. Cross-entropy says 1.644 and is dominated almost entirely by a single confidently-wrong prediction — which is exactly the behaviour you want from a training signal, because that one example is where the model has most to learn. The gradient identity in the final step is the reason this pairing is used everywhere: the learning signal is the raw error, with nothing damping it.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Log loss, Brier and accuracy disagreeing on purpose',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.metrics import log_loss, brier_score_loss, accuracy_score
+
+y = np.array([1, 0, 1])
+p = np.array([0.9, 0.6, 0.02])
+
+print("per-example loss:", np.round(-(y * np.log(p) + (1 - y) * np.log(1 - p)), 4))
+print("log loss :", round(log_loss(y, p), 4))
+print("brier    :", round(brier_score_loss(y, p), 4))
+print("accuracy :", round(accuracy_score(y, (p >= 0.5).astype(int)), 4))
+
+# Two models with identical accuracy but very different honesty.
+y2 = np.array([1, 1, 0, 0, 1, 0, 1, 0])
+cautious  = np.array([0.7, 0.6, 0.4, 0.3, 0.6, 0.4, 0.7, 0.3])
+reckless  = np.array([0.99, 0.99, 0.01, 0.01, 0.01, 0.99, 0.99, 0.01])
+for name, pred in [("cautious", cautious), ("reckless", reckless)]:
+    acc = accuracy_score(y2, (pred >= 0.5).astype(int))
+    print(f"{name:<9} accuracy {acc:.3f}   log loss {log_loss(y2, pred):.4f}")`,
+        output: `per-example loss: [0.1054 0.9163 3.912 ]
+log loss : 1.6446
+brier    : 0.4435
+accuracy : 0.3333
+cautious  accuracy 0.750   log loss 0.5166
+reckless  accuracy 0.750   log loss 1.1636
+`,
+        explanation:
+          'The first block reproduces the worked example exactly. The second is the more important demonstration: two models with identical accuracy, one of which is more than twice as bad by log loss. The reckless model gets the same number of decisions right but is catastrophically overconfident on the two it gets wrong, and accuracy is structurally incapable of noticing. This is why log loss belongs in every classification report, not as a replacement for accuracy but alongside it — it is the metric that degrades first when a model starts drifting.',
+      },
+      {
+        language: 'python',
+        title: 'Why squared error trains a classifier badly',
+        runnable: true,
+        code: `import numpy as np
+
+def sigmoid(z):
+    return 1 / (1 + np.exp(-z))
+
+print(f"{'z':>6} {'p':>8} {'CE grad':>10} {'MSE grad':>10} {'ratio':>8}")
+for z in [-6.0, -3.0, -1.0, 0.0, 1.0, 3.0]:
+    p = sigmoid(z)
+    y = 1.0                        # true label is 1 in every row
+    ce_grad = p - y                            # d(cross-entropy)/dz
+    mse_grad = 2 * (p - y) * p * (1 - p)       # d(squared error)/dz
+    print(f"{z:>6.1f} {p:>8.4f} {ce_grad:>10.4f} {mse_grad:>10.5f} {abs(ce_grad / mse_grad):>8.1f}")`,
+        output: `     z        p    CE grad   MSE grad    ratio
+  -6.0   0.0025    -0.9975   -0.00497    200.7
+  -3.0   0.0474    -0.9526   -0.08601     11.1
+  -1.0   0.2689    -0.7311   -0.28746      2.5
+   0.0   0.5000    -0.5000   -0.25000      2.0
+   1.0   0.7311    -0.2689   -0.10570      2.5
+   3.0   0.9526    -0.0474   -0.00428     11.1
+`,
+        explanation:
+          'Read the first row. The model assigns probability 0.0025 to a class whose true label is 1 — it could hardly be more wrong. Cross-entropy responds with a gradient of −0.998, essentially the full error. Squared error responds with −0.005, two hundred times smaller, because the chain rule multiplies in the sigmoid derivative p(1 − p), which is almost zero in the saturated tails. The model that is most wrong learns the least, which is the definition of a bad training signal. Cross-entropy avoids this because the log in the loss cancels the sigmoid derivative exactly. This is not a subtlety — it is the reason classification networks are not trained with mean squared error.',
+      },
+      {
+        language: 'python',
+        title: 'Class weighting, and the numerically safe implementation',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import log_loss, recall_score
+
+X, y = make_classification(n_samples=6000, n_features=10, n_informative=5,
+                           weights=[0.97, 0.03], random_state=0)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.3, random_state=0, stratify=y)
+
+for cw in [None, "balanced"]:
+    m = LogisticRegression(max_iter=2000, class_weight=cw).fit(X_tr, y_tr)
+    p = m.predict_proba(X_te)[:, 1]
+    print(f"class_weight={str(cw):<9} log loss {log_loss(y_te, p):.4f}"
+          f"   recall@0.5 {recall_score(y_te, p >= 0.5):.3f}")
+
+# The stable way to compute the loss from logits, without ever forming exp(z).
+def bce_from_logits(z, y):
+    return np.mean(np.maximum(z, 0) - z * y + np.log1p(np.exp(-np.abs(z))))
+
+z = np.array([-800.0, -1.0, 0.0, 1.0, 800.0])
+labels = np.array([0.0, 1.0, 1.0, 0.0, 1.0])
+print("stable loss:", round(bce_from_logits(z, labels), 6))
+print("naive loss :", -np.mean(labels * np.log(1 / (1 + np.exp(-z)) + 1e-300)
+                               + (1 - labels) * np.log(1 - 1 / (1 + np.exp(-z)) + 1e-300)))`,
+        output: `class_weight=None      log loss 0.0845   recall@0.5 0.352
+class_weight=balanced  log loss 0.2913   recall@0.5 0.833
+stable loss: 0.531600
+`,
+        explanation:
+          'Two lessons. First, `class_weight="balanced"` multiplies each example’s loss by a factor inversely proportional to its class frequency, which more than doubles recall on the rare class — at the cost of a much worse log loss, because the model is no longer optimising the true likelihood and its probabilities are deliberately shifted. That is a legitimate trade only if you then recalibrate or choose a threshold accordingly. Second, the `bce_from_logits` formulation never evaluates exp of a large positive number, so it handles logits of ±800 without overflow. The naive version below it produces `nan` or `inf` on the same input. This is exactly why PyTorch provides `BCEWithLogitsLoss` and warns against applying a sigmoid first.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Every neural network classifier',
+        usage:
+          'From a two-class medical model to a 1000-class ImageNet network to a language model predicting the next token over a 100,000-entry vocabulary, the training objective is cross-entropy with a softmax output. Language model quality is quoted as perplexity, which is simply the exponential of the average cross-entropy.',
+      },
+      {
+        context: 'Kaggle and competitive benchmarking',
+        usage:
+          'A large share of classification competitions are scored on log loss or AUC rather than accuracy, precisely because log loss rewards calibration. Competitors routinely find that blending models improves log loss substantially while barely moving accuracy, which is evidence that the gain is in confidence rather than in decisions.',
+      },
+      {
+        context: 'Dense object detection',
+        usage:
+          'A detector evaluates tens of thousands of candidate boxes per image, almost all background. Ordinary cross-entropy is swamped by easy negatives, so the RetinaNet authors introduced focal loss, which down-weights well-classified examples by (1 − p)^γ and made single-stage detectors competitive with two-stage ones.',
+      },
+      {
+        context: 'Monitoring a deployed model',
+        usage:
+          'Log loss on recent labelled data degrades before accuracy does, because it responds to a model becoming less certain before those predictions actually cross the threshold. Tracking it alongside accuracy gives earlier warning of distribution drift.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'scikit-learn', role: '`log_loss` and `brier_score_loss` for evaluation, `scoring="neg_log_loss"` in cross-validation, `class_weight` for weighted objectives.' },
+      { tool: 'PyTorch', role: '`nn.CrossEntropyLoss` takes raw logits and applies log-softmax internally; `nn.BCEWithLogitsLoss` does the same for binary, with `pos_weight` for imbalance.' },
+      { tool: 'XGBoost / LightGBM', role: '`objective="binary:logistic"` and `"multi:softprob"` optimise exactly this loss, using its first and second derivatives, which for cross-entropy are (p − y) and p(1 − p).' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Applying softmax and then passing the result to a from-logits loss',
+        why: 'Functions such as `nn.CrossEntropyLoss` apply log-softmax internally. Feeding them probabilities applies the normalisation twice, which silently flattens the distribution and produces a model that trains slowly and predicts badly, with no error raised.',
+        fix: 'Pass raw logits to `CrossEntropyLoss` and `BCEWithLogitsLoss`. Apply softmax or sigmoid only at inference time when you want probabilities to report.',
+      },
+      {
+        mistake: 'Training on accuracy, or selecting hyperparameters by it, when probabilities matter',
+        why: 'Accuracy is a step function of the parameters: its gradient is zero almost everywhere, and it treats a prediction of 0.51 identically to 0.99. Two models with the same accuracy can differ enormously in how trustworthy their probabilities are.',
+        fix: 'Optimise cross-entropy, and use `scoring="neg_log_loss"` in model selection whenever the probability itself feeds a downstream decision.',
+      },
+      {
+        mistake: 'Computing log loss on clipped or zero probabilities without noticing',
+        why: '−log(0) is infinite. Libraries clip to something like 1e-15 to avoid this, which means a single prediction of exactly zero on a true positive contributes around 34.5 to the sum and can dominate the reported metric.',
+        fix: 'Inspect the distribution of predicted probabilities before trusting a log loss value. A metric dominated by a handful of extreme predictions is telling you about those examples, not about the model overall.',
+      },
+      {
+        mistake: 'Using squared error as the loss for a classifier',
+        why: 'The gradient of squared error through a sigmoid includes the factor p(1 − p), which vanishes in the saturated tails. The examples the model gets most confidently wrong produce almost no gradient, so learning stalls exactly where it is most needed.',
+        fix: 'Use cross-entropy for training. Brier score is a perfectly good metric for reporting calibration; it is simply a poor objective to optimise by gradient descent.',
+      },
+      {
+        mistake: 'Applying class weights and then reading the probabilities as calibrated',
+        why: 'Weighting changes the objective, so the minimiser is no longer the true conditional probability. A weighted model’s "0.7" does not correspond to a 70% event rate, and using it in an expected-cost calculation gives the wrong answer.',
+        fix: 'Either leave the loss unweighted and move the decision threshold instead, or recalibrate after training with `CalibratedClassifierCV` and verify with a reliability curve.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Why is cross-entropy used to train classifiers rather than accuracy?',
+        answer:
+          'Two reasons, one about optimisation and one about information. Optimisation first: accuracy is a step function of the model parameters. Shifting a weight slightly usually changes no prediction’s side of the threshold at all, so the gradient is exactly zero; and when a prediction does cross, accuracy jumps discontinuously, so the gradient is undefined. Gradient descent has nothing to work with. Cross-entropy is smooth and, for a linear model, convex, so every parameter update has a well-defined direction. Information second: accuracy discards the model’s confidence entirely. A prediction of 0.51 and one of 0.99 count the same, so a model receives no signal to become more certain where it should be, or less certain where it should not. Cross-entropy uses the whole probability, and because it is a strictly proper scoring rule, its expected value is minimised exactly when the predicted probabilities equal the true ones. That is what makes the outputs interpretable as probabilities rather than merely as scores to threshold.',
+      },
+      {
+        level: 'advanced',
+        question: 'Show that the gradient of softmax cross-entropy with respect to the logits is p − y, and explain why that matters.',
+        answer:
+          'The softmax Jacobian is ∂pₖ/∂zⱼ = pₖ(δₖⱼ − pⱼ). The loss is L = −Σₖ yₖ log pₖ, so by the chain rule ∂L/∂zⱼ = −Σₖ (yₖ/pₖ)·pₖ(δₖⱼ − pⱼ) = −Σₖ yₖ(δₖⱼ − pⱼ) = −yⱼ + pⱼΣₖyₖ, and since the labels are one-hot that sum is 1, leaving pⱼ − yⱼ. Every pₖ cancels. It matters because there is no multiplicative factor that can vanish. Compare squared error through the same sigmoid: its gradient is 2(p − y)·p(1 − p), and in the saturated region where p ≈ 0.002 and the true label is 1, that second factor is about 0.002, so the gradient is two hundred times smaller than cross-entropy’s. The examples the model is most badly wrong about would generate almost no learning signal. There is also a practical corollary: because the gradient is just the error, backpropagation through a softmax output layer is a subtraction, which is why frameworks fuse the softmax and the loss into a single operation rather than composing them.',
+        followUp:
+          'A strong answer connects the cancellation to the general fact that this is the canonical link for the categorical distribution, so the same identity appears for the sigmoid with Bernoulli and the identity link with Gaussian.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Your model has 99.2% accuracy but its log loss has risen sharply since last month. What is happening and what would you do?',
+        answer:
+          'Log loss depends on the whole probability distribution while accuracy depends only on which side of the threshold each prediction falls, so a rising log loss with stable accuracy means the model’s decisions are still mostly correct but its confidence has deteriorated — either it has become less certain on the cases it gets right, or more confident on the ones it gets wrong. Both are classic early symptoms of distribution drift: the input distribution has moved, the model is extrapolating further from its training region, and accuracy has not fallen yet only because the shifted examples have not yet crossed the threshold. My first step would be to decompose the loss and find which examples dominate it, because log loss is unbounded and a handful of confidently-wrong predictions can account for most of the increase. If those cluster in an identifiable segment — a new customer cohort, a changed upstream feature, a new device type — that localises the drift. I would also check for a mechanical cause before assuming drift: a feature whose scale changed, a pipeline that started producing nulls imputed to zero, or a threshold applied in a different place. If the drift is genuine, the choices are recalibration, which is cheap and fixes confidence without retraining, or full retraining on recent data. I would add log loss to the monitoring dashboard permanently, since it degrades before accuracy does and is therefore the better early-warning signal.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A model predicts probabilities 0.8, 0.3 and 0.6 for three examples whose true labels are 1, 0 and 1. Compute the average log loss.',
+        hint: 'For label 1 use −ln(p); for label 0 use −ln(1 − p).',
+        solution:
+          'Example 1: label 1, so −ln(0.8) = 0.2231. Example 2: label 0, so −ln(1 − 0.3) = −ln(0.7) = 0.3567. Example 3: label 1, so −ln(0.6) = 0.5108. Average = (0.2231 + 0.3567 + 0.5108)/3 = 1.0906/3 = 0.3635. For context, a model predicting 0.5 everywhere would score ln 2 = 0.693, so this model is meaningfully better than uninformed. All three predictions are on the correct side of 0.5, so accuracy is 1.0 — and the fact that log loss is 0.36 rather than near zero tells you the model is right but not especially confident, which accuracy cannot convey.',
+      },
+      {
+        prompt:
+          'Prove that the expected cross-entropy is minimised when the predicted probability equals the true probability.',
+        hint: 'Write the expected loss for a true probability π and a report q, then differentiate with respect to q.',
+        solution:
+          'Let the true probability of class 1 be π and let the model report q. The expected loss is E[L] = −π ln q − (1 − π) ln(1 − q). Differentiating with respect to q gives dE/dq = −π/q + (1 − π)/(1 − q). Setting this to zero: π/q = (1 − π)/(1 − q), so π(1 − q) = q(1 − π), hence π − πq = q − πq, giving π = q. The second derivative is π/q² + (1 − π)/(1 − q)², which is strictly positive for q in (0, 1), so the stationary point is the unique minimum. This is exactly the definition of a strictly proper scoring rule: no report other than the truth achieves a lower expected loss. It is the formal reason a model trained on cross-entropy produces calibrated probabilities in the large-sample limit, and it does not hold for accuracy or hinge loss, neither of which is proper.',
+      },
+      {
+        prompt:
+          'For logits (1.0, 3.0, 0.5) and true class 1 (zero-indexed), compute the softmax probabilities, the cross-entropy loss, and the gradient with respect to the logits.',
+        hint: 'Exponentiate, normalise, take −log of the true class, then subtract the one-hot vector.',
+        solution:
+          'Exponentiate: e^1.0 = 2.7183, e^3.0 = 20.0855, e^0.5 = 1.6487. The sum is 24.4525. Softmax: p = (0.1112, 0.8214, 0.0674). The true class is index 1, so the loss is −ln(0.8214) = 0.1967 — a small loss, since the model was already confident and correct. The one-hot label is (0, 1, 0), so the gradient with respect to the logits is p − y = (0.1112, −0.1786, 0.0674). The correct logit is pushed up (negative gradient means gradient descent increases it) and the other two are pushed down, and the three components sum to zero, reflecting the fact that softmax probabilities are constrained to sum to one so only relative changes in the logits matter.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'ML-013-q1',
+        type: 'numeric',
+        concept: 'computing cross-entropy',
+        prompt: 'A model assigns probability 0.25 to the class that actually occurred. What is the cross-entropy loss in nats? Give three decimal places.',
+        answer: 1.386,
+        tolerance: 0.005,
+        explanation:
+          '−ln(0.25) = 1.386. For reference, −ln(0.5) = 0.693, so assigning a quarter instead of a half exactly doubles the loss — each halving of the probability adds ln 2 to the penalty.',
+      },
+      {
+        id: 'ML-013-q2',
+        type: 'mcq',
+        concept: 'why not accuracy',
+        prompt: 'Why is accuracy unsuitable as a training objective for gradient-based optimisation?',
+        options: [
+          'It is a step function of the parameters, so its gradient is zero almost everywhere and undefined at the jumps',
+          'It cannot be computed for multi-class problems',
+          'It always increases monotonically during training regardless of the data',
+          'It requires predicted probabilities, which not all models produce',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Accuracy changes only when a prediction crosses the threshold, so small parameter changes usually leave it exactly unchanged. Gradient descent needs a smooth surrogate, and cross-entropy is the standard one.',
+      },
+      {
+        id: 'ML-013-q3',
+        type: 'truefalse',
+        concept: 'the gradient identity',
+        prompt: 'When softmax is paired with cross-entropy, the gradient with respect to the logits is simply the predicted probabilities minus the one-hot labels.',
+        answer: true,
+        explanation:
+          '∂L/∂z = p − y. The softmax Jacobian cancels exactly against the derivative of the logarithm, so no vanishing factor remains and confidently-wrong predictions still generate a strong learning signal.',
+      },
+      {
+        id: 'ML-013-q4',
+        type: 'multi',
+        concept: 'proper scoring rules',
+        prompt: 'Which of these are proper scoring rules — minimised in expectation exactly when the predicted probabilities equal the true ones? Select all that apply.',
+        options: [
+          'Log loss (cross-entropy)',
+          'Brier score',
+          'Accuracy',
+          'Hinge loss',
+          'Mean absolute error on the predicted probability',
+        ],
+        answerIndices: [0, 1],
+        explanation:
+          'Log loss and Brier score are both proper. Accuracy ignores confidence entirely; hinge loss is minimised by pushing the margin beyond 1 rather than by reporting a true probability; and absolute error on probabilities is minimised by predicting 0 or 1 rather than the true rate.',
+      },
+      {
+        id: 'ML-013-q5',
+        type: 'debug',
+        language: 'python',
+        concept: 'from-logits losses',
+        prompt: 'This PyTorch model trains far more slowly than expected and its predictions stay near uniform. What is wrong?',
+        code: `logits = model(x)
+probs = torch.softmax(logits, dim=1)
+loss = nn.CrossEntropyLoss()(probs, targets)`,
+        options: [
+          'CrossEntropyLoss applies log-softmax internally, so the softmax is being applied twice',
+          'CrossEntropyLoss requires one-hot targets rather than class indices',
+          'The softmax should use dim=0 rather than dim=1',
+          'The loss must be wrapped in torch.log before backpropagation',
+        ],
+        answerIndex: 0,
+        explanation:
+          '`nn.CrossEntropyLoss` expects raw logits and applies log-softmax itself. Passing probabilities normalises twice, flattening the distribution and shrinking the gradients. Pass `logits` directly and apply softmax only at inference.',
+      },
+      {
+        id: 'ML-013-q6',
+        type: 'fill',
+        concept: 'multi-class normalisation',
+        prompt: 'Which function converts a vector of logits into a probability distribution over K classes?',
+        answers: ['softmax', 'the softmax', 'softmax function'],
+        explanation:
+          'Softmax: exponentiate each logit and divide by the sum of the exponentials. It generalises the sigmoid, which is the two-class special case, and guarantees the outputs are positive and sum to one.',
+      },
+      {
+        id: 'ML-013-q7',
+        type: 'explain',
+        concept: 'cross-entropy versus squared error',
+        prompt: 'Explain why mean squared error is a poor training loss for a classifier with a sigmoid output.',
+        rubric: [
+          'Identifies that the chain rule introduces the factor p(1 − p) for squared error',
+          'Explains that this factor vanishes in the saturated tails, where the model is most wrong',
+          'Contrasts with cross-entropy, whose gradient is simply p − y',
+          'Notes a further reason, such as non-convexity or the fact that MSE is not the correct likelihood for binary data',
+        ],
+        sampleAnswer:
+          'The problem is the gradient in exactly the region that matters most. Differentiating squared error with respect to the pre-activation gives 2(p − y)·σ′(z) = 2(p − y)·p(1 − p). The first factor is the error and behaves sensibly, but the second is the sigmoid derivative, which is near zero whenever the model is confident. Take an example whose true label is 1 where the model has predicted 0.0025. The error is −0.9975, about as bad as possible — yet p(1 − p) is 0.0025, so the gradient is about −0.005, roughly two hundred times smaller than what cross-entropy delivers for the same example. The model learns least from the predictions it has got most badly wrong, so training stalls in the saturated region rather than escaping it. Cross-entropy avoids this because the logarithm in the loss produces a 1/p factor that cancels the p(1 − p) exactly, leaving a gradient of just p − y. There are two further reasons worth mentioning. Squared error on a sigmoid output is non-convex in the parameters, so there can be local minima, whereas cross-entropy with a linear model is convex. And squared error corresponds to assuming Gaussian noise with constant variance, which is simply the wrong likelihood for a binary outcome whose variance is p(1 − p) and therefore depends on the mean. Brier score remains a perfectly good metric for reporting calibration — it is a proper scoring rule — but it is a poor thing to optimise.',
+        explanation:
+          'The essential mechanism is the vanishing p(1 − p) factor in the saturated tails, which means the worst predictions generate the weakest learning signal.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What is binary cross-entropy?', back: '−[y log p + (1−y) log(1−p)], averaged over examples. Equivalently the negative average log-likelihood under a Bernoulli model.' },
+      { front: 'What makes log loss a proper scoring rule?', back: 'Its expected value is uniquely minimised when the predicted probability equals the true probability, so honesty is the optimal strategy.' },
+      { front: 'What is the gradient of softmax cross-entropy?', back: '∂L/∂z = p − y, the predicted distribution minus the one-hot label. The softmax Jacobian cancels against the log derivative.' },
+      { front: 'Why not train with MSE on a sigmoid output?', back: 'Its gradient carries a factor p(1−p) that vanishes when the model is confidently wrong, so the worst examples produce almost no learning signal.' },
+      { front: 'What does log loss = 0.693 mean?', back: 'It equals ln 2 — the score of predicting 0.5 for everything on a balanced problem. Any useful model must beat it.' },
+      { front: 'What is focal loss for?', back: '−(1−p)^γ log p down-weights easy examples so rare hard ones are not swamped. Standard in dense object detection.' },
+      { front: 'Why pass logits rather than probabilities to a loss?', back: 'From-logits implementations use log-sum-exp for numerical stability and avoid double-normalising. Hence BCEWithLogitsLoss and CrossEntropyLoss.' },
+    ],
+
+    challenge: {
+      title: 'A calibration report that changes a decision',
+      brief:
+        'Train two classifiers on an imbalanced dataset: a logistic regression and a gradient boosting model. For each, report accuracy, log loss and Brier score, and plot a reliability curve by binning predicted probabilities into deciles and comparing the mean prediction against the observed rate in each bin. Then apply `CalibratedClassifierCV` with both sigmoid and isotonic methods and re-measure. Finally, write a short note stating which model you would deploy if the downstream system multiplies the predicted probability by a monetary cost, and justify it using the calibration evidence rather than accuracy.',
+      acceptanceCriteria: [
+        'All three metrics are reported for every model variant, in one comparable table',
+        'The reliability curve is computed from held-out data the calibrator never saw',
+        'The write-up explains the difference between a ranking metric and a calibration metric, with numbers from your own run',
+        'The isotonic and sigmoid calibrators are compared, with a comment on which suits the sample size',
+        'The deployment recommendation turns on calibration quality, not on accuracy',
+      ],
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain to a colleague what cross-entropy measures, why it is used instead of accuracy for training, and what happens when a model is confidently wrong.',
+      mustCover: [
+        'Cross-entropy is the negative log of the probability assigned to the class that actually occurred',
+        'Accuracy is a step function with no useful gradient and ignores confidence entirely',
+        'The penalty for confident errors is unbounded, which is what forces honest probabilities',
+        'It is a proper scoring rule: expected loss is minimised exactly at the true probabilities',
+      ],
+      bonusSignals: ['mentions the gradient identity p − y', 'mentions numerical stability and from-logits implementations', 'contrasts log loss with Brier score'],
+      sampleExplanation:
+        'Cross-entropy asks one question of each prediction: what probability did you give to the thing that actually happened? Then it takes the negative logarithm of that number. Give the right answer 0.9 and you pay 0.105. Give it 0.5 and you pay 0.693. Give it 0.01 and you pay 4.6. As the probability you assigned to the truth heads towards zero, the penalty grows without any ceiling. That shape is deliberate, and it has a precise property: if you work out the expected loss when the true event rate is some value and the model reports something else, the minimum sits exactly at reporting the truth. There is no hedging strategy, no way to look better by exaggerating. That is what it means to call it a proper scoring rule, and it is why a model trained this way produces probabilities you can actually use rather than scores you can only rank. Now compare that with accuracy. Accuracy asks only whether each prediction landed on the right side of the threshold. Move a prediction from 0.51 to 0.99 and accuracy does not budge — so as a training objective it is flat almost everywhere, meaning the gradient is zero and there is nothing for the optimiser to descend. You can have two models with identical accuracy where one is calmly right and the other is wildly overconfident on the cases it gets wrong, and only log loss can tell them apart. There is one more piece worth knowing, which is why this particular loss is paired with sigmoid and softmax everywhere you look. When you differentiate cross-entropy through a softmax, the messy derivative of the softmax cancels exactly against the derivative of the logarithm, and what is left is just the prediction minus the label. Nothing damps it. Compare that with squared error, where the chain rule leaves behind a factor of p times one minus p — which is near zero precisely when the model is confidently wrong. Under squared error, the examples you most need to learn from are the ones that teach you least. Under cross-entropy they teach you most.',
+    },
+  },
+
+  {
+    id: 'ML-014',
+    domain: 'ML',
+    module: 'Trees & Ensembles',
+    topic: 'Recursive partitioning',
+    title: 'Decision Trees',
+    slug: 'decision-trees',
+    difficulty: 3,
+    estimatedMinutes: 45,
+    prerequisites: ['ML-003', 'ML-004'],
+    related: ['ML-002', 'ML-010'],
+    tags: ['decision tree', 'gini', 'entropy', 'information gain', 'cart', 'pruning'],
+
+    learningObjectives: [
+      'Explain how a tree chooses a split, and compute Gini impurity and entropy by hand',
+      'Describe why greedy recursive partitioning is used despite not producing the optimal tree',
+      'Control overfitting with depth, minimum leaf size and cost-complexity pruning, and know which to prefer',
+      'State honestly what trees are good at — mixed types, interactions, no scaling — and where they fail',
+    ],
+
+    terminology: [
+      {
+        term: 'Node, split and leaf',
+        definition:
+          'A tree is a set of nodes. Each internal node tests one feature against one threshold and sends the example left or right; each leaf holds a prediction — the majority class for classification, the mean target for regression.',
+        simple: 'A flowchart of yes-or-no questions with an answer at the end of every path.',
+      },
+      {
+        term: 'Gini impurity',
+        definition:
+          'The probability that a randomly chosen element of a node would be misclassified if labelled by drawing a class at random from the node’s own distribution: G = 1 − Σ pₖ². Zero for a pure node, 0.5 for a balanced binary node.',
+        simple: 'How mixed up the labels in this group are.',
+      },
+      {
+        term: 'Entropy and information gain',
+        definition:
+          'Entropy H = −Σ pₖ log₂ pₖ measures the bits needed to encode the class of a random element. Information gain is the entropy of the parent minus the weighted entropy of the children — the number of bits the split buys you.',
+        simple: 'How much uncertainty the question removes.',
+      },
+      {
+        term: 'Greedy recursive partitioning',
+        definition:
+          'The CART algorithm: at each node, evaluate every feature and every candidate threshold, take the split with the largest impurity decrease, then recurse on each child independently. It never reconsiders earlier splits.',
+        simple: 'Always take the best question available right now, then repeat on each branch.',
+      },
+      {
+        term: 'Cost-complexity pruning',
+        definition:
+          'Growing a large tree and then collapsing subtrees that do not pay for themselves, by minimising R(T) + α|T| where R is the error and |T| is the number of leaves. In scikit-learn this is the `ccp_alpha` parameter.',
+        simple: 'Grow it big, then cut back the branches that were not earning their place.',
+      },
+    ],
+
+    simpleExplanation:
+      'A decision tree is the game of twenty questions, learned from data. At the top you have all your training examples jumbled together. The algorithm tries every question it could ask — is income above £30,000, is the contract monthly, is age below 25 — and for each one measures how much tidier the two resulting groups are than the original. Tidiness has a precise meaning here: a group is tidy if almost all its members share the same label. The question that produces the tidiest pair of groups wins, the data splits, and the whole procedure repeats on each half independently. Stop when a group is pure, or too small to split usefully, and whatever label dominates that final group becomes the prediction for anything that lands there. Two things follow from this design. Because each question involves exactly one feature compared against one number, the boundaries a tree draws are always rectangles with sides parallel to the axes — it cannot draw a diagonal without a staircase of many splits. And because nothing stops it, a tree left to grow freely will keep asking questions until every leaf holds a single training example, at which point it has memorised the data perfectly and learned nothing.',
+
+    whyItExists:
+      'Linear models require numeric inputs, comparable scales, and explicit interaction terms, and their coefficients describe a global relationship that may not hold anywhere in particular. Trees handle numeric and categorical features together without scaling, capture interactions automatically because each split is conditioned on those above it, tolerate missing values and outliers, and produce a set of rules a non-specialist can read and check against domain knowledge.',
+
+    analogy: {
+      scenario:
+        'A hospital triage nurse works through a laminated card. First question: is the patient breathing normally? If not, one whole branch of the card applies and everything else becomes irrelevant. If yes, next question: is there chest pain? If yes, ask about radiation to the arm; if no, ask about temperature. Within four or five questions every patient has been routed to one of a few dozen categories, each with a standing instruction. Nobody computes a weighted sum of symptoms. The card was built by looking at thousands of past patients and asking, at each stage, which single question best separates the ones who turned out to need urgent care from the ones who did not.',
+      mapping: [
+        { from: 'Each question on the card', to: 'An internal node testing one feature against a threshold' },
+        { from: 'Choosing the question that best separates outcomes', to: 'Maximising the impurity decrease over all candidate splits' },
+        { from: 'Later questions depending on earlier answers', to: 'Interactions captured automatically by conditioning' },
+        { from: 'The final category and its standing instruction', to: 'A leaf and its predicted class' },
+        { from: 'A card so detailed every patient gets their own box', to: 'An unpruned tree that has memorised the training set' },
+        { from: 'Trimming the card back to what actually helped', to: 'Cost-complexity pruning' },
+      ],
+      bridge:
+        'The card is the model and the questions are the splits, but the analogy earns its place by exposing the two defining properties. First, conditioning: the question asked third depends on the answers to the first two, which is exactly how a tree represents interactions without anyone specifying them. Second, the failure mode: a card refined until every past patient has their own box is useless for the next patient, since it has recorded history rather than learned from it. That is overfitting in its purest form, and pruning is the act of trimming the card back to the questions that generalise.',
+      limitations:
+        'A real triage card is designed by clinicians using causal knowledge, so its questions are robust. A learned tree chooses splits by a greedy statistical criterion, so a slightly different sample of patients can produce a completely different card with similar accuracy — an instability that has no counterpart in the story and is the main reason single trees are usually replaced by ensembles.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Grow a tree split by split',
+        caption: 'Add splits one at a time and watch the impurity fall and the rectangles subdivide. Set max_depth to None to see the boundary shatter into single-point regions.',
+        widget: 'decision-tree-lab',
+      },
+      {
+        kind: 'flow',
+        title: 'How CART builds a tree',
+        branching: true,
+        steps: [
+          { label: 'Start at the root', detail: 'All training examples sit in one node. Compute its impurity — Gini or entropy for classification, variance for regression.' },
+          { label: 'Enumerate candidate splits', detail: 'For every feature, consider every threshold between consecutive sorted values. With d features and n rows that is O(nd) candidates per node.' },
+          { label: 'Score each split', detail: 'Compute the weighted impurity of the two children and subtract it from the parent’s. The largest decrease wins.' },
+          { label: 'Split and recurse', detail: 'Partition the rows and repeat independently on each child. Earlier splits are never revisited — the algorithm is greedy.' },
+          { label: 'Stop', detail: 'Halt when the node is pure, too small to split, at maximum depth, or when no split improves impurity enough.' },
+          { label: 'Prune', detail: 'Optionally grow large then collapse subtrees using cost-complexity pruning, choosing α by cross-validation.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Decision trees: strengths, weaknesses and when to reach for it',
+        caption: 'Reach for a single tree when interpretability is the point — a rule set someone must read, audit and sign off. Reach past it, to a forest or a boosted ensemble, whenever accuracy is the point, because a lone tree is almost always the weakest member of the family.',
+        left: {
+          heading: 'Strengths',
+          points: [
+            'Genuinely interpretable: a shallow tree is a set of rules a domain expert can read and challenge',
+            'No scaling, centring or normalisation required — splits depend only on the order of values',
+            'Handles numeric and categorical features together, and monotone transformations of a feature change nothing',
+            'Captures interactions automatically, since every split is conditioned on those above it',
+            'Robust to outliers in the features, because a split only cares which side of a threshold a value falls',
+            'Fast at prediction: a depth-10 tree needs at most ten comparisons regardless of the training set size',
+          ],
+        },
+        right: {
+          heading: 'Weaknesses',
+          points: [
+            'High variance: resampling the data can produce a structurally different tree with similar accuracy',
+            'Overfits aggressively unless depth, leaf size or pruning is controlled',
+            'Boundaries are axis-aligned, so a diagonal relationship needs a staircase of many splits',
+            'Cannot extrapolate — a regression tree predicts a constant outside the range of its training data',
+            'Greedy splitting can miss a combination that only pays off two levels down, such as XOR',
+            'Impurity-based feature importance is biased towards high-cardinality and continuous features',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Split criteria compared',
+        caption: 'Gini and entropy agree on the chosen split in the overwhelming majority of cases. Gini is the scikit-learn default because it avoids computing logarithms.',
+        columns: ['Criterion', 'Formula', 'Range (binary)', 'Notes'],
+        rows: [
+          ['Gini impurity', '1 − Σ pₖ²', '0 to 0.5', 'Default for classification; slightly favours isolating the largest class'],
+          ['Entropy', '−Σ pₖ log₂ pₖ', '0 to 1', 'Information-theoretic; slightly more willing to build balanced splits'],
+          ['Misclassification error', '1 − max pₖ', '0 to 0.5', 'Not used for growing — it is insufficiently sensitive to changes in node composition'],
+          ['Variance (MSE)', '(1/n) Σ (yᵢ − ȳ)²', '0 upward', 'The regression criterion; the split minimising within-child variance'],
+          ['MAE', '(1/n) Σ |yᵢ − median|', '0 upward', 'Regression alternative, robust to target outliers but much slower to compute'],
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Controlling overfitting',
+        columns: ['Parameter', 'What it does', 'Typical starting point'],
+        rows: [
+          ['max_depth', 'Caps how many questions can be asked in sequence', '3 to 10; start at 5 and tune'],
+          ['min_samples_leaf', 'Refuses a split that would leave too few examples in a child', '1% to 5% of the training rows'],
+          ['min_samples_split', 'Refuses to split a node that is already small', '20 or more on a few thousand rows'],
+          ['max_features', 'Considers only a random subset of features at each split', 'Mainly relevant inside ensembles'],
+          ['ccp_alpha', 'Cost-complexity pruning strength, applied after growing', 'Chosen by cross-validation over the pruning path'],
+          ['min_impurity_decrease', 'Requires a minimum improvement before splitting', 'A blunt instrument; prefer ccp_alpha'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'A decision tree partitions the feature space into disjoint axis-aligned regions R₁, …, R_M and predicts a constant on each: f(x) = Σ_m c_m 1[x ∈ R_m], with c_m the majority class or the mean target in region m. Finding the partition minimising empirical risk subject to a size constraint is NP-hard, so CART proceeds greedily: at each node it selects the feature j and threshold t maximising the impurity decrease ΔI = I(parent) − (n_L/n)I(left) − (n_R/n)I(right), where I is Gini impurity, entropy or within-node variance, and recurses. The resulting estimator is non-parametric with complexity governed by the number of leaves; an unconstrained tree on data with no duplicated feature vectors achieves zero training error. Cost-complexity pruning then selects among nested subtrees by minimising R_α(T) = R(T) + α|T̃|, where |T̃| is the number of leaves, with α chosen by cross-validation.',
+
+    math: {
+      intuition:
+        'A split is worth making if the two groups it creates are, on average, more homogeneous than the group it split. That requires a number for homogeneity. Gini asks: if I labelled a random member of this node by drawing a label at random from the node’s own class proportions, how often would I be wrong? Entropy asks: how many bits would I need to transmit the class of a random member? Both are zero for a pure node and maximal for an even mixture, and both are concave, which is what guarantees that a split can never increase the weighted impurity — so the greedy criterion always has a non-negative score and the algorithm always terminates.',
+      formulas: [
+        {
+          latex: 'G(t) = 1 - \\sum_{k=1}^{K} p_k^{2}',
+          name: 'Gini impurity',
+          meaning:
+            'The probability of misclassifying a random element of node t if you guessed by sampling from the node’s own class distribution. It is 0 when one class holds everything and 0.5 for a fifty-fifty binary node.',
+          variables: [
+            { symbol: 'p_k', meaning: 'Proportion of node t belonging to class k' },
+            { symbol: 'K', meaning: 'Number of classes' },
+          ],
+          category: 'information-theory',
+        },
+        {
+          latex: 'H(t) = -\\sum_{k=1}^{K} p_k \\log_2 p_k',
+          name: 'Entropy',
+          meaning:
+            'The average number of bits needed to encode the class of a random element. A pure node needs zero bits; a balanced binary node needs exactly one.',
+          variables: [
+            { symbol: 'p_k', meaning: 'Proportion of node t belonging to class k' },
+            { symbol: '\\log_2', meaning: 'Base-2 logarithm, so the result is measured in bits' },
+          ],
+          category: 'information-theory',
+        },
+        {
+          latex: '\\Delta I = I(t) - \\frac{n_L}{n}I(t_L) - \\frac{n_R}{n}I(t_R)',
+          name: 'Impurity decrease (information gain)',
+          meaning:
+            'The improvement a split buys, with the children weighted by how many examples land in each. Weighting matters: a split that perfectly isolates three examples out of a thousand is almost worthless despite one child being pure.',
+          variables: [
+            { symbol: 'I(t)', meaning: 'Impurity of the parent node' },
+            { symbol: 'n_L, n_R', meaning: 'Number of examples routed to the left and right children' },
+            { symbol: 'n', meaning: 'Number of examples in the parent' },
+          ],
+          category: 'information-theory',
+        },
+        {
+          latex: 'I_{\\text{var}}(t) = \\frac{1}{n_t}\\sum_{i \\in t} (y_i - \\bar{y}_t)^{2}',
+          name: 'Variance criterion for regression trees',
+          meaning:
+            'The same machinery with variance in place of Gini. Minimising the weighted child variance is exactly minimising the squared error of a piecewise-constant fit, so the leaf prediction is the mean.',
+          variables: [
+            { symbol: 'y_i', meaning: 'Target value of example i' },
+            { symbol: '\\bar{y}_t', meaning: 'Mean target within node t, which becomes the leaf prediction' },
+            { symbol: 'n_t', meaning: 'Number of examples in node t' },
+          ],
+          category: 'regression',
+        },
+        {
+          latex: 'R_{\\alpha}(T) = R(T) + \\alpha |\\tilde{T}|',
+          name: 'Cost-complexity criterion',
+          meaning:
+            'Total error plus a penalty per leaf. As α rises, subtrees that bought only a small error reduction are collapsed, generating a nested sequence of candidate trees from the full tree down to the root.',
+          variables: [
+            { symbol: 'R(T)', meaning: 'Total misclassification cost or squared error of tree T' },
+            { symbol: '|\\tilde{T}|', meaning: 'Number of leaves — the complexity measure' },
+            { symbol: '\\alpha', meaning: 'Price per leaf, selected by cross-validation (`ccp_alpha`)' },
+          ],
+          category: 'complexity',
+        },
+      ],
+      derivation: [
+        'Start with the goal: partition the feature space into regions and predict a constant in each, minimising error. Optimising over all partitions is NP-hard — the number of possible trees is astronomical even for modest data — so exhaustive search is off the table.',
+        'Adopt a greedy approximation. At each node, consider only splits of the form "feature j ≤ threshold t", which restricts attention to axis-aligned cuts, and choose the single best one by immediate impurity reduction.',
+        'Enumerate the candidates efficiently. Sort the node’s values of feature j; only the midpoints between consecutive distinct values can change the partition, giving at most n − 1 candidates per feature. Sorting once and sweeping while updating class counts incrementally makes each feature O(n log n).',
+        'Score a candidate with ΔI = I(t) − (n_L/n)I(t_L) − (n_R/n)I(t_R). Because Gini and entropy are both strictly concave functions of the class proportions, Jensen’s inequality guarantees the weighted child impurity never exceeds the parent’s, so ΔI ≥ 0 always.',
+        'Take the best split, partition the data, and recurse on each child independently. Nothing is ever revisited, which is what makes it fast and also what makes it suboptimal.',
+        'See the limit of greediness with XOR. Two binary features, label = x₁ XOR x₂. Splitting on either feature alone leaves both children exactly fifty-fifty, so ΔI = 0 for every candidate split at the root and the greedy criterion sees no reason to split at all — even though splitting twice would classify the data perfectly. Trees escape this in practice because real features are rarely so perfectly balanced, and because ensembles that split on random subsets stumble into the useful combination.',
+        'Now the stopping problem. Without constraints, recursion continues until every leaf is pure, which on data with no duplicated feature vectors means one training example per leaf and zero training error. That is memorisation.',
+        'Pre-pruning (max_depth, min_samples_leaf) stops growth early, but it is myopic in the same way the splitting is: it may stop just before a split that would have paid off.',
+        'Post-pruning is better. Grow the tree fully, then for each internal node compute the effective α at which collapsing its subtree would leave the cost-complexity criterion unchanged: α_eff = [R(node) − R(subtree)] / (|leaves of subtree| − 1).',
+        'Collapse the node with the smallest α_eff, and repeat. This produces a nested sequence of subtrees T_full ⊃ T₁ ⊃ … ⊃ {root}, each of which is optimal for a range of α — a result due to Breiman and colleagues, and the reason `cost_complexity_pruning_path` returns exactly this sequence.',
+        'Cross-validate over that sequence to choose α, then refit on all the data with the chosen value. This searches a one-dimensional, well-ordered family rather than a grid of loosely-related stopping rules, which is why post-pruning generally beats pre-pruning.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Choosing the root split by hand',
+      setup:
+        'Ten customers, four of whom churned. Two candidate splits are available: A, tenure under 12 months; B, contract is monthly. Split A sends 4 customers left (3 churned, 1 stayed) and 6 right (1 churned, 5 stayed). Split B sends 5 left (3 churned, 2 stayed) and 5 right (1 churned, 4 stayed). Which split does CART choose?',
+      steps: [
+        {
+          label: 'Impurity of the root',
+          detail: 'The root holds 4 churn and 6 stay, so p = (0.4, 0.6). Gini = 1 − (0.4² + 0.6²) = 1 − (0.16 + 0.36) = 0.48. Entropy = −0.4 log₂0.4 − 0.6 log₂0.6 = 0.4(1.322) + 0.6(0.737) = 0.971 bits.',
+          latex: 'G_{\\text{root}} = 1 - (0.4^2 + 0.6^2) = 0.48',
+        },
+        {
+          label: 'Split A, left child',
+          detail: '4 customers, 3 churned. p = (0.75, 0.25). Gini = 1 − (0.5625 + 0.0625) = 0.375. Entropy = 0.75(0.415) + 0.25(2.000) = 0.811 bits.',
+          latex: 'G_{A,L} = 1 - (0.75^2 + 0.25^2) = 0.375',
+        },
+        {
+          label: 'Split A, right child',
+          detail: '6 customers, 1 churned. p = (1/6, 5/6) = (0.1667, 0.8333). Gini = 1 − (0.0278 + 0.6944) = 0.2778. Entropy = 0.1667(2.585) + 0.8333(0.263) = 0.650 bits.',
+          latex: 'G_{A,R} = 1 - (0.1667^2 + 0.8333^2) = 0.2778',
+        },
+        {
+          label: 'Weighted impurity of split A',
+          detail: 'Weight by the fraction of examples in each child: (4/10)(0.375) + (6/10)(0.2778) = 0.150 + 0.1667 = 0.3167. The Gini gain is 0.48 − 0.3167 = 0.1633. In entropy terms the information gain is 0.971 − [0.4(0.811) + 0.6(0.650)] = 0.971 − 0.7145 = 0.2565 bits.',
+          latex: '\\Delta G_A = 0.48 - 0.3167 = 0.1633',
+        },
+        {
+          label: 'Split B, both children',
+          detail: 'Left: 5 customers, 3 churned, p = (0.6, 0.4), Gini = 1 − (0.36 + 0.16) = 0.48. Right: 5 customers, 1 churned, p = (0.2, 0.8), Gini = 1 − (0.04 + 0.64) = 0.32.',
+          latex: 'G_{B,L} = 0.48, \\qquad G_{B,R} = 0.32',
+        },
+        {
+          label: 'Weighted impurity of split B',
+          detail: '(5/10)(0.48) + (5/10)(0.32) = 0.24 + 0.16 = 0.40. The Gini gain is 0.48 − 0.40 = 0.08 — exactly half the gain from split A.',
+          latex: '\\Delta G_B = 0.48 - 0.40 = 0.08',
+        },
+        {
+          label: 'Choose',
+          detail: 'Split A wins with a gain of 0.1633 against 0.08, so the root test becomes "tenure < 12 months". Both criteria agree here, as they usually do: entropy also prefers A, by 0.2565 bits against 0.0729. Note that split B’s left child is exactly as impure as the root — that branch achieved nothing at all.',
+          latex: '\\Delta G_A = 0.1633 > \\Delta G_B = 0.08',
+        },
+        {
+          label: 'What happens next, and where it ends',
+          detail: 'Each child is now treated as a fresh problem and the same search runs again on its own rows. With no constraints this continues until each leaf holds a single customer: ten leaves, zero training error, and a model that has recorded the training set rather than learned from it. Setting min_samples_leaf = 2 would stop split A’s right child from being subdivided to isolate its single churner, which is almost certainly the right call on ten rows.',
+        },
+      ],
+      conclusion:
+        'The whole algorithm is visible in this calculation: measure the parent’s impurity, measure each candidate’s weighted child impurity, take the largest difference, recurse. The weighting is the part people skip and should not — it is what stops a tree from prizing a split that perfectly isolates three rows out of a thousand. And the final step is the real lesson: nothing in the criterion ever says stop, so the stopping rule is a decision you make, not one the algorithm makes for you.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Reading the rules a tree has learned',
+        runnable: true,
+        code: `from sklearn.datasets import load_iris
+from sklearn.tree import DecisionTreeClassifier, export_text
+from sklearn.model_selection import train_test_split
+
+data = load_iris()
+X, y, names = data.data, data.target, data.feature_names
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.3, random_state=0, stratify=y)
+
+tree = DecisionTreeClassifier(max_depth=3, random_state=0).fit(X_tr, y_tr)
+print(export_text(tree, feature_names=names))
+print("train:", round(tree.score(X_tr, y_tr), 4), " test:", round(tree.score(X_te, y_te), 4))
+print("leaves:", tree.get_n_leaves(), " depth:", tree.get_depth())`,
+        output: `|--- petal length (cm) <= 2.45
+|   |--- class: 0
+|--- petal length (cm) >  2.45
+|   |--- petal width (cm) <= 1.75
+|   |   |--- petal length (cm) <= 4.95
+|   |   |   |--- class: 1
+|   |   |--- petal length (cm) >  4.95
+|   |   |   |--- class: 2
+|   |--- petal width (cm) >  1.75
+|   |   |--- class: 2
+
+train: 0.9810  test: 0.9778
+leaves: 4  depth: 3
+`,
+        explanation:
+          'This is the property no other model in this module has: the fitted model is four readable rules, and a botanist could confirm or dispute each one. Petal length under 2.45 cm identifies setosa perfectly, and the remaining two species separate mainly on petal width at 1.75 cm. Note the train and test scores are almost identical, because depth 3 is a strong constraint on a dataset this simple. `export_text` is the fastest way to audit a tree; `plot_tree` gives the same information graphically with impurity and sample counts at each node.',
+      },
+      {
+        language: 'python',
+        title: 'Unrestricted growth, and what pruning fixes',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.tree import DecisionTreeClassifier
+
+X, y = load_breast_cancer(return_X_y=True)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.3, random_state=0, stratify=y)
+
+full = DecisionTreeClassifier(random_state=0).fit(X_tr, y_tr)
+print(f"unrestricted: leaves {full.get_n_leaves():>3}  depth {full.get_depth()}"
+      f"  train {full.score(X_tr, y_tr):.4f}  test {full.score(X_te, y_te):.4f}")
+
+for d in [2, 3, 5, 8]:
+    t = DecisionTreeClassifier(max_depth=d, random_state=0).fit(X_tr, y_tr)
+    print(f"max_depth={d}:   leaves {t.get_n_leaves():>3}  "
+          f"train {t.score(X_tr, y_tr):.4f}  test {t.score(X_te, y_te):.4f}")
+
+# Cost-complexity pruning searches a principled one-dimensional family.
+path = full.cost_complexity_pruning_path(X_tr, y_tr)
+best = max(((a, cross_val_score(DecisionTreeClassifier(ccp_alpha=a, random_state=0),
+                                X_tr, y_tr, cv=5).mean()) for a in path.ccp_alphas[:-1]),
+           key=lambda t: t[1])
+pruned = DecisionTreeClassifier(ccp_alpha=best[0], random_state=0).fit(X_tr, y_tr)
+print(f"ccp_alpha={best[0]:.5f}: leaves {pruned.get_n_leaves():>3}  "
+      f"train {pruned.score(X_tr, y_tr):.4f}  test {pruned.score(X_te, y_te):.4f}")`,
+        output: `unrestricted: leaves  21  depth 7  train 1.0000  test 0.9298
+max_depth=2:   leaves   4  train 0.9447  test 0.9298
+max_depth=3:   leaves   7  train 0.9774  test 0.9415
+max_depth=5:   leaves  15  train 0.9975  test 0.9298
+max_depth=8:   leaves  21  train 1.0000  test 0.9298
+ccp_alpha=0.00814: leaves   6  train 0.9648  test 0.9474
+`,
+        explanation:
+          'The unrestricted tree reaches a perfect training score, which is structurally guaranteed rather than impressive: it keeps splitting until each leaf is pure. Its test score is seven points lower. The depth sweep shows the usual inverted-U, but depth is a clumsy dial because it constrains every branch equally, whether or not each one needs it. Cost-complexity pruning is better principled: grow fully, then collapse the subtrees with the worst error-reduction-per-leaf, producing a nested sequence of candidate trees indexed by a single α. Here it finds a six-leaf tree that beats every fixed depth on test accuracy while remaining small enough to read.',
+      },
+      {
+        language: 'python',
+        title: 'Axis-aligned boundaries and unstable structure',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score
+
+rng = np.random.default_rng(0)
+n = 600
+X = rng.uniform(-3, 3, (n, 2))
+y_diag = (X[:, 0] + X[:, 1] > 0).astype(int)        # a clean diagonal boundary
+y_axis = (X[:, 0] > 0).astype(int)                  # a clean axis-aligned boundary
+
+for name, target in [("diagonal", y_diag), ("axis-aligned", y_axis)]:
+    tree = cross_val_score(DecisionTreeClassifier(max_depth=3, random_state=0), X, target, cv=5).mean()
+    logr = cross_val_score(LogisticRegression(), X, target, cv=5).mean()
+    print(f"{name:<14} depth-3 tree {tree:.3f}   logistic {logr:.3f}")
+
+# Structural instability: resample 90% of the rows and see what the root split becomes.
+roots = []
+for seed in range(8):
+    idx = np.random.default_rng(seed).choice(n, int(0.9 * n), replace=False)
+    t = DecisionTreeClassifier(max_depth=3, random_state=0).fit(X[idx], y_diag[idx])
+    roots.append((t.tree_.feature[0], round(float(t.tree_.threshold[0]), 3)))
+print("root splits across 8 resamples:", roots)`,
+        output: `diagonal       depth-3 tree 0.900   logistic 0.998
+axis-aligned   depth-3 tree 0.998   logistic 0.998
+root splits across 8 resamples: [(0, -0.049), (1, 0.077), (0, 0.011), (1, 0.128), (0, -0.202), (0, 0.062), (1, -0.033), (1, 0.244)]
+`,
+        explanation:
+          'Two points that matter in practice. First, a tree needs a staircase of many splits to approximate a diagonal, so at depth 3 it loses ten points to a logistic regression on a boundary the linear model gets almost perfectly — while on an axis-aligned boundary the two are indistinguishable. The lesson is that trees are not universally more flexible; they are flexible in a particular, axis-aligned way. Second, removing 10% of the rows changes even the root split — sometimes the feature, always the threshold. Both choices give similar accuracy, which is precisely the point: the structure is not identified by the data, so any story told about "the tree found that feature 0 matters most" is fragile. This instability is exactly what bagging in ML-015 exploits.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Clinical decision rules',
+        usage:
+          'Rules such as the Canadian CT Head Rule are decision trees — a short sequence of yes/no tests producing a recommendation. They are deliberately kept to a handful of nodes because a clinician must be able to apply the rule from memory and defend each branch, which rules out any model that cannot be printed on a card.',
+      },
+      {
+        context: 'Credit and insurance underwriting',
+        usage:
+          'Regulated lenders use shallow trees and rule sets because every decline must be explained with specific reasons. A tree gives the exact path a case took through the rules, which satisfies adverse-action requirements in a way a gradient boosting ensemble does not without additional explanation machinery.',
+      },
+      {
+        context: 'The building block of everything that wins on tabular data',
+        usage:
+          'Random forests, gradient boosting, XGBoost and LightGBM are all ensembles of decision trees. The single tree is rarely the deployed model, but understanding how a split is chosen, and why a lone tree has high variance, is what makes the behaviour of those ensembles predictable.',
+      },
+      {
+        context: 'Exploratory data analysis',
+        usage:
+          'Fitting a depth-3 tree to a new dataset is a fast way to see which features carry signal and where the natural thresholds lie. The resulting rules often suggest engineered features — a threshold the tree keeps rediscovering is usually worth encoding explicitly for a linear model.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'scikit-learn', role: '`DecisionTreeClassifier` and `DecisionTreeRegressor`; `export_text` and `plot_tree` for inspection; `cost_complexity_pruning_path` for principled pruning.' },
+      { tool: 'dtreeviz / graphviz', role: 'Richer visualisations showing the class distribution at every node, which is what you put in front of a domain expert during a review.' },
+      { tool: 'XGBoost / LightGBM', role: 'Both build the same kind of axis-aligned tree, with histogram-based split finding instead of exact enumeration; the split criterion is the same idea applied to gradients.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Leaving the tree unconstrained and reporting the training score',
+        why: 'With no depth or leaf-size limit, a tree splits until every leaf is pure, so a perfect training score is a structural guarantee rather than evidence of anything. The same tree is typically five to ten points worse on held-out data.',
+        fix: 'Always set `max_depth` or `min_samples_leaf`, or prune with `ccp_alpha`, and report cross-validated performance. Treat a perfect training score as a warning sign.',
+      },
+      {
+        mistake: 'Trusting `feature_importances_` as a measure of true importance',
+        why: 'Impurity-based importance is systematically biased towards continuous and high-cardinality features, because they offer more candidate thresholds and therefore more chances to reduce impurity by chance. A random ID column can score highly.',
+        fix: 'Use `permutation_importance` on held-out data, which measures the actual effect on predictive performance, and cross-check with domain knowledge.',
+      },
+      {
+        mistake: 'Scaling the features before fitting a tree',
+        why: 'Harmless but pointless, and it signals a misunderstanding. Splits depend only on the ordering of values, so any monotone transformation — scaling, log, rank — leaves the fitted tree identical.',
+        fix: 'Skip scaling for trees. Do keep it in the pipeline if other models share that pipeline, but do not expect it to change anything for the tree.',
+      },
+      {
+        mistake: 'Drawing conclusions from a single tree’s structure',
+        why: 'Tree structure is unstable: removing a small fraction of rows can change the root split entirely, with no loss of accuracy. Any narrative built on "the tree chose this feature first" may not survive resampling.',
+        fix: 'Check stability by refitting on bootstrap samples. If the structure varies, report the stable finding — which features recur — rather than one tree’s particular layout, and consider a forest.',
+      },
+      {
+        mistake: 'Expecting a regression tree to extrapolate',
+        why: 'Every leaf predicts a constant, so outside the range of the training targets a tree returns the value of whichever leaf the example falls into. It cannot predict a value higher than the maximum leaf mean, ever.',
+        fix: 'Use a linear model, or a hybrid such as a linear model on tree-derived features, when the relationship genuinely extends beyond the observed range. Time-trending targets are the classic trap.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'How does a decision tree decide which feature to split on?',
+        answer:
+          'It tries them all and scores each one. For every feature, it considers every threshold that would separate the rows differently — in practice the midpoints between consecutive sorted values — and for each candidate it computes the impurity of the two resulting groups, weighted by how many examples fall into each. Impurity is Gini or entropy for classification and variance for regression. The split with the largest decrease from the parent’s impurity wins. Then the process repeats independently on each child. Two things are worth emphasising. The weighting matters: a split that perfectly isolates two rows out of a thousand barely reduces the weighted impurity at all, which is exactly right. And the search is greedy — it takes the locally best split and never reconsiders it, which is why the resulting tree is not the optimal tree, merely a good one found quickly. Finding the optimal tree is NP-hard.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Gini or entropy — does the choice matter?',
+        answer:
+          'Rarely in practice. Both are concave measures of node impurity that reach zero for a pure node and a maximum for a uniform mixture, and they select the same split in the large majority of cases; empirical comparisons typically find differences of well under a percentage point in accuracy. Where they differ slightly is in their shape: entropy is steeper near the pure ends, so it is a little more inclined to build balanced splits, while Gini tends slightly towards isolating the most frequent class. Gini is the scikit-learn default mainly because it avoids computing logarithms and so is a little faster in the inner loop. The criterion you should not use for growing is misclassification error: it is piecewise linear rather than strictly concave, so a split that meaningfully changes the class proportions can leave it unchanged, which makes it blind to improvements the other two see. It is, however, the right criterion for pruning, where you are directly comparing error rates. If I were spending tuning budget, I would put it into depth, minimum leaf size and `ccp_alpha` long before the split criterion.',
+        followUp:
+          'A strong answer mentions that misclassification error is unsuitable for growing because it is not strictly concave, but is appropriate for pruning.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Why is a single decision tree almost never the deployed model, and what replaces it?',
+        answer:
+          'Variance. A tree makes a sequence of hard, discrete choices, and each one is conditioned on all those above it, so a small perturbation of the training data can flip a split near the root and change every decision beneath it. You can demonstrate this in a few lines: resample 90% of the rows a handful of times and the root split changes feature, not merely threshold, while accuracy stays roughly constant. That instability means a single tree sits at a poor point on the bias-variance curve — it has low bias, since it can fit almost anything, but high variance, so its expected test error is dominated by sensitivity to the sample. The remedy is averaging. Bagging fits many trees on bootstrap samples and averages them, which cuts the variance without raising bias; random forests go further by also sampling features at each split, which decorrelates the trees and reduces the variance floor that correlation imposes. Boosting takes the opposite route, using deliberately weak shallow trees and fitting each one to the previous ensemble’s errors, which reduces bias sequentially. Either way the single tree becomes a component. The one case where I would still deploy a lone tree is when the rule set itself is the deliverable — a clinical or regulatory context where a human must read, audit and sign off on the logic, and a two-point accuracy gain does not compensate for losing that.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A node contains 20 examples: 12 of class A and 8 of class B. Compute its Gini impurity and its entropy in bits.',
+        hint: 'p = (0.6, 0.4). Gini = 1 − Σp², entropy = −Σ p log₂ p.',
+        solution:
+          'Gini = 1 − (0.6² + 0.4²) = 1 − (0.36 + 0.16) = 1 − 0.52 = 0.48. Entropy = −0.6 log₂(0.6) − 0.4 log₂(0.4) = 0.6(0.7370) + 0.4(1.3219) = 0.4422 + 0.5288 = 0.971 bits. Both numbers are close to their maxima — 0.5 for Gini and 1.0 for entropy in the binary case — which tells you this node is nearly as mixed as it could be and a split here has plenty of room to help. As a sanity check, a node of 20 examples all from class A would give Gini 0 and entropy 0, and a 10-10 split would give exactly 0.5 and 1.0.',
+      },
+      {
+        prompt:
+          'A split of that same 20-example node sends 8 examples left (7 class A, 1 class B) and 12 right (5 class A, 7 class B). Compute the Gini gain and say whether it is a good split.',
+        hint: 'Compute each child’s Gini, weight by 8/20 and 12/20, subtract from the parent’s 0.48.',
+        solution:
+          'Left child: p = (0.875, 0.125), Gini = 1 − (0.7656 + 0.0156) = 0.2188. Right child: p = (0.4167, 0.5833), Gini = 1 − (0.1736 + 0.3403) = 0.4861. Weighted child impurity = (8/20)(0.2188) + (12/20)(0.4861) = 0.0875 + 0.2917 = 0.3792. Gini gain = 0.48 − 0.3792 = 0.1008. It is a genuine improvement, and it comes almost entirely from the left child, which is now 87.5% class A. The right child is essentially as impure as the parent, so that branch has achieved nothing and will need further splitting. Whether 0.1008 is "good" only means anything by comparison — CART would evaluate every other candidate split and take the largest gain, so this split is chosen only if nothing beats it.',
+      },
+      {
+        prompt:
+          'Explain why a decision tree cannot learn the XOR function of two binary features using greedy splitting at the root, and why a tree of depth 2 nevertheless represents it perfectly.',
+        hint: 'Compute the impurity gain of splitting on either feature alone.',
+        solution:
+          'Take a balanced XOR dataset: the four combinations (0,0), (0,1), (1,0), (1,1) with labels 0, 1, 1, 0 in equal numbers. The root has 50% of each class, so Gini = 0.5. Split on x₁: the left child (x₁ = 0) contains the (0,0) rows labelled 0 and the (0,1) rows labelled 1, so it is still fifty-fifty with Gini 0.5; the right child is identical. Weighted child impurity is 0.5, so ΔG = 0 exactly. The same holds for x₂. Every available split has zero gain, so a greedy criterion sees no reason to make any split at all and stops immediately. Yet the function is perfectly representable at depth 2: split on x₁, then split each child on x₂, and all four leaves are pure. The failure is in the search, not in the model class — greedy splitting evaluates each split by its immediate benefit and XOR is constructed so that the immediate benefit of the necessary first split is zero. In practice this rarely bites exactly, because real features are not perfectly balanced, so some split has a small non-zero gain that opens the path. It is also one of the reasons ensembles help: random feature subsampling and boosting both explore split sequences that a single greedy tree would never reach.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'ML-014-q1',
+        type: 'numeric',
+        concept: 'computing Gini',
+        prompt: 'A node contains 30 examples: 18 of class A and 12 of class B. What is its Gini impurity? Give two decimal places.',
+        answer: 0.48,
+        tolerance: 0.01,
+        explanation:
+          'p = (0.6, 0.4), so Gini = 1 − (0.36 + 0.16) = 0.48. The maximum for a binary node is 0.5 at a perfect fifty-fifty split, so this node is nearly maximally mixed.',
+      },
+      {
+        id: 'ML-014-q2',
+        type: 'truefalse',
+        concept: 'scaling',
+        prompt: 'Standardising the features before fitting a decision tree generally improves its accuracy.',
+        answer: false,
+        explanation:
+          'Splits depend only on the ordering of values, so any monotone transformation leaves the fitted tree unchanged. Scaling is harmless but has no effect — unlike for KNN or SVM, where it is essential.',
+      },
+      {
+        id: 'ML-014-q3',
+        type: 'mcq',
+        concept: 'greedy search',
+        prompt: 'Why does CART use greedy splitting instead of searching for the optimal tree?',
+        options: [
+          'Finding the optimal tree is NP-hard, so exhaustive search is computationally infeasible',
+          'Greedy splitting is guaranteed to find the optimal tree anyway',
+          'The optimal tree would always overfit, so it is deliberately avoided',
+          'Greedy splitting is required for the impurity measures to be well defined',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The number of possible trees is astronomical and the optimisation is NP-hard. Greedy splitting finds a good tree quickly, at the cost of possibly missing combinations that only pay off several levels down — XOR being the canonical example.',
+      },
+      {
+        id: 'ML-014-q4',
+        type: 'multi',
+        concept: 'properties of trees',
+        prompt: 'Which statements about decision trees are true? Select all that apply.',
+        options: [
+          'They produce axis-aligned decision boundaries',
+          'They capture feature interactions without those interactions being specified',
+          'An unconstrained tree typically achieves zero training error',
+          'A regression tree can extrapolate beyond the range of its training targets',
+          'Their structure can change substantially when a small fraction of the data is resampled',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'A regression tree predicts a constant per leaf, so it can never output a value outside the range of the leaf means — extrapolation is structurally impossible. The other four are all standard properties, and the last is the motivation for bagging.',
+      },
+      {
+        id: 'ML-014-q5',
+        type: 'order',
+        concept: 'how CART builds a tree',
+        prompt: 'Put the steps of growing one node of a CART tree into order.',
+        items: [
+          'Compute the impurity of the current node',
+          'Enumerate candidate splits: every feature crossed with every threshold between sorted values',
+          'For each candidate, compute the sample-weighted impurity of the two children',
+          'Select the split with the largest impurity decrease',
+          'Partition the rows and recurse on each child',
+          'Stop when a stopping criterion is met, then optionally prune',
+        ],
+        explanation:
+          'The weighting in the third step is what people most often omit. Without it, a split isolating two rows out of a thousand would look excellent because one child is pure, when in fact it barely changes the overall impurity.',
+      },
+      {
+        id: 'ML-014-q6',
+        type: 'fill',
+        concept: 'pruning',
+        prompt: 'Which scikit-learn parameter controls cost-complexity pruning after the tree has been grown?',
+        answers: ['ccp_alpha', 'ccp alpha', 'alpha'],
+        explanation:
+          '`ccp_alpha` sets the price per leaf in R(T) + α|T|. Larger values collapse more subtrees. `cost_complexity_pruning_path` returns the nested sequence of candidate α values to cross-validate over.',
+      },
+      {
+        id: 'ML-014-q7',
+        type: 'explain',
+        concept: 'overfitting and control',
+        prompt: 'Explain why an unconstrained decision tree overfits, and compare pre-pruning with post-pruning as remedies.',
+        rubric: [
+          'Explains that splitting continues until leaves are pure, giving zero training error by construction',
+          'Notes that a leaf holding one example predicts that example’s label, which does not generalise',
+          'Describes pre-pruning (depth, leaf size) and its myopia',
+          'Describes cost-complexity post-pruning and why it searches a better-behaved family',
+        ],
+        sampleAnswer:
+          'Nothing in the splitting criterion ever says stop. As long as a node contains more than one class, some split reduces its impurity, so the recursion continues until every leaf is pure. On data with no duplicated feature vectors that means one training example per leaf and a training accuracy of exactly 100% — which is guaranteed by the algorithm rather than earned from the data, and would hold equally on randomly shuffled labels. Such a tree has recorded the training set. The first family of remedies is pre-pruning: cap `max_depth`, require `min_samples_leaf` examples in each child, or demand a minimum impurity decrease. These work, and they are cheap, but they are myopic in the same way the splitting itself is — a depth limit stops every branch at the same point whether or not each branch needed it, and a minimum-gain threshold can halt just before a split that would have paid off handsomely two levels down. The second family is post-pruning, and it is generally better. Grow the tree fully, then consider collapsing each internal node and compute the α at which collapsing would leave R(T) + α|T| unchanged. Collapsing in order of that α produces a nested sequence of subtrees from the full tree down to the root, each optimal over a range of α, so choosing the model reduces to cross-validating a single well-ordered parameter rather than searching a grid of loosely-related stopping rules. In scikit-learn that is `cost_complexity_pruning_path` followed by `ccp_alpha`. In my experience post-pruning finds smaller trees with better held-out accuracy than a depth sweep, which matters most when the tree itself is the deliverable and every extra leaf is something a human has to read.',
+        explanation:
+          'The key contrast is that pre-pruning makes an irreversible local decision before seeing what a subtree would have achieved, whereas post-pruning evaluates each subtree’s actual contribution before deciding to keep it.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'How does a tree choose a split?', back: 'It maximises the impurity decrease: parent impurity minus the sample-weighted impurity of the two children, over all features and thresholds.' },
+      { front: 'What is Gini impurity?', back: '1 − Σ pₖ². The chance of misclassifying a random element labelled by sampling from the node’s own class proportions. 0 when pure, 0.5 for a balanced binary node.' },
+      { front: 'Why is an unconstrained tree’s 100% training accuracy meaningless?', back: 'Splitting continues until every leaf is pure, so it is guaranteed by construction — it would also happen with randomly shuffled labels.' },
+      { front: 'Do trees need feature scaling?', back: 'No. Splits depend only on value ordering, so any monotone transformation leaves the fitted tree identical.' },
+      { front: 'What shape are tree decision boundaries?', back: 'Axis-aligned rectangles. A diagonal boundary requires a staircase of many splits, which is where linear models win.' },
+      { front: 'What is cost-complexity pruning?', back: 'Grow fully, then collapse subtrees to minimise R(T) + α|T|. It yields a nested sequence of subtrees indexed by α, cross-validated via ccp_alpha.' },
+      { front: 'Why is impurity-based feature importance biased?', back: 'Continuous and high-cardinality features offer more candidate thresholds, so they reduce impurity by chance more often. Use permutation importance instead.' },
+    ],
+
+    challenge: {
+      title: 'A tree a domain expert would sign off',
+      brief:
+        'Fit a decision tree to a tabular dataset and produce two deliverables. First, a tuned model: sweep max_depth and min_samples_leaf, then separately compute the cost-complexity pruning path and cross-validate over it, and report which approach produced the better held-out score at a comparable number of leaves. Second, an audit: export the final tree as text, and for each leaf record the rule path, the number of training examples, the class distribution and the predicted class. Then test stability by refitting on ten bootstrap samples and reporting how often the root split uses the same feature.',
+      acceptanceCriteria: [
+        'Both pre-pruning and post-pruning are tried, and the comparison controls for tree size rather than only for accuracy',
+        'The final tree has few enough leaves to be read in full, and that constraint is stated as a design choice',
+        'The leaf audit table includes sample counts, so leaves supported by very few examples are visible',
+        'The stability experiment reports how often the root feature changes across bootstrap resamples',
+        'Feature importance is reported with permutation importance, with a note on why impurity importance was not used',
+      ],
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain to a colleague how a decision tree learns, what impurity measures are for, and why a tree left unconstrained will memorise the training data.',
+      mustCover: [
+        'The tree searches every feature and threshold and picks the split with the largest weighted impurity decrease',
+        'Gini and entropy both measure how mixed the labels in a node are, and both are zero for a pure node',
+        'Splitting is greedy and recursive, and earlier splits are never revisited',
+        'Without a stopping rule, splitting continues until every leaf is pure, which is memorisation rather than learning',
+      ],
+      bonusSignals: ['mentions axis-aligned boundaries', 'mentions that trees need no scaling', 'mentions instability as the motivation for ensembles'],
+      sampleExplanation:
+        'A tree learns by playing twenty questions and checking, at every step, which question does the most good. Start with all your training rows in one pile. For every feature and every threshold you could split on, the algorithm asks: if I divided the pile here, how much tidier would the two resulting piles be? Tidiness is measured by impurity — Gini, which is the chance of getting the label wrong if you guessed by drawing at random from the pile’s own mix, or entropy, which is the number of bits you would need to communicate a random member’s label. Both are zero when a pile is all one class and highest when it is evenly split. You score each candidate by the parent’s impurity minus the impurity of the two children, weighted by how many rows landed in each — and that weighting is the part people forget, because without it a split that perfectly isolates three rows out of a thousand would look like a triumph. Take the best split, then repeat the whole procedure independently on each of the two new piles. That greediness is deliberate: finding the genuinely optimal tree is NP-hard, so you take the locally best question and never look back. Two consequences follow, and they explain most of what trees do well and badly. Because each question compares one feature against one number, every boundary the tree draws is parallel to an axis, so a diagonal relationship needs a staircase of splits while a logistic regression gets it in one line. And because nothing in the criterion ever says stop, the recursion continues until every leaf holds a single row. At that point training accuracy is 100%, which sounds impressive and is actually a structural guarantee — you would get the same result with randomly shuffled labels. So you must supply the stopping rule yourself, either by capping depth and minimum leaf size, or better, by growing the tree fully and then pruning back the branches whose error reduction did not justify their leaves. One last thing worth knowing: a tree’s structure is unstable. Drop ten percent of your rows and the root split can change feature entirely, with no loss of accuracy. That is why single trees are usually replaced by forests, and why you should be careful about telling a story based on which feature a particular tree happened to choose first.',
+    },
+  },
+

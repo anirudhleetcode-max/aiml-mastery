@@ -83,7 +83,7 @@ export default async function MistakesPage() {
             <Stat
               label="Most missed"
               value={<span className="text-base leading-snug">{mostMissed ? mostMissed[0] : '—'}</span>}
-              sub={mostMissed ? `${mostMissed[1]} wrong answers` : undefined}
+              sub={mostMissed ? `${mostMissed[1]} wrong answer${mostMissed[1] === 1 ? '' : 's'}` : undefined}
             />
           </div>
 
