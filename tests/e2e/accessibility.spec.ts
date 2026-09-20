@@ -51,7 +51,7 @@ test.describe('accessibility', () => {
   test('the core app pages have no serious violations', async ({ page }) => {
     await signInAsDemo(page);
 
-    for (const path of ['/dashboard', '/today', '/roadmap', '/tests', '/analytics', '/labs']) {
+    for (const path of ['/dashboard', '/today', '/roadmap', '/tests', '/analytics', '/labs', '/interview', '/flashcards']) {
       await page.goto(path, { waitUntil: 'networkidle' });
       expect(await scan(page, path), `serious violations on ${path}`).toEqual([]);
     }

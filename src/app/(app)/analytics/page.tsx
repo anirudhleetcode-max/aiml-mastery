@@ -12,6 +12,8 @@ import { ProgressBar } from '@/components/ui/progress';
 import { MASTERY_LEVELS, MASTERY_META } from '@/types/progress';
 import { levelFor } from '@/features/xp/levels';
 import { disciplineLabel } from '@/features/xp/rules';
+import { computeReadiness } from '@/features/interview/engine';
+import { LABS } from '@/data/labs';
 import { addDays, dateKey, daysBetween, formatDuration, formatXP, parseDateKey, pct, prettyDate } from '@/lib/format';
 
 export const metadata: Metadata = { title: 'Analytics' };
@@ -53,6 +55,20 @@ export default async function AnalyticsPage() {
 
   const totalActiveDays = Object.values(state.activity).filter((a) => a.studySeconds > 0 || a.unitsCompleted > 0).length;
   const elapsedDays = Math.max(1, daysBetween(state.profile.startDate, o.today) + 1);
+
+  /* ---- practice breadth, all from recorded actions ---- */
+  const flashcardsGraded = state.flashcardReviews.length;
+  const flashcardsKnown = state.flashcardReviews.filter((r) => r.lastGrade === 'known').length;
+  const flashcardsDue = state.flashcardReviews.filter((r) => r.nextReviewAt <= o.today).length;
+
+  const interviewReadiness = computeReadiness(state);
+  const interviewTotal = interviewReadiness.total;
+  const interviewGraded = interviewReadiness.attempted;
+  const interviewConfident = interviewReadiness.confident;
+
+  const labsTotal = LABS.length;
+  const labsStarted = state.labs.filter((l) => l.stepsDone.length > 0).length;
+  const labsDone = state.labs.filter((l) => l.completedAt != null).length;
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
@@ -159,6 +175,40 @@ export default async function AnalyticsPage() {
           format="minutes"
         />
       </div>
+
+      {/* ---------------------------------------------- Practice breadth */}
+      <section className="rounded-xl border border-line bg-surface p-4 sm:p-5">
+        <SectionHeading
+          as="h2"
+          title="Practice beyond the lessons"
+          description="Reading a unit is one kind of evidence. These are the others, and each is counted from a recorded action rather than from time on the page."
+          className="mb-4"
+        />
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Stat
+            label="Flashcards graded"
+            value={flashcardsGraded}
+            sub={flashcardsDue > 0 ? `${flashcardsDue} due now` : 'Nothing due'}
+            tone={flashcardsDue > 0 ? 'warning' : 'success'}
+          />
+          <Stat
+            label="Cards recalled"
+            value={flashcardsGraded > 0 ? pct(flashcardsKnown / flashcardsGraded) : '—'}
+            sub="Graded as known on the last pass"
+          />
+          <Stat
+            label="Interview questions"
+            value={`${interviewGraded} / ${interviewTotal}`}
+            sub={`${interviewConfident} felt solid`}
+          />
+          <Stat
+            label="Labs completed"
+            value={`${labsDone} / ${labsTotal}`}
+            sub={labsStarted > labsDone ? `${labsStarted - labsDone} in progress` : 'Every step verified'}
+            tone={labsDone > 0 ? 'success' : 'default'}
+          />
+        </div>
+      </section>
 
       {/* ------------------------------------------------------ Domains */}
       <div className="grid gap-4 lg:grid-cols-2">
