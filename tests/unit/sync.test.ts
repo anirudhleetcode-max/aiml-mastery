@@ -167,6 +167,32 @@ describe('the sync write path', () => {
     expect(result.state.units[firstUnit.id]?.teachingScore).toBeGreaterThan(0);
   });
 
+  it('cannot inflate practice by repeating the same item', async () => {
+    const result = await applyEvents(userId, [
+      envelope('ev-practice-1', { type: 'practice-completed', unitId: firstUnit.id, practiceIndex: 0 }),
+      envelope('ev-practice-2', { type: 'practice-completed', unitId: firstUnit.id, practiceIndex: 0 }),
+      envelope('ev-practice-3', { type: 'practice-completed', unitId: firstUnit.id, practiceIndex: 0 }),
+    ]);
+
+    // Three events, one distinct item: the count is one.
+    expect(result.state.units[firstUnit.id]?.practiceCompleted).toBe(1);
+
+    const second = await applyEvents(userId, [
+      envelope('ev-practice-4', { type: 'practice-completed', unitId: firstUnit.id, practiceIndex: 1 }),
+    ]);
+    expect(second.state.units[firstUnit.id]?.practiceCompleted).toBe(2);
+  });
+
+  it('ignores a practice index that does not exist', async () => {
+    const before = await applyEvents(userId, []);
+    const result = await applyEvents(userId, [
+      envelope('ev-practice-bogus', { type: 'practice-completed', unitId: firstUnit.id, practiceIndex: 39 }),
+    ]);
+    expect(result.state.units[firstUnit.id]?.practiceCompleted).toBe(
+      before.state.units[firstUnit.id]?.practiceCompleted,
+    );
+  });
+
   it('never lets XP go negative', async () => {
     const state = await applyEvents(userId, []);
     expect(state.state.xp).toBeGreaterThanOrEqual(0);

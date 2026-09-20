@@ -224,8 +224,6 @@ export default function VectorPlayground({ props }: { props?: Record<string, unk
     );
   }
 
-  const trans = reduced || dragging ? '' : 'transition-[opacity] duration-150';
-
   return (
     <WidgetShell
       takeaway="A vector is a list of numbers and an arrow at the same time. Adding is sliding b until its tail meets a's tip; a − b is the arrow that points from b to a; and the unit vector keeps the direction while throwing the length away, which is exactly what cosine similarity does later."
@@ -366,7 +364,7 @@ export default function VectorPlayground({ props }: { props?: Record<string, unk
                 r={dragging === key ? 10 : 8}
                 style={{ fill: key === 'a' ? VIZ.series : VIZ.info, fillOpacity: 0.28, stroke: key === 'a' ? VIZ.series : VIZ.info }}
                 strokeWidth={2}
-                className="cursor-grab"
+                className={cn('cursor-grab', reduced ? '' : 'transition-[r] duration-150')}
                 onPointerDown={(e) => {
                   (e.target as Element).setPointerCapture?.(e.pointerId);
                   setDragging(key);
@@ -375,7 +373,7 @@ export default function VectorPlayground({ props }: { props?: Record<string, unk
             );
           })}
         </svg>
-        <p className={cn('mt-1 text-center text-[11px] text-subtle', trans)}>
+        <p className="mt-1 text-center text-[11px] text-subtle">
           Drag either filled circle, or type exact components below.
         </p>
       </div>

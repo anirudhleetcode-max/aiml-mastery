@@ -105,6 +105,9 @@ model UnitProgress {
   lastScore         Float   @default(0)
   attempts          Int     @default(0)
   practiceCompleted Int     @default(0)
+  /// JSON array of completed practice indices, so the count cannot be inflated
+  /// by repeating the same item.
+  practiceDone      String  @default("[]")
   challengeCompleted Boolean @default(false)
   teachingScore     Float?
   lessonCompletedAt DateTime?

@@ -190,22 +190,42 @@ export async function applyEvents(userId: string, events: LearnerEvent[]): Promi
             if (!unit || e.practiceIndex >= unit.practiceQuestions.length) break;
             const row = await ensureProgress(tx, userId, e.unitId);
             const before = row.mastery;
-            const next = Math.min(unit.practiceQuestions.length, row.practiceCompleted + 1);
+
+            // Record *which* items were done. Repeating one cannot inflate the
+            // count, which is what keeps PRACTICED evidence-based rather than
+            // click-based.
+            let done: number[] = [];
+            try {
+              done = JSON.parse(row.practiceDone) as number[];
+            } catch {
+              done = [];
+            }
+            const set = new Set(done.filter((n) => Number.isInteger(n) && n >= 0));
+            set.add(e.practiceIndex);
+            const indices = [...set].slice(0, unit.practiceQuestions.length);
+
             const updated = await tx.unitProgress.update({
               where: { id: row.id },
-              data: { practiceCompleted: next, lastStudiedAt: safeAt },
+              data: {
+                practiceCompleted: indices.length,
+                practiceDone: JSON.stringify(indices),
+                lastStudiedAt: safeAt,
+              },
             });
             const after = computeMastery(toProgress(updated), requirementsFor(unit));
             await tx.unitProgress.update({ where: { id: row.id }, data: { mastery: after } });
             if (before !== after) effects.masteryChanges.push({ unitId: e.unitId, from: before, to: after });
-            xpDelta += await awardXP(
-              tx,
-              userId,
-              [{ reason: 'practice-complete', amount: XP_VALUES['practice-complete'], detail: `Practice: ${unit.title}`, unitId: unit.id }],
-              safeAt,
-              effects,
-            );
-            await bumpActivity(tx, userId, day, { xp: XP_VALUES['practice-complete'] });
+            // XP only for genuinely new practice, never for re-clicking.
+            if (indices.length > done.length) {
+              xpDelta += await awardXP(
+                tx,
+                userId,
+                [{ reason: 'practice-complete', amount: XP_VALUES['practice-complete'], detail: `Practice: ${unit.title}`, unitId: unit.id }],
+                safeAt,
+                effects,
+              );
+              await bumpActivity(tx, userId, day, { xp: XP_VALUES['practice-complete'] });
+            }
             break;
           }
 
@@ -595,6 +615,7 @@ export async function applyEvents(userId: string, events: LearnerEvent[]): Promi
                   lastScore: 0,
                   attempts: 0,
                   practiceCompleted: 0,
+                  practiceDone: '[]',
                   challengeCompleted: false,
                   teachingScore: null,
                   lessonCompletedAt: null,

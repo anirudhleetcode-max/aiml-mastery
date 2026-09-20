@@ -98,14 +98,14 @@ const ANALOGIES: { a: string; b: string; c: string; label: string }[] = [
 ];
 
 /** A text label baked into a canvas texture — no font is fetched over the network. */
-function makeLabelSprite(text: string, color: string, bright: boolean): THREE.Sprite {
+function makeLabelSprite(text: string, color: string): THREE.Sprite {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
   canvas.height = 64;
   const ctx = canvas.getContext('2d');
   if (ctx) {
     ctx.clearRect(0, 0, 256, 64);
-    ctx.font = `${bright ? '700' : '500'} 38px ui-sans-serif, system-ui, sans-serif`;
+    ctx.font = '600 38px ui-sans-serif, system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.lineWidth = 6;
@@ -163,17 +163,25 @@ function Cloud({
     [analogyColor],
   );
 
+  // Textures are expensive, so the sprites are built once per palette and only
+  // their opacity changes as the selection moves.
   const sprites = React.useMemo(
     () =>
       WORDS.map((w) => {
-        const isHot = w.word === selected || neighbours.some((n) => n.word === w.word);
-        const s = makeLabelSprite(w.word, colors[w.group], isHot);
+        const s = makeLabelSprite(w.word, colors[w.group]);
         s.position.set(w.v[0], w.v[1] + 0.34, w.v[2]);
-        s.material.opacity = selected === null || isHot ? 1 : 0.35;
         return s;
       }),
-    [colors, selected, neighbours],
+    [colors],
   );
+
+  React.useEffect(() => {
+    sprites.forEach((s, i) => {
+      const word = WORDS[i].word;
+      const isHot = word === selected || neighbours.some((n) => n.word === word);
+      s.material.opacity = selected === null || isHot ? 1 : 0.3;
+    });
+  }, [sprites, selected, neighbours]);
 
   // Neighbour links and the analogy arrow share one line object.
   const lineGeometry = React.useMemo(() => new THREE.BufferGeometry(), []);
@@ -199,21 +207,22 @@ function Cloud({
     lineGeometry.setFromPoints(pts.length ? pts : [new THREE.Vector3(), new THREE.Vector3()]);
   }, [lineGeometry, selected, neighbours, analogyPoint, analogyTarget]);
 
-  // Everything created above is disposed here; nothing three.js made is left behind.
+  // Disposal is split one effect per resource. Sharing a single effect would
+  // mean that rebuilding the labels also disposed the sphere geometry that all
+  // 24 points are still drawing with.
+  React.useEffect(() => () => sphere.dispose(), [sphere]);
+  React.useEffect(() => () => ring.dispose(), [ring]);
+  React.useEffect(() => () => Object.values(materials).forEach((m) => m.dispose()), [materials]);
+  React.useEffect(() => () => analogyMaterial.dispose(), [analogyMaterial]);
+  React.useEffect(() => () => lineGeometry.dispose(), [lineGeometry]);
+  React.useEffect(() => () => lineMaterial.dispose(), [lineMaterial]);
   React.useEffect(
-    () => () => {
-      sphere.dispose();
-      ring.dispose();
-      Object.values(materials).forEach((m) => m.dispose());
-      analogyMaterial.dispose();
-      lineGeometry.dispose();
-      lineMaterial.dispose();
+    () => () =>
       sprites.forEach((s) => {
         s.material.map?.dispose();
         s.material.dispose();
-      });
-    },
-    [sphere, ring, materials, analogyMaterial, lineGeometry, lineMaterial, sprites],
+      }),
+    [sprites],
   );
 
   return (
