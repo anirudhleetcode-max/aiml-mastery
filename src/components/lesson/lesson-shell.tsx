@@ -193,7 +193,7 @@ export function LessonShell({
               aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark this unit'}
               className={cn(
                 'grid h-9 w-9 place-items-center rounded-lg border transition-colors',
-                bookmarked ? 'border-primary/40 bg-primary/10 text-primary' : 'border-line text-subtle hover:text-ink',
+                bookmarked ? 'border-primary/40 bg-primary/10 text-primary-ink' : 'border-line text-subtle hover:text-ink',
               )}
             >
               <Bookmark size={15} fill={bookmarked ? 'currentColor' : 'none'} />
@@ -232,7 +232,13 @@ export function LessonShell({
 
       <div className="mt-4 grid gap-5 lg:grid-cols-[200px_1fr]">
         {/* ------------------------------------------------ Section nav */}
-        <nav aria-label="Lesson sections" className="lg:sticky lg:top-20 lg:self-start">
+        {/*
+          `min-w-0` is load-bearing. A grid item defaults to min-width:auto, so
+          without it this column refuses to shrink below the width of the
+          section list, the `overflow-x-auto` below never engages, and the whole
+          lesson page scrolls sideways on a phone.
+        */}
+        <nav aria-label="Lesson sections" className="min-w-0 lg:sticky lg:top-20 lg:self-start">
           <ol className="flex gap-1 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0">
             {sections.map((s, i) => (
               <li key={s.id} className="shrink-0 lg:shrink">
@@ -242,13 +248,13 @@ export function LessonShell({
                   aria-current={i === index ? 'step' : undefined}
                   className={cn(
                     'flex w-full items-center gap-2 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-left text-[12.5px] font-medium transition-colors',
-                    i === index ? 'bg-primary/12 text-primary' : 'text-subtle hover:bg-surface-2 hover:text-ink',
+                    i === index ? 'bg-primary/12 text-primary-ink' : 'text-subtle hover:bg-surface-2 hover:text-ink',
                   )}
                 >
                   <span
                     className={cn(
                       'grid h-4 w-4 shrink-0 place-items-center rounded-full border text-[9px] tabular-nums',
-                      i < furthest ? 'border-success/50 bg-success/15 text-success' : i === index ? 'border-primary text-primary' : 'border-line text-subtle',
+                      i < furthest ? 'border-success/50 bg-success/15 text-success' : i === index ? 'border-primary text-primary-ink' : 'border-line text-subtle',
                     )}
                   >
                     {i < furthest ? <Check size={9} strokeWidth={3.5} /> : i + 1}
@@ -303,7 +309,7 @@ export function LessonShell({
                 className="group rounded-xl border border-line bg-surface p-4 transition-colors hover:border-line-strong"
               >
                 <p className="text-[11px] uppercase tracking-[0.1em] text-subtle">Previous unit</p>
-                <p className="mt-1 text-[13.5px] font-medium text-ink group-hover:text-primary">{meta.prevTitle}</p>
+                <p className="mt-1 text-[13.5px] font-medium text-ink group-hover:text-primary-ink">{meta.prevTitle}</p>
               </Link>
             ) : (
               <div />
@@ -314,7 +320,7 @@ export function LessonShell({
                 className="group rounded-xl border border-line bg-surface p-4 text-right transition-colors hover:border-line-strong"
               >
                 <p className="text-[11px] uppercase tracking-[0.1em] text-subtle">Next unit</p>
-                <p className="mt-1 text-[13.5px] font-medium text-ink group-hover:text-primary">{meta.nextTitle}</p>
+                <p className="mt-1 text-[13.5px] font-medium text-ink group-hover:text-primary-ink">{meta.nextTitle}</p>
               </Link>
             )}
           </div>

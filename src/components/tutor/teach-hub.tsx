@@ -98,7 +98,7 @@ export function TeachHub({
                 best {pct(meta.bestTeachingScore)}
               </Badge>
             )}
-            <Link href={`/learn/${current.slug}`} className="ml-auto text-[12px] text-primary hover:underline">
+            <Link href={`/learn/${current.slug}`} className="ml-auto text-[12px] text-primary-ink hover:underline">
               Open the lesson
             </Link>
           </div>

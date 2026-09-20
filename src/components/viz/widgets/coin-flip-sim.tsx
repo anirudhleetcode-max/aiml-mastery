@@ -370,7 +370,7 @@ export default function CoinFlipSim() {
             <span
               key={`${i}-${r}`}
               className={`inline-flex h-5 w-5 items-center justify-center rounded font-mono text-[11px] font-semibold ${
-                r === 1 ? 'bg-primary/15 text-primary' : 'bg-surface-3 text-subtle'
+                r === 1 ? 'bg-primary/15 text-primary-ink' : 'bg-surface-3 text-subtle'
               }`}
             >
               {r === 1 ? 'H' : 'T'}

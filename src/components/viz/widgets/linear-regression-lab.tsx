@@ -373,7 +373,7 @@ export default function LinearRegressionLab() {
               <button
                 type="button"
                 onClick={fit}
-                className="rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[12px] font-medium text-primary transition-colors hover:bg-primary/20"
+                className="rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[12px] font-medium text-primary-ink transition-colors hover:bg-primary/20"
               >
                 Fit it for me
               </button>

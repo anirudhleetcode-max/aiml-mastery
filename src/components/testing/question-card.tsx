@@ -85,7 +85,7 @@ export function QuestionCard({
           <p className="mt-1.5 text-[13px] leading-relaxed text-muted">{question.explanation}</p>
           {question.type === 'explain' && (
             <details className="mt-3">
-              <summary className="cursor-pointer text-[12.5px] font-medium text-primary">
+              <summary className="cursor-pointer text-[12.5px] font-medium text-primary-ink">
                 Show a strong answer
               </summary>
               <p className="mt-2 text-[13px] leading-relaxed text-muted">{question.sampleAnswer}</p>

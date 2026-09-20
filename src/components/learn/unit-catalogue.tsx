@@ -230,7 +230,7 @@ export function UnitCatalogue({
                   className={cn(
                     'rounded-lg border px-2.5 py-1.5 text-[12px] font-medium transition-colors',
                     status === s.value
-                      ? 'border-primary/40 bg-primary/12 text-primary'
+                      ? 'border-primary/40 bg-primary/12 text-primary-ink'
                       : 'border-line text-subtle hover:text-ink',
                   )}
                 >
@@ -251,7 +251,7 @@ export function UnitCatalogue({
                 onClick={() => setDifficulty(null)}
                 className={cn(
                   'rounded-lg border px-2.5 py-1.5 text-[12px] font-medium transition-colors',
-                  difficulty === null ? 'border-primary/40 bg-primary/12 text-primary' : 'border-line text-subtle hover:text-ink',
+                  difficulty === null ? 'border-primary/40 bg-primary/12 text-primary-ink' : 'border-line text-subtle hover:text-ink',
                 )}
               >
                 Any
@@ -265,7 +265,7 @@ export function UnitCatalogue({
                   onClick={() => setDifficulty(difficulty === d ? null : d)}
                   className={cn(
                     'h-[30px] w-[30px] rounded-lg border text-[12px] font-semibold tabular-nums transition-colors',
-                    difficulty === d ? 'border-primary/40 bg-primary/12 text-primary' : 'border-line text-subtle hover:text-ink',
+                    difficulty === d ? 'border-primary/40 bg-primary/12 text-primary-ink' : 'border-line text-subtle hover:text-ink',
                   )}
                 >
                   {d}
@@ -285,7 +285,7 @@ export function UnitCatalogue({
                 onClick={() => setDensity('compact')}
                 className={cn(
                   'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px] font-medium transition-colors',
-                  density === 'compact' ? 'border-primary/40 bg-primary/12 text-primary' : 'border-line text-subtle hover:text-ink',
+                  density === 'compact' ? 'border-primary/40 bg-primary/12 text-primary-ink' : 'border-line text-subtle hover:text-ink',
                 )}
               >
                 <Rows3 size={13} aria-hidden /> Table
@@ -296,7 +296,7 @@ export function UnitCatalogue({
                 onClick={() => setDensity('cards')}
                 className={cn(
                   'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px] font-medium transition-colors',
-                  density === 'cards' ? 'border-primary/40 bg-primary/12 text-primary' : 'border-line text-subtle hover:text-ink',
+                  density === 'cards' ? 'border-primary/40 bg-primary/12 text-primary-ink' : 'border-line text-subtle hover:text-ink',
                 )}
               >
                 <LayoutGrid size={13} aria-hidden /> Cards
@@ -311,7 +311,7 @@ export function UnitCatalogue({
         {filtering ? ' that match your filters' : ''}
         {sort !== 'curriculum' ? `, sorted by ${SORT_OPTIONS.find((s) => s.value === sort)?.label.toLowerCase()}` : ''}.
         {filtering && (
-          <button type="button" onClick={clearFilters} className="ml-2 font-medium text-primary hover:underline">
+          <button type="button" onClick={clearFilters} className="ml-2 font-medium text-primary-ink hover:underline">
             Clear filters
           </button>
         )}
@@ -372,7 +372,7 @@ function CompactTable({ units, domainName }: { units: CatalogueUnit[]; domainNam
           {units.map((u) => (
             <tr key={u.id} className="transition-colors hover:bg-surface-2">
               <th scope="row" className="max-w-72 py-2.5 pl-4 pr-3 text-left font-normal">
-                <Link href={`/learn/${u.slug}`} className="block truncate font-medium text-ink hover:text-primary">
+                <Link href={`/learn/${u.slug}`} className="block truncate font-medium text-ink hover:text-primary-ink">
                   {u.title}
                 </Link>
                 <span className="block truncate text-[11px] text-subtle">

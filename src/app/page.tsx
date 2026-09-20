@@ -126,7 +126,7 @@ export default async function LandingPage() {
         <section id="approach" className="relative border-t border-line py-24 sm:py-32">
           <div className="mx-auto max-w-7xl px-4 sm:px-6">
             <Reveal>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">The method</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary-ink">The method</p>
               <h2 className="mt-3 max-w-3xl text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
                 Understanding first. Always.
               </h2>
@@ -182,7 +182,7 @@ export default async function LandingPage() {
                       ].map(([from, to]) => (
                         <div key={from} className="flex items-center gap-2">
                           <span className="text-subtle">{from}</span>
-                          <ArrowRight size={12} className="shrink-0 text-primary" />
+                          <ArrowRight size={12} className="shrink-0 text-primary-ink" />
                           <span className="font-medium text-ink">{to}</span>
                         </div>
                       ))}
@@ -226,7 +226,7 @@ export default async function LandingPage() {
         <section id="curriculum" className="border-t border-line bg-surface/40 py-24 sm:py-32">
           <div className="mx-auto max-w-7xl px-4 sm:px-6">
             <Reveal>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">The curriculum</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary-ink">The curriculum</p>
               <h2 className="mt-3 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
                 Fourteen domains. {TOTAL_UNITS} units. Nothing skipped.
               </h2>
@@ -292,7 +292,7 @@ export default async function LandingPage() {
         <section id="platform" className="border-t border-line py-24 sm:py-32">
           <div className="mx-auto max-w-7xl px-4 sm:px-6">
             <Reveal>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">The platform</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary-ink">The platform</p>
               <h2 className="mt-3 max-w-3xl text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
                 Built for the part everybody skips: actually finishing.
               </h2>
@@ -302,7 +302,7 @@ export default async function LandingPage() {
               {PLATFORM.map((f, i) => (
                 <Reveal key={f.title} delay={Math.min(i * 40, 280)}>
                   <div className="h-full rounded-xl border border-line bg-surface p-5 shadow-soft">
-                    <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary/12 text-primary">
+                    <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary/12 text-primary-ink">
                       <f.icon size={17} />
                     </span>
                     <h3 className="mt-4 text-[14px] font-semibold text-ink">{f.title}</h3>
@@ -320,7 +320,7 @@ export default async function LandingPage() {
             <div className="grid gap-12 lg:grid-cols-2">
               <Reveal>
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Mastery</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary-ink">Mastery</p>
                   <h2 className="mt-3 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
                     You cannot click your way to mastered.
                   </h2>

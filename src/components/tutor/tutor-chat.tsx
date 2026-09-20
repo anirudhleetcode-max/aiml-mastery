@@ -80,7 +80,7 @@ export function TutorChat({
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pb-4" role="log" aria-live="polite" aria-label="Tutor conversation">
         {turns.length === 0 && (
           <div className="rounded-xl border border-line bg-surface p-6">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/12 text-primary">
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/12 text-primary-ink">
               <Bot size={19} />
             </span>
             <h2 className="mt-4 text-lg font-semibold tracking-tight text-ink">
@@ -127,7 +127,7 @@ export function TutorChat({
             </div>
           ) : (
             <div key={turn.id} className="flex gap-3">
-              <span className="mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary/12 text-primary">
+              <span className="mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary/12 text-primary-ink">
                 <Bot size={14} />
               </span>
               <div className="min-w-0 flex-1 space-y-3">
@@ -138,7 +138,7 @@ export function TutorChat({
                 {turn.reply?.source && (
                   <p className="text-[11.5px] text-subtle">
                     From{' '}
-                    <Link href={`/learn/${turn.reply.source.slug}`} className="text-primary hover:underline">
+                    <Link href={`/learn/${turn.reply.source.slug}`} className="text-primary-ink hover:underline">
                       {turn.reply.source.title}
                     </Link>{' '}
                     · {turn.reply.source.domain}
@@ -166,7 +166,7 @@ export function TutorChat({
 
         {busy && (
           <div className="flex items-center gap-3 text-[13px] text-subtle">
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary/12 text-primary">
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary/12 text-primary-ink">
               <Loader2 size={14} className="animate-spin" />
             </span>
             Looking it up…

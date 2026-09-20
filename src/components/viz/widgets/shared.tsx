@@ -29,7 +29,7 @@ export function WidgetShell({
       {controls && <div className="space-y-3 border-t border-line px-4 py-3">{controls}</div>}
       {takeaway && (
         <p className="border-t border-line bg-primary/[0.05] px-4 py-2.5 text-[12px] leading-relaxed text-muted">
-          <span className="font-medium text-primary">Notice: </span>
+          <span className="font-medium text-primary-ink">Notice: </span>
           {takeaway}
         </p>
       )}

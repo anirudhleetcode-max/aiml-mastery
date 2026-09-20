@@ -384,7 +384,7 @@ export default function RagFlow() {
                   )}
                 >
                   <div className="flex items-center gap-2">
-                    <span className={cn('w-4 shrink-0 text-center font-mono text-[10px]', picked ? 'text-primary' : 'text-subtle')}>
+                    <span className={cn('w-4 shrink-0 text-center font-mono text-[10px]', picked ? 'text-primary-ink' : 'text-subtle')}>
                       {picked ? i + 1 : '·'}
                     </span>
                     <span className="min-w-0 flex-1 truncate text-[11.5px] text-muted">
@@ -445,7 +445,7 @@ export default function RagFlow() {
             {verdict === 'grounded' && gold && (
               <>
                 <p className="text-[12.5px] leading-relaxed text-ink">
-                  {gold.fact} <span className="font-mono text-[10.5px] text-primary">[{citation + 1}]</span>
+                  {gold.fact} <span className="font-mono text-[10.5px] text-primary-ink">[{citation + 1}]</span>
                 </p>
                 <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
                   Grounded: every clause traces to chunk [{citation + 1}], {selected[citation]?.chunk.docTitle}. The

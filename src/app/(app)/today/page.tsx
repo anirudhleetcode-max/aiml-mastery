@@ -36,7 +36,7 @@ export default async function TodayPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-5">
       <header>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary-ink">
           {beforeStart ? 'Before you begin' : `Day ${dayNumber} of ${o.schedule.totalDays}`}
         </p>
         <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-ink">
@@ -47,7 +47,7 @@ export default async function TodayPage() {
 
       {beforeStart && (
         <section className="rounded-xl border border-primary/30 bg-primary/[0.06] p-6 text-center">
-          <Sparkles size={22} className="mx-auto text-primary" />
+          <Sparkles size={22} className="mx-auto text-primary-ink" />
           <h2 className="mt-3 text-xl font-semibold tracking-tight text-ink">Welcome to your AI/ML journey</h2>
           <p className="mx-auto mt-2 max-w-md text-[14px] leading-relaxed text-muted">
             {o.schedule.totalDays} days. {o.totals.total} concepts. One mission: understand AI/ML deeply enough to
@@ -129,7 +129,7 @@ export default async function TodayPage() {
                           style={{ background: domainColor(r.unit.domain) }}
                           aria-hidden
                         />
-                        <span className="min-w-0 flex-1 truncate text-[13px] text-ink group-hover:text-primary">
+                        <span className="min-w-0 flex-1 truncate text-[13px] text-ink group-hover:text-primary-ink">
                           {r.unit.title}
                         </span>
                         <span className="shrink-0 text-[11.5px] tabular-nums text-subtle">

@@ -35,7 +35,11 @@ test.describe('assessment and progress', () => {
       if (await next.isVisible().catch(() => false)) await next.click();
     }
 
-    await expect(page.getByText(/correct/).first()).toBeVisible({ timeout: 20_000 });
+    // The results page reports a grade, a fraction and the questions to
+    // revisit — assert on those rather than on the word "correct", which it
+    // has no reason to use.
+    await expect(page.getByText(/\d+ of \d+/).first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/\d+%/).first()).toBeVisible();
     await expect(page.getByRole('link', { name: /Back to tests/ })).toBeVisible();
   });
 

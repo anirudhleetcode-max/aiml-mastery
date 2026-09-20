@@ -19,3 +19,7 @@ next-env.d.ts
 /coverage
 shot.mjs
 shots.mjs
+
+# Playwright session saved by the auth setup project
+playwright/.auth/
+test-results/

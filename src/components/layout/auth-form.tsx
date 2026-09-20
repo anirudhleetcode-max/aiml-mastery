@@ -139,7 +139,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
 
       <p className="mt-6 text-center text-[13px] text-subtle">
         {isSignup ? 'Already have an account? ' : "Don't have an account? "}
-        <Link href={isSignup ? '/login' : '/signup'} className="font-medium text-primary hover:underline">
+        <Link href={isSignup ? '/login' : '/signup'} className="font-medium text-primary-ink hover:underline">
           {isSignup ? 'Sign in' : 'Create one'}
         </Link>
       </p>

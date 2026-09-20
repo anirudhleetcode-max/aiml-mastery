@@ -95,7 +95,7 @@ export function DeadlineTracker({
               if (!unit) return null;
               return (
                 <li key={p.unitId} className="flex items-baseline justify-between gap-3 text-[12.5px]">
-                  <Link href={`/learn/${unit.slug}`} className="truncate font-medium text-ink hover:text-primary hover:underline">
+                  <Link href={`/learn/${unit.slug}`} className="truncate font-medium text-ink hover:text-primary-ink hover:underline">
                     {unit.title}
                   </Link>
                   <span className="shrink-0 text-subtle">{p.reason}</span>

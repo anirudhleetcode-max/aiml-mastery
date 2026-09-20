@@ -17,7 +17,7 @@ test.describe('mobile', () => {
     await page.goto('/dashboard');
 
     await page.getByRole('button', { name: 'Open navigation' }).click();
-    await expect(page.getByRole('link', { name: 'Roadmap' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Roadmap', exact: true })).toBeVisible();
   });
 
   test('a lesson is readable and navigable on a phone', async ({ page }) => {

@@ -50,7 +50,7 @@ export default async function LessonPage({ params }: { params: Promise<{ slug: s
         <p className="lesson-prose text-[15.5px]">{unit.simpleExplanation}</p>
 
         <div className="rounded-xl border border-line bg-surface-2 p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">Why does it exist?</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary-ink">Why does it exist?</p>
           <p className="mt-2 text-[14px] leading-relaxed text-muted">{unit.whyItExists}</p>
         </div>
 
@@ -408,7 +408,7 @@ export default async function LessonPage({ params }: { params: Promise<{ slug: s
             </div>
             <Link
               href={`/graph?focus=${unit.id}`}
-              className="mt-3 inline-flex items-center gap-1 text-[12.5px] font-medium text-primary hover:underline"
+              className="mt-3 inline-flex items-center gap-1 text-[12.5px] font-medium text-primary-ink hover:underline"
             >
               <GraduationCap size={13} /> See this in the knowledge graph
             </Link>
@@ -443,7 +443,7 @@ export default async function LessonPage({ params }: { params: Promise<{ slug: s
 function Heading({ title, eyebrow, note }: { title: string; eyebrow: string; note?: string }) {
   return (
     <div>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">{eyebrow}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary-ink">{eyebrow}</p>
       <h2 className="mt-1.5 text-xl font-semibold tracking-tight text-ink">{title}</h2>
       {note && <p className="mt-2 max-w-2xl text-[13.5px] leading-relaxed text-subtle">{note}</p>}
     </div>

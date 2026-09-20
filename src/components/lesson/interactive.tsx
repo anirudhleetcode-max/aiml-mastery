@@ -334,7 +334,7 @@ export function TeachBackSection({ unit }: { unit: LearningUnit }) {
       />
 
       <div className="rounded-xl border border-primary/25 bg-primary/[0.05] p-5">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">The prompt</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary-ink">The prompt</p>
         <p className="mt-2 text-[15px] leading-relaxed text-ink">{prompt.prompt}</p>
       </div>
 
@@ -452,7 +452,7 @@ export function TeachBackSection({ unit }: { unit: LearningUnit }) {
               type="button"
               onClick={() => setShowSample((s) => !s)}
               aria-expanded={showSample}
-              className="text-[13px] font-medium text-primary hover:underline"
+              className="text-[13px] font-medium text-primary-ink hover:underline"
             >
               {showSample ? 'Hide' : 'Show'} a reference explanation
             </button>

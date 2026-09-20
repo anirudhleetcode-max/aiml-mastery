@@ -2,9 +2,18 @@ import type { Page } from '@playwright/test';
 
 export const DEMO = { email: 'demo@aimlmastery.app', password: 'demolearner2026' };
 
-/** Signs in as the seeded demo learner, who already has progress. */
+/**
+ * Ensures the page is in an authenticated demo session.
+ *
+ * Projects load a session saved once by `auth.setup.ts`, so this is normally a
+ * no-op that just confirms the cookie survived. It falls back to a real sign-in
+ * for any spec that opted out of the stored state — but note the login endpoint
+ * is rate limited to ten attempts per ten minutes, so that path must stay rare.
+ */
 export async function signInAsDemo(page: Page) {
-  await page.goto('/login');
+  await page.goto('/dashboard');
+  if (!/\/login/.test(page.url())) return;
+
   await page.getByLabel('Email').fill(DEMO.email);
   await page.getByLabel('Password', { exact: true }).fill(DEMO.password);
   await page.getByRole('button', { name: 'Sign in' }).click();

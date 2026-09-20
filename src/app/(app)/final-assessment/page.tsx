@@ -83,7 +83,7 @@ export default async function FinalAssessmentPage({
   return (
     <div className="mx-auto max-w-4xl space-y-5">
       <header className="rounded-xl border border-line bg-gradient-to-br from-surface to-surface-2 p-6 text-center">
-        <Crown size={26} className="mx-auto text-primary" />
+        <Crown size={26} className="mx-auto text-primary-ink" />
         <h1 className="mt-3 text-2xl font-semibold tracking-tight text-ink">AI/ML Master Assessment</h1>
         <p className="mx-auto mt-2 max-w-xl text-[14px] leading-relaxed text-muted">
           Every domain, mixed formats, no hints and no explanations until the end. The result is broken down domain
@@ -188,7 +188,7 @@ export default async function FinalAssessmentPage({
 
       <section className="rounded-xl border border-primary/25 bg-primary/[0.05] p-5">
         <h2 className="flex items-center gap-2 text-[14px] font-semibold text-ink">
-          <GraduationCap size={15} className="text-primary" /> And then the real one
+          <GraduationCap size={15} className="text-primary-ink" /> And then the real one
         </h2>
         <p className="mt-2 max-w-2xl text-[13.5px] leading-relaxed text-muted">
           After the assessment comes the teacher challenge: random concepts, one after another, explained in your own

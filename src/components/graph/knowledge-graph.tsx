@@ -100,7 +100,7 @@ export function KnowledgeGraph({ nodes, edges, domains, totals, initialFocus }: 
       <header className="rounded-xl border border-line bg-gradient-to-br from-surface to-surface-2 p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">Knowledge graph</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary-ink">Knowledge graph</p>
             <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-ink">Everything, and what it rests on</h1>
             <p className="mt-2 max-w-xl text-[13.5px] leading-relaxed text-subtle">
               Each circle is a unit, coloured by domain and sized by how much it unlocks. Arrows run from a
@@ -207,7 +207,7 @@ export function KnowledgeGraph({ nodes, edges, domains, totals, initialFocus }: 
             onClick={() => setPicked(new Set())}
             className={cn(
               'rounded-lg border px-2.5 py-1 text-[12px] font-medium transition-colors',
-              picked.size === 0 ? 'border-primary/40 bg-primary/12 text-primary' : 'border-line text-subtle hover:text-ink',
+              picked.size === 0 ? 'border-primary/40 bg-primary/12 text-primary-ink' : 'border-line text-subtle hover:text-ink',
             )}
           >
             All domains
@@ -243,7 +243,7 @@ export function KnowledgeGraph({ nodes, edges, domains, totals, initialFocus }: 
                 setPicked(new Set());
                 setCompletedOnly(false);
               }}
-              className="ml-2 font-medium text-primary hover:underline"
+              className="ml-2 font-medium text-primary-ink hover:underline"
             >
               Clear filters
             </button>
@@ -382,7 +382,7 @@ function DetailPanel({
 
       <Link
         href={`/learn/${node.slug}`}
-        className="mt-4 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-primary hover:underline"
+        className="mt-4 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-primary-ink hover:underline"
       >
         Open the lesson <ArrowRight size={13} />
       </Link>
@@ -463,7 +463,7 @@ function ListView({ units, byId, total }: { units: GraphNode[]; byId: Map<string
                   }}
                   aria-hidden
                 />
-                <Link href={`/learn/${u.slug}`} className="text-[13.5px] font-medium text-ink hover:text-primary">
+                <Link href={`/learn/${u.slug}`} className="text-[13.5px] font-medium text-ink hover:text-primary-ink">
                   {u.title}
                 </Link>
                 <span className="font-mono text-[11px] text-subtle">{u.id}</span>

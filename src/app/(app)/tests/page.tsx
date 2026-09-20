@@ -217,7 +217,7 @@ function Card({
   return (
     <div className="flex h-full flex-col rounded-xl border border-line bg-surface p-5">
       <div className="flex items-start justify-between gap-2">
-        <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary/12 text-primary">{icon}</span>
+        <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary/12 text-primary-ink">{icon}</span>
         {badge}
       </div>
       <h2 className="mt-3.5 text-[14px] font-semibold text-ink">{title}</h2>

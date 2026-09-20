@@ -1,6 +1,6 @@
 import { ALL_UNITS, UNIT_BY_ID, prerequisitesOf, leadsTo } from '@/data/curriculum';
 import { DOMAIN_BY_ID } from '@/data/domains';
-import { searchCurriculum } from '@/features/curriculum/search';
+import { CONFIDENT_COVERAGE, resolveConcept, searchCurriculum } from '@/features/curriculum/search';
 import type { LearningUnit, QuizQuestion } from '@/types/curriculum';
 
 /**
@@ -113,13 +113,27 @@ function resolveUnit(query: string, ctx: TutorContext): LearningUnit | undefined
     .trim();
 
   if (stripped.length >= 3) {
-    const hits = searchCurriculum(stripped, { limit: 6 });
-    // Prefer a lesson-level hit; a flashcard match is weaker evidence.
-    const best = hits.find((h) => h.kind === 'unit') ?? hits[0];
-    if (best) {
-      const unit = UNIT_BY_ID.get(best.unitId);
-      if (unit) return unit;
+    // `searchCurriculum` matches substrings, which is right for a search box —
+    // a loose hit is a useful suggestion — and wrong here. Its top result for
+    // "zzzqqq nonexistent concept xyzzy" was a real unit, and the tutor would
+    // then have explained that unit as though it had been asked about. Commit
+    // to a unit only when the question actually names something we teach.
+    const match = resolveConcept(stripped);
+    if (!match || match.coverage < CONFIDENT_COVERAGE || !match.specific) {
+      // Anything weaker falls through so the caller can offer candidates or
+      // say it found nothing, rather than answering the wrong question
+      // fluently. That refusal is the whole point of the gate.
+      return undefined;
     }
+
+    // The gate decides *whether* to answer; the search index decides *which*
+    // unit, because it ranks by relevance while the gate only measures
+    // whether the question named something. Many units clear the gate at full
+    // coverage, so using it to rank would pick an arbitrary one.
+    const hits = searchCurriculum(stripped, { limit: 6 });
+    const best = hits.find((h) => h.kind === 'unit') ?? hits[0];
+    const ranked = best ? UNIT_BY_ID.get(best.unitId) : undefined;
+    return ranked ?? match.unit;
   }
 
   return ctx.currentUnitId ? UNIT_BY_ID.get(ctx.currentUnitId) : undefined;

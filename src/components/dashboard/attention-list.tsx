@@ -73,7 +73,7 @@ function Panel({
           {items.slice(0, 5).map((item) => (
             <li key={item.id}>
               <Link href={`/learn/${item.slug}`} className="group flex items-baseline justify-between gap-3 py-2.5">
-                <span className="min-w-0 truncate text-[13px] font-medium text-ink group-hover:text-primary">
+                <span className="min-w-0 truncate text-[13px] font-medium text-ink group-hover:text-primary-ink">
                   {item.title}
                 </span>
                 <span className="shrink-0 text-[11.5px] tabular-nums text-subtle">{item.detail}</span>

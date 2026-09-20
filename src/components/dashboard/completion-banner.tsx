@@ -46,13 +46,13 @@ export function CompletionBanner({
 
       <div className="relative flex flex-wrap items-start justify-between gap-6">
         <div className="min-w-0">
-          <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
+          <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary-ink">
             <Crown size={13} /> Curriculum complete
           </p>
           <h2 className="mt-2 text-[28px] font-semibold leading-tight tracking-tight text-ink sm:text-3xl">
             AI/ML mastery complete
           </h2>
-          <p className="mt-1.5 text-lg font-semibold tabular-nums text-primary">
+          <p className="mt-1.5 text-lg font-semibold tabular-nums text-primary-ink">
             {totals.completed} / {totals.total}
           </p>
           <p className="mt-3 max-w-lg text-[14px] leading-relaxed text-muted">

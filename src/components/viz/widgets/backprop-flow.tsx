@@ -402,7 +402,7 @@ export default function BackpropFlow() {
             <button
               type="button"
               onClick={applyUpdate}
-              className="rounded-md border border-line bg-primary/10 px-2.5 py-1 text-[12px] font-medium text-primary transition-colors hover:bg-primary/15"
+              className="rounded-md border border-line bg-primary/10 px-2.5 py-1 text-[12px] font-medium text-primary-ink transition-colors hover:bg-primary/15"
             >
               Apply update
             </button>
@@ -507,7 +507,7 @@ export default function BackpropFlow() {
           <span
             className={`rounded-full px-2 py-0.5 text-[10.5px] font-medium ${
               current.phase === 'forward'
-                ? 'bg-primary/10 text-primary'
+                ? 'bg-primary/10 text-primary-ink'
                 : current.phase === 'backward'
                   ? 'bg-warning/10 text-warning'
                   : 'bg-success/10 text-success'

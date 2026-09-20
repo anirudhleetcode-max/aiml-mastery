@@ -149,7 +149,7 @@ export function GlossaryBrowser({
               <a
                 key={l}
                 href={`#glossary-${l === '#' ? 'other' : l}`}
-                className="grid h-7 w-7 place-items-center rounded-md border border-line bg-surface-2 text-[11.5px] font-medium text-muted transition-colors hover:border-primary/40 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/25"
+                className="grid h-7 w-7 place-items-center rounded-md border border-line bg-surface-2 text-[11.5px] font-medium text-muted transition-colors hover:border-primary/40 hover:text-primary-ink focus:outline-none focus:ring-2 focus:ring-primary/25"
               >
                 {l}
               </a>
@@ -267,7 +267,7 @@ function TermCard({
                 href={`/learn/${u.slug}`}
                 className={cn(
                   'inline-flex max-w-full items-center rounded-md border border-line bg-surface-2 px-2 py-1 text-[11.5px] text-subtle',
-                  'transition-colors hover:border-primary/40 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/25',
+                  'transition-colors hover:border-primary/40 hover:text-primary-ink focus:outline-none focus:ring-2 focus:ring-primary/25',
                 )}
               >
                 <span className="truncate">{u.title}</span>

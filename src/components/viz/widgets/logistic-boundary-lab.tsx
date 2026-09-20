@@ -393,7 +393,7 @@ export default function LogisticBoundaryLab() {
             <button
               type="button"
               onClick={train}
-              className="rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[12px] font-medium text-primary transition-colors hover:bg-primary/20"
+              className="rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[12px] font-medium text-primary-ink transition-colors hover:bg-primary/20"
             >
               Train it for me
             </button>

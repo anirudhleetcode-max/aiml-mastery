@@ -171,7 +171,7 @@ export function PracticeView({
                 />
                 <Link
                   href={`/learn/${unit.slug}`}
-                  className="text-[13.5px] font-semibold text-ink hover:text-primary hover:underline"
+                  className="text-[13.5px] font-semibold text-ink hover:text-primary-ink hover:underline"
                 >
                   {unit.title}
                 </Link>
@@ -232,7 +232,7 @@ export function PracticeView({
                 )}
                 <Link
                   href={`/learn/${unit.slug}#challenge`}
-                  className="mt-4 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-primary hover:underline"
+                  className="mt-4 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-primary-ink hover:underline"
                 >
                   Open the challenge in {unit.title}
                   <ArrowRight size={12} />

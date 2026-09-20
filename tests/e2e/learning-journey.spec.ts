@@ -10,7 +10,7 @@ test.describe('the learning journey', () => {
     await page.goto('/dashboard');
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await expect(page.getByRole('progressbar', { name: 'Overall curriculum progress' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: /Today's mission/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Today.s mission/i })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Deadline' })).toBeVisible();
     await expect(page.getByText(/Mastery composition/)).toBeVisible();
     await expect(page.locator('body')).not.toContainText(/coming soon|lorem ipsum/i);
@@ -38,7 +38,7 @@ test.describe('the learning journey', () => {
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Your First Python Program');
     // Intuition comes first — no equation opens a lesson.
     await expect(page.getByText('What is it?')).toBeVisible();
-    await expect(page.getByText('The analogy')).toBeVisible();
+    await expect(page.getByText('The analogy').first()).toBeVisible();
 
     // Section navigation works and reaches the teach-back step.
     await page.getByRole('button', { name: 'Definition' }).click();

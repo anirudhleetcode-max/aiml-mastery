@@ -110,7 +110,7 @@ export function ScheduleSection({ data }: { data: SettingsData }) {
           <button
             type="button"
             onClick={() => setExpanded(true)}
-            className="mt-2 text-[12.5px] font-medium text-primary hover:underline"
+            className="mt-2 text-[12.5px] font-medium text-primary-ink hover:underline"
           >
             Show all {s.upcoming.length} upcoming days
           </button>
@@ -140,7 +140,7 @@ export function ScheduleSection({ data }: { data: SettingsData }) {
 
       <div className="rounded-xl border border-line bg-surface-2 p-4">
         <h3 className="flex items-center gap-2 text-[13px] font-medium text-ink">
-          <CalendarClock size={15} className="text-primary" aria-hidden />
+          <CalendarClock size={15} className="text-primary-ink" aria-hidden />
           Recalculate my plan
         </h3>
         <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">

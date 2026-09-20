@@ -57,7 +57,7 @@ export function SectionHeading({
     <div className={cn('flex flex-wrap items-end justify-between gap-3', className)}>
       <div className="min-w-0">
         {eyebrow && (
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">{eyebrow}</p>
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary-ink">{eyebrow}</p>
         )}
         <Tag className={cn('font-semibold text-ink', Tag === 'h1' ? 'text-2xl' : 'text-lg')}>{title}</Tag>
         {description && <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-subtle">{description}</p>}
@@ -84,7 +84,7 @@ export function Stat({
 }) {
   const tones = {
     default: 'text-ink',
-    primary: 'text-primary',
+    primary: 'text-primary-ink',
     success: 'text-success',
     warning: 'text-warning',
     xp: 'text-xp',

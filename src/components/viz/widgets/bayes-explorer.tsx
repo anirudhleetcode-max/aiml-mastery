@@ -347,7 +347,7 @@ export default function BayesExplorer() {
                   onClick={() => applyPreset(p)}
                   aria-pressed={active}
                   className={`rounded-md border border-line px-2.5 py-1 text-[12px] font-medium transition-colors ${
-                    active ? 'bg-primary/10 text-primary' : 'bg-surface-2 text-muted hover:text-ink'
+                    active ? 'bg-primary/10 text-primary-ink' : 'bg-surface-2 text-muted hover:text-ink'
                   }`}
                 >
                   {p.label}

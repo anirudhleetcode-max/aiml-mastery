@@ -180,7 +180,7 @@ function ShapeEditor({
                 const v = Number.isFinite(raw) ? Math.max(1, Math.min(MAX_DIM, raw)) : 1;
                 onChange(shape.map((x, j) => (j === i ? v : x)));
               }}
-              className="w-11 bg-transparent text-right font-mono text-[12px] tabular-nums text-ink outline-none focus:text-primary"
+              className="w-11 bg-transparent text-right font-mono text-[12px] tabular-nums text-ink outline-none focus:text-primary-ink"
             />
           </label>
         ))}
@@ -416,7 +416,7 @@ export default function Broadcasting({ props }: { props?: Record<string, unknown
                     key={i}
                     className={cn(
                       'py-1.5 pl-3 font-mono font-semibold tabular-nums',
-                      p.ok ? 'text-primary' : 'text-subtle',
+                      p.ok ? 'text-primary-ink' : 'text-subtle',
                     )}
                   >
                     {p.ok ? p.out : '—'}
@@ -455,7 +455,7 @@ export default function Broadcasting({ props }: { props?: Record<string, unknown
               <div>
                 <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-2">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-subtle">A + B</p>
-                  <p className="font-mono text-[11px] tabular-nums text-primary">{fmtShape(out)}</p>
+                  <p className="font-mono text-[11px] tabular-nums text-primary-ink">{fmtShape(out)}</p>
                 </div>
                 <div
                   className="grid gap-1"

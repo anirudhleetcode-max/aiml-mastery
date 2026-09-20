@@ -87,7 +87,7 @@ export function Sidebar({ onNavigate, className }: { onNavigate?: () => void; cl
                       aria-current={active ? 'page' : undefined}
                       className={cn(
                         'group relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] font-medium transition-colors',
-                        active ? 'bg-primary/12 text-primary' : 'text-muted hover:bg-surface-2 hover:text-ink',
+                        active ? 'bg-primary/12 text-primary-ink' : 'text-muted hover:bg-surface-2 hover:text-ink',
                       )}
                     >
                       {active && (
@@ -110,7 +110,7 @@ export function Sidebar({ onNavigate, className }: { onNavigate?: () => void; cl
           onClick={onNavigate}
           className={cn(
             'flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] font-medium transition-colors',
-            pathname.startsWith('/settings') ? 'bg-primary/12 text-primary' : 'text-muted hover:bg-surface-2 hover:text-ink',
+            pathname.startsWith('/settings') ? 'bg-primary/12 text-primary-ink' : 'text-muted hover:bg-surface-2 hover:text-ink',
           )}
         >
           <Settings size={16} />

@@ -103,7 +103,7 @@ export function TodayCard({
               <span
                 className={cn(
                   'grid h-6 w-6 shrink-0 place-items-center rounded-full',
-                  testDone ? 'bg-success/15 text-success' : 'text-primary',
+                  testDone ? 'bg-success/15 text-success' : 'text-primary-ink',
                 )}
               >
                 {testDone ? <Check size={13} strokeWidth={3} /> : <ClipboardCheck size={13} />}

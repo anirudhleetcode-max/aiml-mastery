@@ -17,7 +17,7 @@ export function DomainProgress({ domains }: { domains: DomainStat[] }) {
         <h2 id="domains-heading" className="text-[14px] font-semibold text-ink">
           Progress by domain
         </h2>
-        <Link href="/roadmap" className="text-[12px] text-primary hover:underline">
+        <Link href="/roadmap" className="text-[12px] text-primary-ink hover:underline">
           Open roadmap
         </Link>
       </div>
@@ -32,7 +32,7 @@ export function DomainProgress({ domains }: { domains: DomainStat[] }) {
                   style={{ background: domainColor(d.domain.id) }}
                   aria-hidden
                 />
-                <span className="flex-1 truncate text-[13px] font-medium text-ink group-hover:text-primary">
+                <span className="flex-1 truncate text-[13px] font-medium text-ink group-hover:text-primary-ink">
                   {d.domain.name}
                 </span>
                 <span className="shrink-0 text-[12px] tabular-nums text-subtle">

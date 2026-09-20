@@ -83,7 +83,7 @@ export function AppearanceSection({ data }: { data: SettingsData }) {
                 )}
               >
                 <span className="flex items-center gap-2">
-                  <Icon size={15} className={active ? 'text-primary' : 'text-subtle'} aria-hidden />
+                  <Icon size={15} className={active ? 'text-primary-ink' : 'text-subtle'} aria-hidden />
                   <span className="text-[14px] font-medium text-ink">{label}</span>
                 </span>
                 <span className="mt-1 block text-[12px] leading-relaxed text-subtle">{detail}</span>
@@ -135,7 +135,7 @@ export function AppearanceSection({ data }: { data: SettingsData }) {
             <button
               type="button"
               onClick={() => setScale(100)}
-              className="text-[12.5px] font-medium text-primary hover:underline"
+              className="text-[12.5px] font-medium text-primary-ink hover:underline"
             >
               Reset to 100%
             </button>

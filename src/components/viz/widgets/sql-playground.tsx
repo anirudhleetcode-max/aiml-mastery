@@ -1639,7 +1639,7 @@ export default function SqlPlayground({ props }: { props?: Record<string, unknow
                                     <span
                                       className={cn(
                                         'ml-1 rounded px-1 text-[9.5px] font-semibold uppercase tracking-wide',
-                                        c.key === 'PK' ? 'bg-primary/15 text-primary' : 'bg-accent/15 text-accent',
+                                        c.key === 'PK' ? 'bg-primary/15 text-primary-ink' : 'bg-accent/15 text-accent',
                                       )}
                                     >
                                       {c.key}

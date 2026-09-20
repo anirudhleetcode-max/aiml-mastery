@@ -160,7 +160,7 @@ export default function HashTable() {
           <p className="font-mono text-[12px] leading-relaxed text-ink">
             <span className="text-accent">&lsquo;{focus}&rsquo;</span> → {codes(focus).join(' + ')} ={' '}
             {sumCodes(focus)} → {sumCodes(focus)} % {capacity} ={' '}
-            <span className="font-semibold text-primary">bucket {focusBucket}</span>
+            <span className="font-semibold text-primary-ink">bucket {focusBucket}</span>
           </p>
         ) : (
           <p className="text-[12px] text-muted">Insert a key to see the arithmetic.</p>
@@ -185,7 +185,7 @@ export default function HashTable() {
               <span
                 className={cn(
                   'mt-1 w-6 shrink-0 text-right font-mono text-[11px] tabular-nums',
-                  hot ? 'text-primary' : 'text-subtle',
+                  hot ? 'text-primary-ink' : 'text-subtle',
                 )}
               >
                 {i}

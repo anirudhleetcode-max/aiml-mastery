@@ -1,6 +1,10 @@
 import { expect, test } from '@playwright/test';
 import { completeOnboarding, signUpFresh } from './helpers';
 
+// These exercise the sign-in and sign-up UI itself, so they must start
+// from a signed-out browser rather than the shared demo session.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test.describe('authentication and onboarding', () => {
   test('rejects a weak password with a useful message', async ({ page }) => {
     await page.goto('/signup');
@@ -8,7 +12,7 @@ test.describe('authentication and onboarding', () => {
     await page.getByLabel('Email').fill(`short-${Date.now()}@example.com`);
     await page.getByLabel('Password', { exact: true }).fill('short');
     await page.getByRole('button', { name: 'Start my journey' }).click();
-    await expect(page.getByRole('alert')).toContainText(/10 characters/i);
+    await expect(page.locator('form').getByRole('alert')).toContainText(/10 characters/i);
   });
 
   test('rejects a wrong password without revealing whether the account exists', async ({ page }) => {
@@ -16,7 +20,7 @@ test.describe('authentication and onboarding', () => {
     await page.getByLabel('Email').fill('definitely-not-a-user@example.com');
     await page.getByLabel('Password', { exact: true }).fill('some-wrong-password');
     await page.getByRole('button', { name: 'Sign in' }).click();
-    await expect(page.getByRole('alert')).toContainText('Email or password is incorrect.');
+    await expect(page.locator('form').getByRole('alert')).toContainText('Email or password is incorrect.');
   });
 
   test('a new learner signs up, onboards and lands on a real plan', async ({ page }) => {
@@ -26,7 +30,11 @@ test.describe('authentication and onboarding', () => {
     await completeOnboarding(page);
 
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/Good (morning|afternoon|evening)|Still up/);
-    await expect(page.getByText(/Deadline|31 December|Dec 31/i).first()).toBeVisible();
+    // Onboarding lands on today's mission, which situates the learner in the
+    // real course window and lists actual units rather than a placeholder.
+    await expect(page.getByText(/Day 1 of \d+/)).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Today.s mission/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Your First Python Program/ }).first()).toBeVisible();
   });
 
   test('protects the app from signed-out visitors', async ({ page, context }) => {

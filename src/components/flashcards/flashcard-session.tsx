@@ -272,7 +272,7 @@ export function FlashcardSession({
                 />
                 <Link
                   href={`/learn/${card.unitSlug}`}
-                  className="truncate text-[12.5px] font-medium text-muted hover:text-primary hover:underline"
+                  className="truncate text-[12.5px] font-medium text-muted hover:text-primary-ink hover:underline"
                 >
                   {card.unitTitle}
                 </Link>
@@ -353,7 +353,7 @@ function Summary({
 
   return (
     <div className="rounded-xl border border-line bg-surface p-5 sm:p-6">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">Session complete</p>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary-ink">Session complete</p>
       <h2 className="mt-1.5 text-xl font-semibold tracking-tight text-ink">
         {known} of {total} recalled
       </h2>

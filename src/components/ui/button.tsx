@@ -15,7 +15,7 @@ const VARIANTS: Record<Variant, string> = {
   outline: 'border border-line-strong text-ink hover:bg-surface-2 active:translate-y-px',
   danger: 'bg-danger text-white hover:brightness-110 active:translate-y-px',
   success: 'bg-success text-white hover:brightness-110 active:translate-y-px',
-  subtle: 'bg-primary/12 text-primary hover:bg-primary/20 border border-primary/25',
+  subtle: 'bg-primary/12 text-primary-ink hover:bg-primary/20 border border-primary/25',
 };
 
 const SIZES: Record<Size, string> = {

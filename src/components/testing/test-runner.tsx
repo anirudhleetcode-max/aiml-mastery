@@ -209,7 +209,7 @@ export function TestRunner({
 
       <p className="mt-2 text-right text-[11.5px] text-subtle">
         From{' '}
-        <Link href={`/learn/${current.unitSlug}`} className="hover:text-primary hover:underline">
+        <Link href={`/learn/${current.unitSlug}`} className="hover:text-primary-ink hover:underline">
           {current.unitTitle}
         </Link>
       </p>
@@ -296,7 +296,7 @@ function Results({
           <ul className="mt-3 space-y-2">
             {[...byUnit.entries()].map(([id, u]) => (
               <li key={id} className="flex items-center gap-3">
-                <Link href={`/learn/${u.slug}`} className="min-w-0 flex-1 truncate text-[13px] text-ink hover:text-primary">
+                <Link href={`/learn/${u.slug}`} className="min-w-0 flex-1 truncate text-[13px] text-ink hover:text-primary-ink">
                   {u.title}
                 </Link>
                 <ProgressBar value={u.correct / u.total} className="w-24 shrink-0" size="sm" label={`${u.title} score`} />
@@ -335,7 +335,7 @@ function Results({
                   </p>
                   <Link
                     href={`/learn/${q.unitSlug}`}
-                    className="mt-3 inline-block text-[12.5px] font-medium text-primary hover:underline"
+                    className="mt-3 inline-block text-[12.5px] font-medium text-primary-ink hover:underline"
                   >
                     Revisit {q.unitTitle} →
                   </Link>

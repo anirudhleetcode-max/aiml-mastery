@@ -52,7 +52,7 @@ export default async function TeachPage({ searchParams }: { searchParams: Promis
   return (
     <div className="mx-auto max-w-4xl space-y-5">
       <header>
-        <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
+        <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary-ink">
           <GraduationCap size={13} /> Teacher mode
         </p>
         <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-ink">

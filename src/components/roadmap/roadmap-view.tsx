@@ -126,7 +126,7 @@ export function RoadmapView({
       <header className="rounded-xl border border-line bg-gradient-to-br from-surface to-surface-2 p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-6">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">The roadmap</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary-ink">The roadmap</p>
             <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-ink">
               Python to Generative AI, in order
             </h1>
@@ -191,7 +191,7 @@ export function RoadmapView({
                 className={cn(
                   'rounded-lg border px-2.5 py-1.5 text-[12px] font-medium transition-colors',
                   status === o.value
-                    ? 'border-primary/40 bg-primary/12 text-primary'
+                    ? 'border-primary/40 bg-primary/12 text-primary-ink'
                     : 'border-line text-subtle hover:text-ink',
                 )}
               >
@@ -212,7 +212,7 @@ export function RoadmapView({
                 className={cn(
                   'h-7 w-7 rounded-lg border text-[11px] font-semibold tabular-nums transition-colors',
                   difficulty === d
-                    ? 'border-primary/40 bg-primary/12 text-primary'
+                    ? 'border-primary/40 bg-primary/12 text-primary-ink'
                     : 'border-line text-subtle hover:text-ink',
                 )}
               >
@@ -232,7 +232,7 @@ export function RoadmapView({
                 setStatus('all');
                 setDifficulty(null);
               }}
-              className="ml-2 font-medium text-primary hover:underline"
+              className="ml-2 font-medium text-primary-ink hover:underline"
             >
               Clear filters
             </button>
@@ -320,7 +320,7 @@ export function RoadmapView({
         <li className="relative">
           <div className="flex gap-4">
             <span
-              className="relative z-10 mt-4 grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full border-2 border-primary bg-canvas text-primary"
+              className="relative z-10 mt-4 grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full border-2 border-primary bg-canvas text-primary-ink"
               aria-hidden
             >
               <Check size={11} strokeWidth={3} />
@@ -332,7 +332,7 @@ export function RoadmapView({
               </p>
               <Link
                 href="/final-assessment"
-                className="mt-3 inline-block text-[12.5px] font-medium text-primary hover:underline"
+                className="mt-3 inline-block text-[12.5px] font-medium text-primary-ink hover:underline"
               >
                 See what the final assessment covers →
               </Link>
@@ -370,7 +370,7 @@ function ModuleList({ units }: { units: RoadmapUnit[] }) {
                       u.mastery === 'MASTERED' || u.mastery === 'TEACHER'
                         ? 'border-success/50 bg-success/15 text-success'
                         : u.completed
-                          ? 'border-primary/50 bg-primary/12 text-primary'
+                          ? 'border-primary/50 bg-primary/12 text-primary-ink'
                           : 'border-line text-subtle',
                     )}
                     title={MASTERY_META[u.mastery].label}
@@ -379,7 +379,7 @@ function ModuleList({ units }: { units: RoadmapUnit[] }) {
                   </span>
 
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13.5px] font-medium text-ink group-hover:text-primary">
+                    <span className="block truncate text-[13.5px] font-medium text-ink group-hover:text-primary-ink">
                       {u.title}
                     </span>
                     <span className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-subtle">

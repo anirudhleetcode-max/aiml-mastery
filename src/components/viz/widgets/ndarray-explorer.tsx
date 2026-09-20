@@ -275,7 +275,7 @@ export default function NdarrayExplorer() {
                 <span
                   className={cn(
                     'mt-1 shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10.5px] tabular-nums',
-                    s === sel.s ? 'border-primary bg-primary/10 text-primary' : 'border-line text-subtle',
+                    s === sel.s ? 'border-primary bg-primary/10 text-primary-ink' : 'border-line text-subtle',
                   )}
                 >
                   a[{s}]

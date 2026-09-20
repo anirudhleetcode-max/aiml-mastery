@@ -28,7 +28,7 @@ function Body({ visual }: { visual: Visual }) {
           {visual.steps.map((step, i) => (
             <li key={i} className="flex gap-3">
               <div className="flex flex-col items-center">
-                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-line bg-surface text-[11px] font-semibold tabular-nums text-primary">
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-line bg-surface text-[11px] font-semibold tabular-nums text-primary-ink">
                   {i + 1}
                 </span>
                 {i < visual.steps.length - 1 && <span className="mt-1 w-px flex-1 bg-line" aria-hidden />}
@@ -47,7 +47,7 @@ function Body({ visual }: { visual: Visual }) {
         <div className="grid gap-3 sm:grid-cols-2">
           {[visual.left, visual.right].map((side, i) => (
             <div key={i} className="rounded-lg border border-line bg-surface p-4">
-              <p className={cn('text-[12.5px] font-semibold', i === 0 ? 'text-primary' : 'text-accent')}>
+              <p className={cn('text-[12.5px] font-semibold', i === 0 ? 'text-primary-ink' : 'text-accent')}>
                 {side.heading}
               </p>
               <ul className="mt-2.5 space-y-1.5">
@@ -102,7 +102,7 @@ function Body({ visual }: { visual: Visual }) {
           <ul className="mt-3 space-y-2">
             {visual.annotations.map((a, i) => (
               <li key={i} className="flex gap-2.5 text-[12.5px] leading-relaxed">
-                <CornerDownRight size={13} className="mt-1 shrink-0 text-primary" />
+                <CornerDownRight size={13} className="mt-1 shrink-0 text-primary-ink" />
                 <span>
                   <code className="rounded bg-surface-3 px-1.5 py-0.5 font-mono text-[12px] text-accent">{a.part}</code>
                   <span className="ml-2 text-muted">{a.note}</span>
@@ -118,7 +118,7 @@ function Body({ visual }: { visual: Visual }) {
         <ol className="space-y-3">
           {visual.events.map((e, i) => (
             <li key={i} className="flex gap-3">
-              <span className="w-20 shrink-0 text-right text-[12px] font-medium tabular-nums text-primary">{e.when}</span>
+              <span className="w-20 shrink-0 text-right text-[12px] font-medium tabular-nums text-primary-ink">{e.when}</span>
               <span className="relative flex flex-col items-center">
                 <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" />
                 {i < visual.events.length - 1 && <span className="mt-1 w-px flex-1 bg-line" aria-hidden />}

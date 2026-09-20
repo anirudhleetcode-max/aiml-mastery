@@ -260,7 +260,7 @@ function MistakeCard({
       <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-3.5">
         <Link
           href={`/learn/${row.unitSlug}`}
-          className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-primary hover:underline"
+          className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-primary-ink hover:underline"
         >
           {row.unitTitle}
           <ArrowRight size={12} />

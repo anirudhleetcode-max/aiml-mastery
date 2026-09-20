@@ -1,5 +1,9 @@
 import { expect, test } from '@playwright/test';
 
+// The landing page is what a logged-out visitor sees; signed in it swaps its
+// calls to action for a link straight to the dashboard.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test.describe('landing page', () => {
   test('states the promise and the real numbers', async ({ page }) => {
     await page.goto('/');

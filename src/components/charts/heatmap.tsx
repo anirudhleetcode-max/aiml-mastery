@@ -147,18 +147,29 @@ export function ActivityHeatmap({
 
       <div className="mt-3 flex items-center justify-between gap-4 text-[11px] text-subtle">
         <span>Click a day for its detail</span>
-        <div className="flex items-center gap-1.5">
-          <span>Less</span>
+        {/*
+          The ramp is one image, not five. Labelling each swatch individually
+          put an aria-label on a role-less span (which is prohibited) and made
+          a screen reader read five bare colour names between "Less" and
+          "More"; one role="img" announces the scale as a single idea. The
+          per-swatch `title` stays as a pointer affordance.
+        */}
+        <div
+          className="flex items-center gap-1.5"
+          role="img"
+          aria-label={`Activity scale, least to most: ${LEVEL_LABELS.join(', ')}.`}
+        >
+          <span aria-hidden="true">Less</span>
           {[0, 1, 2, 3, 4].map((l) => (
             <span
               key={l}
+              aria-hidden="true"
               className="h-[11px] w-[11px] rounded-[3px]"
               style={{ background: `var(--viz-seq-${l})` }}
               title={LEVEL_LABELS[l]}
-              aria-label={LEVEL_LABELS[l]}
             />
           ))}
-          <span>More</span>
+          <span aria-hidden="true">More</span>
         </div>
       </div>
     </div>

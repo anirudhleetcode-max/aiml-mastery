@@ -25,6 +25,7 @@ step() {
 
 step "Typecheck"            npx tsc --noEmit
 step "Lint"                 npx eslint src scripts tests --max-warnings=0
+step "UI contrast (WCAG AA)" node scripts/check-contrast.mjs
 step "Curriculum integrity" npx tsx scripts/verify-curriculum.ts --stats
 step "Unit + integration"   npx vitest run
 

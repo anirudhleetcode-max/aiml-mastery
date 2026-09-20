@@ -120,7 +120,7 @@ export function OnboardingFlow({ defaultName }: { defaultName: string }) {
       <div className="mb-8 flex items-center gap-3">
         <Logo className="h-8 w-8" />
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">Setting up</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary-ink">Setting up</p>
           <p className="text-[14px] font-medium text-ink">Step {step + 1} of {steps.length} · {steps[step]}</p>
         </div>
       </div>

@@ -55,7 +55,7 @@ export function NotificationBell() {
               <button
                 type="button"
                 onClick={markAll}
-                className="flex items-center gap-1 text-[12px] text-primary hover:underline"
+                className="flex items-center gap-1 text-[12px] text-primary-ink hover:underline"
               >
                 <Check size={12} /> Mark all read
               </button>

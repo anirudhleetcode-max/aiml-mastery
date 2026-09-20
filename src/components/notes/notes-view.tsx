@@ -193,7 +193,7 @@ function NoteCard({
         />
         <Link
           href={`/learn/${meta.slug}`}
-          className="min-w-0 truncate text-[13.5px] font-semibold text-ink hover:text-primary hover:underline"
+          className="min-w-0 truncate text-[13.5px] font-semibold text-ink hover:text-primary-ink hover:underline"
         >
           {meta.title}
         </Link>
@@ -229,7 +229,7 @@ function NoteCard({
             </Button>
             <Link
               href={`/learn/${meta.slug}`}
-              className="ml-auto inline-flex items-center gap-1.5 text-[12.5px] font-medium text-primary hover:underline"
+              className="ml-auto inline-flex items-center gap-1.5 text-[12.5px] font-medium text-primary-ink hover:underline"
             >
               Open the unit
               <ArrowRight size={12} />

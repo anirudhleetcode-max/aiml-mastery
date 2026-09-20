@@ -21,7 +21,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <div className="absolute inset-0 grid-bg opacity-30 [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]" />
         <div className="absolute left-1/2 top-1/3 h-[34rem] w-[34rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,hsl(var(--c-primary)/0.16),transparent_65%)]" />
         <div className="relative flex h-full flex-col justify-center px-14 xl:px-20">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">The commitment</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary-ink">The commitment</p>
           <p className="mt-5 text-[26px] font-semibold leading-snug tracking-tight text-ink xl:text-[30px]">
             {TOTAL_UNITS} concepts. Every one explained until it makes sense — then tested until it sticks.
           </p>

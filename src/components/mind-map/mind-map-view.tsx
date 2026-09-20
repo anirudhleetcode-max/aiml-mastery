@@ -441,7 +441,7 @@ export function MindMapView({ domains, totals }: MindMapViewProps) {
   return (
     <div className="mx-auto max-w-6xl">
       <header className="rounded-xl border border-line bg-gradient-to-br from-surface to-surface-2 p-5 sm:p-6">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">Mind map</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary-ink">Mind map</p>
         <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-ink">The whole field, from the centre out</h1>
         <p className="mt-2 max-w-xl text-[13.5px] leading-relaxed text-subtle">
           Fourteen branches leave the centre. Open one to see its modules and the units inside them, and the branch
