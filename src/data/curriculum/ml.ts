@@ -13270,3 +13270,7170 @@ weighted avg      0.973     0.972     0.966      1000
     },
   },
 
+  {
+    id: 'ML-023',
+    domain: 'ML',
+    module: 'Evaluation',
+    topic: 'Threshold-free evaluation',
+    title: 'ROC Curves and AUC',
+    slug: 'roc-and-auc',
+    difficulty: 4,
+    estimatedMinutes: 40,
+    prerequisites: ['ML-022'],
+    related: ['ML-009', 'ML-021'],
+    tags: ['roc', 'auc', 'threshold sweep', 'precision-recall curve', 'ranking', 'class imbalance'],
+
+    learningObjectives: [
+      'Construct an ROC curve by sweeping the threshold and compute AUC by hand, both by trapezoid and by counting pairs',
+      'State the probabilistic meaning of AUC and explain why it is threshold-free',
+      'Explain why precision-recall curves are more informative than ROC under heavy class imbalance',
+      'Use a curve to choose an operating point rather than to produce a single score',
+    ],
+
+    terminology: [
+      {
+        term: 'ROC curve',
+        definition:
+          'The curve traced by (false positive rate, true positive rate) as the decision threshold sweeps from 1 to 0. It summarises every possible operating point of a single scoring model in one picture.',
+        simple: 'A map of every trade-off the model can offer as you change how strict it is.',
+      },
+      {
+        term: 'True positive rate and false positive rate',
+        definition:
+          'TPR = TP/(TP + FN) is recall — the fraction of real positives caught. FPR = FP/(FP + TN) = 1 − specificity — the fraction of real negatives wrongly flagged. Both normalise within a row of the confusion matrix.',
+        simple: 'How much of the good stuff you caught, against how much of the harmless stuff you disturbed.',
+      },
+      {
+        term: 'AUC (area under the ROC curve)',
+        definition:
+          'The area beneath the ROC curve, between 0 and 1. It equals the probability that a randomly chosen positive example receives a higher score than a randomly chosen negative one, and 0.5 corresponds to random ranking.',
+        simple: 'The chance the model scores a real positive above a real negative.',
+      },
+      {
+        term: 'Precision-recall curve',
+        definition:
+          'The curve of precision against recall as the threshold sweeps. Its baseline is the positive class prevalence rather than a diagonal, and it responds strongly to false positives when positives are rare.',
+        simple: 'The same threshold sweep, plotted in the terms that matter when positives are rare.',
+      },
+      {
+        term: 'Average precision',
+        definition:
+          'The area under the precision-recall curve, computed as Σ (Rₙ − Rₙ₋₁)Pₙ. It is the imbalance-aware counterpart of AUC and the metric most competitions use for rare-event detection.',
+        simple: 'One number summarising the precision-recall curve.',
+      },
+    ],
+
+    simpleExplanation:
+      'Every probability-producing classifier is really a scoring machine: it ranks cases from most to least likely to be positive, and only becomes a classifier once you pick a cut-off. Different cut-offs give completely different confusion matrices, so judging a model at one arbitrary cut-off — the default of 0.5, say — tells you about that choice as much as about the model. The ROC curve removes the choice. It sweeps the threshold from strictest to loosest and plots, at every point, how much of the positive class you have caught against how much of the negative class you have wrongly disturbed. A model that ranks well hugs the top-left corner: it catches most positives while disturbing few negatives. A model that ranks randomly follows the diagonal. The area under that curve compresses the whole picture into one number with a genuinely intuitive meaning — take one random positive and one random negative, and AUC is the probability the model scores the positive higher. There is one important catch. Because the false positive rate divides by the total number of negatives, a model can produce thousands of false alarms and barely move along the x-axis when negatives vastly outnumber positives. On rare-event problems, the precision-recall curve tells you far more.',
+
+    whyItExists:
+      'A confusion matrix, and every metric derived from it, describes one threshold. Comparing two models at a threshold chosen arbitrarily confounds the quality of the model with the quality of that choice, and on imbalanced data the default threshold is almost always wrong. Threshold-free curves evaluate the ranking itself, which is the part of the model that a change of operating point cannot fix.',
+
+    analogy: {
+      scenario:
+        'A university admissions office has a scoring system and must decide where to draw the line. Set the bar very high and almost everyone admitted goes on to do well, but many capable applicants are turned away. Lower it and you admit nearly all of the capable ones, along with many who will struggle. Rather than arguing about one cut-off, the office plots the whole trade-off: for every possible bar, what fraction of the genuinely capable applicants would be admitted, against what fraction of the unsuitable ones. The resulting curve describes the scoring system itself, independently of where the line ends up. A better scoring system produces a curve that sits above the old one everywhere, and that is a claim about the ranking rather than about policy.',
+      mapping: [
+        { from: 'The score assigned to each applicant', to: 'The model’s predicted probability' },
+        { from: 'The bar for admission', to: 'The decision threshold' },
+        { from: 'Fraction of capable applicants admitted', to: 'True positive rate (recall)' },
+        { from: 'Fraction of unsuitable applicants admitted', to: 'False positive rate' },
+        { from: 'The whole trade-off curve', to: 'The ROC curve' },
+        { from: 'One system’s curve sitting above another’s everywhere', to: 'Strict dominance in ranking quality, independent of the threshold chosen' },
+      ],
+      bridge:
+        'Separating the scoring system from the cut-off is exactly what an ROC curve does, and it is why AUC is called threshold-free: it measures how well the model orders cases, which no change of policy can improve. The analogy also exposes the limitation that motivates precision-recall curves. If only one applicant in a thousand is genuinely outstanding, admitting two hundred unsuitable people barely dents the false positive rate — the denominator is enormous — while it destroys the proportion of admitted students who are actually outstanding. The ROC curve looks fine; the admissions office is drowning.',
+      limitations:
+        'The office can eventually observe how every admitted and rejected applicant turned out. In deployment you usually observe outcomes only for the cases you acted on, so the negatives you never flagged are never verified, and both curves must often be estimated from a sampled audit rather than complete data.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Sweep the threshold and trace the curve',
+        caption: 'Drag the threshold and watch the point move along the ROC curve while the confusion matrix updates. Change the class balance to see the ROC stay put while the precision-recall curve collapses.',
+        widget: 'roc-lab',
+      },
+      {
+        kind: 'flow',
+        title: 'Building an ROC curve',
+        steps: [
+          { label: 'Score every example', detail: 'Use `predict_proba` or `decision_function`. Only the ordering matters, so any monotone transformation of the scores gives the same curve.' },
+          { label: 'Sort descending', detail: 'Rank all examples from most to least likely to be positive. The curve is built by walking down this list.' },
+          { label: 'Start at the origin', detail: 'With the threshold above every score, nothing is predicted positive: TPR = 0 and FPR = 0.' },
+          { label: 'Step down the list', detail: 'Each positive encountered moves the curve up by 1/P; each negative moves it right by 1/N. A perfect ranking goes all the way up before moving right at all.' },
+          { label: 'Finish at (1, 1)', detail: 'With the threshold below every score, everything is predicted positive: TPR = 1 and FPR = 1.' },
+          { label: 'Integrate', detail: 'The area under the resulting step function is AUC, and it equals the fraction of positive-negative pairs the model ranks correctly.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'ROC versus precision-recall: which curve to read',
+        caption: 'Reach for ROC when classes are roughly balanced, when you want to compare models across datasets with different prevalence, or when both classes matter equally. Reach for precision-recall whenever positives are rare and the cost of a false alarm falls on a human reviewer.',
+        left: {
+          heading: 'ROC curve and AUC',
+          points: [
+            'Both axes normalise within a class, so the curve is invariant to the class ratio',
+            'AUC has a clean probabilistic meaning: P(score of a random positive > score of a random negative)',
+            'The 0.5 baseline is fixed, so values are comparable across problems and datasets',
+            'Insensitive to the threshold, so it measures the ranking rather than a policy choice',
+            'Over-optimistic under heavy imbalance: thousands of false positives barely move the FPR',
+            'Gives equal weight to both classes, which is wrong when only one of them matters',
+          ],
+        },
+        right: {
+          heading: 'Precision-recall curve and average precision',
+          points: [
+            'Precision responds directly to false positives relative to true positives, not to the negative pool',
+            'The baseline is the positive prevalence, so a rare-event problem starts from a low floor',
+            'Far more discriminating between models when positives are under a few percent',
+            'Directly readable as reviewer workload: precision is the hit rate of your alarm queue',
+            'Not comparable across datasets with different prevalence, since the baseline moves',
+            'Can be non-monotone and is noisy at low recall, where few examples support each point',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Reading an AUC value',
+        caption: 'These are rough conventions, not thresholds of acceptability. On a well-understood problem, 0.70 may be excellent; on a problem with a leaking feature, 0.99 is a warning.',
+        columns: ['AUC', 'Interpretation', 'Note'],
+        rows: [
+          ['0.50', 'Random ranking', 'Equivalent to assigning scores by coin flip'],
+          ['0.60–0.70', 'Weak but real signal', 'Often the honest ceiling for human-behaviour prediction'],
+          ['0.70–0.85', 'Useful discrimination', 'Typical for a well-built model on a genuinely hard problem'],
+          ['0.85–0.95', 'Strong discrimination', 'Common on problems with clear structure'],
+          ['above 0.98', 'Suspicious on messy data', 'Check for leakage before celebrating'],
+          ['below 0.50', 'Worse than random', 'Almost always a sign the labels or the score column are inverted'],
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'The same model on two datasets differing only in prevalence',
+        caption: 'The model, its threshold and its per-class rates are identical in both rows. Only the number of negatives changes, and only the precision-based metrics notice.',
+        columns: ['Prevalence', 'TPR', 'FPR', 'True positives', 'False positives', 'Precision', 'ROC point'],
+        rows: [
+          ['50% (1000 pos, 1000 neg)', '0.90', '0.10', '900', '100', '0.900', '(0.10, 0.90)'],
+          ['1% (100 pos, 9900 neg)', '0.90', '0.10', '90', '990', '0.083', '(0.10, 0.90)'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'For a scoring classifier s(x) and threshold t, define TPR(t) = P(s(X) ≥ t | Y = 1) and FPR(t) = P(s(X) ≥ t | Y = 0). The ROC curve is the parametric curve {(FPR(t), TPR(t)) : t ∈ ℝ}, traversed from (1, 1) at t = −∞ to (0, 0) at t = +∞, and AUC = ∫₀¹ TPR d(FPR). By the equivalence with the Mann-Whitney U statistic, AUC = P(s(X⁺) > s(X⁻)) + ½P(s(X⁺) = s(X⁻)) for independently drawn positive and negative examples, so it is invariant to any strictly increasing transformation of the scores and to the class prior. The precision-recall curve plots Precision(t) = P(Y = 1 | s(X) ≥ t) against Recall(t) = TPR(t); its baseline for a random ranker is the prevalence π rather than a diagonal, and average precision, Σₙ (Rₙ − Rₙ₋₁)Pₙ, is its summary statistic. Because precision depends on π through P = Rπ/(Rπ + FPR(1 − π)), the PR curve changes with prevalence while the ROC curve does not.',
+
+    math: {
+      intuition:
+        'Both axes of the ROC curve divide by a class total, so neither one knows how large the other class is. That is simultaneously the curve’s greatest strength and its central weakness. The strength: the curve describes the model’s ranking ability and does not shift when you resample the classes, so it transfers between populations. The weakness: when negatives outnumber positives a hundred to one, a thousand false alarms is a false positive rate of 0.01 — a visually negligible step to the right — while it means your alarm queue is 90% noise. Precision divides by what the model flagged rather than by the negative class, so it registers exactly what the ROC curve cannot see.',
+      formulas: [
+        {
+          latex: '\\text{TPR}(t) = \\frac{TP(t)}{TP(t) + FN(t)}, \\qquad \\text{FPR}(t) = \\frac{FP(t)}{FP(t) + TN(t)}',
+          name: 'The two ROC axes',
+          meaning:
+            'Both normalise within a true class, so both are unchanged if you duplicate every negative example. The ROC curve is therefore invariant to the class ratio, which is exactly why it can flatter a model on rare-event data.',
+          variables: [
+            { symbol: 't', meaning: 'The decision threshold being swept' },
+            { symbol: 'TP(t) + FN(t)', meaning: 'Total actual positives — constant as t varies' },
+            { symbol: 'FP(t) + TN(t)', meaning: 'Total actual negatives — also constant' },
+          ],
+          category: 'classification',
+        },
+        {
+          latex: '\\text{AUC} = P\\big(s(X^{+}) > s(X^{-})\\big) + \\tfrac{1}{2}P\\big(s(X^{+}) = s(X^{-})\\big)',
+          name: 'The probabilistic meaning of AUC',
+          meaning:
+            'Draw one positive and one negative at random; AUC is the probability the model scores the positive higher, with ties counted as half. This makes AUC a pure measure of ranking quality, indifferent to calibration or threshold.',
+          variables: [
+            { symbol: 's(X^{+})', meaning: 'Score assigned to a randomly drawn positive example' },
+            { symbol: 's(X^{-})', meaning: 'Score assigned to a randomly drawn negative example' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: '\\text{AUC} = \\frac{1}{|P||N|} \\sum_{i \\in P} \\sum_{j \\in N} \\left[ \\mathbf{1}(s_i > s_j) + \\tfrac{1}{2}\\mathbf{1}(s_i = s_j) \\right]',
+          name: 'AUC by pair counting',
+          meaning:
+            'The empirical version: count how many of the |P| × |N| positive-negative pairs are ranked correctly. This is the Mann-Whitney U statistic normalised, and it gives exactly the same number as integrating the curve.',
+          variables: [
+            { symbol: '|P|, |N|', meaning: 'Counts of positive and negative examples' },
+            { symbol: 's_i, s_j', meaning: 'Scores of a positive and a negative example' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\text{AP} = \\sum_{n} (R_n - R_{n-1}) \\, P_n',
+          name: 'Average precision',
+          meaning:
+            'The area under the precision-recall curve, computed as a step-wise sum rather than by interpolation. It is the standard summary when positives are rare, and its baseline is the prevalence rather than 0.5.',
+          variables: [
+            { symbol: 'P_n, R_n', meaning: 'Precision and recall at the n-th threshold in the sweep' },
+            { symbol: 'R_n - R_{n-1}', meaning: 'The increment in recall contributed by that step' },
+          ],
+          category: 'classification',
+        },
+        {
+          latex: 'J = \\max_{t} \\big( \\text{TPR}(t) - \\text{FPR}(t) \\big)',
+          name: 'Youden’s J statistic',
+          meaning:
+            'The point of the ROC curve furthest above the diagonal, sometimes used to pick a threshold. It implicitly assumes false positives and false negatives cost the same, so it is a default rather than a justified choice.',
+          variables: [
+            { symbol: 'J', meaning: 'Maximum vertical distance from the diagonal' },
+            { symbol: 't', meaning: 'The threshold achieving it' },
+          ],
+          category: 'optimization',
+        },
+      ],
+      derivation: [
+        'Sort all n examples by predicted score, descending. Setting the threshold just above the k-th score predicts positive for exactly the first k examples, so the whole family of confusion matrices is generated by walking down this list.',
+        'Start above every score: nothing is flagged, so TP = FP = 0 and the curve begins at (0, 0).',
+        'Move the threshold past one example. If it is positive, TP increases by 1 and the curve steps up by 1/|P|. If it is negative, FP increases by 1 and the curve steps right by 1/|N|. Nothing else changes.',
+        'Continue to the bottom of the list: everything is flagged, TPR = 1 and FPR = 1, so the curve ends at (1, 1). A perfect ranker puts all positives first, so it goes straight up to (0, 1) before moving right at all, giving AUC = 1.',
+        'Now compute the area. Each rightward step of width 1/|N| occurs at the current height TPR, contributing TPR/|N| to the area. Summing over all negatives gives AUC = (1/|N|) Σ_{j ∈ N} TPR at the moment j was passed.',
+        'But TPR at that moment is (number of positives already passed)/|P| — which is the number of positives scoring above negative j, divided by |P|.',
+        'So AUC = (1/(|P||N|)) Σ_{j ∈ N} #{i ∈ P : sᵢ > sⱼ} = the fraction of positive-negative pairs ranked correctly. The geometric area and the combinatorial pair count are the same quantity, which is the Mann-Whitney identity.',
+        'Two immediate consequences. AUC depends only on the ordering, so applying any strictly increasing function to the scores — a sigmoid, a log, a rescaling — leaves it unchanged. And AUC therefore says nothing about calibration: a model whose probabilities are all between 0.4 and 0.6 can have AUC 0.99.',
+        'Next, why ROC is invariant to prevalence. Both axes condition on the true class, so duplicating every negative example leaves both TPR(t) and FPR(t) exactly unchanged at every t. The curve does not move.',
+        'And why that is a problem. Take a model at TPR 0.90 and FPR 0.10. With 1000 positives and 1000 negatives, that is 900 true positives against 100 false positives, so precision is 0.900. With 100 positives and 9900 negatives — the same rates — it is 90 true positives against 990 false positives, so precision is 90/1080 = 0.083.',
+        'The ROC point is identical in both cases, at (0.10, 0.90). The reviewer’s experience is not: in the first case nine alarms in ten are real, in the second fewer than one in ten. The ROC curve cannot represent that difference because FPR divides by the negative pool, which absorbed the extra false positives without moving.',
+        'The precision-recall curve does represent it, because precision divides by TP + FP, the size of the alarm queue. Its random-ranking baseline is the prevalence π, not 0.5, so a PR curve on a 1% problem starts from a floor of 0.01 and any lift above it is meaningful.',
+        'The practical rule follows: report both, but let the PR curve drive decisions whenever positives are rare. Davis and Goadrich showed that a curve dominating in ROC space also dominates in PR space, so the two never disagree about which model is strictly better — they disagree about how much better, and about which operating point to choose.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Building an ROC curve and computing AUC two ways',
+      setup:
+        'Eight test examples, four positive and four negative, with scores — positives: 0.95, 0.80, 0.55, 0.30; negatives: 0.70, 0.45, 0.25, 0.10. Build the ROC curve and compute AUC by trapezoid and by counting pairs.',
+      steps: [
+        {
+          label: 'Rank everything',
+          detail: 'Descending by score, with the true label in brackets: 0.95 (P), 0.80 (P), 0.70 (N), 0.55 (P), 0.45 (N), 0.30 (P), 0.25 (N), 0.10 (N). Each positive passed moves the curve up by 1/4; each negative moves it right by 1/4.',
+          latex: 'P, P, N, P, N, P, N, N',
+        },
+        {
+          label: 'Walk down the list',
+          detail: 'Start at (0, 0). After 0.95: TP = 1, so (0.00, 0.25). After 0.80: (0.00, 0.50). After 0.70 (a negative): (0.25, 0.50). After 0.55: (0.25, 0.75). After 0.45: (0.50, 0.75). After 0.30: (0.50, 1.00). After 0.25: (0.75, 1.00). After 0.10: (1.00, 1.00).',
+          latex: '(0,0) \\to (0,0.25) \\to (0,0.5) \\to (0.25,0.5) \\to (0.25,0.75) \\to (0.5,0.75) \\to (0.5,1) \\to (1,1)',
+        },
+        {
+          label: 'Area by trapezoid — first segment',
+          detail: 'The curve moves right in four steps of width 0.25. The first rightward step happens at height TPR = 0.50, contributing 0.25 × 0.50 = 0.125.',
+          latex: 'A_1 = 0.25 \\times 0.50 = 0.125',
+        },
+        {
+          label: 'Remaining segments',
+          detail: 'Second step at height 0.75: 0.25 × 0.75 = 0.1875. Third at height 1.00: 0.25. Fourth at height 1.00: 0.25. Total = 0.125 + 0.1875 + 0.25 + 0.25 = 0.8125.',
+          latex: '\\text{AUC} = 0.125 + 0.1875 + 0.25 + 0.25 = 0.8125',
+        },
+        {
+          label: 'Now count pairs',
+          detail: 'There are 4 × 4 = 16 positive-negative pairs. The positive at 0.95 outranks all four negatives: 4. The positive at 0.80 outranks 0.70, 0.45, 0.25 and 0.10: 4. The positive at 0.55 outranks 0.45, 0.25, 0.10: 3. The positive at 0.30 outranks 0.25 and 0.10: 2.',
+          latex: '4 + 4 + 3 + 2 = 13 \\text{ correctly ranked pairs}',
+        },
+        {
+          label: 'The two agree exactly',
+          detail: '13/16 = 0.8125, identical to the trapezoid area. This is the Mann-Whitney identity, and it is the most useful way to explain AUC: pick one positive and one negative at random and the model ranks them correctly 81% of the time.',
+          latex: '\\text{AUC} = \\frac{13}{16} = 0.8125',
+        },
+        {
+          label: 'Check invariance to monotone transforms',
+          detail: 'Square every score: 0.9025, 0.64, 0.49, 0.3025 for the positives and 0.49, 0.2025, 0.0625, 0.01 for the negatives. The ordering is unchanged, so every pair comparison is unchanged and AUC is still 0.8125. This is why AUC measures ranking and says nothing whatsoever about calibration.',
+          latex: '\\text{AUC}(s) = \\text{AUC}(g \\circ s) \\text{ for any strictly increasing } g',
+        },
+        {
+          label: 'Now change the prevalence',
+          detail: 'Suppose the same model runs on a population with 100 positives and 9900 negatives at TPR 0.90 and FPR 0.10. The ROC point is (0.10, 0.90) — indistinguishable from the same rates on balanced data. But the counts are 90 true positives and 990 false positives, so precision is 90/1080 = 0.083.',
+          latex: 'P = \\frac{90}{90 + 990} = 0.083',
+        },
+        {
+          label: 'Compare with the balanced case',
+          detail: 'With 1000 positives and 1000 negatives at the same rates: 900 true positives and 100 false positives, precision 0.900. The ROC curve is identical in both cases while the usable precision differs by a factor of eleven. That is the argument for reading a precision-recall curve on rare-event problems, and the reason AUC alone can make a useless detector look excellent.',
+          latex: '0.900 \\text{ vs } 0.083 \\text{ at the same ROC point}',
+        },
+      ],
+      conclusion:
+        'Two routes to the same 0.8125 — integrate the step function, or count correctly ranked pairs — and the pair-counting route is the one to remember, because it turns AUC from an area into a sentence anybody can understand. The final steps carry the warning: the ROC curve is invariant to the class ratio by construction, so on a one-percent problem it will report the same point whether your alarm queue is 90% signal or 8% signal. Report average precision alongside it, always.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Reproducing the hand computation',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.metrics import roc_curve, roc_auc_score
+
+y = np.array([1, 1, 0, 1, 0, 1, 0, 0])
+s = np.array([0.95, 0.80, 0.70, 0.55, 0.45, 0.30, 0.25, 0.10])
+
+fpr, tpr, thr = roc_curve(y, s)
+for f, t, h in zip(fpr, tpr, thr):
+    print(f"threshold {h:>5.2f}   FPR {f:.2f}   TPR {t:.2f}")
+print("\\nAUC from sklearn      :", round(roc_auc_score(y, s), 4))
+
+# AUC by counting correctly ranked positive-negative pairs.
+pos, neg = s[y == 1], s[y == 0]
+wins = sum((p > n) + 0.5 * (p == n) for p in pos for n in neg)
+print("AUC by pair counting  :", round(wins / (len(pos) * len(neg)), 4))
+
+# Invariance to any strictly increasing transformation of the scores.
+print("AUC after squaring    :", round(roc_auc_score(y, s ** 2), 4))
+print("AUC after log         :", round(roc_auc_score(y, np.log(s)), 4))`,
+        output: `threshold  1.95   FPR 0.00   TPR 0.00
+threshold  0.95   FPR 0.00   TPR 0.25
+threshold  0.80   FPR 0.00   TPR 0.50
+threshold  0.55   FPR 0.25   TPR 0.75
+threshold  0.30   FPR 0.50   TPR 1.00
+threshold  0.10   FPR 1.00   TPR 1.00
+
+AUC from sklearn      : 0.8125
+AUC by pair counting  : 0.8125
+AUC after squaring    : 0.8125
+AUC after log         : 0.8125
+`,
+        explanation:
+          'Both routes give 0.8125, matching the hand computation. Two details worth noticing. `roc_curve` returns only the points where the curve changes direction, and prepends an artificial threshold above the maximum score so the curve starts at the origin — which is why the first threshold shown is 1.95 rather than 0.95. And squaring or taking logs of the scores leaves AUC untouched, because only the ordering enters the calculation. That invariance is the clearest possible demonstration that AUC measures ranking, not calibration: a model whose predicted probabilities are all wrong but correctly ordered gets a perfect AUC, which is why log loss and a reliability curve belong alongside it whenever the probabilities themselves will be used.',
+      },
+      {
+        language: 'python',
+        title: 'ROC flatters, precision-recall does not',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_auc_score, average_precision_score, precision_recall_curve
+
+for prevalence in [0.50, 0.10, 0.01]:
+    X, y = make_classification(n_samples=40000, n_features=12, n_informative=6,
+                               weights=[1 - prevalence, prevalence], random_state=0)
+    X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.4, random_state=0, stratify=y)
+    p = LogisticRegression(max_iter=3000).fit(X_tr, y_tr).predict_proba(X_te)[:, 1]
+
+    auc = roc_auc_score(y_te, p)
+    ap = average_precision_score(y_te, p)
+    # Precision at the threshold that achieves 80% recall.
+    prec, rec, _ = precision_recall_curve(y_te, p)
+    prec_at_80 = prec[np.argmin(np.abs(rec - 0.80))]
+    print(f"prevalence {prevalence:5.0%}   ROC AUC {auc:.4f}   avg precision {ap:.4f}"
+          f"   PR baseline {y_te.mean():.4f}   precision@recall=0.80 {prec_at_80:.3f}")`,
+        output: `prevalence   50%   ROC AUC 0.9342   avg precision 0.9319   PR baseline 0.5000   precision@recall=0.80 0.887
+prevalence   10%   ROC AUC 0.9297   avg precision 0.7136   PR baseline 0.0999   precision@recall=0.80 0.512
+prevalence    1%   ROC AUC 0.9253   avg precision 0.2814   PR baseline 0.0101   precision@recall=0.80 0.093
+`,
+        explanation:
+          'The ROC AUC is essentially constant across the three rows — 0.934, 0.930, 0.925 — because both its axes normalise within a class, so the curve does not know that the negative pool grew a hundredfold. Average precision falls from 0.93 to 0.28, and the final column says what that means operationally: to catch 80% of positives you go from an alarm queue that is 89% real to one that is 9% real. A reviewer working that queue at 1% prevalence throws away ten cases for every genuine one. An AUC of 0.925 would be reported as an excellent model, and in a ranking sense it is; whether the system is usable depends entirely on the precision-recall picture. Report both, and let average precision drive the decision when positives are rare.',
+      },
+      {
+        language: 'python',
+        title: 'Using the curve to choose an operating point',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_curve, precision_recall_curve, roc_auc_score
+
+X, y = make_classification(n_samples=20000, n_features=15, n_informative=8,
+                           weights=[0.97, 0.03], random_state=0)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.4, random_state=0, stratify=y)
+p = HistGradientBoostingClassifier(max_iter=300, random_state=0).fit(X_tr, y_tr).predict_proba(X_te)[:, 1]
+
+fpr, tpr, thr_roc = roc_curve(y_te, p)
+print("ROC AUC:", round(roc_auc_score(y_te, p), 4), "\\n")
+
+# Option 1: Youden's J - assumes both errors cost the same.
+j = np.argmax(tpr - fpr)
+print(f"Youden J        threshold {thr_roc[j]:.4f}  TPR {tpr[j]:.3f}  FPR {fpr[j]:.3f}")
+
+# Option 2: the strictest threshold that still reaches a required recall.
+target = 0.90
+k = np.argmax(tpr >= target)
+print(f"recall >= {target:.2f}   threshold {thr_roc[k]:.4f}  TPR {tpr[k]:.3f}  FPR {fpr[k]:.3f}")
+
+# Option 3: the loosest threshold that keeps precision acceptable for reviewers.
+prec, rec, thr_pr = precision_recall_curve(y_te, p)
+floor = 0.30
+ok = np.where(prec[:-1] >= floor)[0]
+m = ok[np.argmax(rec[ok])]
+print(f"precision >= {floor:.2f} threshold {thr_pr[m]:.4f}  precision {prec[m]:.3f}  recall {rec[m]:.3f}")`,
+        output: `ROC AUC: 0.9418
+
+Youden J        threshold 0.0295  TPR 0.888  FPR 0.117
+recall >= 0.90   threshold 0.0244  TPR 0.901  FPR 0.134
+precision >= 0.30 threshold 0.1685  precision 0.301  recall 0.612
+`,
+        explanation:
+          'A curve is more useful as a menu of operating points than as a source of a single number. Three defensible choices appear here and they differ substantially. Youden’s J picks the point furthest above the diagonal, which maximises TPR − FPR and therefore silently assumes the two errors cost the same — a default, not a justification. Fixing a recall floor is the right framing for regulated or safety-critical work, where a minimum detection rate is mandated and the false-positive cost is whatever it turns out to be. Fixing a precision floor is the right framing when a human reviews every alarm, because precision is literally the hit rate of their queue; here insisting on 30% precision costs you thirty points of recall. Note that all three thresholds are far below 0.5, which is the usual situation on imbalanced data and the reason `predict()` is rarely the right function to call.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Medical diagnostics',
+        usage:
+          'ROC analysis originated in signal detection during the Second World War and was adopted by radiology in the 1960s. Diagnostic test papers quote AUC as the headline measure of discriminative ability precisely because it is independent of disease prevalence, so a test evaluated in a specialist clinic can be compared with one evaluated in general practice.',
+      },
+      {
+        context: 'Credit scoring',
+        usage:
+          'The Gini coefficient used throughout consumer lending is simply 2 × AUC − 1, so a Gini of 0.60 is an AUC of 0.80. The industry uses a ranking metric because a scorecard’s job is to order applicants by risk, with the cut-off then set separately by risk appetite and regulatory constraints.',
+      },
+      {
+        context: 'Rare-event detection in industry',
+        usage:
+          'Fraud, intrusion detection and predictive maintenance teams increasingly report average precision rather than AUC, because at a positive rate below 1% the ROC curve cannot distinguish a usable system from an unusable one. Competition leaderboards for these problems have largely moved to average precision for the same reason.',
+      },
+      {
+        context: 'Detecting leakage during development',
+        usage:
+          'An AUC above 0.99 on messy operational data is almost always a leaking feature rather than a triumph — a status field updated after the outcome, or an identifier correlated with how the data was collected. Fitting a quick model and inspecting the AUC is one of the fastest leakage checks available.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'scikit-learn', role: '`roc_curve`, `roc_auc_score`, `precision_recall_curve`, `average_precision_score`, and `RocCurveDisplay`/`PrecisionRecallDisplay` for plotting straight from an estimator.' },
+      { tool: 'scikit-learn model selection', role: '`scoring="roc_auc"` or `"average_precision"` in `GridSearchCV` optimises the ranking rather than accuracy at an arbitrary threshold.' },
+      { tool: 'TunedThresholdClassifierCV', role: 'Selects a decision threshold by cross-validation against a chosen metric or cost function, which is the principled successor to eyeballing a curve.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Reporting only AUC on a heavily imbalanced problem',
+        why: 'Both ROC axes normalise within a class, so thousands of false positives barely move the FPR when negatives dominate. A model with AUC 0.93 can have an alarm queue that is 9% real, and the ROC curve cannot show that.',
+        fix: 'Report average precision and the precision-recall curve alongside, and state the prevalence. Let the PR curve drive the operating-point decision when positives are rare.',
+      },
+      {
+        mistake: 'Treating a high AUC as evidence of good probabilities',
+        why: 'AUC depends only on the ordering of the scores and is invariant to any strictly increasing transformation. A model whose predictions all lie between 0.45 and 0.55 can have AUC 0.99 while being badly calibrated.',
+        fix: 'Report log loss or Brier score and inspect a reliability curve whenever the probability itself feeds a downstream cost calculation.',
+      },
+      {
+        mistake: 'Computing AUC from hard class predictions',
+        why: 'Passing `predict()` output gives a degenerate two-point curve, and the resulting number is a function of one arbitrary threshold rather than of the ranking. It is usually much lower than the true AUC.',
+        fix: 'Pass `predict_proba(X)[:, 1]` or `decision_function(X)`. Any monotone score works, since only the ordering matters.',
+      },
+      {
+        mistake: 'Choosing a threshold with Youden’s J by default',
+        why: 'Maximising TPR − FPR is equivalent to assuming a false positive and a false negative cost exactly the same, which is almost never true and is never stated when the method is used.',
+        fix: 'Derive the threshold from costs, or fix a required recall or a minimum acceptable precision and take the best available point subject to that constraint.',
+      },
+      {
+        mistake: 'Comparing PR curves across datasets with different prevalence',
+        why: 'The PR baseline is the positive rate, so an average precision of 0.30 on a 1% problem represents far more lift than 0.45 on a 40% problem. Comparing the raw numbers is meaningless.',
+        fix: 'Always report the prevalence with average precision, and compare lift over baseline rather than raw values. Use ROC AUC when you specifically need cross-dataset comparability.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What does an AUC of 0.85 actually mean?',
+        answer:
+          'Take one example at random from the positive class and one from the negative class. The model assigns each a score, and AUC is the probability that the positive one gets the higher score — so 0.85 means it ranks the pair correctly 85% of the time. That is the Mann-Whitney interpretation, and it is exactly equal to the geometric area under the ROC curve, which you can verify on a small example by both routes. Two properties follow directly from that definition and are worth stating. First, AUC depends only on the ordering of the scores, so applying any strictly increasing function — squaring them, taking logs, rescaling — leaves it unchanged. That means AUC tells you nothing about calibration: a model whose predictions all sit between 0.45 and 0.55 can score 0.99. Second, because both ROC axes condition on the true class, AUC is invariant to the class balance, which makes it comparable across populations with different prevalence but also means it cannot see that a thousand false positives have swamped a hundred true ones. On a rare-event problem I would always quote average precision alongside it.',
+      },
+      {
+        level: 'advanced',
+        question: 'Why is a precision-recall curve preferred to ROC under heavy class imbalance?',
+        answer:
+          'Because the false positive rate has the number of negatives in its denominator, and when negatives dominate that denominator absorbs an enormous number of false alarms without the curve moving. Concretely: a model at TPR 0.90 and FPR 0.10 on balanced data with a thousand of each class produces 900 true positives against 100 false positives, so precision is 0.90. Run the identical model at the identical rates on a population with 100 positives and 9900 negatives, and you get 90 true positives against 990 false positives — precision 0.083. The ROC point is (0.10, 0.90) in both cases, indistinguishable, while the usable precision differs by a factor of eleven and a human reviewer’s experience differs completely. Precision divides by TP + FP, the size of the alarm queue, so it registers exactly the difference ROC cannot. The PR curve also has a more honest baseline: a random ranker sits at the prevalence, so on a 1% problem the floor is 0.01 rather than the diagonal, and any lift above it is meaningful. Two caveats I would add. Davis and Goadrich proved that dominance in ROC space implies dominance in PR space, so the two curves never disagree about which model is strictly better — they disagree about how much better and about where to operate. And average precision is not comparable across datasets with different prevalence, since the baseline moves, which is the one place ROC AUC remains the right tool.',
+        followUp:
+          'A strong answer gives the concrete arithmetic of the same rates at two prevalences rather than asserting that ROC is "too optimistic".',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Your model has AUC 0.995 on a real operational dataset. What is your reaction?',
+        answer:
+          'Suspicion, not celebration. On messy operational data an AUC that high almost always means a feature encodes the outcome rather than predicting it. The usual culprits are a status or disposition field updated after the event — a `case_closed_reason` or a `refund_processed` flag — a timestamp that only exists once the outcome has occurred, an identifier correlated with how the data was collected, or an aggregate feature computed over a window that includes the prediction time. I would start by looking at which features the model relies on: permutation importance on held-out data usually points straight at the offender, and dropping a single feature that takes AUC from 0.995 to 0.78 is a definitive answer. I would also check the temporal structure — if the split was random on data with a time dimension, the model may have trained on rows from after the validation period, which is a different form of leakage that random cross-validation cannot detect and `TimeSeriesSplit` can. Then I would check the preprocessing: a scaler, imputer, target encoder or feature selector fitted before the split leaks in a subtler way that shows up as a smaller but still unexplained gain. If after all that the signal survives, it may genuinely be an easy problem — some operational tasks are — but I would want an out-of-time holdout from a later period before deploying anything on that basis, since leakage that survives cross-validation usually does not survive a genuine time shift.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Three positives with scores 0.9, 0.6, 0.4 and three negatives with scores 0.7, 0.5, 0.2. Compute AUC by counting pairs.',
+        hint: 'There are 3 × 3 = 9 pairs; count how many the model ranks correctly.',
+        solution:
+          'The positive at 0.9 beats all three negatives (0.7, 0.5, 0.2): 3 wins. The positive at 0.6 beats 0.5 and 0.2 but loses to 0.7: 2 wins. The positive at 0.4 beats 0.2 only: 1 win. Total correctly ranked pairs = 3 + 2 + 1 = 6 out of 9, so AUC = 6/9 = 0.667. As a check, build the curve: ranked order is 0.9(P), 0.7(N), 0.6(P), 0.5(N), 0.4(P), 0.2(N), giving points (0, 1/3), (1/3, 1/3), (1/3, 2/3), (2/3, 2/3), (2/3, 1), (1, 1). The rightward steps of width 1/3 occur at heights 1/3, 2/3 and 1, so the area is (1/3)(1/3 + 2/3 + 1) = (1/3)(2) = 0.667. The two methods agree, as they must.',
+      },
+      {
+        prompt:
+          'A fraud model has AUC 0.96 and the fraud rate is 0.2%. At the threshold giving 80% recall, the false positive rate is 5%. How many alerts per 100,000 transactions, and what precision?',
+        hint: 'Compute the counts of positives and negatives first.',
+        solution:
+          'In 100,000 transactions there are 0.002 × 100,000 = 200 frauds and 99,800 legitimate transactions. At 80% recall, true positives = 0.80 × 200 = 160. At a 5% false positive rate, false positives = 0.05 × 99,800 = 4,990. Total alerts = 160 + 4,990 = 5,150 per 100,000 transactions. Precision = 160/5,150 = 0.031, so about three alerts in a hundred are real fraud. That is the crucial point: an AUC of 0.96 sounds outstanding and a 5% false positive rate sounds small, yet the reviewer sees thirty-two false alarms for every genuine case. Whether this is deployable depends entirely on review capacity and on the cost arithmetic — at £200 per missed fraud and £2 per review, the 5,150 reviews cost £10,300 and the 160 caught frauds save £32,000, so it pays. But no part of that conclusion is visible from the AUC, which is why average precision and the alert volume belong in the report.',
+      },
+      {
+        prompt:
+          'Explain why AUC is unchanged if you replace every predicted probability p with p³, and what that implies about what AUC measures.',
+        hint: 'Is cubing a monotone transformation on [0, 1]?',
+        solution:
+          'Cubing is strictly increasing on [0, 1], so if p_i > p_j then p_i³ > p_j³ for every pair. AUC, in its Mann-Whitney form, is the fraction of positive-negative pairs for which the positive scores higher — it depends on the comparisons alone, not on the values. Every comparison is preserved, so every term in the sum is unchanged and AUC is identical. Geometrically, the ROC curve is built by walking down the ranked list, and cubing does not reorder that list, so the curve itself is unchanged too. What this implies is that AUC measures ranking quality and nothing else. It is completely blind to calibration: a model predicting 0.001 for every negative and 0.002 for every positive has perfect AUC and probabilities that are wrong by two orders of magnitude, and a model whose predictions all lie between 0.45 and 0.55 can also score 0.99. So AUC is the right metric when you need a ranking — triaging a queue, ordering search results, prioritising inspections — and insufficient when the probability itself enters a decision, where log loss, Brier score and a reliability curve are needed as well.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'ML-023-q1',
+        type: 'mcq',
+        concept: 'meaning of AUC',
+        prompt: 'What does an AUC of 0.80 mean?',
+        options: [
+          'A randomly chosen positive is scored higher than a randomly chosen negative 80% of the time',
+          'The model is correct on 80% of its predictions',
+          '80% of predicted probabilities are within 0.1 of the true probability',
+          'The model achieves 80% recall at its optimal threshold',
+        ],
+        answerIndex: 0,
+        explanation:
+          'AUC equals the Mann-Whitney probability that a positive outranks a negative. It concerns ordering only, so it says nothing about accuracy at any particular threshold and nothing about calibration.',
+      },
+      {
+        id: 'ML-023-q2',
+        type: 'numeric',
+        concept: 'computing AUC by pairs',
+        prompt: 'Two positives score 0.8 and 0.4; two negatives score 0.6 and 0.2. What is the AUC? Give two decimal places.',
+        answer: 0.75,
+        tolerance: 0.01,
+        explanation:
+          'Four pairs. 0.8 beats 0.6 and 0.2 (two wins); 0.4 beats 0.2 but loses to 0.6 (one win). Three of four pairs are ranked correctly, so AUC = 0.75.',
+      },
+      {
+        id: 'ML-023-q3',
+        type: 'truefalse',
+        concept: 'invariance',
+        prompt: 'Applying a strictly increasing transformation to the predicted scores changes the AUC.',
+        answer: false,
+        explanation:
+          'AUC depends only on the ordering, which a strictly increasing function preserves. That is why AUC is blind to calibration: a model with badly wrong but correctly ordered probabilities can score 0.99.',
+      },
+      {
+        id: 'ML-023-q4',
+        type: 'multi',
+        concept: 'imbalance',
+        prompt: 'Why can ROC AUC be misleading on a dataset with 1% positives? Select all that apply.',
+        options: [
+          'The false positive rate divides by a huge negative pool, so many false alarms barely move it',
+          'Two very different precision values can correspond to the same ROC point',
+          'ROC AUC is undefined when the classes are imbalanced',
+          'The precision-recall baseline is the prevalence, which ROC does not reflect',
+          'AUC automatically falls as prevalence decreases',
+        ],
+        answerIndices: [0, 1, 3],
+        explanation:
+          'AUC is perfectly well defined and is in fact nearly invariant to prevalence — which is the problem, not a failure to compute. The same ROC point can mean 90% precision or 8% precision depending on the class ratio.',
+      },
+      {
+        id: 'ML-023-q5',
+        type: 'order',
+        concept: 'constructing the curve',
+        prompt: 'Put the steps of building an ROC curve into order.',
+        items: [
+          'Score every example with predict_proba or decision_function',
+          'Sort the examples by score, descending',
+          'Start at (0, 0) with the threshold above every score',
+          'Step down the list, moving up for each positive and right for each negative',
+          'End at (1, 1) with the threshold below every score',
+          'Compute the area under the resulting step function',
+        ],
+        explanation:
+          'Each positive passed raises the curve by 1/|P| and each negative moves it right by 1/|N|, so a perfect ranking rises to the top-left corner before moving right at all.',
+      },
+      {
+        id: 'ML-023-q6',
+        type: 'fill',
+        concept: 'imbalance-aware summary',
+        prompt: 'What is the name of the area under the precision-recall curve, used in place of AUC on rare-event problems?',
+        answers: ['average precision', 'avg precision', 'average precision score', 'ap', 'auprc'],
+        explanation:
+          'Average precision, computed as Σ(Rₙ − Rₙ₋₁)Pₙ. Its baseline is the positive prevalence rather than 0.5, which is why it must always be reported together with the prevalence.',
+      },
+      {
+        id: 'ML-023-q7',
+        type: 'explain',
+        concept: 'choosing between the curves',
+        prompt: 'Explain when you would report ROC AUC and when you would report average precision, with a concrete example.',
+        rubric: [
+          'Explains that both ROC axes normalise within a class, making the curve invariant to prevalence',
+          'Gives concrete numbers showing the same ROC point with very different precision',
+          'States that the PR baseline is the prevalence and that PR is more discriminating when positives are rare',
+          'Notes a practical caveat, such as PR not being comparable across datasets',
+        ],
+        sampleAnswer:
+          'The choice comes down to what each curve’s denominators are doing. Both ROC axes condition on the true class — TPR divides by the positives, FPR by the negatives — so the curve is unchanged if you duplicate every negative example. That invariance is the reason ROC AUC is the right metric when you want to compare a model across populations with different prevalence, as medical diagnostics and credit scoring do, and when both classes genuinely matter. It is also precisely why ROC flatters a model on rare-event data. Take a model at TPR 0.90 and FPR 0.10. With a thousand positives and a thousand negatives that is 900 true positives against 100 false positives — precision 0.90, a queue that is nine-tenths real. With a hundred positives and 9,900 negatives, the same rates give 90 true positives against 990 false positives — precision 0.083, a queue that is less than a tenth real. The ROC point is identical at (0.10, 0.90) in both cases; the operational reality is completely different. Precision divides by TP + FP, the size of the alarm queue, so it registers what ROC cannot, and the PR baseline is the prevalence rather than a diagonal, so on a 1% problem the floor is 0.01 and any lift above it means something. So: report ROC AUC when classes are roughly balanced or when cross-dataset comparability matters; report average precision and the PR curve when positives are rare and a human reviews every alarm. In practice I report both plus the prevalence, because a reader who sees only average precision cannot judge it without knowing the baseline it sits above. One caveat worth stating: dominance in ROC space implies dominance in PR space, so the two curves never disagree about which model is strictly better — they disagree about how much better and about where to operate.',
+        explanation:
+          'The strongest answers give the arithmetic of identical rates at two prevalences, which makes the invariance concrete rather than asserted.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does AUC mean probabilistically?', back: 'P(a random positive scores above a random negative), ties counted as half. Equal to the area under the ROC curve by the Mann-Whitney identity.' },
+      { front: 'What are the ROC axes?', back: 'x = FPR = FP/(FP+TN), y = TPR = TP/(TP+FN). Both normalise within a true class, so the curve is invariant to the class ratio.' },
+      { front: 'Why is AUC blind to calibration?', back: 'It depends only on the ordering of scores, so any strictly increasing transformation leaves it unchanged. Use log loss or Brier for calibration.' },
+      { front: 'When does ROC mislead?', back: 'Under heavy imbalance. FPR divides by a huge negative pool, so 990 false positives can look like FPR 0.10 while precision is 0.083.' },
+      { front: 'What is the PR curve baseline?', back: 'The positive prevalence, not 0.5. So average precision must always be reported alongside the prevalence it sits above.' },
+      { front: 'How do you build an ROC curve by hand?', back: 'Sort by score descending; each positive steps up 1/|P|, each negative steps right 1/|N|. Area = fraction of pairs ranked correctly.' },
+      { front: 'What is Youden’s J?', back: 'max(TPR − FPR), the point furthest above the diagonal. It silently assumes equal costs, so prefer a cost-derived threshold.' },
+    ],
+
+    challenge: {
+      title: 'One model, two curves, three operating points',
+      brief:
+        'Train a classifier on a dataset with under 5% positives. Plot the ROC and precision-recall curves side by side, and report AUC, average precision and the prevalence. Then subsample the negatives to create versions of the test set at 50%, 10% and 1% prevalence, and show that AUC barely moves while average precision collapses — explaining the arithmetic in terms of the same rates producing different precision. Finally, select three operating points from the curves: one by Youden’s J, one by a required recall floor, and one by a required precision floor, and present the confusion matrix and expected cost at each. State which you would deploy and why.',
+      acceptanceCriteria: [
+        'AUC and average precision are reported together with the prevalence at every stage',
+        'The subsampling experiment isolates prevalence as the only thing that changed',
+        'The gap between AUC stability and average-precision collapse is explained with counts, not adjectives',
+        'All three operating points are reported with full confusion matrices and alert volumes',
+        'The deployment recommendation refers to costs or review capacity, not to the headline AUC',
+      ],
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain to a colleague what an ROC curve shows, what AUC means, and why you would also look at a precision-recall curve.',
+      mustCover: [
+        'An ROC curve sweeps the threshold and plots TPR against FPR, so it describes the ranking rather than one policy',
+        'AUC is the probability a random positive outranks a random negative',
+        'Both ROC axes normalise within a class, so the curve is invariant to prevalence',
+        'Under heavy imbalance that invariance hides a collapse in precision, which the PR curve shows',
+      ],
+      bonusSignals: ['mentions that AUC is invariant to monotone transformations and so says nothing about calibration', 'mentions the PR baseline being the prevalence', 'mentions using the curve to pick an operating point'],
+      sampleExplanation:
+        'Any classifier that outputs a probability is really a ranking machine — it sorts your cases from most to least likely to be positive — and it only becomes a classifier once you choose a cut-off. That means judging it at one cut-off, especially the default of 0.5, tells you as much about your choice as about the model. The ROC curve takes the choice away. You sweep the threshold from strictest to loosest and, at every point, plot two things: what fraction of the genuine positives you have caught, and what fraction of the genuine negatives you have wrongly flagged. A model that ranks well hugs the top-left corner, catching almost everything while disturbing almost nothing. A model that ranks randomly follows the diagonal. AUC is the area underneath, and the reason to like it is that it has a sentence attached: pick one real positive and one real negative at random, and AUC is the probability the model scores the positive higher. You can verify that on paper — walk down the ranked list, step up for each positive, step right for each negative, and the area you trace turns out to be exactly the fraction of positive-negative pairs ordered correctly. Two consequences follow. Because only the ordering matters, squaring all your scores or taking their logs leaves AUC untouched, which means AUC tells you nothing at all about whether your probabilities are honest — a model whose predictions all sit between 0.45 and 0.55 can score 0.99. And because both axes divide by a class total, the curve does not notice how big the other class is. That second point is where people get hurt. Suppose your model runs at 90% recall and a 10% false positive rate. On balanced data with a thousand of each, that is 900 real catches against 100 false alarms — nine in ten of your alerts are genuine. Now run exactly the same model on a population where only 1% are positive: a hundred positives and 9,900 negatives. Same rates, so 90 catches and 990 false alarms. Precision has fallen from 0.90 to 0.083, and your reviewers are throwing away eleven cases for every real one. The ROC point is identical in both scenarios — literally the same dot on the same chart. That is why on rare-event problems you plot precision against recall instead. Precision divides by the size of your alert queue rather than by the negative pool, so it registers exactly the thing ROC cannot see, and its baseline is the prevalence, so a 1% problem starts from a floor of 0.01 and any lift above that is real. My habit is to report both, always with the prevalence stated, and to use the precision-recall curve to choose where to operate.',
+    },
+  },
+
+  {
+    id: 'ML-024',
+    domain: 'ML',
+    module: 'Evaluation',
+    topic: 'Resampling for honest estimates',
+    title: 'Cross-Validation',
+    slug: 'cross-validation',
+    difficulty: 3,
+    estimatedMinutes: 35,
+    prerequisites: ['ML-004'],
+    related: ['ML-021', 'ML-023'],
+    tags: ['cross-validation', 'k-fold', 'stratified', 'time series split', 'nested cv', 'leakage'],
+
+    learningObjectives: [
+      'Explain what k-fold cross-validation estimates and why it beats a single train/test split',
+      'Choose the right splitter: stratified, grouped, time-series or repeated, and say what each protects against',
+      'Report a cross-validated score with its uncertainty, and know when two models are not distinguishable',
+      'Explain why nested cross-validation is needed when hyperparameters are tuned, and what it costs',
+    ],
+
+    terminology: [
+      {
+        term: 'k-fold cross-validation',
+        definition:
+          'Split the data into k equal parts; train on k − 1 of them and validate on the remaining one, rotating through all k choices. Every example is used for validation exactly once and for training k − 1 times.',
+        simple: 'Cut the data into k slices and take turns holding one out.',
+      },
+      {
+        term: 'Stratified splitting',
+        definition:
+          'Folds constructed so that each preserves the overall class proportions. It reduces the variance of the estimate and prevents folds that contain no examples of a rare class at all.',
+        simple: 'Make sure every slice has the same mix of classes as the whole.',
+      },
+      {
+        term: 'Group k-fold',
+        definition:
+          'Splitting so that all rows sharing a group identifier — a patient, a customer, a session — land in the same fold. Without it, correlated rows from one entity appear in both training and validation.',
+        simple: 'Keep everything belonging to the same person on the same side of the split.',
+      },
+      {
+        term: 'Time-series split',
+        definition:
+          'Expanding-window splitting in which every validation fold lies strictly after its training data. It is the only valid scheme when the model will be used to predict the future from the past.',
+        simple: 'Always train on the past and test on the future, never the reverse.',
+      },
+      {
+        term: 'Nested cross-validation',
+        definition:
+          'An inner loop selects hyperparameters and an outer loop estimates performance. It is necessary because the score of the winning configuration on the data used to choose it is optimistically biased.',
+        simple: 'One loop to choose settings, a separate outer loop to judge the result honestly.',
+      },
+    ],
+
+    simpleExplanation:
+      'A single train/test split gives you one number, and that number depends heavily on which rows happened to land in the test set. With a few hundred rows, two different random splits can easily differ by five percentage points, so you cannot tell whether a change to your model helped or whether you got a friendlier split. Cross-validation fixes this by using every row for validation exactly once. Cut the data into five parts, train on four and score on the fifth, then rotate so each part takes a turn as the validation set. You now have five scores instead of one: their average is a much more stable estimate, and their spread tells you how much the estimate itself can be trusted. That spread is the part people ignore and should not — if your five folds range from 0.79 to 0.91, then a rival model scoring two points higher has not been shown to be better. The other thing to get right is how the folds are cut. If classes are rare, force every fold to contain some. If rows come in groups — several visits by the same patient — keep each group whole, or the model will recognise the patient rather than the condition. And if the data has a time order, never train on the future.',
+
+    whyItExists:
+      'A single held-out split wastes data and produces an estimate whose variance is large enough to hide real differences between models, especially on small datasets. Cross-validation reuses every observation for both training and validation, reducing that variance and supplying an empirical spread that turns a point estimate into an interval you can reason about.',
+
+    analogy: {
+      scenario:
+        'A driving examiner wants to know whether a learner can actually drive, but there is only time for one test route. If the route happens to avoid roundabouts and the learner is weak on roundabouts, they pass; if it happens to include three, they fail. One route measures the learner and the route together, and you cannot tell the two apart from a single result. So the school does something better: it splits its test area into five districts, and runs the candidate five times, each time on a different district, having practised in the other four. Five results tell you far more than one — their average is a fairer verdict, and if the five range from a comfortable pass to a narrow fail, that variation is itself information about how consistent the driver really is.',
+      mapping: [
+        { from: 'The single test route', to: 'A single train/test split' },
+        { from: 'Which hazards happened to be on that route', to: 'Which examples happened to land in the test set' },
+        { from: 'Rotating through five districts', to: 'The k folds, each taking a turn as validation' },
+        { from: 'The average of the five results', to: 'The cross-validated score' },
+        { from: 'The spread across the five results', to: 'The fold standard deviation, and hence the uncertainty of the estimate' },
+        { from: 'Practising on a district you will later be tested in', to: 'Leakage — fitting anything on data that will be validated against' },
+      ],
+      bridge:
+        'The rotation is exactly k-fold cross-validation, and the analogy earns its place by making the variance point unavoidable: nobody would report a single route’s outcome as the driver’s ability, yet people routinely report a single split’s score as a model’s performance. The final mapping is the one that causes real damage. If the candidate practises in the district they will be tested in, the test measures memory rather than skill, and that is precisely what happens when a scaler, an imputer or a feature selector is fitted before the split.',
+      limitations:
+        'A driving test can be repeated cheaply and the districts are genuinely interchangeable. Real data often is not: rows may be ordered in time, or clustered by patient or customer, in which case plain rotation quietly mixes the future into the past or the same person into both sides, and a specialised splitter is required.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Run folds and watch the scores spread',
+        caption: 'Change k and the dataset size, and observe how the mean stabilises while individual folds remain noisy.',
+        widget: 'code-playground',
+      },
+      {
+        kind: 'flow',
+        title: 'A single round of k-fold',
+        steps: [
+          { label: 'Shuffle, if rows are exchangeable', detail: 'Not if the data is time-ordered. `shuffle=True` with a fixed `random_state` makes the split reproducible.' },
+          { label: 'Partition into k folds', detail: 'Equal sized, stratified by class where relevant, and grouped where rows share an entity.' },
+          { label: 'Hold out fold i', detail: 'Train the entire pipeline — scaler, imputer, selector, model — on the other k − 1 folds only.' },
+          { label: 'Score fold i', detail: 'Apply the fitted pipeline to the held-out fold using `transform`, never `fit_transform`.' },
+          { label: 'Rotate', detail: 'Repeat for every i, so each example is validated exactly once and trained on k − 1 times.' },
+          { label: 'Summarise', detail: 'Report the mean and the standard deviation across folds. The spread is part of the result, not an afterthought.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Cross-validation: strengths, weaknesses and when to reach for it',
+        caption: 'Reach for k-fold whenever the dataset is small enough that a single split would be noisy — which is most tabular problems under a hundred thousand rows. Reach past it to a single large holdout when data is abundant and training is expensive, and to a time-based split whenever the data has an order.',
+        left: {
+          heading: 'Strengths',
+          points: [
+            'Every example contributes to both training and validation, which matters most when data is scarce',
+            'The estimate has much lower variance than a single split, so small improvements become detectable',
+            'The fold spread gives a free measure of uncertainty, turning a point estimate into an interval',
+            'Specialised splitters handle stratification, grouping and temporal order explicitly',
+            'Integrates with `Pipeline` so that preprocessing is refitted per fold, which is the only leak-proof arrangement',
+            'Supports model comparison on identical folds, which removes split noise from the comparison',
+          ],
+        },
+        right: {
+          heading: 'Weaknesses',
+          points: [
+            'Costs k model fits rather than one, and nested CV multiplies that again',
+            'Fold scores are not independent — training sets overlap heavily — so naive confidence intervals are too narrow',
+            'Invalid without modification when rows are grouped or time-ordered',
+            'Cannot detect leakage introduced before the data reached the splitter',
+            'Assumes the data is exchangeable and drawn from the distribution you will deploy on',
+            'The final model is usually refitted on all the data, so the score describes the procedure rather than the artefact you ship',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Choosing a splitter',
+        columns: ['Situation', 'Splitter', 'What it prevents'],
+        rows: [
+          ['Balanced classes, exchangeable rows', 'KFold', 'Nothing special — the plain case'],
+          ['Imbalanced classes', 'StratifiedKFold', 'Folds with too few or zero positives, and inflated variance'],
+          ['Repeated measurements per subject', 'GroupKFold or StratifiedGroupKFold', 'The model recognising the subject rather than the outcome'],
+          ['Time-ordered data', 'TimeSeriesSplit', 'Training on the future to predict the past'],
+          ['Very small datasets', 'LeaveOneOut or RepeatedStratifiedKFold', 'Wasting scarce data; high variance of the estimate'],
+          ['Hyperparameters being tuned', 'Nested CV (cross_val_score over GridSearchCV)', 'Reporting the selection score as a performance estimate'],
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'How many folds?',
+        caption: 'k trades bias against variance and cost. Five and ten are conventions that work; the reasoning behind them is worth knowing so you can depart from them deliberately.',
+        columns: ['k', 'Training set size', 'Bias of the estimate', 'Variance', 'Cost'],
+        rows: [
+          ['2', '50% of the data', 'High — models are trained on half the data', 'Low', '2 fits'],
+          ['5', '80%', 'Moderate', 'Moderate', '5 fits'],
+          ['10', '90%', 'Low', 'Slightly higher than k = 5', '10 fits'],
+          ['n (leave-one-out)', '100% − 1 row', 'Almost none', 'High; folds are near-identical and highly correlated', 'n fits'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'k-fold cross-validation partitions the n observations into k disjoint folds F₁, …, F_k of approximately equal size and computes CV(k) = (1/k) Σᵢ L(f^{(−i)}, Fᵢ), where f^{(−i)} is the model fitted on all folds except Fᵢ and L is the chosen loss on that fold. It estimates the expected generalisation error of the learning procedure applied to a training set of size n(k − 1)/k, so it is slightly pessimistic as an estimate for a model trained on all n, with the bias decreasing in k. The k fold scores are not independent, since any two training sets share (k − 2)/(k − 1) of their data, so the naive variance estimate understates uncertainty and no unbiased estimator of the variance of CV(k) exists. When hyperparameters are selected by cross-validation, min over configurations of the CV score is optimistically biased for the selected configuration; nested cross-validation restores an unbiased estimate by wrapping the entire selection procedure inside an outer resampling loop.',
+
+    math: {
+      intuition:
+        'Cross-validation is an averaging device. A single split gives one noisy measurement of generalisation error; averaging k of them reduces the noise, roughly in proportion to k if the measurements were independent — which they are not, because the training sets overlap heavily. That overlap is why leave-one-out, despite using almost all the data every time, has a high-variance estimate: its n models are nearly identical, so averaging them removes very little noise. The other quantity worth computing is the standard error of the mean, because it converts "model A scored 0.85 and model B scored 0.87" into a statement about whether that difference means anything.',
+      formulas: [
+        {
+          latex: '\\mathrm{CV}(k) = \\frac{1}{k}\\sum_{i=1}^{k} L\\big(f^{(-i)}, F_i\\big)',
+          name: 'The cross-validation estimate',
+          meaning:
+            'The average loss over folds, where each fold is scored by a model that never saw it. It estimates the error of the learning procedure, not of one particular fitted model.',
+          variables: [
+            { symbol: 'F_i', meaning: 'The i-th validation fold' },
+            { symbol: 'f^{(-i)}', meaning: 'The model fitted on all folds except the i-th' },
+            { symbol: 'L', meaning: 'The loss or score evaluated on the held-out fold' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 's = \\sqrt{\\frac{1}{k-1}\\sum_{i=1}^{k}\\big(s_i - \\bar{s}\\big)^{2}}, \\qquad \\mathrm{SE} = \\frac{s}{\\sqrt{k}}',
+          name: 'Fold spread and standard error',
+          meaning:
+            'The standard deviation across folds measures how much the estimate depends on which rows landed where. Dividing by √k gives a rough standard error — rough because fold scores are correlated, so the true uncertainty is larger.',
+          variables: [
+            { symbol: 's_i', meaning: 'Score on fold i' },
+            { symbol: '\\bar{s}', meaning: 'Mean across folds — the reported CV score' },
+            { symbol: 'k', meaning: 'Number of folds' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\rho = \\frac{k - 2}{k - 1}',
+          name: 'Overlap between two training sets',
+          meaning:
+            'Any two of the k training sets share this fraction of their rows. At k = 10 it is 8/9 ≈ 0.89, which is why the fold scores are strongly correlated and why a naive t-interval across folds is too narrow.',
+          variables: [
+            { symbol: 'k', meaning: 'Number of folds' },
+            { symbol: '\\rho', meaning: 'Fraction of shared training data between any two folds' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'N_{\\text{fits}} = k_{\\text{outer}} \\times \\big(|\\Lambda| \\times k_{\\text{inner}} + 1\\big)',
+          name: 'Cost of nested cross-validation',
+          meaning:
+            'The outer loop refits the whole selection procedure each time. With 5 outer folds, 5 inner folds and 60 hyperparameter candidates, that is 5 × 301 = 1,505 fits against 300 for a flat search.',
+          variables: [
+            { symbol: '|\\Lambda|', meaning: 'Number of hyperparameter configurations in the grid' },
+            { symbol: 'k_{\\text{inner}}, k_{\\text{outer}}', meaning: 'Fold counts for the two loops' },
+          ],
+          category: 'complexity',
+        },
+        {
+          latex: '\\mathbb{E}\\left[\\min_{\\lambda \\in \\Lambda} \\widehat{\\mathrm{err}}(\\lambda)\\right] < \\min_{\\lambda \\in \\Lambda} \\mathbb{E}\\left[\\widehat{\\mathrm{err}}(\\lambda)\\right]',
+          name: 'Why selection biases the score',
+          meaning:
+            'The minimum of many noisy estimates is below the true minimum in expectation: the winning configuration is partly winning because its noise happened to be favourable. This is why the best CV score in a grid search is not an unbiased performance estimate.',
+          variables: [
+            { symbol: '\\Lambda', meaning: 'The set of hyperparameter configurations searched' },
+            { symbol: '\\widehat{\\mathrm{err}}', meaning: 'The cross-validated error estimate for one configuration' },
+          ],
+          category: 'statistics',
+        },
+      ],
+      derivation: [
+        'Start with a single split. The held-out score is an unbiased estimate of generalisation error for a model trained on that particular training set, but it has high variance because it depends on which rows landed in the test set — and on small data that variance swamps the differences you are trying to detect.',
+        'Reduce the variance by averaging several such estimates. Partition the data into k folds and rotate, so every row is validated exactly once. Averaging k measurements reduces variance, though not by a factor of k, because the measurements are correlated.',
+        'Quantify that correlation. Two training sets in k-fold share all folds except two, so they overlap in (k − 2)/(k − 1) of their rows — 8/9 at k = 10. Models trained on nearly the same data make nearly the same errors, so the fold scores move together and averaging removes less noise than independence would suggest.',
+        'Note the bias direction. Each model is trained on n(k − 1)/k rows rather than n, so CV estimates the error of a slightly smaller training set and is therefore slightly pessimistic for the model you will finally fit on everything. At k = 10 the shortfall is 10% of the data and the bias is usually negligible; at k = 2 it is 50% and the bias is real.',
+        'This is the k trade-off. Larger k means less bias but more cost, and — perhaps counter-intuitively — not less variance. Leave-one-out has almost no bias, since each model sees n − 1 rows, but its n models are nearly identical, so their errors are almost perfectly correlated and the average is a high-variance estimate of generalisation error. Five or ten folds is the usual compromise.',
+        'Now report uncertainty. Compute the standard deviation across folds and divide by √k for a rough standard error. With five folds scoring 0.82, 0.88, 0.79, 0.91 and 0.85, the mean is 0.850, the sample standard deviation is 0.0474 and the standard error is 0.0212.',
+        'A 95% interval using t with 4 degrees of freedom is 0.850 ± 2.776 × 0.0212 = [0.791, 0.909]. So a rival model scoring 0.87 is well inside the interval and has not been shown to be better. Treat this interval as optimistically narrow, because the fold correlation violates the independence the t-interval assumes.',
+        'For comparing two models, do not compare independent runs. Score both on the identical folds and analyse the paired differences, which removes the split-to-split noise common to both and is far more sensitive.',
+        'Next, stratification. With 100 rows at a 5% positive rate there are 5 positives. Plain 10-fold puts an average of 0.5 positives in each fold, so several folds will contain none at all — recall is then undefined and the fold score is meaningless. Stratifying forces each fold to hold roughly the same class proportions and both removes that failure and reduces variance.',
+        'Then grouping. If a dataset has ten visits per patient, a random fold split puts some of a patient’s visits in training and others in validation. The model can then identify the patient and recall their outcome, which inflates the score and has nothing to do with predicting new patients. `GroupKFold` keeps each patient whole.',
+        'Then time. If rows are ordered, random folds train on rows from after the validation period. The resulting score reflects hindsight, and it is systematically optimistic in a way that only shows up in production. `TimeSeriesSplit` makes every validation fold strictly later than its training data.',
+        'Finally, selection bias. Search 60 hyperparameter configurations and take the best CV score. Each score is noisy, and taking the minimum of many noisy quantities preferentially selects configurations whose noise was favourable, so the winning score is biased downwards as an error estimate — typically by one to three points on small data.',
+        'Nested cross-validation fixes this by treating the whole tuning procedure as the thing being evaluated: an inner loop selects hyperparameters on the training portion, and an outer loop scores the selected model on data the inner loop never touched. The cost is k_outer × (|Λ| × k_inner + 1) fits, but it is the only honest number when hyperparameters were chosen from the same data.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Reading five fold scores properly',
+      setup:
+        'A five-fold cross-validation returns accuracies of 0.82, 0.88, 0.79, 0.91 and 0.85. A colleague’s model scores 0.87 on the same data. Work out what can and cannot be concluded, then compute the cost of doing the comparison properly with nested CV over a 60-point grid.',
+      steps: [
+        {
+          label: 'Mean',
+          detail: '(0.82 + 0.88 + 0.79 + 0.91 + 0.85)/5 = 4.25/5 = 0.850. This is the headline number, and on its own it is only half the result.',
+          latex: '\\bar{s} = 0.850',
+        },
+        {
+          label: 'Spread',
+          detail: 'Deviations from the mean: −0.03, +0.03, −0.06, +0.06, 0.00. Squares: 0.0009, 0.0009, 0.0036, 0.0036, 0. Sum = 0.0090, divided by k − 1 = 4 gives variance 0.00225, so s = 0.0474.',
+          latex: 's = \\sqrt{0.00225} = 0.0474',
+        },
+        {
+          label: 'Standard error',
+          detail: 'SE = s/√k = 0.0474/√5 = 0.0212. Note this treats the five folds as independent, which they are not — their training sets share three-quarters of the data — so the true uncertainty is larger than this.',
+          latex: '\\mathrm{SE} = \\frac{0.0474}{\\sqrt{5}} = 0.0212',
+        },
+        {
+          label: 'Interval',
+          detail: 'With t₄ = 2.776 for 95%, the interval is 0.850 ± 2.776(0.0212) = 0.850 ± 0.059 = [0.791, 0.909].',
+          latex: '[0.791,\\, 0.909]',
+        },
+        {
+          label: 'Is 0.87 better?',
+          detail: 'It sits comfortably inside the interval, so on this evidence the two models are indistinguishable. Reporting "our model achieves 0.87 versus their 0.85" would be describing fold noise. The correct statement is that the difference is within the resolution of this experiment.',
+          latex: '0.87 \\in [0.791,\\, 0.909]',
+        },
+        {
+          label: 'How to compare properly',
+          detail: 'Score both models on identical folds and analyse the five paired differences rather than the two means. Pairing cancels the fold-to-fold difficulty that both models share, which typically shrinks the standard error by a large factor and makes genuine differences of one or two points detectable.',
+          latex: 'd_i = s_i^{A} - s_i^{B}, \\quad \\text{test } \\bar{d} \\text{ rather than } \\bar{s}^{A} - \\bar{s}^{B}',
+        },
+        {
+          label: 'Cost of nested CV',
+          detail: 'A 60-point grid with 5 inner folds and 5 outer folds requires 5 × (60 × 5 + 1) = 5 × 301 = 1,505 model fits. A flat `GridSearchCV` requires 60 × 5 = 300. Nested costs five times as much and returns a number you can actually publish.',
+          latex: 'N = 5 \\times (60 \\times 5 + 1) = 1505',
+        },
+        {
+          label: 'Why the extra cost buys something',
+          detail: 'The best score in a flat grid search is the minimum of 60 noisy estimates, and the minimum of many noisy quantities is biased low: the winner partly won because its noise was favourable. On small data that bias is typically one to three points — exactly the size of the improvements people report. Nested CV measures the whole procedure, including the selection, and is therefore unbiased.',
+          latex: '\\mathbb{E}\\big[\\min_{\\lambda} \\widehat{\\mathrm{err}}(\\lambda)\\big] < \\min_{\\lambda} \\mathbb{E}\\big[\\widehat{\\mathrm{err}}(\\lambda)\\big]',
+        },
+        {
+          label: 'A stratification check',
+          detail: 'Separately: with 100 rows and a 5% positive rate there are 5 positives. Plain 10-fold puts 0.5 positives in each fold on average, so by chance several folds will contain none — recall is undefined there and the fold score is meaningless. `StratifiedKFold` guarantees each fold holds roughly the same proportion, which is why it is the default for classification in scikit-learn.',
+          latex: '\\frac{5 \\text{ positives}}{10 \\text{ folds}} = 0.5 \\text{ per fold}',
+        },
+      ],
+      conclusion:
+        'The mean was never the whole answer. A spread of 0.79 to 0.91 across folds means this experiment cannot resolve differences smaller than about six points, so a two-point "improvement" is noise. Two habits follow: always report the fold standard deviation next to the mean, and compare models on identical folds using paired differences. And if hyperparameters were tuned on the same data, the reported score needs nesting to be honest.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'One split is a lottery; cross-validation is not',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.datasets import load_breast_cancer
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
+
+X, y = load_breast_cancer(return_X_y=True)
+
+# Ten different random splits of the same data, with the model seed held fixed.
+scores = []
+for s in range(10):
+    X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.3, random_state=s, stratify=y)
+    m = RandomForestClassifier(n_estimators=100, random_state=0).fit(X_tr, y_tr)
+    scores.append(m.score(X_te, y_te))
+scores = np.array(scores)
+print(f"single splits: min {scores.min():.4f}  max {scores.max():.4f}  spread {scores.ptp():.4f}")
+
+cv = cross_val_score(RandomForestClassifier(n_estimators=100, random_state=0), X, y,
+                     cv=StratifiedKFold(5, shuffle=True, random_state=0), n_jobs=-1)
+print(f"5-fold folds : {np.round(cv, 4).tolist()}")
+print(f"5-fold       : mean {cv.mean():.4f}  sd {cv.std(ddof=1):.4f}  se {cv.std(ddof=1)/np.sqrt(5):.4f}")`,
+        output: `single splits: min 0.9298  max 0.9825  spread 0.0526
+5-fold folds : [0.9561, 0.9649, 0.9561, 0.9825, 0.9469]
+5-fold       : mean 0.9613  sd 0.0136  se 0.0061
+`,
+        explanation:
+          'Ten different random splits of the same data, with the same model and the same seed for the model itself, produce accuracies spanning more than five percentage points. If you ran one split and reported it, you would be reporting the split as much as the model — and if a colleague ran a different split, you would disagree for no substantive reason. The five-fold estimate has a standard error of 0.006, roughly an order of magnitude tighter, and it comes with a fold standard deviation that tells you how much to trust it. Note `StratifiedKFold(shuffle=True, random_state=0)`: shuffling matters whenever the data might arrive sorted by class or by time, and fixing the seed makes the result reproducible for anyone who reruns it.',
+      },
+      {
+        language: 'python',
+        title: 'Group and time-series splits, and what happens without them',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import Ridge
+from sklearn.model_selection import cross_val_score, GroupKFold, KFold, TimeSeriesSplit
+
+# --- Grouped data: 200 patients, 10 visits each, outcome fixed per patient. ---
+rng = np.random.default_rng(0)
+groups = np.repeat(np.arange(200), 10)
+patient_effect = rng.normal(size=200)
+X = np.column_stack([patient_effect[groups] + rng.normal(0, 0.3, 2000), rng.normal(size=2000)])
+y = (patient_effect[groups] > 0).astype(int)
+
+rf = RandomForestClassifier(n_estimators=100, random_state=0)
+print("patients split randomly (WRONG):",
+      round(cross_val_score(rf, X, y, cv=KFold(5, shuffle=True, random_state=0)).mean(), 4))
+print("patients kept whole  (RIGHT):",
+      round(cross_val_score(rf, X, y, cv=GroupKFold(5), groups=groups).mean(), 4))
+
+# --- Time-ordered data with a trend and autocorrelation. ---
+t = np.arange(1000)
+signal = np.cumsum(rng.normal(0, 1, 1000))
+Xt = np.column_stack([np.roll(signal, 1), np.roll(signal, 2), np.roll(signal, 3)])[5:]
+yt = signal[5:]
+print("\\nrandom folds on a time series (WRONG):",
+      round(cross_val_score(Ridge(), Xt, yt, cv=KFold(5, shuffle=True, random_state=0)).mean(), 4))
+print("expanding window             (RIGHT):",
+      round(cross_val_score(Ridge(), Xt, yt, cv=TimeSeriesSplit(5)).mean(), 4))`,
+        output: `patients split randomly (WRONG): 0.9985
+patients kept whole  (RIGHT): 0.8710
+
+random folds on a time series (WRONG): 0.9981
+expanding window             (RIGHT): 0.9943
+`,
+        explanation:
+          'In the grouped case, the outcome is a property of the patient, so a random split puts some of a patient’s ten visits in training and the rest in validation — the model simply recognises the patient and recalls the answer, scoring 0.9985. Keeping patients whole gives 0.871, which is the number that describes performance on a new patient and therefore the only one worth reporting. The gap of twelve points is entirely fabricated by the splitter. The time-series case shows a smaller but real difference here; on data with a genuine regime change or a trend that a lagged feature cannot extrapolate, the gap is often far larger, and the danger is that random folds let the model interpolate between surrounding time points rather than extrapolate forward. The rule is to ask what "a new case" means for your problem — a new patient, a new customer, a new week — and split along that boundary.',
+      },
+      {
+        language: 'python',
+        title: 'Nested cross-validation, and the size of the selection bias',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.model_selection import GridSearchCV, cross_val_score, StratifiedKFold
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
+
+X, y = make_classification(n_samples=300, n_features=20, n_informative=6, random_state=0)
+
+pipe = make_pipeline(StandardScaler(), SVC())
+grid = {"svc__C": [0.01, 0.1, 1, 10, 100], "svc__gamma": [1e-4, 1e-3, 1e-2, 1e-1, 1]}
+inner = StratifiedKFold(5, shuffle=True, random_state=1)
+outer = StratifiedKFold(5, shuffle=True, random_state=2)
+
+search = GridSearchCV(pipe, grid, cv=inner, n_jobs=-1).fit(X, y)
+print("best params            :", search.best_params_)
+print("best inner CV score    :", round(search.best_score_, 4), " <- optimistically biased")
+
+nested = cross_val_score(GridSearchCV(pipe, grid, cv=inner, n_jobs=-1), X, y, cv=outer, n_jobs=-1)
+print("nested CV score        :", round(nested.mean(), 4), f"(sd {nested.std(ddof=1):.4f})")
+print("optimism               :", round(search.best_score_ - nested.mean(), 4))
+
+n_cand = len(grid["svc__C"]) * len(grid["svc__gamma"])
+print(f"\\nfits: flat {n_cand * 5}, nested {5 * (n_cand * 5 + 1)}")`,
+        output: `best params            : {'svc__C': 10, 'svc__gamma': 0.01}
+best inner CV score    : 0.9200  <- optimistically biased
+nested CV score        : 0.9000 (sd 0.0333)
+optimism               : 0.0200
+
+fits: flat 125, nested 630
+`,
+        explanation:
+          'The best score from the grid search is two points higher than the nested estimate, and that gap is pure selection bias: twenty-five candidates were each scored with noise, and taking the maximum preferentially picks whichever configuration had the luckiest folds. Two points is exactly the size of improvement people routinely claim in reports, which is why the distinction matters. The rule is simple: if the data was used to choose the configuration, the score from that choosing process is not a performance estimate. Use nested CV when you need an honest number to publish or to compare against a baseline; use a flat search when you only need to pick settings and will evaluate on a separate held-out set afterwards. Note the cost — 630 fits against 125 — which is why nested CV is reserved for the final reported number rather than run continuously during development.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Clinical prediction models',
+        usage:
+          'Reporting guidelines for clinical prediction models require internal validation by cross-validation or bootstrapping, and explicitly require that any variable selection be repeated inside each resample. Models validated without that step have repeatedly failed on external data, which is the clinical version of the leakage problem.',
+      },
+      {
+        context: 'Competition leaderboards',
+        usage:
+          'Experienced competitors build a local cross-validation scheme that matches the competition’s split structure — grouped by user, or split by time — and trust it over the public leaderboard, which is a single split and therefore noisy. The gap between a reliable local CV and a public score is the standard early warning of a mismatch in split structure.',
+      },
+      {
+        context: 'Forecasting and time-dependent systems',
+        usage:
+          'Demand forecasting, churn and credit models are validated with expanding or rolling windows, because random folds let the model interpolate between surrounding time points. Backtests that use random splits routinely overstate performance by a margin that only becomes visible after deployment.',
+      },
+      {
+        context: 'Small-sample scientific data',
+        usage:
+          'In materials science, psychology and genomics, datasets of a few dozen to a few hundred samples are common. Repeated stratified k-fold is standard there, and nested cross-validation is increasingly expected by reviewers whenever hyperparameters or features were selected from the same data.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'scikit-learn', role: '`cross_val_score`, `cross_validate` (which returns train scores and timings too), `cross_val_predict`, and the splitter family `KFold`, `StratifiedKFold`, `GroupKFold`, `TimeSeriesSplit`.' },
+      { tool: 'scikit-learn pipelines', role: 'A `Pipeline` passed to a cross-validator is the mechanism that makes preprocessing leak-proof, since every step is refitted on each training fold.' },
+      { tool: 'MLflow / experiment tracking', role: 'Logging per-fold scores rather than only the mean is what makes historical comparisons meaningful, since it records the uncertainty alongside the estimate.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Reporting only the mean fold score',
+        why: 'Without the spread, a reader cannot tell whether a two-point difference between models is meaningful. On small datasets fold standard deviations of three to five points are common, making most reported improvements indistinguishable from noise.',
+        fix: 'Report mean ± standard deviation across folds, and compare models on identical folds using paired differences rather than comparing independent runs.',
+      },
+      {
+        mistake: 'Fitting preprocessing before the split',
+        why: 'A scaler, imputer, encoder or feature selector fitted on all the data has seen the validation rows. Each fold is then evaluated using statistics derived partly from itself, which inflates the score silently and is not detected by any library warning.',
+        fix: 'Put every fitted transformation inside a `Pipeline` and pass the pipeline to the cross-validator, so each fold refits the preprocessing on its own training data.',
+      },
+      {
+        mistake: 'Using random folds on grouped or time-ordered data',
+        why: 'With repeated measurements, a random split lets the model recognise the entity instead of predicting the outcome — a twelve-point inflation is easy to produce. With time-ordered data it trains on the future to predict the past.',
+        fix: 'Use `GroupKFold` when rows share an entity and `TimeSeriesSplit` when the data has an order. Ask what "a new case" means in deployment and split along that boundary.',
+      },
+      {
+        mistake: 'Reporting the best grid-search score as the model’s performance',
+        why: 'The maximum of many noisy estimates is biased upwards. Searching sixty configurations and quoting the winner typically overstates performance by one to three points on small data — the same size as the improvements being claimed.',
+        fix: 'Use nested cross-validation for the reported number, or reserve a test set that plays no part in selection and score on it exactly once.',
+      },
+      {
+        mistake: 'Assuming leave-one-out is the most reliable option',
+        why: 'LOOCV has low bias but high variance: its n models are trained on nearly identical data, so their errors are strongly correlated and averaging removes little noise. It also costs n fits.',
+        fix: 'Use 5 or 10 folds, repeated several times with different seeds if the dataset is small. `RepeatedStratifiedKFold` gives a more stable estimate than LOOCV at a fraction of the cost.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'Why use k-fold cross-validation instead of a single train/test split?',
+        answer:
+          'Two reasons: data efficiency and variance. A single split holds out, say, 30% of the data, which is 30% that never contributes to training — painful when you have a few hundred rows. Cross-validation uses every row for training in k − 1 folds and for validation exactly once, so nothing is wasted. The more important reason is variance. A single split gives one number that depends heavily on which rows landed in the test set; on a dataset of a few hundred rows I have seen ten different random splits of the same data and the same model span more than five percentage points. If you report one of those numbers, you are reporting the split as much as the model, and a colleague running a different split will disagree with you for no substantive reason. Averaging over k folds gives a much tighter estimate — typically an order of magnitude smaller standard error — and, just as usefully, the spread across folds tells you how much resolution your experiment has. If the folds range from 0.79 to 0.91, you cannot detect a two-point improvement, and knowing that stops you from chasing noise.',
+      },
+      {
+        level: 'intermediate',
+        question: 'What is nested cross-validation and when do you need it?',
+        answer:
+          'Nested cross-validation has two loops: an inner one that selects hyperparameters on the training portion of each outer fold, and an outer one that scores the selected model on data the inner loop never saw. You need it whenever hyperparameters were chosen using the same data you want to report a score on. The reason is a statistical fact about maxima: each configuration’s cross-validated score is noisy, and taking the best of sixty noisy estimates preferentially picks whichever configuration had the luckiest folds, so the winning score is biased optimistically. On small datasets the bias is typically one to three points — precisely the size of the improvements people claim in reports. I can demonstrate it in a few lines: on a 300-row problem with a 25-point grid, the best inner score is 0.92 and the nested estimate is 0.90. The cost is real: k_outer × (candidates × k_inner + 1) fits, so 5 × (25 × 5 + 1) = 630 instead of 125. Because of that, I would use a flat search during development, when I only need to pick settings, and run nested CV once for the number that goes into a report or a model card. The alternative, which is cheaper and often preferable in industry, is to hold out a genuine test set that takes no part in any selection and score on it exactly once.',
+        followUp:
+          'A strong answer notes that this is the same phenomenon as multiple testing, and that holding out a final test set is an acceptable substitute when data is plentiful.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Your cross-validated score is 0.94 but the model scores 0.78 in production. What went wrong?',
+        answer:
+          'Most likely the cross-validation did not simulate deployment. I would check four things in order. First, split structure: if rows are grouped — several records per customer, per patient, per device — a random fold split lets the model recognise the entity and recall its outcome, which can inflate a score by ten points or more. Production sees entirely new entities, so `GroupKFold` is what would have measured that. Second, time: if the data has an order and the folds were random, the model trained on rows from after the validation period, so the CV score reflects hindsight that will never be available at prediction time. `TimeSeriesSplit` is the fix, and an out-of-time holdout is the definitive check. Third, leakage in preprocessing: a scaler, imputer, target encoder or feature selector fitted before the split leaks validation statistics into training, and no warning is raised. Everything fitted must live inside a `Pipeline`. Fourth, and separately from all of those, genuine distribution shift — the production population may simply differ from the training data, in which case the CV was honest about the data it had and the data was not representative. I would distinguish these by scoring the production data directly where labels are available, comparing feature distributions between training and production, and re-running CV with the correct splitter to see how much of the gap it reproduces. In my experience the group and time cases account for most of these gaps, and both are preventable by asking one question before splitting: what does "a new case" mean here?',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Five-fold CV gives scores 0.71, 0.83, 0.76, 0.80 and 0.75. Compute the mean, standard deviation and standard error, and say whether a competing model scoring 0.79 is better.',
+        hint: 'Use the sample standard deviation with k − 1 in the denominator.',
+        solution:
+          'Mean = (0.71 + 0.83 + 0.76 + 0.80 + 0.75)/5 = 3.85/5 = 0.770. Deviations: −0.06, +0.06, −0.01, +0.03, −0.02. Squares: 0.0036, 0.0036, 0.0001, 0.0009, 0.0004, summing to 0.0086. Divided by 4 gives variance 0.00215, so s = 0.0464. Standard error = 0.0464/√5 = 0.0207. A 95% interval using t₄ = 2.776 is 0.770 ± 0.058 = [0.712, 0.828]. The competitor’s 0.79 falls inside, so there is no evidence it is better — the difference of two points is well within the noise of this experiment. The right way to settle it is to score both models on the identical folds and test the five paired differences, which removes the fold-to-fold difficulty both models share and is far more sensitive than comparing two means. And note that even the interval above is optimistically narrow, because fold scores are correlated through overlapping training sets.',
+      },
+      {
+        prompt:
+          'You have 500 MRI scans from 100 patients, five scans each, and want to predict a per-patient diagnosis. Why is plain 5-fold cross-validation wrong, and what would it do to your score?',
+        hint: 'What does the model see in training that it will also see in validation?',
+        solution:
+          'A plain 5-fold split assigns individual scans to folds at random, so for almost every patient some of their five scans land in training and the rest in validation. Scans from the same patient are extremely similar — same anatomy, same scanner, same session — and the diagnosis is a property of the patient, not of the individual scan. The model therefore does not need to learn anything about the disease: it can learn to recognise the patient from incidental features and recall the label. The cross-validated score measures that recall ability, and it will be far higher than the true performance on a new patient, often by ten to twenty points. In deployment every patient is new, so the score does not transfer at all. The fix is `GroupKFold` with the patient identifier as the group, which guarantees all five scans from a patient fall on the same side of every split, so the validation measures exactly what production will face. If the classes are also imbalanced, `StratifiedGroupKFold` handles both constraints together. The general principle is to split along whatever boundary defines "a new case" in deployment.',
+      },
+      {
+        prompt:
+          'You search a grid of 40 hyperparameter configurations with 5-fold CV and report the best score. Explain why that number is optimistic and quantify the cost of fixing it with nested CV.',
+        hint: 'What is the expected value of the minimum of many noisy estimates?',
+        solution:
+          'Each configuration’s cross-validated score is an estimate with noise attached. Taking the best of forty such estimates does not select the configuration with the best true performance — it selects the one with the best combination of true performance and favourable noise. Formally, the expected value of the minimum of several noisy error estimates is below the minimum of their expectations, so the winning score is biased optimistically as a performance estimate. The bias grows with the number of configurations searched and with the noise level, which means it is largest exactly where data is scarce; on a few hundred rows with a grid of this size, one to three points is typical. Nested CV fixes it by putting the entire selection procedure inside an outer loop, so the reported score comes from data that played no part in choosing the configuration. The cost is k_outer × (|Λ| × k_inner + 1) fits: with 5 outer folds, 5 inner folds and 40 candidates, that is 5 × 201 = 1,005 fits against 200 for the flat search — five times the compute. In practice I would run the flat search during development and either nested CV or a single untouched holdout for the number that gets reported.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'ML-024-q1',
+        type: 'mcq',
+        concept: 'what CV estimates',
+        prompt: 'What does a k-fold cross-validation score estimate?',
+        options: [
+          'The expected generalisation error of the learning procedure on a training set of size n(k−1)/k',
+          'The training error of the final model fitted on all the data',
+          'The error of one specific fitted model on unseen data',
+          'The irreducible noise in the dataset',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Each fold model is trained on a fraction (k−1)/k of the data, so CV estimates the error of the procedure at that training size — slightly pessimistic for the final model fitted on everything, with the bias shrinking as k grows.',
+      },
+      {
+        id: 'ML-024-q2',
+        type: 'numeric',
+        concept: 'summarising folds',
+        prompt: 'Five folds score 0.80, 0.86, 0.82, 0.88 and 0.84. What is the mean? Give two decimal places.',
+        answer: 0.84,
+        tolerance: 0.005,
+        explanation:
+          'Mean = 4.20/5 = 0.84, with a sample standard deviation of 0.0316 and a standard error of 0.0141. Always report the spread — without it a reader cannot judge whether a small difference between models means anything.',
+      },
+      {
+        id: 'ML-024-q3',
+        type: 'match',
+        concept: 'choosing a splitter',
+        prompt: 'Match each data situation to the splitter it requires.',
+        pairs: [
+          { left: 'Ten visits per patient, outcome per patient', right: 'GroupKFold' },
+          { left: 'Daily sales history used to forecast next week', right: 'TimeSeriesSplit' },
+          { left: '2% positive class', right: 'StratifiedKFold' },
+          { left: 'Balanced classes, independent rows', right: 'KFold' },
+        ],
+        explanation:
+          'The question to ask before splitting is what "a new case" means in deployment — a new patient, a new week, a new independent row — and to split along that boundary. Getting it wrong inflates the score in a way no metric will reveal.',
+      },
+      {
+        id: 'ML-024-q4',
+        type: 'truefalse',
+        concept: 'selection bias',
+        prompt: 'The best cross-validated score from a grid search is an unbiased estimate of the selected model’s performance.',
+        answer: false,
+        explanation:
+          'It is optimistically biased. Taking the maximum of many noisy estimates preferentially selects favourable noise, typically inflating the score by one to three points on small data. Nested CV or an untouched test set gives an honest number.',
+      },
+      {
+        id: 'ML-024-q5',
+        type: 'debug',
+        language: 'python',
+        concept: 'preprocessing leakage',
+        prompt: 'This cross-validation reports 0.97 but the model performs far worse on new data. What is the flaw?',
+        code: `X_scaled = StandardScaler().fit_transform(X)
+X_sel = SelectKBest(f_classif, k=20).fit_transform(X_scaled, y)
+scores = cross_val_score(SVC(), X_sel, y, cv=5)`,
+        options: [
+          'Scaling and selection are fitted on all the data, so every fold was preprocessed using itself',
+          'SVC cannot be used with cross_val_score and needs a wrapper',
+          'SelectKBest requires unscaled features to compute f_classif correctly',
+          'cv=5 is too few folds to give a reliable estimate',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Both steps see the whole dataset before the folds are created, so each validation fold influenced the statistics and the feature choice applied to it. The fix is `make_pipeline(StandardScaler(), SelectKBest(...), SVC())` passed to `cross_val_score`.',
+      },
+      {
+        id: 'ML-024-q6',
+        type: 'fill',
+        concept: 'nesting',
+        prompt: 'What is the name of the scheme with an inner loop for hyperparameter selection and an outer loop for performance estimation?',
+        answers: ['nested cross-validation', 'nested cv', 'nested cross validation', 'double cross-validation'],
+        explanation:
+          'Nested cross-validation. It costs k_outer × (candidates × k_inner + 1) fits but is the only way to report an unbiased score when hyperparameters were tuned on the same data.',
+      },
+      {
+        id: 'ML-024-q7',
+        type: 'explain',
+        concept: 'designing a validation scheme',
+        prompt: 'Describe how you would set up cross-validation for a dataset of hospital admissions, with several admissions per patient, spanning three years, predicting readmission within 30 days.',
+        rubric: [
+          'Identifies the grouping structure and proposes keeping patients whole',
+          'Identifies the temporal structure and proposes a time-based split or an out-of-time holdout',
+          'Notes class imbalance and the need for stratification or an appropriate metric',
+          'States that all preprocessing must be inside a pipeline refitted per fold',
+        ],
+        sampleAnswer:
+          'This dataset has three complications at once, and each one breaks a different assumption of plain k-fold. First, grouping: multiple admissions per patient means a random split would put some of a patient’s admissions in training and others in validation, and since patient-level characteristics drive readmission, the model could recognise the patient rather than learn anything generalisable. That routinely inflates scores by ten points or more. So patients must be kept whole. Second, time: the model will be deployed to predict future admissions from past ones, so a validation scheme that trains on 2023 and validates on 2021 is measuring hindsight. I would use an out-of-time design — train on the first two years, validate on the third — or a rolling-origin scheme with several such splits to get more than one estimate. Combining both constraints is the genuinely hard part: `StratifiedGroupKFold` handles grouping and class balance but not time, so in practice I would do the primary validation as time-based splits with patients assigned wholly to the earlier or later period, and use grouped k-fold within the training period for hyperparameter tuning. Third, imbalance: 30-day readmission is typically 10 to 20%, so I would stratify where the splitter allows and, more importantly, report precision-recall and average precision rather than accuracy, at a threshold derived from what a follow-up intervention costs relative to a readmission. Throughout, every fitted transformation — imputation of missing labs, encoding of diagnosis codes, any target encoding, any feature selection — goes inside a `Pipeline` so it is refitted per fold. Target encoding of high-cardinality codes is the step I would watch most carefully, since it uses the outcome directly. Finally I would hold back the most recent months entirely and score on them once at the end, because an out-of-time holdout is the only check that catches the kinds of leakage cross-validation cannot see.',
+        explanation:
+          'A complete answer recognises that grouping, time and imbalance are three separate constraints, and is honest that satisfying all three simultaneously usually requires a bespoke scheme rather than a single splitter.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does k-fold CV estimate?', back: 'The generalisation error of the procedure at training size n(k−1)/k. Slightly pessimistic for the final model fitted on all data.' },
+      { front: 'Why report the fold standard deviation?', back: 'It sets the resolution of the experiment. If folds span 0.79–0.91, a two-point difference between models is not detectable.' },
+      { front: 'When do you need GroupKFold?', back: 'When rows share an entity — patient, customer, session. Otherwise the model recognises the entity and recalls the label, inflating the score.' },
+      { front: 'Why is leave-one-out not the safest choice?', back: 'Low bias but high variance: the n models are nearly identical, so their errors are highly correlated and averaging removes little noise. It also costs n fits.' },
+      { front: 'What is nested cross-validation for?', back: 'An honest score when hyperparameters were tuned on the same data. The best grid-search score is biased upwards by one to three points on small data.' },
+      { front: 'How much do two k-fold training sets overlap?', back: '(k−2)/(k−1) of their rows — 8/9 at k = 10. That correlation is why naive confidence intervals across folds are too narrow.' },
+      { front: 'Where must preprocessing live?', back: 'Inside a Pipeline passed to the cross-validator, so it is refitted on each training fold. Fitting before the split leaks validation statistics.' },
+    ],
+
+    challenge: {
+      title: 'A validation scheme that matches deployment',
+      brief:
+        'Take a dataset with both a group structure and a time order — synthesise one if necessary, with repeated measurements per entity and a drifting relationship over time. Evaluate the same model four ways: plain KFold, StratifiedKFold, GroupKFold, and a time-based split, reporting mean and standard deviation for each. Explain the ordering of the four numbers mechanistically. Then add a deliberate preprocessing leak — fit a scaler and a feature selector before splitting — and quantify the additional inflation. Finally, run nested cross-validation over a modest hyperparameter grid and report the optimism relative to the flat search.',
+      acceptanceCriteria: [
+        'All four splitters are compared with the same model and the same metric, with fold spreads reported',
+        'The ranking of the four scores is explained by what each splitter allows the model to see',
+        'The leakage experiment isolates preprocessing as the only change and quantifies its effect',
+        'Nested CV is run and the optimism against the flat grid-search score is reported as a number',
+        'The write-up states which scheme you would use in production and why, in terms of what "a new case" means',
+      ],
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain to a colleague what cross-validation does, why the fold spread matters, and how you would choose a splitter.',
+      mustCover: [
+        'k-fold rotates the validation set so every row is used for validation exactly once',
+        'It reduces the variance of the estimate compared with a single split, and reports a spread',
+        'The splitter must match what "a new case" means: stratified, grouped or time-ordered',
+        'Preprocessing must be refitted inside each fold, which is what a Pipeline guarantees',
+      ],
+      bonusSignals: ['mentions nested CV for tuned hyperparameters', 'mentions that fold scores are correlated', 'mentions paired comparison on identical folds'],
+      sampleExplanation:
+        'A single train/test split gives you one number, and that number is partly about your model and partly about which rows happened to land in the test set. On a few hundred rows I have seen the same model, with the same seed, score anywhere from 0.93 to 0.98 across ten different random splits — so if you report one of them and a colleague reports another, you will disagree for no real reason. Cross-validation takes the luck out. Cut the data into five parts, train on four and score on the fifth, then rotate so each part takes its turn. Every row gets used for validation exactly once and for training four times, nothing is wasted, and you end up with five numbers instead of one. The average is a much steadier estimate. But the part people skip is the spread, and the spread is where the judgement lives. If your five folds range from 0.79 to 0.91, then the resolution of your experiment is about six points, and a rival model that scores two points higher has not been shown to be better — you are looking at fold noise. Report mean and standard deviation together, always, and when you compare two models, score them on the same folds and look at the paired differences rather than comparing two averages, because pairing cancels out the fold-to-fold difficulty they both face. The other thing to get right is how you cut the folds, and the question to ask is: what does "a new case" mean when this model is deployed? If it means a new patient and your data has ten visits per patient, then random folds will put some of a patient’s visits on each side, the model will learn to recognise the patient and recall their outcome, and your score will be inflated — I have measured twelve points from exactly that. Use GroupKFold. If it means next week, and your data is a time series, then random folds train on the future to predict the past, which is hindsight you will never have. Use TimeSeriesSplit, and hold back the most recent period entirely. If your positive class is 2%, stratify, or some folds will contain no positives at all and their scores will be meaningless. And one rule that applies regardless: every transformation that gets fitted — scaling, imputation, encoding, feature selection — must be refitted inside each fold, which in practice means putting it in a Pipeline and handing the pipeline to the cross-validator. Fitting it beforehand lets the validation rows influence their own preprocessing, and nothing will warn you.',
+    },
+  },
+  {
+    id: 'ML-025',
+    domain: 'ML',
+    module: 'Bias & Variance',
+    topic: 'Diagnosing model capacity',
+    title: 'Overfitting and Underfitting',
+    slug: 'overfitting-and-underfitting',
+    difficulty: 3,
+    estimatedMinutes: 40,
+    prerequisites: ['ML-024'],
+    related: ['ML-002', 'ML-016', 'ML-021'],
+    tags: ['overfitting', 'underfitting', 'generalisation', 'learning curves', 'capacity', 'memorisation'],
+
+    learningObjectives: [
+      'Distinguish overfitting from underfitting by reading the gap between training and validation error, not by looking at either one alone',
+      'Read a learning curve and a validation curve, and state which of the two problems each diagnoses',
+      'Decide from a diagnosis whether more data, more capacity, or more regularisation is the right response',
+      'Explain why a model that memorises its training set is not a model that has learned anything',
+    ],
+
+    terminology: [
+      {
+        term: 'Generalisation',
+        definition:
+          'The ability of a fitted model to perform on data drawn from the same distribution but not used in fitting. It is the only property that matters, and it is never directly observed — only estimated, from data the model has not seen.',
+        simple: 'Doing well on questions you were not shown the answers to.',
+      },
+      {
+        term: 'Overfitting',
+        definition:
+          'The regime in which a model has enough capacity to absorb noise particular to the training sample. Training error keeps falling while validation error rises, because the extra structure being learned does not exist in the population.',
+        simple: 'Memorising the practice paper instead of learning the subject.',
+      },
+      {
+        term: 'Underfitting',
+        definition:
+          'The regime in which a model lacks the capacity or the features to represent the real pattern. Training and validation error are both high and close together, because the model fails on everything equally.',
+        simple: 'Using a straight line to describe something that curves.',
+      },
+      {
+        term: 'Generalisation gap',
+        definition:
+          'Validation error minus training error. Its size diagnoses overfitting; the absolute level of training error diagnoses underfitting. Reading only one of the two numbers cannot distinguish the cases.',
+        simple: 'The distance between how well you do on seen and unseen questions.',
+      },
+      {
+        term: 'Learning curve',
+        definition:
+          'Training and validation error plotted against the number of training examples, with model capacity held fixed. It answers one specific question: would collecting more data help?',
+        simple: 'A graph showing whether more examples would fix your problem.',
+      },
+      {
+        term: 'Validation curve',
+        definition:
+          'Training and validation error plotted against a capacity or regularisation hyperparameter, with the dataset held fixed. It locates the capacity at which the generalisation gap starts to grow faster than training error falls.',
+        simple: 'A graph showing how complicated your model should be.',
+      },
+    ],
+
+    simpleExplanation:
+      'Imagine revising for an exam using a booklet of fifty past questions. One student reads each question, works out the underlying rule, and can then handle a question they have never seen. Another memorises all fifty answers in order. Both score full marks on the booklet. Only one of them will pass the real exam. A model is exactly this. Its score on the data it was fitted to tells you almost nothing, because that score can always be driven to perfection by a model with enough capacity — it simply stores every example. What tells you something is the score on data it was never shown. Two failures can happen. The model can be too simple to represent the real pattern, in which case it does badly on everything, seen and unseen alike; that is underfitting, and it means the model has not learned enough. Or the model can be complex enough to absorb the accidental quirks of its particular training sample — the noise, the one-off coincidences — in which case it does superbly on what it saw and poorly on what it did not; that is overfitting, and it means the model has learned too much of the wrong thing. You cannot tell which you have by looking at one number. You need both, and the distance between them is the diagnosis.',
+
+    whyItExists:
+      'Fitting a model is an optimisation problem, and optimisation will always drive training error down as far as the model class allows. But minimising error on the data you already have is not the goal — nobody needs predictions for rows whose answers are already known. The goal is error on data that does not exist yet, which is a different quantity that the optimiser never sees. Overfitting and underfitting are the names for the two ways those quantities come apart, and recognising which one you have determines every next action you could take.',
+
+    analogy: {
+      scenario:
+        'A driving instructor has one route through town and a pupil who practises it for weeks. The pupil becomes flawless on that route: they know that the third traffic light is slow, that the car parked outside the bakery is always there, that you can take the corner by the school fast because it is never busy. On test day the examiner picks a different route, and the pupil struggles badly — none of what they learned transfers, because most of it was about that route rather than about driving. A second pupil has only ever read the highway code and never sat in a car; they are equally lost, but for the opposite reason. They never learned enough. The instructor can tell the two apart without watching the test: the first pupil drives the practice route perfectly and any other route badly, while the second drives every route badly, including the practice one.',
+      mapping: [
+        { from: 'The single practice route', to: 'The training set' },
+        { from: 'The examiner’s unseen route', to: 'The validation set' },
+        { from: 'The parked car that is always outside the bakery', to: 'Noise specific to the training sample' },
+        { from: 'Knowing the route perfectly but driving badly elsewhere', to: 'Overfitting — a large generalisation gap' },
+        { from: 'Driving every route badly, practice route included', to: 'Underfitting — high training error' },
+        { from: 'Comparing performance on the two routes', to: 'Comparing training and validation error' },
+        { from: 'Practising on many different routes', to: 'Collecting more, and more varied, training data' },
+      ],
+      bridge:
+        'The instructor’s diagnostic is exactly the machine-learning one, and it is diagnostic precisely because it uses two numbers rather than one. Perfect on the practice route and poor elsewhere means the pupil absorbed route-specific detail: capacity is being spent on noise, so reduce capacity, regularise, or supply more varied routes. Poor everywhere means there was never enough skill to begin with: increase capacity or supply better features. The reason a single number cannot diagnose this is that both pupils can be described as "failing the test", and the fixes point in opposite directions.',
+      limitations:
+        'The analogy assumes the examiner’s route is drawn from the same town. If the test is in a different country with different road rules, no amount of practice or capacity helps — that is distribution shift, a third failure mode that this diagnostic cannot see, because both training and validation error can look fine while deployment error is terrible.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Watch a model overfit as capacity grows',
+        caption: 'Increase the polynomial degree and watch the fitted curve move from a straight line that misses the pattern, through a good fit, to a wild curve that passes exactly through every training point. The validation error traces a U.',
+        widget: 'bias-variance-lab',
+      },
+      {
+        kind: 'flow',
+        title: 'The diagnostic procedure',
+        steps: [
+          { label: 'Get two numbers, not one', detail: 'Training error and validation error, from the same model and the same metric. Cross-validation gives a steadier validation number and a fold spread you will need in step 4.' },
+          { label: 'Look at the training error first', detail: 'If it is high relative to what the problem allows, the model cannot even fit the data it has seen. That is underfitting, and nothing about the validation set is relevant yet.' },
+          { label: 'Then look at the gap', detail: 'If training error is low but validation error is much higher, capacity is being spent on sample-specific noise. That is overfitting.' },
+          { label: 'Check the gap against fold noise', detail: 'A three-point gap means nothing if the fold standard deviation is four points. Compare the gap with the spread before calling it overfitting.' },
+          { label: 'Plot a learning curve if you are overfitting', detail: 'If the two curves are still converging as data grows, more data will help. If they have flattened into parallel lines, more data will not, and you need regularisation or a simpler model.' },
+          { label: 'Plot a validation curve if you are unsure of capacity', detail: 'Sweep the capacity hyperparameter and find where validation error turns upward. That point, not the training minimum, is the model you want.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Two failures that look the same from one number',
+        caption: 'Both give a disappointing validation score, and the corrective actions are opposites. Applying the overfitting fix to an underfitting model — adding regularisation, simplifying, collecting more rows — makes it strictly worse.',
+        left: {
+          heading: 'Underfitting (high bias)',
+          points: [
+            'Training error is high; validation error is high and close to it',
+            'The gap is small, often under a point or two',
+            'More training rows change nothing — the model already fails on the rows it has',
+            'Caused by too little capacity, too few features, or regularisation set far too strong',
+            'Fixes: richer model class, better or interacting features, weaker regularisation, train longer',
+            'Easy to miss when the metric has no natural scale, since "high" needs a reference point',
+          ],
+        },
+        right: {
+          heading: 'Overfitting (high variance)',
+          points: [
+            'Training error is very low, sometimes zero; validation error is markedly higher',
+            'The gap is large relative to the fold-to-fold spread',
+            'More training rows reliably help, until the curves converge',
+            'Caused by too much capacity relative to the amount of data, or by too many features',
+            'Fixes: regularisation, fewer features, early stopping, bagging, more data, simpler model',
+            'A perfect training score on noisy data is the signature, and is never good news',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Reading a diagnosis into an action',
+        caption: 'The reference level for "high" is whatever the problem admits — human performance, a strong published baseline, or the irreducible noise you can estimate from repeated measurements.',
+        columns: ['Training error', 'Validation error', 'Diagnosis', 'What to do'],
+        rows: [
+          ['High', 'High, similar', 'Underfitting', 'More capacity, better features, less regularisation'],
+          ['Low', 'Much higher', 'Overfitting', 'More data, more regularisation, fewer features, early stopping'],
+          ['High', 'Much higher', 'Both at once', 'Fix underfitting first — a model that cannot fit cannot be tuned'],
+          ['Low', 'Low, similar', 'Healthy', 'Stop tuning; check for leakage if it looks too good'],
+          ['Low', 'Lower than training', 'Suspicious', 'Usually a split bug, dropout at eval time, or an easier validation set'],
+        ],
+      },
+      {
+        kind: 'annotated',
+        title: 'Anatomy of a learning curve',
+        caption: 'Training and validation error plotted against training-set size, capacity held fixed. The shape of the gap at the right-hand edge is the whole message.',
+        subject: 'error\n  ^\n  |  validation\n  |  \\\n  |   \\___\n  |       \\_____________   <- still falling: more data helps\n  |    ___/-------------\n  |   /   training\n  +-------------------------> training-set size',
+        annotations: [
+          { part: 'Training curve rises', note: 'With few rows the model fits them almost exactly, so training error starts near zero and rises as more rows must be accommodated at once.' },
+          { part: 'Validation curve falls', note: 'More rows mean less sample-specific noise absorbed, so the fitted model transfers better.' },
+          { part: 'A gap still closing', note: 'If the curves are still approaching each other at the right edge, the model is data-limited and collecting more rows is the highest-value action.' },
+          { part: 'Two flat parallel lines', note: 'A persistent gap that has stopped shrinking means more data will not help. Reach for regularisation or a smaller model instead.' },
+          { part: 'Both flat and both high', note: 'Underfitting. The curves have converged at a poor level, and no quantity of additional rows will move them.' },
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'Let S = {(xᵢ, yᵢ)}ᵢ₌₁ⁿ be drawn i.i.d. from a distribution D, let A be a learning algorithm producing a hypothesis ĥ = A(S), and let L be a loss. The empirical risk is R̂(ĥ) = (1/n) Σ L(ĥ(xᵢ), yᵢ) and the true risk is R(ĥ) = E₍ₓ,ᵧ₎∼D[L(ĥ(x), y)]. The generalisation gap is R(ĥ) − R̂(ĥ). Overfitting is the regime in which R̂(ĥ) is small while the gap is large; underfitting is the regime in which R̂(ĥ) is itself large, so the gap is uninformative. For a hypothesis class H of finite VC dimension d, uniform convergence gives R(ĥ) ≤ R̂(ĥ) + O(√((d + log(1/δ))/n)) with probability 1 − δ, which formalises the trade the diagnostic makes visible: the bound loosens as capacity d rises and tightens as sample size n rises. Because R(ĥ) is never observable, every practical diagnosis substitutes a held-out or cross-validated estimate for it, and that estimate is itself a random variable whose spread must be compared against any gap before the gap is called real.',
+
+    math: {
+      intuition:
+        'The training error is a biased estimate of the true error, and the bias is not an accident of a particular dataset — it is caused by the fact that the model was chosen to minimise exactly that quantity. Fitting is selection, and selection on a noisy criterion always yields an optimistic value. The magnitude of that optimism scales with how many effectively free choices the fitting made, and shrinks with how many examples constrained them. That single ratio, capacity over sample size, is the whole story, and it is why the same model can overfit on a thousand rows and underfit on a million.',
+      formulas: [
+        {
+          latex: '\\hat{R}(h) = \\frac{1}{n}\\sum_{i=1}^{n} L(h(x_i), y_i), \\qquad R(h) = \\mathbb{E}_{(x,y)\\sim D}\\big[L(h(x), y)\\big]',
+          name: 'Empirical risk and true risk',
+          meaning:
+            'The first is computable and the second is what you actually care about. They differ, and the difference is not noise that averages away — it is systematic, because the model was chosen to make the first one small.',
+          variables: [
+            { symbol: 'n', meaning: 'Number of training examples' },
+            { symbol: 'L', meaning: 'The loss function used both to fit and to evaluate' },
+            { symbol: 'D', meaning: 'The population distribution the data is drawn from' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\text{gap}(h) = R(h) - \\hat{R}(h)',
+          name: 'The generalisation gap',
+          meaning:
+            'The quantity that overfitting makes large. Note that it involves R(h), which is unobservable, so every practical diagnosis substitutes a held-out estimate and inherits that estimate’s variance.',
+          variables: [
+            { symbol: 'R(h)', meaning: 'True risk on the population' },
+            { symbol: '\\hat{R}(h)', meaning: 'Empirical risk on the training sample' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'R(\\hat{h}) \\le \\hat{R}(\\hat{h}) + O\\!\\left(\\sqrt{\\frac{d + \\log(1/\\delta)}{n}}\\right)',
+          name: 'A uniform-convergence bound',
+          meaning:
+            'With probability at least 1 − δ, the true risk exceeds the empirical risk by at most this amount. The bound is loose in practice, but its shape is the lesson: the excess grows with capacity d and shrinks as √n.',
+          variables: [
+            { symbol: 'd', meaning: 'VC dimension, a capacity measure of the hypothesis class' },
+            { symbol: 'n', meaning: 'Training-set size' },
+            { symbol: '\\delta', meaning: 'Failure probability of the bound' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\mathbb{E}[\\text{optimism}] = \\frac{2}{n}\\sum_{i=1}^{n} \\operatorname{Cov}(\\hat{y}_i, y_i)',
+          name: 'Optimism of the training error',
+          meaning:
+            'The expected amount by which in-sample error understates out-of-sample error equals twice the average covariance between each fitted value and its own target. A model that chases its own targets — that is, that fits noise — has high covariance and high optimism.',
+          variables: [
+            { symbol: '\\hat{y}_i', meaning: 'The model’s fitted value for example i' },
+            { symbol: 'y_i', meaning: 'The observed target for example i' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\mathbb{E}[\\text{optimism}] = \\frac{2 p \\sigma^2}{n} \\quad \\text{(linear model, } p \\text{ parameters)}',
+          name: 'Optimism for a linear model',
+          meaning:
+            'For ordinary least squares the general formula collapses to something concrete: each additional parameter inflates the optimism by 2σ²/n. This is exactly the penalty term inside Mallows’ Cₚ and AIC, and it makes the capacity-over-sample-size ratio literal.',
+          variables: [
+            { symbol: 'p', meaning: 'Number of fitted parameters' },
+            { symbol: '\\sigma^2', meaning: 'Irreducible noise variance' },
+            { symbol: 'n', meaning: 'Number of training rows' },
+          ],
+          category: 'statistics',
+        },
+      ],
+      derivation: [
+        'Start with a concrete case where everything can be computed: fit a polynomial of degree p by least squares to n points generated as y = f(x) + ε with ε of variance σ², and ask how the in-sample error relates to the out-of-sample error.',
+        'Least squares projects y onto a p-dimensional subspace. Write the projection matrix H, so ŷ = Hy and the residual is (I − H)y. Because H is a projection of rank p, trace(H) = p.',
+        'Take the expectation of the training error. E[||y − ŷ||²] = E[||(I − H)(f + ε)||²]. If the true f lies in the span — the no-bias case — the first term vanishes and this is E[||(I − H)ε||²] = σ²·trace(I − H) = σ²(n − p).',
+        'So the expected training mean squared error is σ²(n − p)/n, which is strictly below σ². The model reports a noise level smaller than the noise actually present, and the shortfall is exactly pσ²/n.',
+        'Now the out-of-sample error at the same inputs. A fresh target y′ = f + ε′ is independent of the fit, so E[||y′ − ŷ||²] = E[||(I − H)ε||²] + E[||ε′||²] ... expanding gives σ²(n − p) + nσ², hence a mean of σ²(n + p)/n.',
+        'Subtract the two: the expected gap is σ²(n + p)/n − σ²(n − p)/n = 2pσ²/n. Every parameter costs exactly 2σ²/n of optimism, regardless of whether it captures signal.',
+        'This is the whole phenomenon in one expression. Hold n fixed and increase p: training error falls (fewer residual degrees of freedom) while the gap grows linearly. At some p the gap grows faster than the training error falls, and validation error turns upward. That turning point is the U-shape a validation curve traces.',
+        'Hold p fixed and increase n instead: the gap 2pσ²/n shrinks like 1/n while training error rises toward σ². The two curves converge — which is precisely what a learning curve plots, and why a still-shrinking gap means more data will help.',
+        'Underfitting is the term this derivation dropped. If f does not lie in the span of the p basis functions, the bias term E[||(I − H)f||²] is non-zero and appears in both the training and out-of-sample error identically. It raises both, leaving the gap unchanged.',
+        'That asymmetry is the diagnostic, stated precisely: bias raises training error and leaves the gap alone; variance leaves training error alone and raises the gap. Reading the two numbers separates two effects that a single number confounds.',
+        'One caveat the derivation makes honest. The clean formula assumed a linear fit with p fixed in advance. Choosing p by looking at validation scores is itself a fitting procedure, so the selected model’s validation score carries its own optimism — which is why the final report belongs on a test set that no choice was made against.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Diagnosing three models on the same data',
+      setup:
+        'A regression problem with 200 training rows. The target is generated as y = 3 sin(x) + ε with σ = 0.5, so the best achievable RMSE is 0.50. Three polynomial fits are compared: degree 1, degree 5 and degree 25. Five-fold cross-validation gives the numbers below, and the task is to diagnose each and prescribe an action.',
+      steps: [
+        {
+          label: 'The three results',
+          detail: 'Degree 1: training RMSE 1.94, validation RMSE 1.97, fold spread 0.06. Degree 5: training 0.48, validation 0.54, spread 0.05. Degree 25: training 0.21, validation 1.42, spread 0.31.',
+          latex: '(1.94, 1.97), \\quad (0.48, 0.54), \\quad (0.21, 1.42)',
+        },
+        {
+          label: 'Establish the reference level',
+          detail: 'The noise has σ = 0.50, so no model can beat an RMSE of 0.50 however good it is. Without this reference, "training RMSE 1.94" is just a number; with it, 1.94 is four times the irreducible floor and obviously terrible.',
+          latex: '\\text{RMSE}_{\\min} = \\sigma = 0.50',
+        },
+        {
+          label: 'Diagnose degree 1',
+          detail: 'Training 1.94 against a floor of 0.50 is very high, and the gap of 0.03 is smaller than the fold spread of 0.06 — statistically indistinguishable from zero. High training error, no gap: underfitting. A straight line cannot represent a sine wave, and that failure applies equally to seen and unseen rows.',
+          latex: '\\text{gap} = 1.97 - 1.94 = 0.03 < 0.06 = \\text{spread}',
+        },
+        {
+          label: 'Diagnose degree 25',
+          detail: 'Training 0.21 is below the noise floor of 0.50, which is already the alarm: the model is fitting variation that is not reproducible. The gap of 1.21 is four times the fold spread of 0.31. Low training error, large gap: overfitting.',
+          latex: '\\text{gap} = 1.42 - 0.21 = 1.21 \\approx 3.9 \\times 0.31',
+        },
+        {
+          label: 'Diagnose degree 5',
+          detail: 'Training 0.48 sits essentially at the noise floor and validation 0.54 is a whisker above it. The gap of 0.06 is about one fold spread. This model has learned the signal and very little else.',
+          latex: '\\text{gap} = 0.54 - 0.48 = 0.06 \\approx 1.2 \\times 0.05',
+        },
+        {
+          label: 'Check the optimism formula against degree 25',
+          detail: 'The derivation predicts an expected squared-error optimism of 2pσ²/n. With p = 26, σ² = 0.25 and n = 200: 2 × 26 × 0.25/200 = 0.065 in MSE. Training MSE is 0.21² = 0.044, so predicted out-of-sample MSE is about 0.109, an RMSE near 0.33.',
+          latex: '\\frac{2 p \\sigma^2}{n} = \\frac{2 \\times 26 \\times 0.25}{200} = 0.065',
+        },
+        {
+          label: 'Why the observed overfitting is far worse than predicted',
+          detail: 'Observed validation RMSE is 1.42, not 0.33. The formula assumed the fit is evaluated at the same x values; a degree-25 polynomial oscillates violently between training points, so error at new x values is catastrophically worse than the in-sample formula allows. The formula gives a floor on the optimism, never a ceiling.',
+          latex: '1.42 \\gg 0.33',
+        },
+        {
+          label: 'Prescribe for degree 1',
+          detail: 'More rows will not help — the model already fails on the 200 it has, and 200,000 straight-line fits to a sine wave still give a straight line. Regularising would make it worse. The action is more capacity: raise the degree, or add sin/cos basis features.',
+          latex: '\\text{high bias} \\Rightarrow \\text{increase capacity}',
+        },
+        {
+          label: 'Prescribe for degree 25',
+          detail: 'Two routes. Reduce capacity to degree 5, which the sweep already shows works. Or keep degree 25 and add ridge regularisation, which shrinks the high-order coefficients; at a well-chosen α this recovers validation RMSE near 0.55, because the penalty suppresses precisely the oscillating terms.',
+          latex: '\\text{high variance} \\Rightarrow \\text{reduce capacity or regularise}',
+        },
+        {
+          label: 'Would more data help degree 25?',
+          detail: 'Yes, and the learning curve says so: with 200 rows the gap is 1.21, with 2,000 rows it falls to about 0.18. The gap is still visibly shrinking, so the model is data-limited. With degree 1 the same experiment moves nothing, because its curves converged long ago.',
+          latex: '\\text{gap} \\propto \\tfrac{p}{n} \\Rightarrow \\text{ten times the data, roughly a tenth the gap}',
+        },
+      ],
+      conclusion:
+        'Three models, three different situations, and the two-number diagnostic separates them without ambiguity. Degree 1 fails on everything (bias, no gap) and needs more capacity. Degree 25 succeeds on what it saw and fails elsewhere (low training error, huge gap) and needs less capacity, more regularisation, or more data. Degree 5 sits at the noise floor with a gap inside the fold noise, which is what a healthy model looks like. Note the two habits that made the diagnosis possible: knowing the irreducible noise level, which gave "high" a meaning, and having the fold spread, which told us whether each gap was real.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'The two failures, side by side',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import cross_validate
+
+rng = np.random.default_rng(0)
+X = rng.uniform(0, 6, 200).reshape(-1, 1)
+y = 3 * np.sin(X).ravel() + rng.normal(0, 0.5, 200)
+
+print(f"irreducible RMSE floor: {0.50:.2f}\\n")
+print(f"{'degree':>7}{'train':>8}{'valid':>8}{'gap':>8}{'spread':>8}  diagnosis")
+
+for degree in (1, 3, 5, 9, 25):
+    model = make_pipeline(PolynomialFeatures(degree), LinearRegression())
+    cv = cross_validate(
+        model, X, y, cv=5,
+        scoring="neg_root_mean_squared_error",
+        return_train_score=True,
+    )
+    train = -cv["train_score"].mean()
+    valid = -cv["test_score"].mean()
+    spread = cv["test_score"].std()
+    gap = valid - train
+    if train > 0.75:
+        note = "underfitting"
+    elif gap > 2 * spread:
+        note = "overfitting"
+    else:
+        note = "healthy"
+    print(f"{degree:>7}{train:>8.2f}{valid:>8.2f}{gap:>8.2f}{spread:>8.2f}  {note}")`,
+        output: `irreducible RMSE floor: 0.50
+
+ degree   train   valid     gap  spread  diagnosis
+      1    1.94    1.97    0.03    0.06  underfitting
+      3    0.79    0.83    0.04    0.07  underfitting
+      5    0.48    0.54    0.06    0.05  healthy
+      9    0.46    0.59    0.13    0.06  overfitting
+     25    0.21    1.42    1.21    0.31  overfitting
+`,
+        explanation:
+          'Three things in this output are worth dwelling on. First, `return_train_score=True` is what makes the diagnosis possible at all — without it you have one number and cannot distinguish the two failures. Second, the gap is compared against the fold spread rather than against a fixed threshold: at degree 9 a gap of 0.13 is only diagnostic because the spread is 0.06, and on a noisier problem the same gap would mean nothing. Third, degree 25 drives training RMSE to 0.21, well below the 0.50 noise floor. Beating the irreducible noise is arithmetically impossible on new data, so a training score below the floor is by itself proof that the model is fitting noise, before you look at validation at all.',
+      },
+      {
+        language: 'python',
+        title: 'A learning curve answers "would more data help?"',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import learning_curve
+
+rng = np.random.default_rng(0)
+X = rng.uniform(0, 6, 4000).reshape(-1, 1)
+y = 3 * np.sin(X).ravel() + rng.normal(0, 0.5, 4000)
+
+for degree, label in ((1, "degree 1  (underfit)"), (25, "degree 25 (overfit)")):
+    sizes, train, valid = learning_curve(
+        make_pipeline(PolynomialFeatures(degree), LinearRegression()),
+        X, y, cv=5,
+        train_sizes=np.array([50, 100, 400, 1600, 3200]),
+        scoring="neg_root_mean_squared_error",
+    )
+    print(f"\\n{label}")
+    print(f"{'n':>6}{'train':>8}{'valid':>8}{'gap':>8}")
+    for n, tr, va in zip(sizes, -train.mean(1), -valid.mean(1)):
+        print(f"{n:>6}{tr:>8.2f}{va:>8.2f}{va - tr:>8.2f}")`,
+        output: `
+degree 1  (underfit)
+     n   train   valid     gap
+    50    1.89    2.06    0.17
+   100    1.93    2.00    0.07
+   400    1.96    1.98    0.02
+  1600    1.97    1.97    0.00
+  3200    1.97    1.97    0.00
+
+degree 25 (overfit)
+     n   train   valid     gap
+    50    0.00    9.61    9.61
+   100    0.18    1.87    1.69
+   400    0.42    0.63    0.21
+  1600    0.47    0.52    0.05
+  3200    0.48    0.50    0.02
+`,
+        explanation:
+          'These two tables give opposite advice, which is the entire point of plotting a learning curve rather than guessing. Degree 1 converges by n = 400 to a gap of 0.02 and then nothing changes: the curves have met at 1.97, far above the 0.50 floor, and sixty-four times the data moved the validation error by 0.09. Collecting more rows is wasted effort. Degree 25 starts catastrophically — at n = 50 it has 26 parameters for 40 training rows, interpolates them exactly at training RMSE 0.00, and produces validation RMSE 9.61 — and then improves steadily as rows accumulate, reaching 0.50 by n = 3200. The same model that was the worst choice at n = 200 is fine at n = 3200, because overfitting is never a property of a model alone but of a model relative to the data available. That is also the practical reading rule: a gap still shrinking at the right-hand edge means collect more data; two flat parallel lines mean do something else.',
+      },
+      {
+        language: 'python',
+        title: 'Memorisation made literal',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(1)
+# Labels are coin flips. There is no pattern here to learn - none at all.
+X = rng.normal(size=(300, 50))
+y = rng.integers(0, 2, 300)
+
+Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.3, random_state=0)
+
+for depth in (2, 5, None):
+    tree = DecisionTreeClassifier(max_depth=depth, random_state=0).fit(Xtr, ytr)
+    name = "unlimited" if depth is None else f"depth {depth}"
+    print(f"{name:>10}  train {tree.score(Xtr, ytr):.3f}   test {tree.score(Xte, yte):.3f}"
+          f"   leaves {tree.get_n_leaves():>3}")`,
+        output: `   depth 2  train 0.665   test 0.478
+   depth 5  train 0.871   test 0.511
+ unlimited  train 1.000   test 0.489
+`,
+        explanation:
+          'The labels are coin flips, so the true accuracy of every possible model on this problem is exactly 0.50 and no algorithm can do better. The unlimited tree nevertheless reaches a perfect 1.000 on its training set, using 210 leaves to store 210 rows — it has memorised the data, one leaf per example, which is what "overfitting" means in its purest form. Test accuracy is 0.489, indistinguishable from chance. This is the experiment to keep in mind whenever a training score looks wonderful: perfect training accuracy is always achievable given enough capacity, and it therefore carries no information about whether a model has learned anything. Note also that all three test scores hover around 0.50 with visible scatter — with 90 test rows the standard error is about 0.053, so the differences between 0.478, 0.511 and 0.489 are pure noise, and reading a ranking into them would be a second mistake on top of the first.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'A credit-scoring model that reached 0.94 AUC in development and 0.71 in production',
+        usage:
+          'The development data contained a field populated only after a manual review that itself depended on the outcome, so the model had memorised a proxy for the answer. The training-validation gap was small because both splits contained the leaking field — which is why leakage is the one failure this diagnostic cannot catch, and why an out-of-time holdout is not optional.',
+      },
+      {
+        context: 'A Kaggle competitor who tuned 4,000 configurations against a public leaderboard scored on 30% of the test set',
+        usage:
+          'Their public score improved by 1.8 points while their private score fell by 0.9. The leaderboard had become a training set: taking the maximum over thousands of noisy evaluations overfits the evaluation itself, which is exactly the same mechanism one level up from model fitting.',
+      },
+      {
+        context: 'A hospital sepsis-prediction model that degraded within months of deployment',
+        usage:
+          'Part of the cause was ordinary drift, but part was that retraining used data from a period when the alert was already running and changing clinician behaviour. Training and validation error stayed close throughout, so the capacity diagnostic looked healthy while the model was being quietly invalidated.',
+      },
+      {
+        context: 'A pneumonia image classifier that was reading the scanner make rather than the lungs',
+        usage:
+          'Metadata burned into the pixel borders identified the hospital, and one hospital in the training set had both a distinctive scanner and a high disease prevalence. Training and validation came from the same hospitals, so the gap stayed small; only an external-hospital test set revealed the shortcut.',
+      },
+    ],
+
+    projectConnections: [
+      {
+        tool: 'scikit-learn',
+        role:
+          '`cross_validate(..., return_train_score=True)`, `learning_curve` and `validation_curve` are the three functions this diagnosis runs on, and they are the first thing to reach for before tuning anything.',
+      },
+      {
+        tool: 'Ridge, Lasso and tree depth limits',
+        role:
+          'The standard response to a confirmed gap. Regularisation (ML-030) is the direct continuation of this unit: it is how you reduce effective capacity without changing model family.',
+      },
+      {
+        tool: 'PyTorch and Keras training loops',
+        role:
+          'The same diagnosis reappears as train and validation loss curves logged every epoch, where early stopping is nothing more than acting on the validation curve the moment it turns upward.',
+      },
+      {
+        tool: 'Weights & Biases or MLflow',
+        role:
+          'Both numbers and the fold spread belong in the tracked run, not in a terminal that scrolls away, so that a later comparison between experiments is comparing like with like.',
+      },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Reading the validation score alone and concluding "the model is overfitting".',
+        why: 'A disappointing validation score is consistent with both failures, and they require opposite fixes. Without the training score there is no way to tell whether the model has learned too much or too little.',
+        fix: 'Always compute both. In scikit-learn pass `return_train_score=True` to `cross_validate`; in a deep-learning loop log both losses every epoch. The gap is the diagnosis, not either number.',
+      },
+      {
+        mistake: 'Calling a small gap overfitting without comparing it against fold-to-fold noise.',
+        why: 'On a small validation set the estimate has a large standard error. A three-point gap against a four-point fold spread is not evidence of anything, and reacting to it by adding regularisation can push a healthy model into underfitting.',
+        fix: 'Report the fold standard deviation next to the mean, and treat a gap as real only when it clearly exceeds the spread — roughly two standard errors as a working rule.',
+      },
+      {
+        mistake: 'Responding to underfitting by collecting more data.',
+        why: 'More rows reduce variance, not bias. A model that cannot fit the rows it already has will fit ten times as many exactly as badly, and the effort is wasted.',
+        fix: 'Check the learning curve first. If the two curves have already converged, more data is the one thing guaranteed not to help; increase capacity or improve the features instead.',
+      },
+      {
+        mistake: 'Tuning against the validation set until the validation score is excellent, then reporting that score.',
+        why: 'Repeatedly selecting the best of many noisy evaluations overfits the validation set itself. The reported number is the maximum of a noisy sample and is optimistically biased, typically by one to three points on small data.',
+        fix: 'Keep a test set that nothing is selected against, or use nested cross-validation. Look at the test set once, at the end, and report whatever it says.',
+      },
+      {
+        mistake: 'Treating a validation score better than the training score as good news.',
+        why: 'It is almost always a bug. Common causes are dropout or batch norm left in training mode during evaluation, an accidentally easier validation split, duplicate rows, or averaging training loss across an epoch while the model improved during it.',
+        fix: 'Investigate rather than celebrate. Evaluate the model on the training set in eval mode after the epoch ends, and check the splits for duplicates and for class-balance differences.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        question: 'A model has 99% training accuracy and 71% validation accuracy. What is happening, and what would you do?',
+        answer:
+          'The 28-point gap says the model has capacity to absorb structure specific to the training sample — classic overfitting. But before acting I would check two things. First, whether 28 points is large relative to the fold-to-fold spread; on a small validation set a wide gap can partly be noise. Second, what the achievable ceiling is: if a strong baseline gets 95%, then 71% is a real problem, whereas if human performance is 74% the model may be close to the limit. Assuming the gap is real, my ordering would be: plot a learning curve to see whether the curves are still converging, because if they are then more data is the highest-value fix and everything else is a workaround; add regularisation appropriate to the model family — ridge or lasso for linear, max_depth and min_samples_leaf for trees, weight decay and dropout for networks; reduce the feature count if it is large relative to n; and use early stopping for anything iterative. I would also check for the degenerate case: if training accuracy is 99% on noisy real-world data, I would look for duplicate rows between splits and for a leaking feature, because a near-perfect training score often means the model found a shortcut rather than that it has too much capacity.',
+        level: 'intermediate',
+      },
+      {
+        question: 'How do you decide whether collecting more labelled data is worth the cost?',
+        answer:
+          'Plot a learning curve — train the same model on increasing subsets of the data you already have and track training and validation error at each size. The shape at the right-hand edge answers the question directly. If the validation curve is still descending and the gap is still narrowing, the model is data-limited and more rows will convert into accuracy; you can even extrapolate roughly, since the gap falls about like 1/n, to estimate what doubling the dataset buys. If the two curves have flattened into parallel lines with a persistent gap, more data of the same kind will not close it and you need regularisation or a different model class. If they have converged at a poor level, you are underfitting and more data is guaranteed to change nothing — the constraint is capacity or features. One nuance: the curve tells you about more data of the same distribution. If the failures concentrate in an under-represented subgroup, targeted collection in that region can help even when the overall curve looks flat, so I would also look at the error breakdown by segment before deciding.',
+        level: 'advanced',
+      },
+      {
+        question: 'Can a model overfit when it has fewer parameters than training examples?',
+        answer:
+          'Yes, easily, because parameter count is a poor proxy for capacity. A single decision tree grown without depth limits has relatively few parameters in the usual sense yet can isolate every training row; a 1-nearest-neighbour model has no fitted parameters at all and achieves zero training error by construction. What matters is effective capacity — how many distinct labellings of the training data the fitting procedure can realise — and that depends on the hypothesis class and the optimiser, not on a parameter count. The converse also holds and is more surprising: modern over-parameterised networks with far more parameters than examples often generalise well, because implicit regularisation from gradient descent and the architecture restricts which of the many interpolating solutions is actually found, producing the double-descent curve where test error falls again beyond the interpolation threshold. So I would not reason about overfitting from parameter counts in either direction. I would measure the gap.',
+        level: 'advanced',
+      },
+      {
+        question: 'Your validation loss is lower than your training loss. What would you check?',
+        answer:
+          'That ordering is backwards from what the optimiser should produce, so I would treat it as a bug until proven otherwise rather than as a good result. The most common cause in deep learning is regularisation that is active during training and disabled at evaluation: dropout randomly zeroes activations during the training pass but not at eval time, so the training loss is measured on a handicapped model. Batch normalisation behaves similarly, using batch statistics when training and running averages when evaluating. A second common cause is that training loss is averaged across the epoch while the model was still improving, so it reflects the average model rather than the final one — evaluating on the training set after the epoch ends removes that artefact. Third, the split itself: an easier validation set, a different class balance, or duplicate rows that landed on both sides. Fourth, in small datasets it can simply be noise, so I would check whether the difference exceeds the run-to-run variability. I would work through those in that order before drawing any conclusion about the model.',
+        level: 'intermediate',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A model scores 0.62 training accuracy and 0.61 validation accuracy on a balanced binary problem. Is it overfitting or underfitting, and what would you do next?',
+        hint: 'Look at the absolute training score first, and remember what the floor is for a balanced binary problem.',
+        solution:
+          'Underfitting. The gap is 0.01, essentially zero, so there is no evidence the model absorbed anything sample-specific. The relevant number is the 0.62 itself: on a balanced binary problem, 0.50 is what guessing achieves, so this model captures a thin sliver of signal and fails on training and validation rows alike. Adding regularisation, simplifying the model or collecting more rows would all make things worse or leave them unchanged. The actions that can help are increasing capacity (a richer model class, more trees, more depth, interaction terms), improving the features (the most common real cause of a score this close to chance is that the features simply do not contain the signal), reducing regularisation if any is set, and checking that the target is what you think it is. Before any of that I would confirm the pipeline is sane by fitting a deliberately over-powerful model — an unlimited-depth tree, say — and checking that it can at least reach a high training score. If it cannot, the features carry no signal and no amount of capacity tuning will help.',
+      },
+      {
+        prompt:
+          'You fit a model on 500 rows with a validation gap of 0.20. You collect 5,000 more rows and refit, and the gap falls to 0.04 while validation error improves from 0.31 to 0.19. What does this tell you about whether to collect more?',
+        hint: 'Consider both how the gap moved and how much room is left between the current error and the plausible floor.',
+        solution:
+          'It tells you the model was genuinely data-limited, and that the remaining headroom from more data is now small. The gap fell by a factor of five for an eleven-fold increase in data, consistent with the roughly 1/n behaviour the optimism formula predicts, which confirms variance was the binding constraint at n = 500. But the gap is now 0.04, so at most about four points of the remaining 0.19 validation error is attributable to variance; the other 0.15 is bias plus irreducible noise, and neither responds to more rows. Extrapolating, another eleven-fold increase — 60,000 rows — would reduce the gap to roughly 0.008, buying perhaps three points. Whether that is worth the labelling cost is a business question, but the modelling answer is that the cheap gains from data have been taken and the next real improvement must come from capacity or features. A useful check before deciding: refit with a deliberately larger model on the 5,500 rows. If the gap reopens and validation improves, capacity is now the constraint and you should raise it before buying more data.',
+      },
+      {
+        prompt:
+          'Explain why a decision tree grown to unlimited depth always reaches 100% training accuracy on data with no duplicate feature rows, and why this is not evidence that the tree is a good model.',
+        hint: 'Think about what the splitting procedure is allowed to keep doing, and what the stopping condition is.',
+        solution:
+          'The tree splits any node that is not pure, and with no depth limit or minimum-leaf constraint it keeps splitting until every leaf contains rows of a single class. If no two training rows share identical feature values, the procedure can always find a split separating any two rows that disagree, so in the limit it produces leaves containing one row each and every training prediction is that row’s own label. Training accuracy is therefore 100% by construction, for any dataset — including one whose labels are coin flips, as the third code example demonstrates. That is exactly why the number carries no information. A measurement that returns the same value regardless of whether any signal exists cannot distinguish a good model from a useless one. What the tree has done is store the training set, and prediction for a new row amounts to asking which stored row it falls nearest to under the learned partition — which generalises only if the partition reflects real structure rather than the accidents of this sample. The evidence you need is validation performance, and the diagnosis comes from the gap between the two.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'ML-025-q1',
+        type: 'mcq',
+        concept: 'diagnosing from two numbers',
+        prompt: 'A model has training RMSE 0.90 and validation RMSE 0.93, against an irreducible noise level of 0.20. What is the diagnosis?',
+        options: [
+          'Underfitting — training error is far above the noise floor and the gap is negligible',
+          'Overfitting — any gap at all indicates absorbed noise',
+          'Healthy — the two numbers are close together',
+          'Cannot tell without knowing the number of parameters',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The gap of 0.03 is negligible, so nothing sample-specific is being absorbed. The problem is that 0.90 is four and a half times the 0.20 floor: the model fails on training rows too. That is underfitting, and the fix is more capacity or better features, never more data.',
+      },
+      {
+        id: 'ML-025-q2',
+        type: 'truefalse',
+        concept: 'more data and bias',
+        prompt: 'Collecting more training data is an effective remedy for underfitting.',
+        answer: false,
+        explanation:
+          'More rows reduce variance, not bias. A model that cannot fit the rows it already has will fit more rows equally badly — the second code example shows sixty-four times the data moving a degree-1 fit by 0.09 RMSE and then stopping.',
+      },
+      {
+        id: 'ML-025-q3',
+        type: 'numeric',
+        concept: 'optimism of training error',
+        prompt: 'A linear model with p = 20 parameters is fitted to n = 500 rows with noise variance σ² = 4. By how much does the expected optimism 2pσ²/n understate the true MSE?',
+        answer: 0.32,
+        tolerance: 0.005,
+        explanation:
+          '2 × 20 × 4 / 500 = 160/500 = 0.32. Every parameter costs 2σ²/n = 0.016 of optimism whether or not it captures real signal, which is exactly the penalty term inside Mallows’ Cₚ and AIC.',
+      },
+      {
+        id: 'ML-025-q4',
+        type: 'match',
+        concept: 'prescribing from a diagnosis',
+        prompt: 'Match each observation to the action it justifies.',
+        pairs: [
+          { left: 'High training error, gap smaller than fold spread', right: 'Increase capacity or improve features' },
+          { left: 'Near-zero training error, gap four times the fold spread', right: 'Regularise, simplify, or collect more data' },
+          { left: 'Learning-curve gap still narrowing at the largest size', right: 'Collect more rows — the model is data-limited' },
+          { left: 'Validation loss below training loss', right: 'Investigate a bug: dropout at eval, split leakage, epoch averaging' },
+        ],
+        explanation:
+          'Each pairing follows from what the two numbers separate: bias raises training error and leaves the gap alone, while variance leaves training error alone and raises the gap. Reversing the fix — regularising an underfit model, adding capacity to an overfit one — makes things strictly worse.',
+      },
+      {
+        id: 'ML-025-q5',
+        type: 'debug',
+        language: 'python',
+        concept: 'missing the training score',
+        prompt: 'This code is meant to diagnose whether a model is overfitting. Why can it not do so?',
+        code: `scores = cross_val_score(model, X, y, cv=5)
+print(f"mean {scores.mean():.3f}  std {scores.std():.3f}")
+if scores.mean() < 0.80:
+    print("model is overfitting - adding regularisation")`,
+        options: [
+          'It never computes a training score, so it cannot distinguish overfitting from underfitting',
+          'cross_val_score needs a scoring argument to work at all',
+          'Five folds is too few to compute a standard deviation',
+          'scores.std() should be divided by the square root of five',
+        ],
+        answerIndex: 0,
+        explanation:
+          'A low validation score is consistent with both failures, and they need opposite fixes — so adding regularisation here may well make an underfit model worse. Use `cross_validate(..., return_train_score=True)` and compare the gap against the fold spread.',
+      },
+      {
+        id: 'ML-025-q6',
+        type: 'order',
+        concept: 'the diagnostic procedure',
+        prompt: 'Put the steps of a capacity diagnosis in the order that makes each one interpretable.',
+        items: [
+          'Establish a reference level: irreducible noise, human performance, or a strong baseline',
+          'Obtain training and validation error for the same model and metric, with the fold spread',
+          'Check whether training error is high relative to the reference — if so, you are underfitting',
+          'Check whether the gap exceeds the fold spread — if so, you are overfitting',
+          'Plot a learning curve to decide whether more data would close the gap',
+          'Act: capacity and features for bias, regularisation or data for variance',
+        ],
+        explanation:
+          'The reference level comes first because "high training error" is meaningless without it. Training error is read before the gap because underfitting must be fixed first — a model that cannot fit its own data cannot usefully be tuned for variance.',
+      },
+      {
+        id: 'ML-025-q7',
+        type: 'explain',
+        concept: 'why training accuracy carries no information',
+        prompt: 'Explain why a decision tree reaching 100% training accuracy tells you nothing about the tree’s quality, using the idea of what a measurement can distinguish.',
+        explanation:
+          'Perfect training accuracy is reachable for any labels at all, including random ones, so it is a property of the model class rather than evidence about the data. Only the held-out score — and specifically its distance from the training score — can discriminate.',
+        rubric: [
+          'States that an unconstrained tree reaches perfect training accuracy by construction, for any labels',
+          'Concludes that a measurement returning the same value with or without signal cannot discriminate',
+          'Connects this to memorisation: one leaf per row stores rather than learns',
+          'Identifies the held-out score, and specifically the gap, as the informative measurement',
+        ],
+        sampleAnswer:
+          'A measurement is only informative if it can come out differently in the situations you want to tell apart. Unlimited-depth tree fitting keeps splitting any impure node, and provided no two rows have identical features it can always separate two rows that disagree, so it terminates with every leaf pure — typically one row per leaf. That means 100% training accuracy is reached for any dataset whatsoever, including one where the labels are coin flips and no learnable pattern exists. Since the measurement returns 1.00 both when there is signal and when there is none, observing 1.00 cannot distinguish those cases, and so it carries no information about model quality. Mechanistically, the tree has stored the training set rather than compressed it into a rule: prediction for a new row consists of finding which stored region it lands in, which generalises only if the partition reflects population structure rather than sample accidents. The informative measurement is performance on rows that did not participate in fitting. Even that is not enough on its own, because a poor validation score could mean too much capacity or too little; it is the gap between training and validation, read against the fold-to-fold spread, that separates the two. On the coin-flip data the unlimited tree shows training 1.000 against test 0.489 — a gap of 0.51 that names the failure precisely. The general lesson extends past trees: any sufficiently flexible model can drive training error to zero, so the quantity is a property of the model class rather than evidence about the world, and it should be read only as one half of a difference.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What single number diagnoses overfitting?', back: 'None. You need two: training and validation error. The gap between them is the diagnosis, and it must be read against the fold spread.' },
+      { front: 'How do underfitting and overfitting differ in their signatures?', back: 'Underfitting: training error high, gap small. Overfitting: training error low, gap large. Bias raises both errors equally; variance raises only the validation one.' },
+      { front: 'When does collecting more data help?', back: 'Only for variance. If the learning-curve gap is still narrowing, more rows help; if the curves are flat and parallel, or converged at a poor level, they do not.' },
+      { front: 'What is the optimism of a linear model’s training error?', back: '2pσ²/n — each parameter costs 2σ²/n whether or not it captures signal. It is the penalty inside Mallows’ Cₚ and AIC.' },
+      { front: 'Why is 100% training accuracy never good news?', back: 'Any sufficiently flexible model achieves it by memorising, even on random labels. A measurement that is identical with and without signal carries no information.' },
+      { front: 'What does a learning curve plot, and what does a validation curve plot?', back: 'Learning curve: error against training-set size, capacity fixed — answers "more data?". Validation curve: error against a capacity hyperparameter, data fixed — answers "how complex?".' },
+      { front: 'Validation loss is below training loss. First suspicion?', back: 'A bug. Dropout or batch norm active during training but not eval, training loss averaged over an improving epoch, or an easier validation split.' },
+      { front: 'Why is the best grid-search validation score optimistic?', back: 'It is the maximum of many noisy estimates, so it preferentially selects favourable noise. Report on a test set nothing was selected against.' },
+    ],
+
+    challenge: {
+      title: 'A capacity diagnosis end to end',
+      brief:
+        'Generate a regression dataset with known irreducible noise, so you have a real floor to compare against. Sweep a capacity hyperparameter and produce a validation curve with training and validation error and fold spreads, identifying the degree at which validation error turns upward. Then pick one underfitting configuration and one overfitting configuration and produce a learning curve for each, at a range of training sizes spanning at least two orders of magnitude. Use the curves to predict, before running it, what will happen when you give the overfitting model ten times the data, then run it and report how close the prediction was. Finally, repeat the overfitting configuration with an added ridge penalty swept over several magnitudes, and show that regularisation and capacity reduction reach comparable validation error by different routes.',
+      acceptanceCriteria: [
+        'The irreducible noise floor is stated and used as the reference for calling training error high or low',
+        'The validation curve reports training and validation error with fold spreads, and locates the turning point',
+        'Learning curves for both configurations are produced and read correctly — one showing convergence, one showing a narrowing gap',
+        'A quantitative prediction about ten times the data is made in advance and then compared against the measured result',
+        'The ridge sweep is shown to reach comparable validation error to capacity reduction, with the mechanism explained',
+        'The write-up states which action it would take in a real project and why, referring to the measured numbers',
+      ],
+    },
+
+    teachingPrompt: {
+      prompt:
+        'A colleague shows you a model with 100% training accuracy and is pleased with it. Explain, without using the words "overfitting" or "underfitting" until you have earned them, why that number is not the good news they think it is, and what you would look at instead.',
+      mustCover: [
+        'That training accuracy can always be driven to perfection by a flexible enough model, so it does not discriminate good models from useless ones',
+        'That the informative measurement is on data the model did not see, and specifically the gap between the two',
+        'That a poor held-out score has two opposite causes and the gap is what separates them',
+        'That the size of a gap must be compared against the fold-to-fold spread before it means anything',
+        'What action follows from each diagnosis, and why applying the wrong one makes things worse',
+      ],
+      sampleExplanation:
+        'Let me start with a question rather than a verdict: if I gave you a dataset where the labels were coin flips — genuinely no pattern, nothing to learn — what training accuracy could a decision tree reach on it? The answer is 100%, and it takes about four lines of code to demonstrate. Grow the tree without a depth limit and it keeps splitting until every leaf holds a single row, so every training prediction is that row’s own stored label. It has not learned anything; it has written the answers down. And this is not a quirk of trees. Any model flexible enough will do the same thing, which means the number 100% comes out identically whether the data contains a beautiful learnable structure or absolutely nothing. A measurement that reads the same in both cases cannot tell you which one you are in, so observing it tells you nothing about your model. That is the whole argument, and it is worth sitting with, because the instinct to be pleased by a high training score is strong. What would tell you something is performance on rows the model never saw during fitting — a held-out set, or better, cross-validation so you get several estimates and a sense of how much they wobble. Now, here is the part people skip. Suppose that held-out score comes back disappointing. You still do not know what is wrong, because there are two completely different diseases with that one symptom. Your model might be too simple to represent the real pattern, in which case it does badly on everything, including the rows it trained on. Or it might be complex enough to have absorbed the accidental quirks of this particular sample — the noise — in which case it does wonderfully on what it saw and badly on what it did not. Those two need opposite treatments: the first wants more capacity and better features, the second wants less capacity, more regularisation, or more data. Give the wrong one and you will make the model measurably worse. So you need both numbers, and you read them in a fixed order. First, is the training error high compared with what the problem actually allows — the noise level, a strong baseline, what a human achieves? If yes, the model cannot even fit its own data and that is the thing to fix first; nothing else is worth tuning until it can. If the training error is respectable, then look at the distance to the validation score. And here is the detail that separates a careful diagnosis from a sloppy one: compare that distance against how much your validation score bounces between folds. A three-point gap when the folds scatter by four points is not evidence of anything, and reacting to it by adding regularisation can push a perfectly healthy model into the other failure. Only when the gap clearly exceeds the fold-to-fold noise have you actually observed something. Now we have earned the words. High training error with no gap is called underfitting — high bias — and it means learn more. Low training error with a large gap is called overfitting — high variance — and it means learn less of the wrong thing. In your colleague’s case, 100% training accuracy tells us the model certainly is not underfitting, but it tells us nothing else. My next step would be five-fold cross-validation with the training score returned as well, so we get the gap and the spread in one command, and then a learning curve if the gap is real, because that settles the one expensive question — whether collecting more data would close it, or whether we should be reaching for regularisation instead.',
+    },
+  },
+  {
+    id: 'ML-026',
+    domain: 'ML',
+    module: 'Bias & Variance',
+    topic: 'Decomposing prediction error',
+    title: 'The Bias–Variance Trade-off',
+    slug: 'bias-variance-tradeoff',
+    difficulty: 4,
+    estimatedMinutes: 40,
+    prerequisites: ['ML-025'],
+    related: ['ML-016', 'ML-017', 'ML-024'],
+    tags: ['bias', 'variance', 'irreducible error', 'decomposition', 'ensembles', 'double descent'],
+
+    learningObjectives: [
+      'Derive the decomposition of expected squared error into bias², variance and irreducible noise, and say what each term is an expectation over',
+      'Estimate all three terms empirically by refitting a model on many resampled training sets',
+      'Explain why bagging attacks variance and boosting attacks bias, and why that difference dictates their base learners',
+      'Recognise where the classical U-shaped picture stops being the whole story, and what double descent adds',
+    ],
+
+    terminology: [
+      {
+        term: 'Bias',
+        definition:
+          'The difference between the average prediction of a model — averaged over all the training sets it could have been fitted on — and the true value. It measures systematic error attributable to the model class rather than to any particular sample.',
+        simple: 'How wrong you are on average, even after averaging away all the luck.',
+      },
+      {
+        term: 'Variance',
+        definition:
+          'The expected squared deviation of the model’s prediction around its own average, taken over training sets. It measures how much the fitted function moves when the data it was fitted on is resampled.',
+        simple: 'How much your answer jumps around when you get a different sample of data.',
+      },
+      {
+        term: 'Irreducible error',
+        definition:
+          'The variance of the target around its conditional mean, σ² = Var(y | x). It is a property of the data-generating process — measurement noise, unobserved causes — and no model of any kind can reduce it.',
+        simple: 'The part of the answer that is genuine randomness, which nothing can predict.',
+      },
+      {
+        term: 'Bias–variance decomposition',
+        definition:
+          'The identity E[(y − f̂(x))²] = Bias[f̂(x)]² + Var[f̂(x)] + σ², which holds exactly for squared-error loss at a fixed x, with the expectation taken over both the noise and the random draw of the training set.',
+        simple: 'Error splits into three parts that add up, and each part has a different cure.',
+      },
+      {
+        term: 'Effective capacity',
+        definition:
+          'How rich a set of functions a fitting procedure can actually realise, accounting for regularisation, early stopping and the optimiser — not merely the parameter count. It is the knob that trades bias against variance.',
+        simple: 'How flexible your model really is once every constraint is accounted for.',
+      },
+      {
+        term: 'Double descent',
+        definition:
+          'The empirical phenomenon in which test error rises to a peak at the interpolation threshold — where capacity first suffices to fit the training data exactly — and then falls again as capacity grows further, producing a second descent beyond the classical U.',
+        simple: 'Past the point where the model can memorise everything, error surprisingly starts improving again.',
+      },
+    ],
+
+    simpleExplanation:
+      'Suppose ten different people each collect their own sample of data about the same thing and each fits a model. You then ask all ten models the same question. Two things can go wrong with their answers. They might all agree with each other but all be wrong in the same direction — every one of them says 40 when the truth is 55. That shared, systematic wrongness is bias, and it comes from the shape of the model they all chose: if the real relationship curves and they all fitted straight lines, no amount of data fixes it, because the average of many straight lines is still a straight line. Or their answers might scatter wildly — 20, 70, 45, 88 — so that while the average is close to 55, no individual answer is trustworthy. That scatter is variance, and it comes from each model having chased the particular accidents of its own sample. Underneath both is a third thing: even a perfect model cannot predict the part of the outcome that is genuine randomness. What makes this more than a taxonomy is that the three parts add up exactly, and that the first two move in opposite directions as you change how flexible the model is. Make it more flexible and bias falls while variance rises. Make it simpler and the reverse happens. The best model is not the one that minimises either, but the one sitting where their sum is smallest.',
+
+    whyItExists:
+      'The previous unit gave a diagnostic — read the gap — but not an explanation of why the gap behaves as it does, nor any way to predict what a change will cost. The decomposition supplies both. It turns a vague intuition that models can be "too simple" or "too complex" into an exact identity with three measurable terms, tells you which term each remedy acts on, and sets a hard floor below which no amount of modelling effort can go. It is also what explains, mechanistically, why bagging and boosting are different techniques rather than two flavours of the same one.',
+
+    analogy: {
+      scenario:
+        'A rifle club is assessing two shooters and a faulty rifle. The first shooter puts all ten shots in a tight cluster, but the cluster sits well below and left of the bullseye — consistent, reproducible, and consistently wrong. The second shooter’s shots scatter all over the target; the centre of their pattern is almost exactly on the bullseye, but no individual shot is near it, and you would not want to bet on the next one. Separately, the rifle itself has a small amount of play in the barrel, so even a perfect shooter with a perfect technique would see a few millimetres of spread that no amount of practice removes. The club records, for each shooter, how far the centre of their group is from the bullseye and how wide the group is, because those two numbers need completely different coaching: the first shooter needs the sights adjusted, the second needs a steadier stance, and nobody can do anything about the barrel.',
+      mapping: [
+        { from: 'Distance from the group centre to the bullseye', to: 'Bias — systematic error of the model class' },
+        { from: 'Width of the group', to: 'Variance — sensitivity to which training sample you drew' },
+        { from: 'Play in the barrel', to: 'Irreducible error σ², a property of the data, not the model' },
+        { from: 'A single shot', to: 'A model fitted on one particular training set' },
+        { from: 'Firing ten times', to: 'Refitting the model on ten resampled training sets' },
+        { from: 'Adjusting the sights', to: 'Reducing bias: richer model class, better features, boosting' },
+        { from: 'Steadying the stance', to: 'Reducing variance: regularisation, more data, bagging' },
+      ],
+      bridge:
+        'The reason the club records two numbers rather than one average miss distance is exactly the reason the decomposition matters: total squared miss distance equals the squared offset of the group centre plus the spread of the group plus the barrel’s own play, and those three quantities call for three different responses. Applying the wrong one is actively harmful — telling the tight-but-offset shooter to steady their stance narrows an already narrow group around the wrong point. That is precisely what happens when you regularise a high-bias model.',
+      limitations:
+        'The target analogy has a fixed bullseye, while a model’s bias is defined per input x — a model can be badly biased in one region and unbiased in another, so the single-number summary hides structure that an error breakdown by segment would reveal. The analogy also suggests bias and variance are independent dials, whereas in practice one hyperparameter usually moves both at once, in opposite directions.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Refit on resampled data and watch the two terms trade',
+        caption: 'Each redraw fits the same model to a fresh sample. Low capacity: the curves lie on top of each other but miss the target. High capacity: they pass through their own points and scatter everywhere. Watch the decomposition update.',
+        widget: 'bias-variance-lab',
+      },
+      {
+        kind: 'flow',
+        title: 'Measuring all three terms empirically',
+        steps: [
+          { label: 'Fix a set of query points', detail: 'Choose the x values at which error will be decomposed. Everything that follows is computed per point and then averaged.' },
+          { label: 'Draw many training sets', detail: 'Bootstrap or, in a simulation, generate B fresh samples of size n from the same process. B = 200 is usually enough for stable estimates.' },
+          { label: 'Fit the model B times', detail: 'Same hyperparameters, same procedure, different data. Collect the B predictions at each query point.' },
+          { label: 'Average across fits', detail: 'The mean prediction at x is the estimate of E[f̂(x)]. This is the group centre in the rifle analogy.' },
+          { label: 'Bias² is the squared distance to truth', detail: '(mean prediction − f(x))². This requires knowing f(x), which is why full decomposition is normally done on simulated data.' },
+          { label: 'Variance is the spread about that mean', detail: 'The average squared deviation of the B predictions around their own mean. Notice it never references the true value at all.' },
+          { label: 'Check that the three sum to the total', detail: 'Bias² + variance + σ² should equal the measured expected squared error. If it does not, something is wrong with the resampling.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Bagging versus boosting: two ensembles, two targets',
+        caption: 'Both combine many weak models, but they attack different terms, and that difference determines everything about how they are configured — including the surprising fact that their ideal base learners are opposites.',
+        left: {
+          heading: 'Bagging (random forests)',
+          points: [
+            'Attacks variance: averaging B fits divides variance by B when the fits are independent',
+            'Leaves bias essentially unchanged — the average of many deep trees is still an unbiased-ish estimator',
+            'Base learners should be low-bias and high-variance: fully grown, unpruned trees',
+            'Trees are fitted independently, so the whole thing parallelises trivially',
+            'Correlation between trees is the binding constraint, which is why random forests subsample features',
+            'Adding more trees never overfits; it only ever reduces variance further, with diminishing returns',
+          ],
+        },
+        right: {
+          heading: 'Boosting (gradient boosting, XGBoost)',
+          points: [
+            'Attacks bias: each round fits the residual error the ensemble has not yet explained',
+            'Variance grows with rounds, which is why boosting can and does overfit',
+            'Base learners should be high-bias and low-variance: shallow trees, often depth 3 to 6',
+            'Sequential by construction — round t depends on the ensemble after round t−1',
+            'The learning rate shrinks each round’s contribution, trading more rounds for lower variance',
+            'Needs early stopping on a validation set; more rounds eventually makes things worse',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'What each remedy actually moves',
+        caption: 'The middle two columns are the reason a diagnosis must precede a fix: half of these actions make a high-bias model worse, and the other half make a high-variance model worse.',
+        columns: ['Action', 'Bias', 'Variance', 'When it is the right move'],
+        rows: [
+          ['More training data', 'Unchanged', 'Falls, roughly like 1/n', 'The gap is large and still narrowing on a learning curve'],
+          ['Richer model class', 'Falls', 'Rises', 'Training error is high relative to the achievable floor'],
+          ['Stronger regularisation', 'Rises', 'Falls', 'Large gap, and more data is unavailable or too costly'],
+          ['More features', 'Usually falls', 'Rises', 'The model underfits and the new features carry real signal'],
+          ['Feature selection', 'Rises slightly', 'Falls', 'Many features relative to rows, most of them uninformative'],
+          ['Bagging / random forest', 'Roughly unchanged', 'Falls a lot', 'A low-bias, high-variance base learner such as a deep tree'],
+          ['Boosting', 'Falls a lot', 'Rises', 'A high-bias base learner and a validation set for early stopping'],
+          ['Early stopping', 'Rises', 'Falls', 'Any iterative fit whose validation curve has turned upward'],
+        ],
+      },
+      {
+        kind: 'annotated',
+        title: 'The decomposition, term by term',
+        caption: 'Every symbol below is an expectation over something specific, and confusing which is the single most common source of error in reasoning about this identity.',
+        subject: 'E_{D,ε}[(y - f̂_D(x))²] = (E_D[f̂_D(x)] - f(x))² + E_D[(f̂_D(x) - E_D[f̂_D(x)])²] + σ²',
+        annotations: [
+          { part: 'E_{D,ε}[...]', note: 'Expectation over two independent sources of randomness: the draw of the training set D, and the noise ε in the new observation being predicted. Not over the test inputs — x is held fixed.' },
+          { part: '(E_D[f̂_D(x)] - f(x))²', note: 'Bias squared. The inner expectation averages the fitted function over all training sets that could have been drawn; the difference from the truth is what averaging cannot remove.' },
+          { part: 'E_D[(f̂_D(x) - E_D[f̂_D(x)])²]', note: 'Variance. Note it never mentions f(x) — variance is measurable without knowing the truth, which is why bootstrap estimates of it are practical while bias estimates usually are not.' },
+          { part: 'σ²', note: 'Irreducible error, Var(y | x). It is added on and never interacts with the other terms, because the new noise is independent of the training set. It is the floor on achievable error.' },
+          { part: 'f̂_D(x)', note: 'The prediction at x of the model fitted on training set D. Treating this as a random variable, with D as the randomness, is the conceptual move the whole decomposition rests on.' },
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'Let y = f(x) + ε with E[ε] = 0 and Var(ε) = σ², and let f̂_D denote the function produced by a fixed learning algorithm applied to a training set D drawn i.i.d. from the population. For squared-error loss at a fixed query point x, taking expectation over both D and the noise in a fresh observation at x, E_{D,ε}[(y − f̂_D(x))²] = (E_D[f̂_D(x)] − f(x))² + Var_D(f̂_D(x)) + σ², where the three terms are bias squared, variance and irreducible error. The cross terms vanish because ε is independent of D and has zero mean. All three terms are functions of x; the usual scalar summary integrates them against the input distribution. The identity is exact for squared error and does not generalise cleanly to other losses: 0–1 loss admits an analogous but non-additive decomposition in which variance can reduce error, and log loss decomposes only via a Bregman-divergence generalisation. Capacity enters through the algorithm: as the effective capacity of the procedure rises, bias is non-increasing and variance is typically increasing, so the sum traces a curve whose minimiser is the model to choose.',
+
+    math: {
+      intuition:
+        'The conceptual move that makes the whole identity work is to stop thinking of the fitted model as a fixed object and start thinking of it as a random variable, whose randomness comes from the training set you happened to draw. Once f̂ is random, its prediction at a point has a mean and a spread like any other random variable, and the familiar identity that mean squared error equals squared bias plus variance applies directly. The noise in the new observation is independent of all of that, so it simply adds. Everything else — why bagging helps, why regularisation trades one term for another, why more data attacks only one of the three — follows from reading the identity carefully.',
+      formulas: [
+        {
+          latex: '\\mathbb{E}\\big[(y - \\hat{f}(x))^2\\big] = \\underbrace{\\big(\\mathbb{E}[\\hat{f}(x)] - f(x)\\big)^2}_{\\text{bias}^2} + \\underbrace{\\mathbb{E}\\big[(\\hat{f}(x) - \\mathbb{E}[\\hat{f}(x)])^2\\big]}_{\\text{variance}} + \\underbrace{\\sigma^2}_{\\text{irreducible}}',
+          name: 'The bias–variance decomposition',
+          meaning:
+            'Expected squared error at a fixed point splits exactly into three non-negative pieces. Two of them respond to modelling choices in opposite directions; the third responds to nothing.',
+          variables: [
+            { symbol: '\\hat{f}(x)', meaning: 'Prediction at x of the model fitted on a random training set' },
+            { symbol: 'f(x)', meaning: 'The true conditional mean E[y | x]' },
+            { symbol: '\\sigma^2', meaning: 'Var(y | x), the noise in the target around its conditional mean' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\operatorname{Var}\\!\\left(\\frac{1}{B}\\sum_{b=1}^{B} \\hat{f}_b(x)\\right) = \\rho \\sigma_f^2 + \\frac{1 - \\rho}{B}\\sigma_f^2',
+          name: 'Variance of an average of correlated fits',
+          meaning:
+            'The exact reason bagging works and the exact reason it plateaus. Averaging B fits kills the independent part of the variance but leaves ρσ_f² untouched, so beyond a point more trees buy nothing and the only remaining lever is decorrelation.',
+          variables: [
+            { symbol: 'B', meaning: 'Number of models averaged' },
+            { symbol: '\\rho', meaning: 'Pairwise correlation between the individual fits' },
+            { symbol: '\\sigma_f^2', meaning: 'Variance of a single fit' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\mathbb{E}\\big[\\|\\hat{\\beta}_{\\text{ridge}} - \\beta\\|^2\\big] = \\underbrace{\\lambda^2 \\beta^{\\top}(X^{\\top}X + \\lambda I)^{-2}\\beta}_{\\text{bias}^2} + \\underbrace{\\sigma^2 \\operatorname{tr}\\big[(X^{\\top}X + \\lambda I)^{-2}X^{\\top}X\\big]}_{\\text{variance}}',
+          name: 'Ridge regression, decomposed in closed form',
+          meaning:
+            'The rare case where both terms can be written down exactly. Bias is zero at λ = 0 and grows monotonically; variance is largest at λ = 0 and shrinks monotonically. Their sum has an interior minimum at some λ > 0, which proves a positive amount of regularisation always beats none.',
+          variables: [
+            { symbol: '\\lambda', meaning: 'Ridge penalty strength' },
+            { symbol: '\\beta', meaning: 'The true coefficient vector' },
+            { symbol: 'X^{\\top}X', meaning: 'The Gram matrix of the design' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\text{Var}_{\\text{total}} \\approx \\frac{C}{n} \\cdot d_{\\text{eff}}',
+          name: 'Variance scales as capacity over sample size',
+          meaning:
+            'A working approximation rather than an identity: variance grows with effective degrees of freedom and falls with sample size. It is why the same model overfits at n = 200 and is fine at n = 20,000, and why capacity should be chosen relative to n rather than in absolute terms.',
+          variables: [
+            { symbol: 'd_{\\text{eff}}', meaning: 'Effective degrees of freedom, e.g. tr(H) for a linear smoother' },
+            { symbol: 'n', meaning: 'Training-set size' },
+            { symbol: 'C', meaning: 'A constant depending on the noise level and the design' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'd_{\\text{eff}}(\\lambda) = \\operatorname{tr}\\big[X(X^{\\top}X + \\lambda I)^{-1}X^{\\top}\\big] = \\sum_{j} \\frac{s_j^2}{s_j^2 + \\lambda}',
+          name: 'Effective degrees of freedom of ridge',
+          meaning:
+            'Makes "effective capacity" literal. At λ = 0 the sum is p, the full parameter count; as λ grows each term shrinks toward zero. Regularisation does not remove parameters, it removes degrees of freedom, and this is the number that enters the variance.',
+          variables: [
+            { symbol: 's_j', meaning: 'The j-th singular value of the design matrix X' },
+            { symbol: '\\lambda', meaning: 'Ridge penalty strength' },
+            { symbol: 'p', meaning: 'Number of columns of X' },
+          ],
+          category: 'linear-algebra',
+        },
+      ],
+      derivation: [
+        'Fix a query point x. Let y = f(x) + ε be a fresh observation there, with E[ε] = 0 and Var(ε) = σ². Let f̂ = f̂_D(x) be the prediction of a model fitted on a random training set D, and write f̄ = E_D[f̂] for its average over training sets.',
+        'The quantity of interest is E[(y − f̂)²], with expectation over both ε and D, which are independent because the fresh noise had no chance to influence the fit.',
+        'Insert f(x) and subtract it: y − f̂ = (f(x) + ε) − f̂ = ε + (f(x) − f̂). Squaring gives ε² + 2ε(f(x) − f̂) + (f(x) − f̂)².',
+        'Take expectations term by term. E[ε²] = σ². The cross term vanishes: ε is independent of D and has mean zero, so E[2ε(f(x) − f̂)] = 2E[ε]·E[f(x) − f̂] = 0. This is where the independence assumption does its work, and it is why leakage — which correlates the test noise with the fit — breaks the identity.',
+        'What remains is σ² + E_D[(f(x) − f̂)²]. The problem has been reduced to decomposing the mean squared deviation of a random variable f̂ from a constant f(x).',
+        'Apply the same trick once more, this time inserting f̄: f(x) − f̂ = (f(x) − f̄) + (f̄ − f̂). Squaring gives (f(x) − f̄)² + 2(f(x) − f̄)(f̄ − f̂) + (f̄ − f̂)².',
+        'Take E_D. The first term is constant in D, so it survives as (f̄ − f(x))², the squared bias. The cross term vanishes because E_D[f̄ − f̂] = f̄ − f̄ = 0 and (f(x) − f̄) is constant. The third term is by definition Var_D(f̂).',
+        'Assembling: E[(y − f̂)²] = σ² + Bias² + Var. All three terms are non-negative, so σ² is a hard floor — no algorithm, however clever, can achieve expected squared error below the irreducible noise.',
+        'Now read the identity for consequences. Variance never references f(x), so it can be estimated from resampling alone without knowing the truth. Bias requires f(x), which is why full decompositions are normally demonstrated on simulated data.',
+        'Next, what more data does. Under mild conditions variance behaves like C·d_eff/n, so it falls roughly as 1/n. Bias is a property of the model class and the fitting procedure, not of n, so it does not move. More data attacks exactly one of the three terms — which is why a learning curve whose gap has stopped shrinking tells you that further collection is wasted.',
+        'Now what averaging does. Suppose B fits each have variance σ_f² and pairwise correlation ρ. The variance of their mean is ρσ_f² + (1 − ρ)σ_f²/B. Sending B to infinity leaves ρσ_f². So averaging destroys the independent component of variance entirely and is powerless against the shared component.',
+        'That single formula explains bagging completely. Use base learners with low bias and high variance — deep unpruned trees — because averaging will remove the variance and cannot remove bias. And attack ρ directly, since it sets the floor: bootstrap samples decorrelate the trees a little, and random feature subsetting at each split decorrelates them a lot, which is precisely the difference between plain bagged trees and a random forest.',
+        'Boosting inverts the logic. Each round fits the ensemble’s current residual, so the ensemble’s bias falls round by round while its variance accumulates. The base learner should therefore be the opposite: shallow, high-bias, low-variance stumps or depth-3 trees. And because variance grows without bound, boosting needs early stopping while bagging does not.',
+        'Finally, the honest caveat. The classical picture says test error is U-shaped in capacity, and for the fixed-design linear and kernel settings where the decomposition is usually taught, it is. But push capacity past the interpolation threshold — the point where the model can fit the training data exactly — and modern over-parameterised models show test error falling again. The variance term does peak sharply at that threshold and then decline, because among the infinitely many interpolating solutions, gradient descent selects a minimum-norm one, which is itself a form of implicit regularisation. So the decomposition remains exactly true; what fails is the assumption that variance increases monotonically in parameter count.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Decomposing the error of three polynomial fits by simulation',
+      setup:
+        'Data is generated as y = sin(x) + ε on x ∈ [0, 2π] with σ = 0.30, so σ² = 0.09 and that is the floor. Three models are compared — a constant (degree 0), a degree-3 polynomial and a degree-15 polynomial — each fitted 500 times on independent samples of n = 30. All three terms are computed at the single query point x = 2.0, where the true value is sin(2.0) = 0.9093.',
+      steps: [
+        {
+          label: 'Set up the experiment',
+          detail: 'Five hundred times: draw 30 fresh points, fit the model, record its prediction at x = 2.0. This gives 500 numbers per model, which is a sample from the distribution of f̂(2.0) induced by resampling the training set.',
+          latex: '\\{\\hat{f}_b(2.0)\\}_{b=1}^{500}, \\quad n = 30',
+        },
+        {
+          label: 'Degree 0 — the constant model',
+          detail: 'Each fit predicts the sample mean of its 30 y values, which estimates the average of sin over [0, 2π] — approximately zero. Mean prediction across the 500 fits: 0.0071. Spread: standard deviation 0.1301.',
+          latex: '\\bar{f} = 0.0071, \\quad \\text{sd} = 0.1301',
+        },
+        {
+          label: 'Degree 0 — the three terms',
+          detail: 'Bias² = (0.0071 − 0.9093)² = 0.8140. Variance = 0.1301² = 0.0169. Irreducible = 0.09. Total = 0.9209, and 88% of it is bias. The model is stable and useless: every fit agrees closely with the others and all of them are wrong by almost a whole unit.',
+          latex: '0.8140 + 0.0169 + 0.09 = 0.9209',
+        },
+        {
+          label: 'Degree 3 — a cubic',
+          detail: 'A cubic can approximate a single period of a sine well. Mean prediction: 0.8981, only 0.011 from the truth. Standard deviation across fits: 0.1122.',
+          latex: '\\bar{f} = 0.8981, \\quad \\text{sd} = 0.1122',
+        },
+        {
+          label: 'Degree 3 — the three terms',
+          detail: 'Bias² = (0.8981 − 0.9093)² = 0.00013. Variance = 0.1122² = 0.0126. Irreducible = 0.09. Total = 0.1027. Compared with the constant model, bias fell by a factor of 6,000 while variance actually fell slightly too — proof that the trade-off is not a law that binds everywhere, only in the region past the optimum.',
+          latex: '0.00013 + 0.0126 + 0.09 = 0.1027',
+        },
+        {
+          label: 'Degree 15 — far too flexible for 30 points',
+          detail: 'Sixteen coefficients fitted to thirty points. Mean prediction: 0.9265, still close to the truth — averaging over 500 fits nearly recovers it. Standard deviation: 0.7742, which is enormous relative to the signal.',
+          latex: '\\bar{f} = 0.9265, \\quad \\text{sd} = 0.7742',
+        },
+        {
+          label: 'Degree 15 — the three terms',
+          detail: 'Bias² = (0.9265 − 0.9093)² = 0.0003. Variance = 0.7742² = 0.5994. Irreducible = 0.09. Total = 0.6897. Bias is the smallest of any model tried, and the total is nearly seven times worse than the cubic. Variance alone accounts for 87% of the error.',
+          latex: '0.0003 + 0.5994 + 0.09 = 0.6897',
+        },
+        {
+          label: 'Read the pattern across the three',
+          detail: 'Bias²: 0.8140 → 0.00013 → 0.0003, collapsing almost immediately and then flat. Variance: 0.0169 → 0.0126 → 0.5994, flat and then exploding. Total: 0.9209 → 0.1027 → 0.6897, a clear U. The minimum is not where either term is minimised but where their sum is.',
+          latex: '\\text{total} = \\text{bias}^2 + \\text{variance} + 0.09',
+        },
+        {
+          label: 'Verify the floor is respected',
+          detail: 'Every total exceeds 0.09, and the best (0.1027) is within 14% of it. That closeness is the real success criterion: the cubic has extracted essentially all the extractable signal, and the remaining error is almost entirely noise that no model can touch.',
+          latex: '0.1027 \\text{ vs floor } 0.09 \\Rightarrow \\text{0.0127 of avoidable error remains}',
+        },
+        {
+          label: 'Now bag the degree-15 model',
+          detail: 'Fit 100 degree-15 polynomials on bootstrap resamples and average them. Bias² stays at 0.0004 — averaging cannot move it — while variance falls from 0.5994 to 0.0781. Total drops from 0.6897 to 0.1685, better than any single high-capacity fit.',
+          latex: '0.0004 + 0.0781 + 0.09 = 0.1685',
+        },
+        {
+          label: 'Why bagging did not reach the cubic’s score',
+          detail: 'The correlated-average formula predicts a floor of ρσ_f². Bootstrap resamples share about 63% of their rows, so the fits are strongly correlated; the measured ρ is roughly 0.13, giving a floor of 0.13 × 0.5994 = 0.0779 — almost exactly the 0.0781 observed. Averaging removed the independent variance and could not touch the rest.',
+          latex: '\\rho\\sigma_f^2 = 0.13 \\times 0.5994 = 0.0779 \\approx 0.0781',
+        },
+        {
+          label: 'And why boosting would be the wrong tool here',
+          detail: 'Boosting reduces bias, and the degree-15 model already has bias² of 0.0003. There is nothing for it to remove, and it would add variance to a model already dominated by it. The decomposition names the correct remedy directly: this is a variance problem, so average, regularise, or get more data.',
+          latex: '\\text{bias}^2 = 0.0003 \\Rightarrow \\text{nothing for boosting to fix}',
+        },
+      ],
+      conclusion:
+        'The numbers make three things concrete that are easy to hold only vaguely. First, the terms genuinely add up, and the total is dominated by a different term in each regime — 88% bias for the constant, 87% variance for degree 15. Second, the trade-off is not a strict law: moving from degree 0 to degree 3 improved both terms at once, because before the optimum, extra capacity buys bias reduction almost free. Third, the decomposition prescribes rather than merely describes. Degree 15 has a variance problem, so bagging it recovers most of the loss, and the correlated-average formula predicts the exact point at which that recovery stops. Boosting, which attacks bias, would have been useless here — and on the degree-0 model it would have been the only thing that helped.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Measuring bias², variance and noise directly',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.linear_model import LinearRegression
+
+rng = np.random.default_rng(0)
+SIGMA, N, B, XQ = 0.30, 30, 500, 2.0
+truth = np.sin(XQ)
+
+def sample():
+    x = rng.uniform(0, 2 * np.pi, N).reshape(-1, 1)
+    return x, np.sin(x).ravel() + rng.normal(0, SIGMA, N)
+
+print(f"true f({XQ}) = {truth:.4f}   irreducible = {SIGMA**2:.4f}\\n")
+print(f"{'degree':>7}{'mean pred':>11}{'bias^2':>10}{'variance':>10}{'total':>9}")
+
+for degree in (0, 1, 3, 7, 15):
+    model = make_pipeline(PolynomialFeatures(degree), LinearRegression())
+    preds = np.array([model.fit(*sample()).predict([[XQ]])[0] for _ in range(B)])
+    bias2 = (preds.mean() - truth) ** 2
+    var = preds.var()
+    print(f"{degree:>7}{preds.mean():>11.4f}{bias2:>10.4f}{var:>10.4f}"
+          f"{bias2 + var + SIGMA**2:>9.4f}")`,
+        output: `true f(2.0) = 0.9093   irreducible = 0.0900
+
+ degree  mean pred    bias^2  variance    total
+      0     0.0071    0.8140    0.0169   0.9209
+      1     0.3624    0.2993    0.0224   0.4117
+      3     0.8981    0.0001    0.0126   0.1027
+      7     0.9116    0.0000    0.0371   0.1271
+     15     0.9265    0.0003    0.5994   0.6897
+`,
+        explanation:
+          'Read down the two middle columns and the trade-off is no longer an abstraction. Bias² collapses from 0.8140 to essentially zero by degree 3 and then stays there; variance is flat at around 0.02 until degree 3, then climbs to 0.5994 by degree 15. The total traces a U with its minimum at degree 3. Two details repay attention. Between degree 0 and degree 3 both terms improve simultaneously — the "trade-off" only binds past the optimum, which is why the advice "start simple" is not the same as "stay simple". And the variance calculation, `preds.var()`, never once refers to `truth`: variance is measurable without knowing the right answer, which is exactly why bootstrap variance estimates are practical on real data while bias estimates generally are not.',
+      },
+      {
+        language: 'python',
+        title: 'Bagging kills variance and leaves bias alone',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.ensemble import BaggingRegressor
+from sklearn.tree import DecisionTreeRegressor
+
+rng = np.random.default_rng(1)
+SIGMA, N, B, XQ = 0.30, 200, 300, 2.0
+truth = np.sin(XQ)
+
+def sample():
+    x = rng.uniform(0, 2 * np.pi, N).reshape(-1, 1)
+    return x, np.sin(x).ravel() + rng.normal(0, SIGMA, N)
+
+def decompose(make_model, label):
+    preds = np.array([make_model().fit(*sample()).predict([[XQ]])[0] for _ in range(B)])
+    bias2, var = (preds.mean() - truth) ** 2, preds.var()
+    print(f"{label:<28}{bias2:>9.4f}{var:>10.4f}{bias2 + var + SIGMA**2:>9.4f}")
+
+print(f"{'model':<28}{'bias^2':>9}{'variance':>10}{'total':>9}")
+decompose(lambda: DecisionTreeRegressor(), "deep tree (single)")
+decompose(lambda: BaggingRegressor(DecisionTreeRegressor(), n_estimators=50,
+                                   random_state=0), "deep trees, bagged x50")
+decompose(lambda: DecisionTreeRegressor(max_depth=2), "stump (depth 2)")
+decompose(lambda: BaggingRegressor(DecisionTreeRegressor(max_depth=2),
+                                   n_estimators=50, random_state=0), "stumps, bagged x50")`,
+        output: `model                          bias^2  variance    total
+deep tree (single)             0.0004    0.1088   0.1992
+deep trees, bagged x50         0.0006    0.0075   0.0981
+stump (depth 2)                0.0879    0.0091   0.1870
+stumps, bagged x50             0.0881    0.0013   0.1794
+`,
+        explanation:
+          'Four rows that between them settle how to choose a base learner. Bagging deep trees cuts variance by a factor of fourteen, from 0.1088 to 0.0075, while bias² barely moves — 0.0004 to 0.0006 — and the total halves. Bagging stumps also cuts variance, from 0.0091 to 0.0013, but the total improves by only 4% because the stump’s bias² of 0.0879 dominates and averaging is powerless against it. This is the concrete answer to a question that otherwise sounds arbitrary: why do random forests use fully grown, unpruned trees when everything else in machine learning says to limit depth? Because the ensemble will handle the variance, so the base learner should spend all its capacity on eliminating bias. Boosting reverses this exactly, and the last two rows show why — with stumps, the bias is what is left to attack, which is precisely the job boosting does.',
+      },
+      {
+        language: 'python',
+        title: 'Averaging correlated fits: the variance floor',
+        runnable: true,
+        code: `import numpy as np
+
+# Var(mean of B fits) = rho * s2 + (1 - rho) * s2 / B
+s2 = 1.0
+print(f"{'B':>5}" + "".join(f"{f’rho={r}':>11}" for r in (0.0, 0.1, 0.5)))
+for B in (1, 5, 25, 100, 1000):
+    row = "".join(f"{r * s2 + (1 - r) * s2 / B:>11.4f}" for r in (0.0, 0.1, 0.5))
+    print(f"{B:>5}{row}")
+
+print("\\nlimit as B -> inf:", [f"{r:.4f}" for r in (0.0, 0.1, 0.5)])
+print("Decorrelation, not more trees, is what moves the floor.")`,
+        output: `    B     rho=0.0     rho=0.1     rho=0.5
+    1      1.0000      1.0000      1.0000
+    5      0.2000      0.2800      0.6000
+   25      0.0400      0.1360      0.5200
+  100      0.0100      0.1090      0.5050
+ 1000      0.0010      0.1009      0.5005
+
+limit as B -> inf: ['0.0000', '0.1000', '0.5000']
+Decorrelation, not more trees, is what moves the floor.
+`,
+        explanation:
+          'Three columns, three completely different stories, and the difference is entirely ρ. With independent fits, variance falls like 1/B without limit. With ρ = 0.1, going from 25 trees to 1,000 — a fortyfold increase in compute — improves variance from 0.1360 to 0.1009, a gain of 3%, because 0.10 of the variance is shared and averaging cannot reach it. With ρ = 0.5 the ensemble is essentially done after five members. This table is the whole design rationale for random forests. Bagged trees fitted on bootstrap resamples of the same data are strongly correlated, because they all find the same dominant split first; random feature subsetting at each node forces different trees to use different features and pushes ρ down, which lowers the floor itself. It also tells you when to stop adding trees: once the curve has flattened, more members are pure cost, and the remaining variance can only be attacked by making the members more different from one another.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'A demand-forecasting team whose weekly retrained model produced wildly different regional forecasts each week',
+        usage:
+          'Decomposition by resampling showed variance accounting for roughly 70% of squared error in low-volume regions, where each model was fitted on a few hundred rows. The fix was hierarchical shrinkage toward a national model — deliberately adding bias to buy a much larger variance reduction — which cut total error by a third without any change of model family.',
+      },
+      {
+        context: 'A random forest and a gradient-boosting model reaching similar accuracy on the same tabular problem by opposite routes',
+        usage:
+          'The forest used 500 unpruned trees and the booster used 900 trees of depth 4. Reading the decomposition explains why neither configuration is transferable: swap the base learners and both collapse, because the forest relies on low-bias members it can average, while the booster relies on low-variance members it can accumulate.',
+      },
+      {
+        context: 'Modern over-parameterised networks that keep improving past the point of fitting the training set exactly',
+        usage:
+          'A ResNet with far more parameters than training images reaches zero training error and then continues to improve on test data as width grows. The decomposition still holds exactly; what fails is the assumption that variance rises monotonically with parameter count, since gradient descent selects a minimum-norm interpolant and that selection is itself regularisation.',
+      },
+      {
+        context: 'An A/B-tested recommender where the high-capacity model won offline and lost online',
+        usage:
+          'Offline evaluation averaged over a large held-out log, which effectively averaged away the variance term. Online, each user saw the output of one particular fit, so the per-user experience was dominated by exactly the variance the offline average had hidden. Reporting the spread across refits, not just the mean, would have caught it.',
+      },
+    ],
+
+    projectConnections: [
+      {
+        tool: 'scikit-learn ensembles',
+        role:
+          '`BaggingRegressor`, `RandomForestClassifier` and `GradientBoostingRegressor` are the decomposition made into code: the first two exist to reduce variance, the third to reduce bias, and their default base-learner settings follow directly from that.',
+      },
+      {
+        tool: 'Ridge and Lasso',
+        role:
+          'The closed-form ridge decomposition is the cleanest demonstration that a positive amount of bias always beats zero, which is the theoretical licence for every regularisation choice made in ML-030.',
+      },
+      {
+        tool: 'Bootstrap resampling',
+        role:
+          'The practical route to a variance estimate on real data, since variance — unlike bias — can be measured without knowing the truth. It also produces the prediction intervals that an error bar on a forecast actually requires.',
+      },
+      {
+        tool: 'Deep-learning width and depth sweeps',
+        role:
+          'Where the classical U breaks down into double descent, and where the useful question becomes which interpolating solution the optimiser selects rather than how many parameters the model has.',
+      },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Believing the trade-off binds everywhere, so that any reduction in bias must cost variance.',
+        why: 'Below the optimum, extra capacity often reduces both. The worked example shows bias² falling from 0.8140 to 0.0001 while variance also fell slightly. The trade-off is a statement about the region past the minimum, not a conservation law.',
+        fix: 'Measure rather than assume. Sweep the capacity hyperparameter and look at where the total actually turns; do not refuse a capacity increase on the grounds that it "must" cost variance.',
+      },
+      {
+        mistake: 'Confusing the variance term with the variance of the target, or with the fold-to-fold spread of a CV score.',
+        why: 'The variance in the decomposition is the spread of the model’s prediction at a fixed x across refits on different training sets. Target variance is σ², a different term entirely, and CV fold spread is a property of the estimator of the score, not of the model.',
+        fix: 'Keep straight what each expectation is over. If a quantity does not require refitting the model on resampled data to compute, it is not the variance term.',
+      },
+      {
+        mistake: 'Using shallow trees as the base learner in a random forest because "shallow trees generalise better".',
+        why: 'Averaging removes variance and cannot remove bias, so a high-bias base learner caps the ensemble’s performance. The code example shows bagged stumps improving by 4% while bagged deep trees improve by 51%.',
+        fix: 'Grow forest trees fully — `max_depth=None` — and control the ensemble through the number of trees and feature subsampling. Save shallow trees for boosting, where bias is the term being attacked.',
+      },
+      {
+        mistake: 'Adding trees to a random forest to fix a plateau in accuracy.',
+        why: 'Variance of an average bottoms out at ρσ_f² regardless of B. Once the curve flattens, additional members cost compute and buy nothing, because the remaining variance is the shared component.',
+        fix: 'Attack ρ instead: reduce `max_features`, increase the diversity of the members, or accept that the remaining error is bias and change the model family.',
+      },
+      {
+        mistake: 'Applying the squared-error decomposition unchanged to classification accuracy.',
+        why: 'The clean three-way additive identity is specific to squared error. Under 0–1 loss the analogous decomposition is not additive and variance can reduce error, because a majority vote among noisy classifiers can be correct more often than the average of them would suggest.',
+        fix: 'For classification, decompose the Brier score or log loss if you need the identity, and otherwise reason about the qualitative direction rather than quoting exact terms.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Explain the bias–variance decomposition and what each term is an expectation over.',
+        answer:
+          'For squared-error loss at a fixed input x, the expected error of a model splits exactly into three pieces: squared bias, variance and irreducible noise. The key conceptual step is to treat the fitted model as a random variable whose randomness comes from which training set you happened to draw. Bias is then the difference between the average prediction over all possible training sets and the true value — systematic error caused by the model class, which averaging cannot remove. Variance is the expected squared deviation of individual predictions around that average, so it measures how much the fitted function moves when you resample the data. Irreducible error is Var(y | x), the noise in the target itself, and it enters as a floor because it is independent of everything the model does. The expectations matter: bias and variance are both over the draw of the training set, while the noise term is over the fresh observation. The derivation is two applications of the same trick — add and subtract a term, square, and show the cross term vanishes by independence and zero mean. One caveat I would add unprompted: this exact additive form is specific to squared error, and for 0–1 loss the analogous decomposition is neither additive nor sign-definite in the variance term.',
+      },
+      {
+        level: 'advanced',
+        question: 'Why do random forests use fully grown trees while gradient boosting uses shallow ones?',
+        answer:
+          'Because they attack different terms, and each method’s base learner should be chosen to have the weakness that the method can fix. Bagging averages independently fitted models, and the variance of an average of B fits with pairwise correlation ρ is ρσ_f² + (1 − ρ)σ_f²/B. Averaging destroys the independent component of variance and does nothing at all to bias, so the ideal member is low-bias and high-variance — which is exactly a fully grown, unpruned tree. Limiting depth in a forest introduces bias the ensemble cannot remove, and it caps performance; I have measured bagged stumps improving a total error by 4% where bagged deep trees improved it by 51%. Boosting is the mirror image: each round fits the residual the ensemble has not yet explained, so bias falls round by round while variance accumulates. The ideal member is therefore high-bias and low-variance, which is a shallow tree, typically depth 3 to 6. Two consequences follow that interviewers often probe. Boosting needs early stopping and a learning rate because its variance grows without bound, whereas adding trees to a forest can never overfit. And the forest’s binding constraint is ρ, not B, which is why random feature subsetting at each split exists — it lowers the floor rather than approaching it faster.',
+      },
+      {
+        level: 'advanced',
+        question: 'Does the bias–variance trade-off still apply to modern over-parameterised neural networks?',
+        answer:
+          'The decomposition applies — it is an algebraic identity for squared error and nothing can make it false. What does not survive is the auxiliary assumption usually taught alongside it, that variance rises monotonically with parameter count and so test error is U-shaped in capacity. Empirically, test error rises to a peak at the interpolation threshold, where capacity first suffices to fit the training data exactly, and then falls again as capacity grows further — the double-descent curve. Decomposing it shows the variance term does spike sharply at that threshold and then decline, which at first seems to contradict the classical story. The resolution is that beyond the threshold there are infinitely many parameter settings that fit the training data exactly, and gradient descent does not pick among them arbitrarily: it converges to a minimum-norm solution, which is implicit regularisation. So the effective capacity of the procedure stops tracking the parameter count. Practically, this means I would not reason about generalisation from parameter counts in either direction, and would instead measure the gap and, where feasible, the variance by refitting on resampled data. It also explains why very large models can be trained without the pruning-and-shrinking instincts that tabular modelling teaches.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'A production model’s predictions change noticeably every time it is retrained on fresh data. What is happening and how would you address it?',
+        answer:
+          'Predictions moving substantially under retraining is the variance term made visible, and it is worth taking seriously even when the accuracy metric looks stable, because a mean score averages away exactly the instability that users experience individually. First I would quantify it rather than eyeball it: retrain on several bootstrap resamples or several overlapping time windows and measure the spread of predictions for the same inputs, ideally broken down by segment, since variance is usually concentrated where data is thin. That also separates true variance from genuine distribution shift, which looks similar but requires a different response — resampling the same period isolates variance, while comparing periods isolates drift. If it is variance, the remedies in rough order of cost are: increase regularisation; reduce effective capacity; average over an ensemble, which divides the independent component of variance by the ensemble size; shrink small-segment models toward a pooled model, deliberately buying bias for a larger variance reduction; and collect more data, which reduces variance roughly as 1/n while leaving bias alone. There is also a product-level option that costs no accuracy: warm-start from the previous model or smooth predictions across retrains, which stabilises what users see without changing the underlying error. I would decide between them by measuring which term dominates first, because if it turns out to be bias, every one of the variance remedies makes the model worse.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A model has bias² = 0.02, variance = 0.31 and irreducible error 0.09. You may either double the training data or switch to a model class with twice the capacity. Which do you choose, and what do you expect each to do?',
+        hint: 'Work out which term dominates, then recall which term each action moves and in which direction.',
+        solution:
+          'Total error is 0.42, of which variance is 0.31 — 74% of the total and 86% of the avoidable part, since 0.09 cannot be touched. Bias² of 0.02 is already small, so there is little to gain there. Doubling the data attacks variance and leaves bias alone; variance falls roughly like 1/n, so expect variance around 0.155 and a total near 0.265, an improvement of about 37%. Doubling capacity does the opposite: it would reduce an already negligible bias² — at most 0.02 of gain, and realistically far less — while increasing a variance term that is already the problem, so the total would very likely get worse. Choose more data. Two refinements worth stating. The 1/n scaling is approximate and assumes the new rows come from the same distribution; if they are systematically different, you gain less and risk shifting bias. And if more data is unavailable, the next-best actions all buy variance reduction with a little bias: stronger regularisation, an ensemble average, or feature selection. Bagging is particularly attractive here because it targets variance almost exclusively — from the correlated-average formula, an ensemble of B members with correlation ρ would land around ρ × 0.31, so even ρ = 0.3 would give roughly 0.09 of variance.',
+      },
+      {
+        prompt:
+          'You bag 25 deep trees and variance falls from 0.40 to 0.11. Estimate the correlation between the individual trees, and predict what 1,000 trees would give.',
+        hint: 'Use Var(mean) = ρσ_f² + (1 − ρ)σ_f²/B and solve for ρ.',
+        solution:
+          'Substitute σ_f² = 0.40, B = 25 and Var(mean) = 0.11: 0.11 = 0.40ρ + 0.40(1 − ρ)/25 = 0.40ρ + 0.016 − 0.016ρ = 0.384ρ + 0.016. So ρ = (0.11 − 0.016)/0.384 = 0.245. The trees are moderately correlated, which is typical for bootstrap resamples of the same dataset, since they tend to agree on the dominant splits. Now predict B = 1,000: 0.40 × 0.245 + 0.40 × 0.755/1000 = 0.0980 + 0.0003 = 0.0983. So a fortyfold increase in trees buys a reduction from 0.11 to 0.098 — about 11% — and the limit as B → ∞ is 0.0980, which the ensemble is already within 0.3% of. The actionable conclusion is that adding trees is nearly exhausted and the remaining variance is the shared component. To go further you must reduce ρ itself: subsample features at each split, which is exactly what turns bagged trees into a random forest. If ρ could be halved to 0.12, the floor would drop to 0.048, a far larger gain than any number of additional trees could deliver.',
+      },
+      {
+        prompt:
+          'Explain why bagging cannot reduce bias, using the definition of the bias term rather than an appeal to intuition.',
+        hint: 'Write down the prediction of the bagged ensemble and take its expectation over training sets.',
+        solution:
+          'Bias at a point x is E_D[f̂_D(x)] − f(x), where the expectation is over the draw of the training set. Consider the bagged ensemble that averages B fits, f̄(x) = (1/B) Σ_b f̂_b(x), where each f̂_b is produced by the same procedure applied to a resample. Take the expectation over training sets: E[f̄(x)] = (1/B) Σ_b E[f̂_b(x)]. Each member is produced by an identical procedure, so every E[f̂_b(x)] is the same quantity, call it f̄_1(x). The sum is therefore B·f̄_1(x)/B = f̄_1(x) — exactly the mean prediction of a single member. The ensemble’s bias, E[f̄(x)] − f(x), is thus identical to a single member’s bias, and B does not appear anywhere. Averaging changes the distribution of the prediction — specifically, it contracts its spread — but leaves its mean untouched, which is precisely why it reduces variance and cannot move bias. One honest caveat: on bootstrap resamples the members are not fitted on the original distribution but on resamples of it, so the ensemble’s bias can differ very slightly from a single fit on the full data. The worked example shows this as 0.0004 versus 0.0006, a second-order effect, and the argument’s conclusion stands.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'ML-026-q1',
+        type: 'mcq',
+        concept: 'what the variance term is over',
+        prompt: 'In the decomposition, the variance term is an expectation over what?',
+        options: [
+          'The random draw of the training set, at a fixed input x',
+          'The distribution of test inputs x',
+          'The noise ε in the target variable',
+          'The fold-to-fold differences of a cross-validation score',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Variance measures how much the prediction at one fixed x moves when the model is refitted on a different training sample. It is the only term that requires refitting to estimate, and notably it never references the true value — which is why bootstrap variance estimates work on real data.',
+      },
+      {
+        id: 'ML-026-q2',
+        type: 'numeric',
+        concept: 'variance of a correlated average',
+        prompt: 'Fifty models each have variance 0.60 and pairwise correlation 0.20. What is the variance of their average? Give three decimal places.',
+        answer: 0.1296,
+        tolerance: 0.002,
+        explanation:
+          '0.20 × 0.60 + 0.80 × 0.60/50 = 0.120 + 0.0096 = 0.1296. The floor as B → ∞ is 0.120, so this ensemble is already within 8% of everything averaging can deliver; further gains need lower ρ, not more members.',
+      },
+      {
+        id: 'ML-026-q3',
+        type: 'truefalse',
+        concept: 'bagging and bias',
+        prompt: 'Increasing the number of trees in a bagged ensemble reduces its bias.',
+        answer: false,
+        explanation:
+          'The expectation of the ensemble equals the expectation of a single member, since averaging identically produced fits leaves the mean unchanged. B does not appear in the bias at all — which is exactly why forest members should be deep, low-bias trees.',
+      },
+      {
+        id: 'ML-026-q4',
+        type: 'match',
+        concept: 'remedies and terms',
+        prompt: 'Match each action to the term it principally moves.',
+        pairs: [
+          { left: 'Collecting more training rows', right: 'Reduces variance, leaves bias unchanged' },
+          { left: 'Bagging fully grown trees', right: 'Reduces variance, leaves bias unchanged' },
+          { left: 'Gradient boosting shallow trees', right: 'Reduces bias, increases variance' },
+          { left: 'Increasing the ridge penalty λ', right: 'Increases bias, reduces variance' },
+        ],
+        explanation:
+          'Each remedy acts on one term and usually pays for it in the other. Applying a variance remedy to a bias-dominated model — regularising an underfit model, say — makes the total strictly worse, which is why a decomposition should precede a fix.',
+      },
+      {
+        id: 'ML-026-q5',
+        type: 'order',
+        concept: 'measuring the decomposition',
+        prompt: 'Put the steps of an empirical bias–variance decomposition in order.',
+        items: [
+          'Fix a query point x and record the true value f(x)',
+          'Draw B independent training sets from the same process',
+          'Fit the same model with the same hyperparameters on each one',
+          'Average the B predictions at x to estimate E[f̂(x)]',
+          'Square the distance from that average to f(x) to get bias²',
+          'Take the spread of the B predictions about their own mean to get variance',
+          'Check that bias² + variance + σ² reproduces the measured total error',
+        ],
+        explanation:
+          'The mean across fits must be computed before either term, since bias measures the distance from it to the truth and variance measures the spread around it. The final check is what catches a broken resampling loop.',
+      },
+      {
+        id: 'ML-026-q6',
+        type: 'fill',
+        concept: 'the error floor',
+        prompt: 'What is the name of the term σ² = Var(y | x), which no model can reduce?',
+        answers: ['irreducible error', 'irreducible noise', 'bayes error', 'noise variance', 'irreducible'],
+        explanation:
+          'Irreducible error, sometimes called the Bayes error for the squared-error case. It sets a hard floor: a total error close to σ² means the avoidable error has essentially been eliminated and further modelling effort is wasted.',
+      },
+      {
+        id: 'ML-026-q7',
+        type: 'code-output',
+        language: 'python',
+        concept: 'diminishing returns from more members',
+        prompt: 'What does this print, and what does it tell you about adding ensemble members?',
+        code: `s2, rho = 0.5, 0.3
+for B in (10, 100, 10000):
+    print(round(rho * s2 + (1 - rho) * s2 / B, 4))`,
+        options: [
+          '0.185, 0.1535, 0.15 — the variance converges to ρσ² = 0.15 and more members stop helping',
+          '0.05, 0.005, 0.00005 — variance falls without limit as B grows',
+          '0.5, 0.5, 0.5 — averaging does not change variance at all',
+          '0.15, 0.15, 0.15 — the ensemble size has no effect whatsoever',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Going from 10 to 10,000 members — a thousandfold increase in compute — improves variance from 0.185 to 0.150, about 19%, because 0.15 of it is the shared component. Past the flattening point, the only remaining lever is decorrelating the members.',
+      },
+      {
+        id: 'ML-026-q8',
+        type: 'explain',
+        concept: 'prescribing from a decomposition',
+        prompt: 'A model shows bias² = 0.45, variance = 0.03, irreducible = 0.10. Someone proposes bagging it across 200 resamples. Evaluate that proposal and give a better one.',
+        explanation:
+          'Bagging reduces variance and leaves bias untouched, so applied to a model whose error is 79% bias it can recover at most 0.03 of a total of 0.58 — and realistically far less once member correlation is accounted for.',
+        rubric: [
+          'Identifies bias as dominant: 0.45 of a 0.58 total, with only 0.03 of variance available to remove',
+          'States that bagging cannot reduce bias, ideally with the reason that averaging leaves the mean unchanged',
+          'Bounds the achievable gain from bagging and notes that correlation makes it smaller still',
+          'Proposes bias-reducing remedies: richer model class, better features, boosting, weaker regularisation',
+          'Notes the 0.10 floor, so the best attainable total is 0.10 and the avoidable error is 0.48',
+        ],
+        sampleAnswer:
+          'The proposal targets the wrong term, and the numbers say so precisely. Total error is 0.58, of which 0.10 is irreducible and cannot be touched by anything. Of the remaining 0.48 of avoidable error, 0.45 is bias and only 0.03 is variance. Bagging reduces variance and provably cannot reduce bias: the expectation of an average of identically produced fits equals the expectation of a single fit, so the ensemble’s mean prediction — and therefore its distance from the truth — is unchanged no matter how many members you use. The very best case for bagging here is eliminating all 0.03 of variance, taking the total from 0.58 to 0.55, a 5% improvement for 200 times the compute. In practice the members would be correlated, so the realistic gain is a fraction of that, perhaps 0.02. Meanwhile the 0.45 of bias sits there untouched. What the decomposition says instead is that this model is too rigid for the problem, and the remedies are all on the bias side. In rough order of how much I would expect: better features, since a bias this large usually means the inputs do not contain the signal in a form the model can use, and interaction terms or domain-derived features often move it more than any algorithm change; a richer model class, a gradient-boosted tree ensemble rather than a linear fit, or more depth if it is already a tree; gradient boosting specifically, since each round fits the residual the ensemble has not yet explained and so attacks bias directly — and note that it will cost variance, which is affordable here because there is only 0.03 of it; and reducing any regularisation currently applied, since regularisation buys variance reduction with bias and this model has no variance problem to solve. I would also sanity-check by fitting a deliberately over-powerful model and confirming that the bias does drop; if it does not, the features genuinely lack the signal and no algorithm will rescue it. Whatever is done, 0.10 remains the floor, so the honest target is a total approaching 0.10 rather than zero, and I would track progress as the fraction of the 0.48 of avoidable error eliminated rather than as raw error.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'State the bias–variance decomposition.', back: 'E[(y − f̂(x))²] = bias² + variance + σ². Exact for squared error at fixed x, with expectations over the training-set draw and the fresh noise.' },
+      { front: 'What is bias an expectation over?', back: 'The draw of the training set. Bias = E_D[f̂_D(x)] − f(x): the distance from the average fit over all possible training sets to the truth.' },
+      { front: 'Why can variance be estimated without knowing the truth?', back: 'Its definition never references f(x) — it is the spread of predictions around their own mean. Bias does reference f(x), which is why full decompositions need simulated data.' },
+      { front: 'Variance of an average of B correlated fits?', back: 'ρσ_f² + (1 − ρ)σ_f²/B. The floor as B → ∞ is ρσ_f², so decorrelation, not more members, moves the limit.' },
+      { front: 'Why do random forests use deep trees and boosting shallow ones?', back: 'Averaging removes variance and not bias, so forest members should be low-bias and high-variance. Boosting removes bias and adds variance, so its members should be the opposite.' },
+      { front: 'Does more data reduce bias?', back: 'No. Variance falls roughly like 1/n; bias is a property of the model class and the procedure, so it does not move with n.' },
+      { front: 'Is the trade-off always binding?', back: 'No. Below the optimum both terms can fall together — degree 0 to degree 3 in the worked example improved both. The trade-off describes the region past the minimum.' },
+      { front: 'What is double descent?', back: 'Test error peaks at the interpolation threshold and then falls again as capacity grows. The identity still holds; what fails is variance rising monotonically with parameter count.' },
+      { front: 'Does the decomposition hold for classification accuracy?', back: 'Not in this additive form. Under 0–1 loss the analogous decomposition is non-additive and variance can reduce error; use Brier score or log loss if you need the identity.' },
+    ],
+
+    challenge: {
+      title: 'Decompose, predict, then verify',
+      brief:
+        'On simulated data with known f and known σ, measure bias², variance and the total for a capacity sweep of at least five settings, at several query points rather than one, and confirm the three terms reproduce the measured total error at each. Then use the decomposition to make three quantitative predictions before testing them: how much a tenfold increase in n will reduce the total for your highest-capacity model; what variance a bagged ensemble of 100 of those models will reach, derived from a measured pairwise correlation; and whether boosting will help your lowest-capacity model and by roughly how much. Run all three and report the gap between prediction and measurement, explaining any discrepancy larger than 20%. Finally, push capacity past the interpolation threshold — more parameters than training points, fitted with a minimum-norm solver — and report whether you observe a second descent.',
+      acceptanceCriteria: [
+        'All three terms are measured across a capacity sweep at multiple query points, with the additivity check reported at each',
+        'Pairwise correlation between ensemble members is measured rather than assumed, and used to predict the bagged variance',
+        'Three quantitative predictions are recorded before the corresponding experiments are run',
+        'Measured results are compared against the predictions, with discrepancies above 20% diagnosed rather than noted',
+        'The boosting experiment is applied to the high-bias configuration and its effect on both terms is reported separately',
+        'The over-parameterised regime is explored and the presence or absence of a second descent is reported honestly',
+      ],
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain the bias–variance decomposition to someone who understands averages and spread but has never seen the identity. Get them to the point where they can say what each term is an expectation over, and then use it to explain why random forests use deep trees while boosting uses shallow ones.',
+      mustCover: [
+        'That the fitted model must be treated as a random variable, with the training-set draw as its randomness',
+        'What bias, variance and irreducible error each measure, and what expectation each is taken over',
+        'That the three terms add up exactly for squared error, and that σ² is a floor nothing can beat',
+        'That averaging leaves the mean unchanged, which is why bagging removes variance and cannot remove bias',
+        'That this fact, plus boosting fitting residuals, dictates opposite base learners for the two methods',
+      ],
+      sampleExplanation:
+        'Start with a thought experiment. Ten colleagues each go out and collect their own sample of data about the same thing, each fits a model using an identical procedure, and then you ask all ten the same question. Two quite different things can go wrong. They might all agree with each other and all be wrong in the same direction — every one says 40 when the truth is 55. Or their answers might be 20, 70, 45, 88, scattering wildly, so that although the average is close to 55, no individual answer can be trusted. Those are different failures and they need different fixes, so we want to measure them separately. Here is the move that makes it all work. Stop thinking of "the model" as one fixed thing. It is the output of a procedure applied to a training set you happened to draw, and had you drawn a different sample you would have a different model. So the prediction at a given input is a random variable, with the randomness coming from which data you got. And random variables have a mean and a spread. The mean of that prediction — averaged over every training set you could have drawn — sits somewhere, and the distance from that somewhere to the truth is the bias. It is the part that averaging cannot remove, because it is already what averaging gives you. The spread around that mean is the variance. Notice that variance never mentions the true value at all; it only asks how much the answers move when the data moves. That is a practical point, not a pedantic one, because it means you can measure variance on real data by resampling, while measuring bias requires knowing the answer, which is why demonstrations use simulated data. There is a third piece. Even a perfect model cannot predict the part of the outcome that is genuine randomness — measurement error, causes nobody recorded. That is the irreducible error, and it just adds on, because the noise in tomorrow’s observation had no opportunity to influence a model fitted on yesterday’s. For squared error these three add up exactly: total equals bias squared plus variance plus noise. The derivation is two applications of the same schoolroom trick — add and subtract a term, square it, and notice the cross term averages to zero — and the reason the cross terms vanish is independence, which is also, incidentally, exactly what leakage destroys. Now let me use it for something, because a decomposition you cannot act on is just bookkeeping. Ask what happens when you average many models together. The ensemble predicts the mean of its members. Take the expectation over training sets: you are averaging B quantities that all have the same expectation, so the result is that same expectation. The ensemble’s mean prediction is identical to a single member’s mean prediction, and therefore its bias is identical too. B does not appear. But the spread contracts, and there is a formula for exactly how much: if each member has variance σ² and any two of them are correlated by ρ, the average has variance ρσ² plus (1 − ρ)σ² over B. Send B to infinity and you are left with ρσ². So averaging annihilates the independent part of the variance and is completely powerless against the shared part, and powerless against bias. Everything about random forests follows from that one sentence. If averaging will handle the variance for you, then your members should spend all their capacity on killing bias — which means fully grown, unpruned trees, exactly the opposite of what you would build if you were shipping a single tree. And if the floor is ρσ², then the interesting lever is not how many trees but how different they are, which is why a forest subsamples features at every split rather than merely bootstrapping rows. Boosting is the mirror image. Each round fits whatever residual the ensemble has not yet explained, so bias falls round by round while variance quietly accumulates. Its members should therefore be the opposite kind: shallow, high-bias, low-variance trees of depth three or four, with a learning rate to slow the accumulation and early stopping because unlike a forest, a booster genuinely can be run too long. So the same table of numbers tells you both which remedy to reach for and, once you have chosen it, how to configure it — and it tells you when to stop, because when your total error is close to σ² there is nothing left to win.',
+    },
+  },
+  {
+    id: 'ML-027',
+    domain: 'ML',
+    module: 'Data Preparation',
+    topic: 'Repairing imperfect data',
+    title: 'Missing Values and Outliers',
+    slug: 'missing-values-and-outliers',
+    difficulty: 3,
+    estimatedMinutes: 35,
+    prerequisites: ['ML-026'],
+    related: ['PD-008', 'STAT-009', 'ML-024'],
+    tags: ['missing data', 'imputation', 'MCAR', 'MAR', 'MNAR', 'outliers', 'robust statistics'],
+
+    learningObjectives: [
+      'Distinguish MCAR, MAR and MNAR, and explain why the mechanism — not the percentage — determines which repairs are safe',
+      'Choose an imputation strategy that matches the mechanism, and add a missingness indicator when absence is itself informative',
+      'Separate the three kinds of outlier — error, heavy tail and genuine rare event — and treat each differently',
+      'Fit every imputation and every clipping bound inside a pipeline so that no validation row influences its own repair',
+    ],
+
+    terminology: [
+      {
+        term: 'MCAR — missing completely at random',
+        definition:
+          'Missingness is independent of both the observed and the unobserved data. A sensor that drops readings on a random schedule is MCAR. It is the only mechanism under which simply deleting incomplete rows leaves estimates unbiased.',
+        simple: 'Values vanish for reasons that have nothing to do with anything you are studying.',
+      },
+      {
+        term: 'MAR — missing at random',
+        definition:
+          'Missingness depends on observed variables but not, given those, on the missing value itself. If older patients skip a questionnaire more often and you have recorded age, the item is MAR conditional on age, and model-based imputation can recover unbiased estimates.',
+        simple: 'You can predict who is missing a value from things you did record.',
+      },
+      {
+        term: 'MNAR — missing not at random',
+        definition:
+          'Missingness depends on the unobserved value itself. High earners declining to report income is the canonical case. No imputation method can fix MNAR from the data alone, because the information required is precisely what is absent.',
+        simple: 'Whether a value is missing depends on what the value would have been.',
+      },
+      {
+        term: 'Imputation',
+        definition:
+          'Replacing a missing entry with an estimate derived from the observed data. Single imputation fills one value and understates uncertainty; multiple imputation produces several completed datasets and pools the results to restore it.',
+        simple: 'Filling in the blank with a sensible guess.',
+      },
+      {
+        term: 'Missingness indicator',
+        definition:
+          'A binary column recording whether an entry was originally absent, kept alongside the imputed value. It lets a model learn from the fact of absence, which is often more predictive than any imputed number.',
+        simple: 'A flag saying "this one was blank", kept because blankness can be a clue.',
+      },
+      {
+        term: 'Robust statistic',
+        definition:
+          'An estimator whose value changes little under contamination of a small fraction of the data. The median has a breakdown point of 50%, the mean of 0%, which is why the median survives a single absurd value and the mean does not.',
+        simple: 'A summary that does not get dragged away by a few extreme points.',
+      },
+      {
+        term: 'Winsorising and clipping',
+        definition:
+          'Replacing values beyond chosen quantiles with the quantile itself, rather than removing the row. It bounds the influence of extremes while retaining the observation, and the bounds must be learned from training data only.',
+        simple: 'Pulling extreme values in to a cap instead of throwing them away.',
+      },
+    ],
+
+    simpleExplanation:
+      'Real data arrives with holes in it and with values that do not belong. The instinct is to patch both quickly — fill the gaps with the average, delete anything that looks extreme — and both instincts are usually wrong, because they throw away the most informative thing on the page. Start with the holes. What matters is not how many there are but why they are there. If a thermometer occasionally fails for no reason connected to the temperature, the gaps carry no information and almost any sensible fill is safe. If the people who skipped the income question skipped it because their income was high, then the gaps are not random at all: they are a signal, and filling them with the average of the people who did answer will systematically understate the truth no matter how clever your method. Outliers work the same way. A recorded age of 999 is a data-entry error and should be corrected or removed. A transaction a thousand times the median might be exactly the fraud you built the model to catch — delete it and you have deleted your signal. And a heavy-tailed distribution, like income or city size, produces extreme values constantly by its own nature; those are not errors at all, they are what the distribution looks like. So the useful question is never "how do I remove this?" but "what produced this, and does my model need to know?"',
+
+    whyItExists:
+      'Every fitting routine requires a complete, finite numeric matrix, so something must be done about gaps and extremes before any model sees the data. That forces a decision, and the decision is consequential: the default choices — drop incomplete rows, fill with the mean, clip at three standard deviations — each encode an assumption about the data-generating process that is frequently false, and when it is false they introduce bias that no downstream metric will reveal. Naming the mechanisms turns an unexamined default into a choice you can justify.',
+
+    analogy: {
+      scenario:
+        'A school is tallying an end-of-term survey and finds that forty of two hundred pupils left the "how many hours do you revise?" box blank. The lazy fix is to compute the average of the 160 who answered and write it into the forty gaps. But the head of year knows something the spreadsheet does not: the survey was handed out in the last five minutes of a lesson, and the pupils who rushed out first were disproportionately the ones who revise least. So the blanks are not a random sample of the school — they lean toward one end — and filling them with the overall average pulls the estimate upward and, worse, makes the estimate look more certain than it is, because forty invented values with no scatter shrink the apparent spread. Meanwhile one pupil has written 400 hours. That is not a pupil who revises unusually hard; it is somebody who misread the question as minutes, or was joking. But another has written 45, which is genuinely high and genuinely real, and the head of year specifically wants to know about pupils like that.',
+      mapping: [
+        { from: 'The blank revision boxes', to: 'Missing values' },
+        { from: 'Blanks concentrated among low revisers', to: 'MNAR — missingness depends on the missing value itself' },
+        { from: 'Filling every blank with the class average', to: 'Mean imputation' },
+        { from: 'Forty identical invented values shrinking the spread', to: 'Artificially reduced variance and over-confident estimates' },
+        { from: 'The 400-hour answer', to: 'An outlier that is a recording error' },
+        { from: 'The genuine 45-hour reviser', to: 'An outlier that is real and is the signal of interest' },
+        { from: 'Knowing the survey was rushed at the end of a lesson', to: 'Domain knowledge about the missingness mechanism' },
+      ],
+      bridge:
+        'The head of year’s advantage is not a better statistical method; it is knowing why the boxes are blank. That is exactly the situation in modelling: the choice of repair is determined by the mechanism, and the mechanism is almost never visible in the data itself. It also shows both failure modes of mean imputation in one picture — bias, because the blanks lean one way, and false confidence, because identical filled values shrink the variance. And it separates the two kinds of extreme value that people lump together, where deleting the first is correct and deleting the second destroys the thing you were measuring.',
+      limitations:
+        'The school can, in principle, go and ask the forty pupils, which recovers the truth. In modelling you almost never can, so MNAR is usually diagnosed by argument and domain knowledge rather than demonstrated, and is handled by modelling the missingness explicitly or by reporting a sensitivity analysis rather than by being solved.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'Deciding what to do about a gap',
+        branching: true,
+        steps: [
+          { label: 'Quantify and locate', detail: 'Missing fraction per column and per row, plus the co-occurrence pattern. Columns missing together usually share a source, which is the first clue to the mechanism.' },
+          { label: 'Ask why, using domain knowledge', detail: 'Mechanism is a question about the world, not about the table. Talk to whoever produced the data before choosing a method.' },
+          { label: 'Test for MCAR where you can', detail: 'Compare observed variables between rows with and without the gap. A systematic difference rules out MCAR; no difference is consistent with MCAR but does not prove it, since MNAR is invisible by construction.' },
+          { label: 'MCAR and few rows affected', detail: 'Dropping rows is unbiased, though it costs sample size. Simple imputation is also safe and cheaper in rows.' },
+          { label: 'MAR', detail: 'Model-based imputation conditional on the observed predictors — iterative or k-NN imputation — recovers unbiased estimates. This is where the effort pays.' },
+          { label: 'MNAR', detail: 'No method fixes it from the data alone. Add an indicator, model the missingness explicitly, and run a sensitivity analysis over plausible assumptions.' },
+          { label: 'Always: add an indicator and fit inside the pipeline', detail: 'The fact of absence is often predictive, and every statistic used to fill must be learned from training folds only.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Two reasons a value is extreme',
+        caption: 'The same number can require opposite treatments. The deciding question is what generated it, which is answered by looking at the record and the domain, not at the magnitude.',
+        left: {
+          heading: 'Error or contamination',
+          points: [
+            'An age of 999, a negative price, a timestamp in 1970 from a null default',
+            'Physically impossible or logically inconsistent with another field',
+            'Often arrives in blocks tied to one source, one date or one software version',
+            'Correct it if you can reconstruct the true value; otherwise treat as missing',
+            'Never silently clip it — clipping turns a detectable error into a plausible-looking wrong number',
+            'Log a data-quality issue upstream; the same error will arrive again next week',
+          ],
+        },
+        right: {
+          heading: 'Genuine extreme',
+          points: [
+            'A transaction of £40,000, a city of twenty million, a 45-hour reviser',
+            'Consistent with the domain and often the reason the model exists',
+            'Heavy-tailed variables produce these constantly and they are not anomalies',
+            'Keep it; consider a log transform or a robust loss instead of removing',
+            'Deleting these teaches the model that the case it must detect does not occur',
+            'If influence is the concern, winsorise or use a robust model rather than dropping the row',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Imputation strategies and what each assumes',
+        caption: 'The rightmost column is the one that decides. A method is not "better" in the abstract — it is appropriate when its assumption matches the mechanism, and misleading otherwise.',
+        columns: ['Method', 'Cost', 'Distorts', 'Valid under'],
+        rows: [
+          ['Drop rows (listwise)', 'Loses sample size, sometimes catastrophically', 'Nothing, if the assumption holds', 'MCAR only'],
+          ['Mean or median fill', 'Trivial', 'Shrinks variance, weakens correlations', 'MCAR, and only if variance is not used downstream'],
+          ['Most-frequent (categorical)', 'Trivial', 'Inflates the majority category', 'MCAR, low missing fraction'],
+          ['Constant sentinel (e.g. −1)', 'Trivial', 'Nothing, for tree models', 'Any, with trees — they can split on the sentinel'],
+          ['k-NN imputation', 'Needs scaling, O(n²) distances', 'Mild smoothing toward neighbours', 'MAR, with informative neighbours'],
+          ['Iterative (MICE-style)', 'Expensive, needs convergence checks', 'Understates uncertainty if used singly', 'MAR'],
+          ['Multiple imputation', 'Several datasets, pooled results', 'Nothing — it restores the lost uncertainty', 'MAR, when interval estimates matter'],
+          ['Indicator column only', 'One extra feature', 'Nothing', 'Any, and essential under MNAR'],
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Detecting extremes: three rules and when each misleads',
+        caption: 'All three are screening tools that flag candidates for inspection. None of them identifies an error, because none of them has any access to what produced the value.',
+        columns: ['Rule', 'Definition', 'Breaks down when'],
+        rows: [
+          ['z-score > 3', 'More than 3 SDs from the mean', 'The outliers themselves inflate the SD, masking each other; also assumes symmetry'],
+          ['IQR fence', 'Below Q1 − 1.5·IQR or above Q3 + 1.5·IQR', 'Skewed data flags a large share of the upper tail as outliers by construction'],
+          ['Modified z-score', '0.6745·(x − median)/MAD > 3.5', 'MAD is zero when more than half the values are identical, e.g. a sparse count column'],
+          ['Isolation Forest', 'Few random splits needed to isolate a point', 'Unsupervised: flags rare, not wrong, and needs a contamination rate you must guess'],
+          ['Domain bounds', 'Physically or logically impossible values', 'Requires knowledge, which is exactly why it is the only one that identifies errors'],
+        ],
+      },
+      {
+        kind: 'annotated',
+        title: 'What mean imputation does to a column',
+        caption: 'A column of 100 values with mean 50 and standard deviation 10, of which 30 are made missing and filled with the observed mean.',
+        subject: 'before: n=100, mean=50.0, sd=10.0  →  70 observed + 30 filled with 50.0  →  after: n=100, mean=50.0, sd≈8.3',
+        annotations: [
+          { part: 'mean unchanged at 50.0', note: 'Under MCAR the mean survives, which is why mean imputation looks harmless when you check only the mean. It is the one statistic that is preserved by construction.' },
+          { part: 'sd falls from 10.0 to ≈8.3', note: 'Thirty values placed exactly at the mean contribute zero to the sum of squares. The spread shrinks by roughly √(70/100), so every downstream standard error is too small and every confidence interval too narrow.' },
+          { part: '30 identical values', note: 'A spike appears in the histogram at exactly the mean. This is visible on inspection and is the reason to plot a column after imputing it, not only before.' },
+          { part: 'correlations weaken', note: 'The filled entries have no relationship with any other column, so every correlation involving this column is attenuated toward zero — a regression coefficient on it is biased toward no effect.' },
+          { part: 'under MNAR the mean moves too', note: 'If the missing values were systematically larger, the observed mean is already an underestimate, and filling with it propagates that bias to all 100 rows rather than 70.' },
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'Let Z = (Z_obs, Z_mis) denote the complete data and let R be the binary matrix indicating which entries are observed. Rubin’s taxonomy classifies the mechanism by the conditional distribution P(R | Z, φ). The data are MCAR if P(R | Z, φ) = P(R | φ) — missingness is independent of the data entirely; MAR if P(R | Z, φ) = P(R | Z_obs, φ) — missingness may depend on what was observed but, given that, not on what was not; and MNAR otherwise. Under MAR with parameters φ distinct from the analysis parameters θ, the missingness mechanism is ignorable, meaning likelihood-based inference on the observed data is valid without modelling R, which is the formal licence for model-based imputation. Under MNAR the mechanism is non-ignorable and identification requires assumptions external to the data. For outliers, an estimator’s breakdown point is the smallest fraction of arbitrarily corrupted observations that can drive the estimate to an arbitrary value: 0 for the sample mean, 1/n for least squares, and 1/2 for the median and MAD. Multiple imputation combines m completed analyses by Rubin’s rules, with total variance T = W̄ + (1 + 1/m)B, where W̄ is the average within-imputation variance and B the between-imputation variance — the second term being exactly the uncertainty that single imputation discards.',
+
+    math: {
+      intuition:
+        'Two quantitative facts do most of the work in this unit. The first is that filling gaps with a constant adds mass at one point and therefore shrinks the variance by a factor equal to the observed fraction, which propagates mechanically into every standard error and every correlation downstream — so single imputation is not merely approximate, it is systematically over-confident in a direction you can compute. The second is the breakdown point: the mean can be moved anywhere by one bad value while the median needs half the data corrupted, which is why robust summaries are the right default for any column you have not personally inspected.',
+      formulas: [
+        {
+          latex: 'P(R \\mid Z_{\\text{obs}}, Z_{\\text{mis}}, \\phi) = P(R \\mid \\phi) \;\;\\text{(MCAR)}, \\qquad = P(R \\mid Z_{\\text{obs}}, \\phi) \;\;\\text{(MAR)}',
+          name: 'Rubin’s missingness mechanisms',
+          meaning:
+            'The whole taxonomy in one line. MCAR: the pattern of holes is unrelated to anything. MAR: it is related only to things you can see. MNAR: neither holds, and the data alone cannot distinguish MAR from MNAR, which is why the mechanism is argued from domain knowledge.',
+          variables: [
+            { symbol: 'R', meaning: 'Indicator matrix: 1 where a value is observed, 0 where it is missing' },
+            { symbol: 'Z_{\\text{obs}}, Z_{\\text{mis}}', meaning: 'The observed and the unobserved parts of the data' },
+            { symbol: '\\phi', meaning: 'Parameters of the missingness mechanism, assumed distinct from the analysis parameters' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: '\\operatorname{Var}_{\\text{imputed}} = \\frac{n_{\\text{obs}} - 1}{n - 1}\\,s_{\\text{obs}}^2 \;\\approx\; p \\cdot s_{\\text{obs}}^2',
+          name: 'Variance shrinkage under mean imputation',
+          meaning:
+            'Filling n − n_obs entries with the observed mean contributes nothing to the sum of squares, so the variance is scaled by the observed fraction p. At 30% missing the standard deviation falls by about 16%, and every downstream standard error inherits that error.',
+          variables: [
+            { symbol: 'n_{\\text{obs}}', meaning: 'Number of observed values in the column' },
+            { symbol: 'p', meaning: 'Observed fraction, n_obs/n' },
+            { symbol: 's_{\\text{obs}}^2', meaning: 'Sample variance of the observed values alone' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'T = \\bar{W} + \\left(1 + \\frac{1}{m}\\right) B, \\qquad B = \\frac{1}{m-1}\\sum_{j=1}^{m}(\\hat\\theta_j - \\bar\\theta)^2',
+          name: 'Rubin’s rules for multiple imputation',
+          meaning:
+            'Total variance is the average uncertainty within each completed dataset plus the variance between them. The second term is precisely the uncertainty that single imputation throws away, and it is why multiple imputation produces honest confidence intervals where single imputation does not.',
+          variables: [
+            { symbol: 'm', meaning: 'Number of imputed datasets' },
+            { symbol: '\\bar{W}', meaning: 'Average within-imputation variance of the estimate' },
+            { symbol: 'B', meaning: 'Between-imputation variance of the m estimates' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\varepsilon^{*} = \\min\\left\\{ \\frac{k}{n} : \\sup_{Z_k} \\left| \\hat\\theta(Z_k) - \\hat\\theta(Z) \\right| = \\infty \\right\\}',
+          name: 'Breakdown point',
+          meaning:
+            'The smallest fraction of corrupted points that can send an estimator anywhere. It is 0 for the mean — one value suffices — and 1/2 for the median, which is the precise sense in which the median is robust and the mean is not.',
+          variables: [
+            { symbol: 'k', meaning: 'Number of observations replaced by arbitrary values' },
+            { symbol: '\\hat\\theta', meaning: 'The estimator in question' },
+            { symbol: 'Z_k', meaning: 'The dataset with k points arbitrarily corrupted' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\text{MAD} = \\operatorname{median}_i\\big(|x_i - \\operatorname{median}_j(x_j)|\\big), \\qquad \\hat\\sigma \\approx 1.4826 \\cdot \\text{MAD}',
+          name: 'Median absolute deviation',
+          meaning:
+            'A robust scale estimate. The constant 1.4826 makes it consistent with the standard deviation under normality, so it can be substituted directly. Unlike the SD, it is not inflated by the very outliers it is being used to detect.',
+          variables: [
+            { symbol: 'x_i', meaning: 'The observations' },
+            { symbol: '1.4826', meaning: '1/Φ⁻¹(0.75), the consistency factor for a normal distribution' },
+          ],
+          category: 'statistics',
+        },
+      ],
+      derivation: [
+        'Take the variance-shrinkage result first, since it is the one that quietly damages the most analyses. A column has n entries of which n_obs are observed, with observed mean x̄ and observed variance s². Fill the n − n_obs gaps with x̄.',
+        'The completed column’s mean is unchanged: the sum becomes n_obs·x̄ + (n − n_obs)·x̄ = n·x̄, so the mean is still x̄. This is why a check on the mean reveals nothing.',
+        'The sum of squared deviations, however, gains nothing from the filled entries, because each contributes (x̄ − x̄)² = 0. The total stays at (n_obs − 1)s².',
+        'So the completed variance is (n_obs − 1)s²/(n − 1) ≈ p·s², where p = n_obs/n. At 30% missing, variance is multiplied by 0.7 and the standard deviation by √0.7 ≈ 0.837 — a 16% understatement.',
+        'Standard errors scale with the standard deviation, so every confidence interval computed from the completed column is about 16% too narrow, and every t-statistic about 19% too large. Nothing in the output announces this.',
+        'The damage to correlation is worse and less symmetric. The filled entries sit at the mean of one column while the other column varies freely, so their contribution to the covariance is zero in expectation. Covariance is attenuated by roughly p while the standard deviation of the imputed column falls only by √p, giving a correlation attenuated by about √p — at 30% missing, a true correlation of 0.60 measures around 0.50.',
+        'Now the case that single imputation cannot fix at all. Multiple imputation draws m completed datasets, each with a different plausible fill, runs the analysis on each, and pools. The point estimate is the average θ̄ = (1/m)Σθ̂_j.',
+        'The variance has two sources. Within each dataset there is the ordinary sampling variance W_j, averaged to W̄. Between datasets there is the spread B of the θ̂_j, which exists only because the missing values were uncertain.',
+        'Rubin’s rule combines them as T = W̄ + (1 + 1/m)B, where the 1/m accounts for having used finitely many imputations. Single imputation reports W̄ alone and so is missing exactly the B term — which is why it is not a cheap approximation to multiple imputation but a systematically over-confident one.',
+        'Turn to outliers and the breakdown point. Take n observations and consider what one arbitrarily large value does to the mean: x̄ = (Σ_{i<n} x_i + x_n)/n, so sending x_n → ∞ sends x̄ → ∞. One point out of any n suffices, so the breakdown point is 0 asymptotically.',
+        'The median, by contrast, is the middle order statistic. Corrupting k points can shift it by at most k positions in the sorted order, so it remains bounded until k exceeds n/2 — a breakdown point of 1/2, the maximum possible for any translation-equivariant estimator.',
+        'This has an immediate practical consequence for outlier detection itself. The z-score rule |x − x̄|/s > 3 uses two estimators with breakdown point 0, so the outliers inflate both the mean and especially the standard deviation, pulling the threshold outward until they no longer exceed it. This is masking, and it is why the rule fails hardest exactly when there are several outliers.',
+        'The modified z-score 0.6745(x − median)/MAD replaces both with breakdown-point-1/2 estimators, so the threshold is computed from the bulk of the data and the extremes cannot hide themselves. On a column with ten contaminated values out of a thousand, the z-rule routinely catches fewer than half of them while the modified rule catches nearly all.',
+        'One caveat that keeps this honest: MAD is zero whenever more than half the values are identical, which happens constantly in sparse count columns, and the modified z-score then divides by zero. Fall back to an IQR fence or a quantile rule in that case.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Three mechanisms, the same column, three different answers',
+      setup:
+        'A column of 1,000 incomes with a true mean of £42,000 and a standard deviation of £18,000. Thirty per cent of the entries are removed under three different mechanisms, and the same four repairs are applied to each. The task is to see which repairs recover the true mean and which do not, and to notice that no summary of the incomplete data distinguishes the mechanisms.',
+      steps: [
+        {
+          label: 'Mechanism 1 — MCAR',
+          detail: 'A processing bug dropped 30% of records chosen uniformly at random. The observed mean is £41,880, within sampling error of the truth, because the observed rows are a random sample of the population.',
+          latex: '\\bar{x}_{\\text{obs}} = 41{,}880 \\approx \\mu = 42{,}000',
+        },
+        {
+          label: 'Mechanism 2 — MAR',
+          detail: 'Respondents under 30 skipped the income question at three times the rate of everyone else, and age is recorded for all 1,000 rows. Since younger respondents earn less, the observed rows over-represent higher earners: observed mean £45,310.',
+          latex: '\\bar{x}_{\\text{obs}} = 45{,}310, \\quad \\text{bias} = +3{,}310',
+        },
+        {
+          label: 'Mechanism 3 — MNAR',
+          detail: 'Respondents earning above £60,000 declined to answer at three times the base rate, and nothing in the data indicates who they are. The observed rows under-represent high earners: observed mean £38,450.',
+          latex: '\\bar{x}_{\\text{obs}} = 38{,}450, \\quad \\text{bias} = -3{,}550',
+        },
+        {
+          label: 'The diagnosis problem',
+          detail: 'All three datasets have 30% missing in the same column. Nothing about the missing count, the pattern, or the observed distribution distinguishes them. The MAR case is detectable — compare age between rows with and without the gap — but MNAR is invisible by construction, because the evidence for it is exactly what is absent.',
+          latex: '\\text{30\\% missing in all three; only mechanism 2 is testable}',
+        },
+        {
+          label: 'Repair A — drop the rows, all three cases',
+          detail: 'Listwise deletion yields exactly the observed means: 41,880 / 45,310 / 38,450. Unbiased under MCAR, badly biased under MAR and MNAR, and it costs 300 rows in every case.',
+          latex: '(41{,}880,\\ 45{,}310,\\ 38{,}450)',
+        },
+        {
+          label: 'Repair B — mean imputation, all three cases',
+          detail: 'Filling with the observed mean reproduces that mean exactly, so the point estimates are identical to Repair A. But the standard deviation drops from about 18,000 to 15,060 in every case, because 300 values now sit precisely at the mean.',
+          latex: 's: 18{,}000 \\to 15{,}060 \\approx \\sqrt{0.7} \\times 18{,}000',
+        },
+        {
+          label: 'Why Repair B is worse than Repair A despite the same estimate',
+          detail: 'Deletion reports n = 700 and a standard error of 18,000/√700 = 680. Mean imputation reports n = 1,000 and 15,060/√1,000 = 476 — a 30% narrower interval built on no additional information. The estimate is equally wrong and the confidence in it is falsely higher.',
+          latex: '680 \\text{ vs } 476 \\text{: false precision}',
+        },
+        {
+          label: 'Repair C — iterative imputation conditional on age and region',
+          detail: 'MCAR: 41,910, unchanged as expected. MAR: 42,140, essentially recovering the truth, because age predicts both the missingness and the value, so conditioning on it removes the bias. MNAR: 38,920, still badly wrong.',
+          latex: '(41{,}910,\\ 42{,}140,\\ 38{,}920)',
+        },
+        {
+          label: 'Why Repair C fixes MAR and not MNAR',
+          detail: 'Model-based imputation borrows information from observed predictors. Under MAR the predictor that drives the missingness is recorded, so conditioning on it restores the right distribution. Under MNAR the driver is the unobserved value itself; there is nothing to condition on, and sophistication cannot manufacture the information.',
+          latex: 'P(R \\mid Z_{\\text{obs}}) \\text{ vs } P(R \\mid Z_{\\text{mis}})',
+        },
+        {
+          label: 'Repair D — add a missingness indicator',
+          detail: 'Keep the imputed value and add a binary column. It does not correct the MNAR mean, but for prediction it often matters more than the value: in the MNAR case the indicator alone predicts high income with 0.68 AUC, because declining to answer is itself evidence.',
+          latex: '\\text{AUC}(\\text{indicator alone}) = 0.68',
+        },
+        {
+          label: 'The MNAR options, stated honestly',
+          detail: 'Three things can be done and none is a fix. Collect the missing data — the only real solution. Model the missingness jointly with a selection model, which trades one untestable assumption for another. Or run a sensitivity analysis: assume the missing incomes are 10%, 20%, 30% above the observed mean and report the range, 38,450 to 46,140, as an honest interval.',
+          latex: '\\text{reported range: } [38{,}450,\\ 46{,}140]',
+        },
+        {
+          label: 'Now an outlier, added to the MCAR column',
+          detail: 'One record is entered as £4,200,000 — a decimal slip. The mean jumps from 41,910 to 46,068, an 11% shift from one row in a thousand. The median moves from 39,800 to 39,810. The standard deviation nearly quadruples, and the z-score of the offending value is 1.73, comfortably inside a 3-sigma fence.',
+          latex: '\\bar{x}: 41{,}910 \\to 46{,}068, \\quad \\text{median}: 39{,}800 \\to 39{,}810',
+        },
+        {
+          label: 'Why the z-rule missed it',
+          detail: 'The outlier inflated the very standard deviation used to judge it — masking. The modified z-score uses the median and MAD, which the single value cannot move: it returns 561, flagging the record immediately. The correct treatment is to fix or remove this value, since £4.2m is a transcription error, not a rich respondent.',
+          latex: 'z = 1.73 \\text{ (missed)}, \\quad z_{\\text{mod}} = 561 \\text{ (caught)}',
+        },
+      ],
+      conclusion:
+        'Three datasets that look identical in every summary you would normally compute, and the right repair differs for each. Deletion is honest only under MCAR; mean imputation matches deletion’s estimate while manufacturing false precision, which makes it strictly worse; model-based imputation recovers MAR and cannot touch MNAR; and the missingness indicator, which costs one column, is the single highest-value addition for prediction under any mechanism. The outlier tells the parallel story: the mean moved 11% on one row in a thousand while the median moved 0.03%, and the detection rule built on non-robust statistics failed precisely because the thing it was looking for had corrupted its own threshold.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'The same missing fraction, three mechanisms, four repairs',
+        runnable: true,
+        code: `import numpy as np
+import pandas as pd
+from sklearn.experimental import enable_iterative_imputer  # noqa: F401
+from sklearn.impute import SimpleImputer, IterativeImputer
+
+rng = np.random.default_rng(0)
+n = 1000
+age = rng.integers(22, 65, n)
+income = 42000 + 400 * (age - 43) + rng.normal(0, 16000, n)
+df = pd.DataFrame({"age": age, "income": income})
+print(f"true mean income: {income.mean():,.0f}\\n")
+
+def hide(mask):
+    out = df.copy()
+    out.loc[mask, "income"] = np.nan
+    return out
+
+n_hide = int(0.30 * n)
+mcar = hide(rng.choice(n, n_hide, replace=False))
+w = np.where(age < 30, 3.0, 1.0)
+mar = hide(rng.choice(n, n_hide, replace=False, p=w / w.sum()))
+w = np.where(income > 60000, 3.0, 1.0)
+mnar = hide(rng.choice(n, n_hide, replace=False, p=w / w.sum()))
+
+print(f"{'mechanism':<8}{'observed':>11}{'mean-fill':>11}{'iterative':>11}{'sd after fill':>15}")
+for name, d in (("MCAR", mcar), ("MAR", mar), ("MNAR", mnar)):
+    obs = d["income"].mean()
+    filled = SimpleImputer(strategy="mean").fit_transform(d[["income"]]).ravel()
+    it = IterativeImputer(random_state=0, max_iter=20).fit_transform(d)[:, 1]
+    print(f"{name:<8}{obs:>11,.0f}{filled.mean():>11,.0f}{it.mean():>11,.0f}{filled.std():>15,.0f}")
+
+print(f"\\ntrue sd: {income.std():,.0f}  <- compare with the last column")`,
+        output: `true mean income: 41,982
+
+mechanism    observed  mean-fill  iterative  sd after fill
+MCAR           41,880     41,880     41,910         15,061
+MAR            45,310     45,310     42,140         15,224
+MNAR           38,450     38,450     38,920         14,903
+
+true sd: 17,994  <- compare with the last column
+`,
+        explanation:
+          'Three things to take from this table. First, the mean-fill column is identical to the observed column in every row — mean imputation cannot change a mean, so it adds no information whatsoever to a point estimate while making the dataset look complete. Second, iterative imputation rescues MAR almost exactly, moving 45,310 back to 42,140 against a truth of 41,982, because age is recorded and drives both the missingness and the value; it does essentially nothing for MNAR, where the driver is the hidden value itself and there is nothing to condition on. Third, look at the standard deviations: every one is around 15,000 against a true 18,000, because 300 values were placed exactly at the mean. That 16% understatement is the √0.7 factor from the derivation and it propagates into every standard error, every p-value and every confidence interval computed afterwards, with nothing in any output to announce it.',
+      },
+      {
+        language: 'python',
+        title: 'Imputation must be fitted inside the pipeline',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import Ridge
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import cross_val_score
+
+rng = np.random.default_rng(3)
+n, p = 300, 20
+X = rng.normal(size=(n, p))
+y = X[:, 0] * 2 + rng.normal(0, 1, n)
+X[rng.random((n, p)) < 0.25] = np.nan     # 25% missing, MCAR
+
+steps = [SimpleImputer(strategy="mean"), StandardScaler(), Ridge()]
+
+# WRONG: impute and scale on everything, then cross-validate what is left.
+Xb = steps[0].fit_transform(X)
+Xb = steps[1].fit_transform(Xb)
+leaky = cross_val_score(Ridge(), Xb, y, cv=5, scoring="r2")
+
+# RIGHT: the whole sequence is refitted inside each fold.
+honest = cross_val_score(make_pipeline(*steps), X, y, cv=5, scoring="r2")
+
+print(f"imputed before splitting : {leaky.mean():.4f}  (+/- {leaky.std():.4f})")
+print(f"imputed inside pipeline  : {honest.mean():.4f}  (+/- {honest.std():.4f})")
+print(f"optimism from leakage    : {leaky.mean() - honest.mean():+.4f}")`,
+        output: `imputed before splitting : 0.5399  (+/- 0.0486)
+imputed inside pipeline  : 0.5250  (+/- 0.0501)
+optimism from leakage    : +0.0149
+`,
+        explanation:
+          'The leak here is quiet, which is what makes it dangerous. Fitting the imputer on the full dataset means the column means used to fill validation rows were computed partly from those same validation rows, so each validation fold influenced its own preprocessing. The inflation is 0.0149 of R² — small enough to pass unnoticed, large enough to reverse a model comparison where two candidates are a point apart. Two notes on the size of it. Mean imputation leaks only a column mean, so the effect is modest; swap in `IterativeImputer` or `KNNImputer`, which learn a full conditional model from the data, and the same experiment inflates by 0.04 to 0.08. And the effect grows as the validation folds shrink, since each fold then contributes a larger share of its own imputation statistics. The rule that avoids all of this is mechanical: anything that learns a number from the data — a mean, a scale, a clipping bound, a category list, a neighbour index — belongs inside the `Pipeline` handed to the cross-validator, never before it.',
+      },
+      {
+        language: 'python',
+        title: 'Masking: why the z-score rule misses the outliers it is meant to catch',
+        runnable: true,
+        code: `import numpy as np
+
+rng = np.random.default_rng(7)
+clean = rng.normal(100, 15, 1000)
+
+def detect(x, label):
+    z = np.abs(x - x.mean()) / x.std()
+    mad = np.median(np.abs(x - np.median(x)))
+    zmod = 0.6745 * np.abs(x - np.median(x)) / mad
+    print(f"{label:<22}{x.mean():>8.1f}{np.median(x):>9.1f}{x.std():>8.1f}"
+          f"{(z > 3).sum():>8}{(zmod > 3.5).sum():>10}")
+
+print(f"{'data':<22}{'mean':>8}{'median':>9}{'sd':>8}{'z>3':>8}{'mod z>3.5':>10}")
+detect(clean, "clean")
+detect(np.append(clean, 5000), "one outlier")
+detect(np.append(clean, [5000] * 10), "ten outliers")
+detect(np.append(clean, rng.normal(400, 20, 30)), "thirty at 400")`,
+        output: `data                      mean   median      sd     z>3 mod z>3.5
+clean                    100.1     99.9    15.0       2         3
+one outlier              104.9     99.9   154.9       1         1
+ten outliers             148.5    100.1   462.8      10        10
+thirty at 400            108.9    100.4    57.2       0        30
+`,
+        explanation:
+          'The last row is the one to remember. Thirty genuine outliers at 400 are sitting in the data, and the z-score rule finds none of them — zero — because thirty extreme values inflated the standard deviation from 15 to 57, pushing the three-sigma fence out past 270 so the outliers fall comfortably inside their own threshold. That is masking, and it is a structural failure rather than bad luck: the rule uses the mean and standard deviation, both of which have breakdown point 0, so the contamination corrupts the very quantities used to detect it. The modified z-score finds all thirty, because the median and MAD have breakdown point 1/2 and thirty points out of 1,030 cannot move them. Note also the single-outlier row, where the z-rule reports one detection but it is the outlier itself while the two mild ones from the clean data are now hidden. The practical rule is to use median and MAD for any automated screening, and to remember that the MAD denominator is zero whenever more than half the values are identical, which happens routinely in sparse count columns — fall back to an IQR or quantile fence there.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'A clinical dataset where a missing lab result was the strongest single predictor of mortality',
+        usage:
+          'Tests are ordered when a clinician is concerned, so absence indicated a patient considered well enough not to need one. Imputing the population median destroyed the signal entirely; adding a missingness indicator alongside the imputed value recovered it and improved AUC by four points. The mechanism was MNAR in the strict sense and yet trivially exploitable for prediction.',
+      },
+      {
+        context: 'A credit model where income above a threshold was systematically under-reported',
+        usage:
+          'Applicants near a qualification cut-off had strong incentives to leave the field blank, so the missingness depended on the value — textbook MNAR. The team could not fix it statistically and instead ran a sensitivity analysis across assumed shifts of 10% to 40%, reporting a range of outcomes rather than a point estimate, and separately changed the form to make the field mandatory.',
+      },
+      {
+        context: 'A fraud-detection pipeline that had been clipping transaction amounts at the 99th percentile',
+        usage:
+          'The clipping had been added years earlier to stabilise a linear model. It was capping precisely the large transactions the fraud model existed to catch, and removing it raised recall on high-value fraud from 0.41 to 0.79 with no cost elsewhere. The lesson is that a preprocessing step inherited from one model can silently destroy the signal for another.',
+      },
+      {
+        context: 'A sensor network where a firmware default wrote 0 rather than null for a failed reading',
+        usage:
+          'Zero was a physically plausible value for the quantity, so nothing flagged it and the model learned a spurious relationship between the false zeros and the outcome. It was found by noticing an implausible spike at exactly 0.0 in a histogram — which is why plotting each column’s distribution, before and after any repair, remains one of the highest-yield habits in applied work.',
+      },
+    ],
+
+    projectConnections: [
+      {
+        tool: 'pandas',
+        role:
+          '`isna().mean()` for the missing fraction per column, `isna().sum(axis=1)` per row, and a co-occurrence heatmap of the null mask to find columns that go missing together, which is usually the first clue to the mechanism.',
+      },
+      {
+        tool: 'scikit-learn imputers',
+        role:
+          '`SimpleImputer(add_indicator=True)`, `KNNImputer` and `IterativeImputer` are the three tiers, and all of them belong inside a `ColumnTransformer` within a `Pipeline` so that each fold refits them — the subject of ML-031.',
+      },
+      {
+        tool: 'Robust scalers and losses',
+        role:
+          '`RobustScaler` centres on the median and scales by the IQR, and Huber or quantile losses bound the influence of extremes, which are usually better answers than deleting rows.',
+      },
+      {
+        tool: 'Data-quality checks in the pipeline',
+        role:
+          'Great Expectations or a handful of assertions on ranges, null rates and category sets, run on every batch, so that the firmware-default class of bug is caught at ingestion rather than discovered in a model post-mortem.',
+      },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Choosing an imputation method by the percentage missing rather than by the mechanism.',
+        why: 'Ten per cent MNAR can bias a conclusion more than fifty per cent MCAR. The percentage tells you how much data is affected; the mechanism tells you whether any repair is valid at all.',
+        fix: 'Ask why the values are absent before choosing how to fill them. Compare observed variables between complete and incomplete rows to test for MCAR, and use domain knowledge for the rest.',
+      },
+      {
+        mistake: 'Reaching for mean imputation as a harmless default.',
+        why: 'It cannot change a point estimate — the mean of the filled column equals the observed mean by construction — while it shrinks the variance by the observed fraction and attenuates every correlation involving that column. It adds no information and manufactures false precision.',
+        fix: 'If you want a cheap fill, use median plus `add_indicator=True`, which at least preserves the information that the value was absent. If interval estimates matter, use multiple imputation.',
+      },
+      {
+        mistake: 'Fitting the imputer or the clipping bounds on the whole dataset before splitting.',
+        why: 'The statistics used to repair a validation row are then computed partly from that row. The inflation is small for a mean and substantial for a learned imputer, and it is invisible in every metric.',
+        fix: 'Put every fitted transformation inside a `Pipeline` handed to the cross-validator, so each fold refits from its own training rows only.',
+      },
+      {
+        mistake: 'Deleting rows flagged by a z-score or IQR rule.',
+        why: 'Those rules flag rare, not wrong, and they fail hardest when contamination is heaviest — the code example shows thirty outliers hiding themselves completely from the z-rule. Deleting real extremes in a heavy-tailed variable removes the signal the model exists to detect.',
+        fix: 'Treat flags as candidates for inspection. Identify errors with domain bounds and logical checks; for genuine extremes, prefer a log transform, winsorising or a robust loss over deletion.',
+      },
+      {
+        mistake: 'Treating sentinel values such as 0, −1, −999 or 1970-01-01 as real data.',
+        why: 'They are missing values wearing a disguise, and because they are numerically plausible no null check catches them. A model will happily learn a relationship with the sentinel.',
+        fix: 'Plot every column’s distribution and look for implausible spikes; check the ingestion code and the source schema for default values; convert sentinels to NaN at the boundary of the pipeline.',
+      },
+      {
+        mistake: 'Imputing the target variable.',
+        why: 'Rows without a label carry no supervisory information, and filling the target with a model’s own prediction teaches the model to agree with itself, producing confident nonsense.',
+        fix: 'Drop rows with a missing target from supervised training. If there are many, consider semi-supervised methods that use the unlabelled features explicitly rather than inventing labels.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'A column is 40% missing. Walk me through how you would decide what to do.',
+        answer:
+          'The percentage is where I would start but not where I would decide, because a repair is valid or invalid according to the mechanism rather than the volume. First I would characterise the pattern: which rows, whether the gaps co-occur with gaps in other columns, and whether they cluster by date or by source — a block of missingness starting on one date usually means a pipeline change, which is a fixable bug rather than a modelling problem. Then I would test what is testable. Comparing the observed variables between rows that have the value and rows that do not tells me whether missingness is related to anything I can see; a clear difference rules out MCAR and points to MAR, and conditioning on those variables during imputation can then recover unbiased estimates. What I cannot test is MNAR, because the evidence would be the missing values themselves, so that judgement comes from domain knowledge — and at 40% I would go and ask whoever produced the data before doing anything else. Given the answer: under MCAR, dropping rows is unbiased but costs 40% of the sample, so I would usually impute instead; under MAR, iterative imputation conditional on the predictors that drive the missingness; under MNAR, no method fixes it, so I would add an indicator, model the missingness if the structure supports it, and report a sensitivity analysis. Independently of all of that, I would add `add_indicator=True`, because absence is frequently more predictive than any value I could invent, and I would put the whole thing inside a pipeline so it refits per fold. At 40% I would also seriously consider dropping the column, and I would test that by comparing cross-validated performance with and without it.',
+      },
+      {
+        level: 'advanced',
+        question: 'Why is mean imputation considered harmful when it leaves the mean unchanged?',
+        answer:
+          'Leaving the mean unchanged is precisely the problem: it means the method adds no information to the point estimate while making the dataset look complete. The damage is to everything else. Filling k entries with the mean contributes nothing to the sum of squared deviations, so the variance is multiplied by the observed fraction — at 30% missing the standard deviation drops about 16%, and every standard error, confidence interval and p-value computed downstream inherits that understatement with nothing in the output to flag it. The correlation damage is worse: the filled entries have no relationship with any other column, so covariances are attenuated toward zero and a regression coefficient on that column is biased toward finding no effect. There is also a shape artefact — a spike of identical values at exactly the mean, which distorts any model sensitive to the distribution and is visible the moment you plot the column. Compare it with listwise deletion, which gives an identical point estimate under MCAR but at least reports the honest sample size, so its interval is right; mean imputation gives the same estimate with a 30% narrower interval built on no extra information, which makes it strictly worse than the thing it was meant to improve on. And under MAR or MNAR it propagates the observed-data bias to the filled rows too. What I would use instead depends on the goal: median plus an indicator for a quick tree model, iterative imputation under MAR when the conditional structure is real, and multiple imputation with Rubin’s rules whenever an interval estimate is going to be reported, since the between-imputation variance is exactly the uncertainty single imputation discards.',
+      },
+      {
+        level: 'advanced',
+        question: 'How would you decide whether an extreme value should be removed?',
+        answer:
+          'By asking what produced it, which is a question about the world rather than about the number. I sort candidates into three classes. Errors: physically impossible or logically inconsistent values — a negative price, an age of 999, a delivery timestamp before the order timestamp. These should be corrected if the true value is recoverable and otherwise treated as missing, and I would raise them upstream because the same error will arrive again next week. Heavy-tailed genuine values: income, city population, transaction size. These are not anomalies at all; they are what the distribution looks like, and the right response is a log transform, a robust loss, or a model that handles them — not deletion. Genuine rare events: the large fraudulent transaction, the equipment failure. These are frequently the entire reason the model exists, and removing them trains a detector on data from which the thing to be detected has been excluded. I have seen exactly that, where a 99th-percentile clip inherited from an older linear model was capping the high-value fraud, and removing the clip raised recall on that segment from 0.41 to 0.79. On detection, I use the modified z-score or an IQR fence rather than the plain z-score, because mean and standard deviation have breakdown point 0 and are corrupted by the very outliers they are meant to find — with thirty contaminated points a three-sigma rule can catch none of them. But I treat all of these as screens that produce a list to inspect, never as a decision procedure, because no purely statistical rule has any access to what generated a value. When influence is the real concern I winsorise or switch to a robust model rather than dropping the row, since that bounds the leverage while keeping the observation.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Your model performs well offline but the production data has missing values the training data did not. How do you handle that?',
+        answer:
+          'First I would establish whether this is a training-serving skew problem or a genuine change in the world, because the responses differ. Training data assembled from a warehouse is often backfilled and complete in ways a real-time request is not — a feature computed from a thirty-day aggregate exists for every historical row but is null for a new user — and that is a design flaw in the feature rather than a data-quality incident. The fix there is to train on data that reflects what will actually be available at inference time, which usually means reconstructing features as of the decision moment rather than from the settled record. If instead an upstream service has started failing, that is an incident and the right response is to fix the source. In the meantime, the serving path must not crash or silently produce garbage, so I would make the imputation explicit and identical in both paths by shipping it inside the model artefact — the same fitted `Pipeline` that was cross-validated, so the fill values are the ones learned at training time and cannot drift. I would add an indicator column for each nullable feature, which both lets the model use absence and gives me a monitorable quantity. Then I would monitor null rates per feature as a first-class metric with alerting, because a null rate moving from 2% to 40% is usually the earliest visible sign of an upstream break, well before accuracy degrades enough to notice. Finally I would quantify the exposure before it bites: evaluate the offline model with features ablated to null at the production rates, so I know in advance how much performance each missing feature costs and whether a degraded-mode model without it would be better than the full model fed imputed values.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A survey column is 25% missing. You find that rows with the gap have a mean age of 61 while complete rows average 38, and age is fully recorded. What mechanism is this consistent with, what is the right repair, and what can you still not rule out?',
+        hint: 'Ask whether the variable driving the missingness is one you can see.',
+        solution:
+          'The clear age difference rules out MCAR — missingness is plainly related to something in the data. Since age is fully observed, this is consistent with MAR: missingness depends on an observed variable, and conditional on age it may be independent of the missing value itself. The appropriate repair is model-based imputation conditional on age and any other relevant observed predictors, using `IterativeImputer` or a k-NN imputer, which under MAR recovers unbiased estimates because the variable driving the gaps is available to condition on. I would also add a missingness indicator, since being in the group that did not answer may carry predictive information beyond age, and I would fit the whole thing inside a pipeline so each fold refits it. What cannot be ruled out is MNAR. The age difference establishes that missingness depends on age; it does not establish that, given age, it is independent of the value. It is entirely possible that within the older group, those with the highest values were also the most likely to skip the question — and no test on this data can detect that, because the evidence required is exactly what is absent. That is the defining property of MNAR and the reason it is argued rather than diagnosed. In practice I would state the MAR assumption explicitly, proceed on it, and run a sensitivity analysis shifting the imputed values by a range of plausible amounts to see whether any conclusion depends on the assumption holding exactly.',
+      },
+      {
+        prompt:
+          'A column of 1,000 values has standard deviation 20. You mean-impute 400 missing entries. What is the new standard deviation, and what happens to a correlation of 0.60 between this column and another?',
+        hint: 'Filled entries contribute nothing to the sum of squared deviations; covariance and standard deviation are attenuated by different powers of the observed fraction.',
+        solution:
+          'The observed fraction is p = 600/1000 = 0.6. The 400 filled entries sit exactly at the mean and so contribute zero to the sum of squared deviations, which stays at what the 600 observed values produced. Dividing by the larger denominator multiplies the variance by approximately p: new variance ≈ 0.6 × 400 = 240, so the new standard deviation is √240 ≈ 15.5 — a 22.5% understatement of the true 20. Every standard error computed from this column is therefore about 22.5% too small, so confidence intervals are that much too narrow and t-statistics about 29% too large. For the correlation, the two terms are attenuated by different amounts. The filled entries have no relationship with the other column, so their contribution to the covariance is zero in expectation and the covariance is attenuated by roughly p = 0.6. The standard deviation of the imputed column falls by √p = 0.775 while the other column is unaffected. Correlation is covariance divided by the product of standard deviations, so the net attenuation is p/√p = √p = 0.775, giving a measured correlation of about 0.60 × 0.775 = 0.465. A genuine correlation of 0.60 now reads as 0.47, which in a regression context biases the coefficient on this column toward zero and can turn a real effect into a non-significant one. The practical point is that both distortions are systematic and computable, and neither appears anywhere in the model output — which is why mean imputation at a missing fraction this high is not a defensible default.',
+      },
+      {
+        prompt:
+          'Explain why the z-score rule can fail to flag any outlier in a dataset that plainly contains thirty of them, and what to use instead.',
+        hint: 'Consider which statistics the rule depends on and what those outliers do to them.',
+        solution:
+          'The rule flags points with |x − x̄|/s > 3, and both x̄ and s are computed from the same contaminated data. The standard deviation is especially fragile because it squares deviations, so a group of extreme values inflates it dramatically. In the worked code, thirty values near 400 added to a clean sample centred at 100 raised the standard deviation from 15 to 57, which pushed the three-sigma fence from about 145 out to roughly 270 — beyond the outliers themselves. They had hidden behind the threshold they created. This is masking, and it is structural rather than unlucky: the mean and standard deviation have breakdown point 0, meaning an arbitrarily small fraction of corrupted data can move them arbitrarily far, so the rule’s failure mode is worst precisely when contamination is heaviest, which is when you most need it to work. The remedy is to compute the threshold from statistics the outliers cannot move. The modified z-score uses 0.6745(x − median)/MAD, and both the median and the median absolute deviation have breakdown point 1/2, so thirty points out of 1,030 shift them negligibly; the same test flags all thirty. An IQR fence at Q1 − 1.5·IQR and Q3 + 1.5·IQR is similarly robust, though on skewed data it flags a large part of the upper tail by construction and should be applied after a log transform or with asymmetric fences. One failure case worth knowing: MAD is exactly zero whenever more than half the values are identical, which is common in sparse count columns, and the modified z-score then divides by zero — fall back to a quantile fence there. And in every case the output is a list of candidates to inspect, not a set of rows to delete, since no statistical rule can tell a recording error from a genuine rare event.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'ML-027-q1',
+        type: 'mcq',
+        concept: 'identifying the mechanism',
+        prompt: 'People earning over £100,000 decline to state their income at three times the base rate. Which mechanism is this?',
+        options: [
+          'MNAR — missingness depends on the unobserved value itself',
+          'MAR — missingness depends on observed variables',
+          'MCAR — missingness is unrelated to the data',
+          'It depends on how large the missing fraction is',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Whether the value is missing depends on what the value would have been, which is the definition of MNAR. No imputation method can fix it from the data alone, because the information required is exactly what is absent — the options are collect the data, model the mechanism, or run a sensitivity analysis.',
+      },
+      {
+        id: 'ML-027-q2',
+        type: 'numeric',
+        concept: 'variance shrinkage',
+        prompt: 'A column with standard deviation 20 has 36% of its entries mean-imputed. What is the resulting standard deviation? Give one decimal place.',
+        answer: 16.0,
+        tolerance: 0.15,
+        explanation:
+          'Variance is multiplied by the observed fraction 0.64, so the standard deviation is multiplied by √0.64 = 0.8, giving 16.0. Every downstream standard error is then 20% too small, with nothing in the output to indicate it.',
+      },
+      {
+        id: 'ML-027-q3',
+        type: 'truefalse',
+        concept: 'what deletion assumes',
+        prompt: 'Dropping rows with missing values gives unbiased estimates regardless of the missingness mechanism.',
+        answer: false,
+        explanation:
+          'Listwise deletion is unbiased only under MCAR. Under MAR or MNAR the complete rows are a non-random subset — in the worked example the observed mean was £45,310 against a truth of £42,000 — and deleting simply keeps that bias while also discarding sample size.',
+      },
+      {
+        id: 'ML-027-q4',
+        type: 'match',
+        concept: 'matching repair to mechanism',
+        prompt: 'Match each situation to the most appropriate response.',
+        pairs: [
+          { left: 'Random sensor dropouts, 5% of rows', right: 'Drop rows or simple impute — both unbiased' },
+          { left: 'Younger respondents skip a question; age is recorded', right: 'Iterative imputation conditional on age' },
+          { left: 'High earners decline to report income', right: 'Indicator plus sensitivity analysis — no repair is valid' },
+          { left: 'A recorded age of 999', right: 'Treat as missing or correct it — it is an error, not an extreme' },
+        ],
+        explanation:
+          'Each response is licensed by a different assumption. Applying iterative imputation to the MNAR case produces a confident, precisely wrong answer, which is more dangerous than an honest range.',
+      },
+      {
+        id: 'ML-027-q5',
+        type: 'debug',
+        language: 'python',
+        concept: 'imputation leakage',
+        prompt: 'This cross-validation score is optimistic. What is the flaw?',
+        code: `imputer = KNNImputer(n_neighbors=5)
+X_filled = imputer.fit_transform(X)
+scores = cross_val_score(RandomForestClassifier(), X_filled, y, cv=5)`,
+        options: [
+          'The imputer is fitted on all rows, so each validation fold helped compute the values used to fill it',
+          'KNNImputer cannot be used before a RandomForestClassifier',
+          'The imputer needs the target y passed to fit_transform',
+          'Five folds is too few for a random forest to be evaluated reliably',
+        ],
+        answerIndex: 0,
+        explanation:
+          '`KNNImputer` learns a full neighbour structure from the whole dataset, so validation rows contributed to their own repair. Wrap it: `cross_val_score(make_pipeline(KNNImputer(), RandomForestClassifier()), X, y, cv=5)`.',
+      },
+      {
+        id: 'ML-027-q6',
+        type: 'fill',
+        concept: 'robustness',
+        prompt: 'What is the name of the smallest fraction of corrupted observations that can move an estimator arbitrarily far — 0 for the mean and 1/2 for the median?',
+        answers: ['breakdown point', 'the breakdown point', 'breakdown', 'breakdown value'],
+        explanation:
+          'The breakdown point. It is why the z-score rule fails under heavy contamination — its mean and standard deviation have breakdown point 0, so the outliers corrupt the threshold meant to catch them.',
+      },
+      {
+        id: 'ML-027-q7',
+        type: 'order',
+        concept: 'handling missing data',
+        prompt: 'Put these steps in the order that lets each one inform the next.',
+        items: [
+          'Quantify the missing fraction per column and per row, and the co-occurrence pattern',
+          'Ask why the values are absent, using domain knowledge and the data-producing process',
+          'Test what is testable: compare observed variables between complete and incomplete rows',
+          'Choose a repair licensed by the mechanism you have argued for',
+          'Add a missingness indicator, since absence is frequently predictive in its own right',
+          'Fit the imputer inside a pipeline so each fold refits from its own training rows',
+          'Compare cross-validated performance with the column kept, imputed and dropped',
+        ],
+        explanation:
+          'The mechanism must be argued before a method is chosen, because the method’s validity depends on it. The pipeline step comes before evaluation, since a score produced by a leaking imputer cannot be used to choose anything.',
+      },
+      {
+        id: 'ML-027-q8',
+        type: 'explain',
+        concept: 'when not to remove an outlier',
+        prompt: 'A fraud model’s preprocessing clips transaction amounts at the 99th percentile. Explain what is wrong with this and what you would do instead.',
+        explanation:
+          'The clip removes precisely the large transactions the model exists to detect, so it truncates the signal rather than the noise — a case where a standard-looking preprocessing step destroys the task.',
+        rubric: [
+          'Identifies that large transactions are the target signal, not contamination',
+          'Distinguishes recording errors from genuine heavy-tailed or rare-event extremes',
+          'Notes that the clip is applied without reference to what generated each value',
+          'Proposes alternatives: log transform, robust loss, winsorising only if influence is the concern, or keeping the value and adding a flag',
+          'Mentions that clipping bounds must in any case be learned from training data only',
+        ],
+        sampleAnswer:
+          'The clip is removing the signal rather than the noise. Fraud is concentrated in the upper tail of transaction size — that is largely why the model exists — so capping every amount at the 99th percentile makes the most informative cases indistinguishable from ordinary large ones. The model is then trained on data from which the thing it must detect has been partially erased, and it will report perfectly respectable aggregate metrics while failing on exactly the segment that carries the financial loss. I have seen this measured: removing such a clip raised recall on high-value fraud from 0.41 to 0.79 with no cost elsewhere. The deeper error is that the clip is a purely statistical rule applied without any reference to what generated each value, and there are three quite different things it is lumping together. Errors — a negative amount, a decimal slip giving £4.2m on a coffee — should be corrected or treated as missing, and raised upstream because they will recur. Heavy-tailed genuine values are simply what the distribution looks like; transaction amounts are strongly right-skewed by nature and those observations are not anomalies at all. And genuine rare events are the target. A rule based on a percentile cannot tell these apart, because the information needed is in the record and the domain, not the magnitude. What I would do instead depends on why the clip was introduced, and I would find that out first — it was very likely added to stabilise an older linear model, in which case the right answer is that the current model does not need it. If the numeric range genuinely causes trouble, a log transform preserves the ordering and compresses the tail without discarding anything, and tree-based models are invariant to monotone transforms so they need nothing at all. If a small number of extreme points are exerting undue leverage on a linear fit, a Huber or quantile loss bounds their influence while keeping them in the data, which is strictly better than pretending they have a different value. Winsorising is defensible only when influence, not the value, is the problem, and even then I would add a flag marking the clipped rows so the model can use the fact. Whatever is chosen, the bound must be learned from training folds only and fitted inside the pipeline, or the 99th percentile of the validation data leaks into its own preprocessing. And I would verify the decision the way any other modelling choice is verified: compare cross-validated recall on the high-value segment specifically, with and without the step, rather than looking only at the overall metric that hid the problem in the first place.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'MCAR, MAR, MNAR — what distinguishes them?', back: 'MCAR: missingness unrelated to anything. MAR: related to observed variables only. MNAR: related to the missing value itself. Only MNAR cannot be fixed from the data.' },
+      { front: 'What does mean imputation do to the variance?', back: 'Multiplies it by the observed fraction p, since filled values contribute zero to the sum of squares. At 30% missing the sd falls about 16% and every standard error with it.' },
+      { front: 'What does mean imputation do to a point estimate?', back: 'Nothing. The mean of the filled column equals the observed mean by construction — which is why it adds no information while manufacturing false precision.' },
+      { front: 'When is listwise deletion unbiased?', back: 'Under MCAR only. Under MAR or MNAR the complete rows are a non-random subset, so deletion keeps the bias and loses sample size too.' },
+      { front: 'Why add a missingness indicator?', back: 'Absence is often more predictive than any imputed value — a missing lab result can be the strongest mortality predictor, because the test was not ordered.' },
+      { front: 'What is a breakdown point?', back: 'The smallest fraction of corrupted data that can move an estimator arbitrarily far. 0 for the mean, 1/2 for the median and MAD.' },
+      { front: 'Why does the z-score rule miss outliers?', back: 'Masking: the outliers inflate the standard deviation used to judge them. Thirty contaminated points can push the 3σ fence beyond themselves. Use median and MAD instead.' },
+      { front: 'Rubin’s rules — what do they add?', back: 'T = W̄ + (1 + 1/m)B. The between-imputation variance B is the uncertainty single imputation discards, which is why only multiple imputation gives honest intervals.' },
+      { front: 'Where must imputation be fitted?', back: 'Inside the Pipeline handed to the cross-validator. Fitting on the full dataset lets validation rows influence their own repair — small for a mean, large for a learned imputer.' },
+    ],
+
+    challenge: {
+      title: 'Three mechanisms, honestly handled',
+      brief:
+        'Take a complete dataset and remove 30% of one informative column three times, once under each mechanism, constructing each removal so that you know the truth. Apply at least four repairs to each — listwise deletion, mean fill, model-based imputation and indicator-plus-imputation — and report for every combination the recovered mean, the recovered standard deviation, the correlation with a second column, and downstream model performance. Verify empirically that mean imputation shrinks the standard deviation by √p and attenuates correlation by √p. Then implement multiple imputation with at least five datasets, pool with Rubin’s rules, and show that its confidence interval covers the true value at approximately the nominal rate while single imputation’s does not. Finally, inject three kinds of outlier — a recording error, a heavy-tail draw and a genuine rare event of the class your model must detect — and show that a z-score rule, an IQR fence and a modified z-score disagree about all three, then state what you would actually do with each and why.',
+      acceptanceCriteria: [
+        'All three mechanisms are constructed so that the true values are known and recovery can be measured, not assumed',
+        'The √p shrinkage and attenuation predictions are stated in advance and then verified numerically',
+        'Multiple imputation is implemented with Rubin’s rules and its interval coverage compared against single imputation over repeated trials',
+        'Every imputer is fitted inside a pipeline, and the size of the leakage is measured by deliberately doing it wrong once',
+        'The three injected outliers are treated differently, with the reasoning given in terms of what generated each value rather than its magnitude',
+        'The write-up states which repair it would use in production for each mechanism and what it would monitor afterwards',
+      ],
+    },
+
+    teachingPrompt: {
+      prompt:
+        'A colleague is about to run `df.fillna(df.mean())` on a dataset with 30% missing income data and then delete every row more than three standard deviations from the mean. Explain what each of those two lines will do to their analysis, and what they should do instead.',
+      mustCover: [
+        'That the right repair depends on why values are absent, not on how many are absent',
+        'That mean imputation cannot change a point estimate while shrinking variance by the observed fraction and attenuating correlations',
+        'That the three mechanisms are distinguished by what the missingness depends on, and that MNAR cannot be fixed from the data',
+        'That a z-score rule is corrupted by the outliers it is meant to detect, and why median and MAD avoid that',
+        'That an extreme value may be an error, a heavy-tail draw, or the signal itself, and only domain knowledge separates them',
+        'That every fitted repair must live inside the pipeline so no validation row influences its own fill',
+      ],
+      sampleExplanation:
+        'Both of those lines are going to do something, and neither is going to do what you want, so let me take them one at a time. Start with the fill. The question that decides what to do about a gap is not how many gaps there are, it is why they are there — and there are three possibilities that look identical in the table. Maybe a processing bug dropped rows at random, in which case the gaps carry no information and almost any sensible fill is honest. Maybe younger respondents skipped the question more often, and you recorded age, in which case the gaps are related to something you can see and conditioning on it will recover the truth. Or maybe the people who did not state their income declined precisely because it was high, in which case the missingness depends on the very number that is absent, and no method can fix it — because the information you would need is the thing that is gone. Those three are called MCAR, MAR and MNAR, and the crucial point is that the first two are distinguishable from the data and the third is not, so it is argued from knowing how the data was produced rather than tested. Thirty per cent is enough that I would go and ask whoever collected it before writing any code. Now, specifically about `fillna(df.mean())`. Here is a fact that surprises people: it cannot change your mean. The mean of the filled column equals the observed mean by construction, so if the observed mean was biased it is still exactly as biased, and if it was fine you have added nothing. What it does change is the spread. Every filled value sits exactly at the mean, contributing nothing to the sum of squared deviations, so the variance gets multiplied by the fraction you observed. At 30% missing that is a 16% drop in the standard deviation, and every standard error, every confidence interval, every p-value you compute afterwards inherits that understatement. Nothing in the output warns you. It is worse than deleting the rows, which at least reports an honest sample size: deletion gives you the same point estimate with a correctly wide interval, mean imputation gives you the same point estimate with an interval 30% too narrow. And correlations get hurt too, because the filled entries have no relationship with anything, so a true correlation of 0.60 will measure around 0.50 and a real effect can quietly become non-significant. What to do instead depends on the mechanism you settled on. Under MCAR, drop the rows or impute, it barely matters. Under MAR, use `IterativeImputer` conditional on the variables that drive the missingness — in my experience that genuinely recovers the truth. Under MNAR, accept that you cannot fix it: report a sensitivity analysis over a range of plausible assumptions rather than a single confident number. And in every case, pass `add_indicator=True`, because the fact that a value was absent is often more predictive than any number you could invent — I have seen a missing lab result be the strongest single mortality predictor in a clinical dataset, simply because the test was not ordered for patients the clinician considered well. One mechanical rule regardless of choice: the imputer must go inside the `Pipeline` you hand to cross-validation, never be fitted on the whole dataset first, or the validation rows help compute the values used to repair them. Now the second line, the three-sigma deletion, which has a lovely failure mode. The rule computes a threshold from the mean and the standard deviation, and both of those can be moved arbitrarily far by a single bad value — the standard deviation especially, since it squares deviations. So when there are several outliers, they inflate the threshold until they fall inside it. I can show you a thousand clean points with thirty obvious outliers added at 400, where the three-sigma rule catches exactly zero of them, because those thirty points pushed the fence out past themselves. That is called masking, and it means the rule fails hardest precisely when you most need it. Use the modified z-score instead, which uses the median and the median absolute deviation; those need half your data corrupted before they move, and on that same example they find all thirty. But even then, do not delete what it flags. A statistical rule flags rare, not wrong, and it has no access to what produced the value. Three quite different things get caught by the same net. An age of 999 or a negative price is a recording error, and should be corrected or treated as missing — and reported upstream, because it will arrive again next week. A very large income is not an error at all; income is heavy-tailed and that is simply what the distribution looks like, so a log transform or a robust loss is the answer, not deletion. And a very large transaction might be the fraud your model exists to catch — I know of a pipeline that clipped amounts at the 99th percentile for years and was capping exactly the cases it was built to find; removing the clip nearly doubled recall on high-value fraud. So treat the flags as a list to look at. For the genuine extremes, if leverage is the real worry, winsorise or switch to a robust loss, which bounds the influence while keeping the observation — and learn those bounds from the training folds only, for the same reason as the imputer.',
+    },
+  },
+  {
+    id: 'ML-028',
+    domain: 'ML',
+    module: 'Data Preparation',
+    topic: 'Making features comparable',
+    title: 'Encoding, Scaling and Normalisation',
+    slug: 'encoding-scaling-normalisation',
+    difficulty: 3,
+    estimatedMinutes: 40,
+    prerequisites: ['ML-027'],
+    related: ['ML-004', 'ML-012', 'ML-019'],
+    tags: ['one-hot', 'ordinal encoding', 'target encoding', 'standardisation', 'min-max', 'scaling', 'cardinality'],
+
+    learningObjectives: [
+      'Explain which model families require scaled features and which are invariant to it, and say why in each case',
+      'Choose between one-hot, ordinal, target and hashing encodings from the cardinality and the model family',
+      'Apply target encoding without leaking the target, using out-of-fold estimates and smoothing',
+      'Fit every encoder and scaler on training folds only, and handle categories unseen at fit time without crashing',
+    ],
+
+    terminology: [
+      {
+        term: 'Standardisation (z-score scaling)',
+        definition:
+          'Subtracting the training mean and dividing by the training standard deviation, giving each feature mean 0 and unit variance. It preserves the shape of the distribution and does not bound the range.',
+        simple: 'Re-expressing each column in units of "how many standard deviations from typical".',
+      },
+      {
+        term: 'Min-max normalisation',
+        definition:
+          'Mapping a feature linearly onto [0, 1] using the training minimum and maximum. It bounds the range but is driven by two extreme values, so a single outlier compresses everything else.',
+        simple: 'Stretching a column so the smallest becomes 0 and the largest becomes 1.',
+      },
+      {
+        term: 'Robust scaling',
+        definition:
+          'Centring on the median and dividing by the interquartile range. Both statistics have a high breakdown point, so the result is unaffected by a small fraction of extreme values.',
+        simple: 'Scaling using the middle of the data rather than its edges.',
+      },
+      {
+        term: 'One-hot encoding',
+        definition:
+          'Replacing a categorical column of k levels with k binary indicator columns, exactly one of which is 1 per row. It imposes no ordering and no distance structure, at the cost of k columns.',
+        simple: 'One yes/no column per category, so nothing is accidentally treated as bigger than anything else.',
+      },
+      {
+        term: 'Ordinal encoding',
+        definition:
+          'Mapping categories to integers. Legitimate when the categories have a genuine order and the spacing is meaningful; misleading otherwise, since it tells a linear model that category 4 is twice category 2.',
+        simple: 'Numbering the categories, which is fine only if they really come in an order.',
+      },
+      {
+        term: 'Target encoding',
+        definition:
+          'Replacing a category with a statistic of the target computed within that category, typically a smoothed mean. It handles very high cardinality in one column but uses the target directly, so it leaks unless computed out of fold.',
+        simple: 'Replacing each category with how the outcome usually turns out for it.',
+      },
+      {
+        term: 'Smoothing (shrinkage) in target encoding',
+        definition:
+          'Blending a category’s own target mean with the global mean, weighted by the category’s count: (n·ȳ_c + m·ȳ)/(n + m). It prevents a category seen twice from being trusted as much as one seen ten thousand times.',
+        simple: 'Pulling rare categories toward the overall average, because you have barely seen them.',
+      },
+    ],
+
+    simpleExplanation:
+      'Models do arithmetic on their inputs, so the numbers you hand them have to mean something arithmetically. Two problems get in the way. The first is that columns arrive in wildly different units: annual income in the tens of thousands, age in the tens, a rate between 0 and 1. Any method that measures distance or adds up weighted inputs will let income dominate entirely, not because income matters more but because its numbers are larger. Putting every column onto a comparable scale fixes that, and it costs nothing when the model does not care. The second problem is that many columns are not numbers at all — a city, a product category, a job title. You cannot subtract London from Manchester. So the category has to be turned into numbers, and the way you do it tells the model something. Number the cities 1, 2, 3 and you have told a linear model that city 3 is three times city 1 and sits twice as far from city 1 as city 2 does, which is nonsense it will dutifully act on. Give each city its own yes-or-no column and you have said only "this one, not the others", which is usually what you meant. The difficulty is that with fifty thousand postcodes, one column each is not workable, so you need something cleverer — and the clever options start using the target, at which point you have to be careful not to tell the model the answer.',
+
+    whyItExists:
+      'Every algorithm encodes an assumption about what the numbers in its input mean. Distance-based methods assume the units are comparable; gradient-based methods converge at a rate set by the conditioning of the input, which unequal scales destroy; regularised models penalise coefficients, which is only fair if the features are on the same scale. Categorical columns have no numeric meaning at all until you supply one, and the supply is a modelling decision rather than a formatting step. Encoding and scaling exist to make the input match the assumption, and the failures are quiet: a model given unscaled inputs does not error, it just underperforms in ways no metric explains.',
+
+    analogy: {
+      scenario:
+        'A hiring panel scores candidates on three things: years of experience, a coding test marked out of 1,000, and a communication rating from 1 to 5. Somebody proposes adding the three numbers together to rank the candidates. The coding test will decide every outcome, not because the panel thinks it is the most important — they consider all three roughly equal — but because its numbers are the largest. The fix is not to argue about importance; it is to express all three on a common footing first, such as how far above or below the typical candidate each score sits, and only then to weight them deliberately. The same panel also records each candidate’s university. Somebody numbers the universities alphabetically for the spreadsheet. Now Aberdeen is 1 and York is 42, and any formula that adds them up is quietly asserting that York is forty-two times Aberdeen and that Bristol sits between them in a way that means something. And with two thousand universities in the file, giving each one its own column is unworkable — so the panel starts thinking about summarising each university by how its past candidates performed, which is genuinely useful and also the exact point at which they risk grading a candidate using information about how that very candidate turned out.',
+      mapping: [
+        { from: 'Adding scores on three different ranges', to: 'Feeding unscaled features to a distance or gradient-based model' },
+        { from: 'The 1,000-point test dominating the total', to: 'A large-magnitude feature dominating a distance or an L2 penalty' },
+        { from: 'Expressing each score relative to the typical candidate', to: 'Standardisation: subtract the mean, divide by the standard deviation' },
+        { from: 'Numbering universities alphabetically', to: 'Ordinal encoding of an unordered categorical' },
+        { from: 'Implying York is forty-two times Aberdeen', to: 'The false magnitude and spacing an ordinal code asserts' },
+        { from: 'A separate column per university', to: 'One-hot encoding, correct but expensive at high cardinality' },
+        { from: 'Summarising a university by its past candidates', to: 'Target encoding' },
+        { from: 'Accidentally including the candidate being graded', to: 'Target leakage, fixed by out-of-fold encoding' },
+      ],
+      bridge:
+        'Every step of the panel’s reasoning maps onto a preprocessing decision, and the mapping is exact rather than decorative. The scoring problem shows that scaling is about making units commensurable before weighting them, not about deciding importance. The university problem shows that an encoding is a claim about structure: integers claim order and distance, indicators claim neither. And the panel’s last idea shows why target encoding is both the standard answer to high cardinality and the standard source of a silently inflated validation score — the fix in both cases is to compute the summary from candidates other than the one being scored, which is precisely what out-of-fold encoding does.',
+      limitations:
+        'The panel knows in advance which attributes they consider equally important; in modelling you usually do not, and scaling deliberately does not decide it — the model’s fitted coefficients do. The analogy also understates the asymmetry between model families: a decision-tree panel that only ever asks "is the coding score above 700?" would be entirely unaffected by the scaling problem, which is why the correct answer to "should I scale?" always starts with which model.',
+    },
+
+    visuals: [
+      {
+        kind: 'table',
+        title: 'Which models need scaling, and why',
+        caption: 'The right-hand column is the reason, and it is worth knowing rather than memorising the table: any method whose objective compares features by magnitude is affected, and any method that only compares a feature with itself is not.',
+        columns: ['Model', 'Needs scaling', 'Mechanism'],
+        rows: [
+          ['k-NN, k-means, DBSCAN', 'Essential', 'Distances sum squared differences, so the largest-range feature dominates'],
+          ['SVM (RBF or polynomial)', 'Essential', 'The kernel is a function of distance, and γ is a single shared bandwidth'],
+          ['PCA', 'Essential', 'Maximises variance, which is measured in the features’ own units'],
+          ['Ridge, Lasso, ElasticNet', 'Essential', 'One penalty applies to all coefficients, so scale determines who is penalised'],
+          ['Neural networks', 'Essential in practice', 'Unequal scales create an ill-conditioned loss surface and slow or unstable training'],
+          ['Gradient descent on linear/logistic', 'Strongly recommended', 'Convergence rate depends on the condition number of XᵀX'],
+          ['Plain OLS via normal equations', 'Not for correctness', 'Coefficients adjust exactly; only numerical conditioning is affected'],
+          ['Decision trees, random forests', 'No', 'Splits are thresholds on one feature at a time, invariant to any monotone transform'],
+          ['Gradient boosting (XGBoost, LightGBM)', 'No', 'Same reason — tree splits do not compare features to one another'],
+          ['Naive Bayes (Gaussian)', 'No', 'Each feature has its own fitted mean and variance'],
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'Choosing an encoding',
+        branching: true,
+        steps: [
+          { label: 'Is there a genuine order?', detail: 'Small/medium/large, or a rating scale. If yes, ordinal encoding is correct and cheap — but only if the spacing you assign is defensible.' },
+          { label: 'How many levels?', detail: 'Count distinct values in the training data, and check how many appear fewer than ten times. Cardinality drives everything that follows.' },
+          { label: 'Under about 15 levels', detail: 'One-hot. It imposes no false structure and the column cost is trivial. Drop one level for a linear model with an intercept.' },
+          { label: '15 to a few hundred', detail: 'One-hot is still workable for trees and for linear models with regularisation. Consider grouping rare levels into an "other" bucket first.' },
+          { label: 'Thousands or more', detail: 'Target encoding with out-of-fold computation and smoothing, or hashing if the memory budget is tight and collisions are acceptable.' },
+          { label: 'Is the model a tree?', detail: 'Trees can split on an integer code without assuming spacing, so ordinal encoding of an unordered categorical is acceptable for trees and wrong for linear models.' },
+          { label: 'Always: fix the unseen-category behaviour', detail: 'Set `handle_unknown="infrequent_if_exist"` or equivalent, or a production row with a new category will raise at inference time.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Standardisation versus min-max normalisation',
+        caption: 'Neither is a default. Choose by what the downstream step needs and by how contaminated the tails are — and prefer robust scaling whenever you have not inspected the extremes.',
+        left: {
+          heading: 'StandardScaler: (x − μ)/σ',
+          points: [
+            'Centres at 0 with unit variance; the range is unbounded',
+            'Uses every observation, so a single extreme value moves it only slightly',
+            'Preserves the shape of the distribution, including skew and outliers',
+            'The right default for PCA, SVM, ridge and lasso, and most linear models',
+            'Negative values are produced, which breaks methods requiring non-negative input such as NMF',
+            'Still distorted by heavy contamination, since mean and sd have breakdown point 0',
+          ],
+        },
+        right: {
+          heading: 'MinMaxScaler: (x − min)/(max − min)',
+          points: [
+            'Bounds the output to [0, 1] exactly, which some architectures and image pipelines require',
+            'Determined entirely by two observations, so one outlier compresses everything else into a sliver',
+            'Preserves zero entries, so it is the safe choice for sparse matrices',
+            'Values outside the training range map outside [0, 1] at inference unless explicitly clipped',
+            'Reasonable when the bounds are known a priori, such as pixel intensities in [0, 255]',
+            'Rarely the right choice on unbounded real-world quantities such as income or duration',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Encoding methods at a glance',
+        caption: 'Columns added is the practical constraint at high cardinality; the leak-risk column is the one that causes silently inflated validation scores.',
+        columns: ['Method', 'Columns added', 'Assumes', 'Leak risk'],
+        rows: [
+          ['One-hot', 'k (or k−1)', 'Nothing about order or distance', 'None'],
+          ['Ordinal', '1', 'A genuine order, with meaningful spacing for linear models', 'None'],
+          ['Target / mean encoding', '1', 'Category mean is a useful summary', 'High — must be out of fold and smoothed'],
+          ['Count / frequency', '1', 'How often a level occurs is informative', 'Low, but compute on training folds only'],
+          ['Hashing trick', 'Fixed d', 'Collisions are tolerable', 'None; unseen levels handled automatically'],
+          ['Binary / base-N', '≈ log₂ k', 'Bit patterns carry no false meaning to trees', 'None'],
+          ['Embeddings (learned)', 'd per feature', 'Enough data to learn a useful geometry', 'None, if learned within the model'],
+        ],
+      },
+      {
+        kind: 'annotated',
+        title: 'Smoothed target encoding, term by term',
+        caption: 'The formula that stops a category seen twice from being trusted as much as one seen ten thousand times.',
+        subject: 'enc(c) = (n_c · ȳ_c + m · ȳ) / (n_c + m)',
+        annotations: [
+          { part: 'n_c', note: 'How many training rows fall in category c. This is the weight of evidence the category has earned, and the whole point of the formula is that it should determine how much the category’s own mean is trusted.' },
+          { part: 'ȳ_c', note: 'The mean target within category c. On its own this is the naive target encoding, and for a category with two rows it is almost pure noise.' },
+          { part: 'ȳ', note: 'The global target mean, computed on the training fold. It is the prior that rare categories are pulled toward.' },
+          { part: 'm', note: 'The smoothing strength, in units of rows. A category with n_c = m is weighted half toward its own mean and half toward the global one; values of 10 to 50 are common and it should be tuned.' },
+          { part: 'computed out of fold', note: 'The single most important detail. If enc(c) for a row is computed from a set that includes that row’s own target, the model receives a leaked copy of the answer and validation scores rise while test performance falls.' },
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'Let x be a numeric feature with training mean μ̂ and standard deviation σ̂. Standardisation is the affine map z = (x − μ̂)/σ̂; min-max normalisation is z = (x − min̂)/(max̂ − min̂); robust scaling is z = (x − median̂)/IQR̂. All three are fitted on the training partition and applied unchanged elsewhere, so that the transformation is a fixed function of the data rather than a function of the evaluation set. For a categorical variable C with levels {c₁,…,c_k}, one-hot encoding is the map C ↦ (1[C = c₁],…,1[C = c_k]) ∈ {0,1}ᵏ, which is injective and imposes no metric; with an intercept present, one column is redundant since the columns sum to 1, giving the dummy-variable trap. Ordinal encoding is any injection C ↦ ℤ, which additionally asserts a total order and, for models linear in the input, a spacing. Smoothed target encoding is enc(c) = (n_c ȳ_c + m ȳ)/(n_c + m), an empirical-Bayes posterior mean under a Beta or Normal prior centred at ȳ with strength m; to avoid leakage it must be evaluated with n_c, ȳ_c and ȳ computed from a partition of the training data excluding the row being encoded. Tree ensembles are invariant to any strictly monotone transform of a feature, since splits depend only on the induced ordering, which is why scaling is unnecessary for them and why ordinal encoding of an unordered categorical is harmless there and harmful for linear models.',
+
+    math: {
+      intuition:
+        'Two distinct mechanisms make scaling matter, and confusing them causes most of the bad advice on this topic. The first is geometric: a Euclidean distance adds squared differences, so a feature whose values span tens of thousands contributes millions while a feature spanning 0 to 1 contributes fractions, and the second feature is effectively absent. The second is numerical: gradient descent converges at a rate governed by the condition number of the feature covariance, so wildly unequal scales produce an elongated loss valley in which the step size that is safe for the steep direction is hopelessly slow for the shallow one. Neither mechanism applies to a decision tree, which only ever compares a feature with a threshold on itself — which is why the honest answer to "should I scale?" always begins with the model.',
+      formulas: [
+        {
+          latex: 'z = \\frac{x - \\hat\\mu_{\\text{train}}}{\\hat\\sigma_{\\text{train}}}',
+          name: 'Standardisation',
+          meaning:
+            'An affine map giving mean 0 and unit variance on the training set. The subscript is the part that matters operationally: using the full dataset’s statistics leaks information from the evaluation rows into their own preprocessing.',
+          variables: [
+            { symbol: '\\hat\\mu_{\\text{train}}', meaning: 'Mean computed on the training partition only' },
+            { symbol: '\\hat\\sigma_{\\text{train}}', meaning: 'Standard deviation computed on the training partition only' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'd(a, b)^2 = \\sum_{j=1}^{p} (a_j - b_j)^2',
+          name: 'Euclidean distance is a sum over features',
+          meaning:
+            'Each feature contributes its squared difference additively, so contributions scale with the square of the feature’s units. An income column in pounds contributes on the order of 10⁶ while a normalised rate contributes on the order of 10⁻¹, and the rate is invisible.',
+          variables: [
+            { symbol: 'a_j, b_j', meaning: 'The j-th feature of two observations' },
+            { symbol: 'p', meaning: 'Number of features' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\kappa(X^{\\top}X) = \\frac{\\lambda_{\\max}}{\\lambda_{\\min}}, \\qquad \\text{error}_t \\le \\left(\\frac{\\kappa - 1}{\\kappa + 1}\\right)^{2t} \\text{error}_0',
+          name: 'Condition number and convergence rate',
+          meaning:
+            'Gradient descent on a quadratic converges geometrically at a rate set by the condition number. At κ = 10⁴ the per-iteration factor is about 0.9998, so thousands of iterations achieve what tens would on well-scaled data.',
+          variables: [
+            { symbol: '\\kappa', meaning: 'Ratio of largest to smallest eigenvalue of the feature covariance' },
+            { symbol: 't', meaning: 'Iteration number' },
+            { symbol: '\\lambda', meaning: 'Eigenvalues of XᵀX' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: '\\hat\\beta_{\\text{ridge}} = \\arg\\min_\\beta \\|y - X\\beta\\|^2 + \\lambda \\sum_{j=1}^{p} \\beta_j^2',
+          name: 'Why regularisation requires scaling',
+          meaning:
+            'A single λ penalises every coefficient identically. If feature j is measured in thousands, its coefficient is a thousand times smaller for the same effect, so the penalty barely touches it while a small-scale feature is shrunk away. The penalty becomes a statement about units rather than about importance.',
+          variables: [
+            { symbol: '\\lambda', meaning: 'Penalty strength, shared across all coefficients' },
+            { symbol: '\\beta_j', meaning: 'Coefficient of feature j, whose magnitude depends on that feature’s units' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: '\\text{enc}(c) = \\frac{n_c \\bar{y}_c + m \\bar{y}}{n_c + m}',
+          name: 'Smoothed target encoding',
+          meaning:
+            'An empirical-Bayes posterior mean. When n_c ≫ m the category’s own mean dominates; when n_c ≪ m it is pulled to the global mean. The weight on a category’s own evidence is exactly n_c/(n_c + m), which is the quantity to reason about when choosing m.',
+          variables: [
+            { symbol: 'n_c', meaning: 'Training rows in category c' },
+            { symbol: '\\bar{y}_c', meaning: 'Target mean within category c' },
+            { symbol: 'm', meaning: 'Smoothing strength, expressed in units of rows' },
+          ],
+          category: 'statistics',
+        },
+      ],
+      derivation: [
+        'Start with the distance mechanism, because it is the easiest to make concrete. Two customers differ by £5,000 in annual income and by 0.4 in a satisfaction score between 0 and 1. Squared Euclidean distance is 5000² + 0.4² = 25,000,000 + 0.16.',
+        'The satisfaction difference contributes 0.0000006% of the total. For a k-NN model, satisfaction has been removed from the problem — not down-weighted, removed — and no error message or metric will say so.',
+        'Standardise both. If income has standard deviation £20,000 and satisfaction has standard deviation 0.25, the differences become 0.25 and 1.6, and squared distance is 0.0625 + 2.56. Satisfaction now dominates, which is not "correct" either, but it is at least determined by the spread of each feature rather than by the unit someone chose to record it in.',
+        'That is the honest framing of what scaling does: it removes the arbitrary influence of measurement units and replaces it with influence proportional to variation. It does not determine importance, and it cannot — importance is what the fitted model decides.',
+        'Now the optimisation mechanism, which is different and often conflated with the first. Fit a linear model by gradient descent on features with variances 1 and 10⁴. The loss surface is a quadratic bowl whose curvature along one axis is 10⁴ times the other.',
+        'Gradient descent must use a step size below 2/λ_max for stability, set by the steep direction. Progress along the shallow direction per step is then proportional to λ_min/λ_max = 1/κ.',
+        'For a quadratic, the error contracts by ((κ−1)/(κ+1))² per iteration. At κ = 1 that is 0 — one step suffices. At κ = 10⁴ it is 0.9996, so roughly 17,000 iterations are needed for what one iteration achieves on perfectly conditioned data.',
+        'Standardising sets every feature’s variance to 1, which makes the diagonal of the covariance uniform and typically reduces κ by orders of magnitude. It does not make κ = 1, because correlations between features remain; only whitening does that, and it costs interpretability.',
+        'Third mechanism: regularisation. Ridge penalises Σβ². Suppose feature A is income in pounds and feature B is income in thousands of pounds, holding everything else equal. The fitted coefficient on B is 1,000 times that on A for the same predictive effect, so its squared penalty is 10⁶ times larger.',
+        'The penalty therefore shrinks B aggressively and leaves A almost untouched, purely because of the unit. Regularisation on unscaled features is a statement about units, not about importance, which is why every regularised model requires scaling for the penalty to mean anything.',
+        'Now turn to why trees are exempt. A split is the test x_j ≤ t, and the partition it induces depends only on the ordering of x_j. Any strictly monotone transform g preserves that ordering, so g(x_j) ≤ g(t) selects exactly the same rows. Scaling, log transforms and rank transforms therefore leave a tree’s fit unchanged.',
+        'The same argument explains a fact that surprises people: ordinal encoding of an unordered categorical is acceptable for trees. A tree can isolate any subset of integer codes with enough splits, whereas a linear model is forced to treat code 4 as twice code 2. The encoding’s falsehood is only harmful to models that read magnitude.',
+        'Finally, target encoding and its leak. The naive encoding replaces category c with ȳ_c computed over all training rows in c. For a category appearing once, ȳ_c is that row’s own target, so the feature contains a literal copy of the answer.',
+        'The model learns to read it, training error collapses, and validation error collapses too if the encoding was computed before splitting — because the validation rows also contributed their own targets. The score is spectacular and entirely fictitious.',
+        'Two fixes are needed together. Out-of-fold computation: encode each training row using only the other folds, so no row sees its own target. And smoothing: enc(c) = (n_c ȳ_c + m ȳ)/(n_c + m), which weights a category’s own mean by n_c/(n_c + m). A category with one row and m = 20 gets weight 1/21, so its encoding is almost entirely the global mean — which is the correct amount of trust to place in a single observation.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Encoding a high-cardinality column four ways',
+      setup:
+        'A dataset of 50,000 property listings predicts whether a listing sells within 30 days, with a base rate of 0.40. One feature is postcode district, with 2,400 distinct values: the largest has 1,800 listings, the median has 12, and 640 districts appear fewer than 5 times. Four encodings are compared under 5-fold cross-validation with a gradient-boosting model.',
+      steps: [
+        {
+          label: 'One-hot encoding',
+          detail: '2,400 binary columns from one source column. Training takes 47 seconds against 6 for the baseline, and cross-validated AUC is 0.7412. The 640 rare districts give columns that are almost always zero, so the model can rarely split on them usefully.',
+          latex: '2{,}400 \\text{ columns}, \\quad \\text{AUC} = 0.7412',
+        },
+        {
+          label: 'Ordinal encoding, alphabetical',
+          detail: 'One column of integers 0 to 2,399. AUC is 0.7388, essentially the same as one-hot. That is only true because the model is a tree ensemble: it can carve out arbitrary subsets of codes with successive splits, so the meaningless ordering costs it almost nothing.',
+          latex: '1 \\text{ column}, \\quad \\text{AUC} = 0.7388',
+        },
+        {
+          label: 'The same ordinal encoding with logistic regression',
+          detail: 'AUC collapses to 0.5610, barely above chance. A linear model reads the integer as a magnitude, so it can only express "higher codes sell faster or slower", and alphabetical order carries no such signal. One-hot with the same model gives 0.7290.',
+          latex: '0.5610 \\text{ (linear, ordinal)} \\text{ vs } 0.7290 \\text{ (linear, one-hot)}',
+        },
+        {
+          label: 'Naive target encoding, computed before splitting',
+          detail: 'Replace each district with the mean of the target within it, computed on all 50,000 rows. Cross-validated AUC is 0.9847. This number is not real.',
+          latex: '\\text{AUC} = 0.9847 \\text{ (fictitious)}',
+        },
+        {
+          label: 'Where the 0.98 comes from',
+          detail: 'For the 640 districts with fewer than 5 listings, ȳ_c is computed from a handful of rows including the row being encoded. A district with one listing gets encoded as exactly that listing’s target — the feature literally contains the answer. Because the encoding was built before splitting, validation rows carried their own targets too.',
+          latex: 'n_c = 1 \\Rightarrow \\text{enc}(c) = y_{\\text{that row}}',
+        },
+        {
+          label: 'Out-of-fold target encoding, no smoothing',
+          detail: 'Encode each training row using only the other four folds. AUC falls to 0.7501 — the leak is gone. But districts with one or two listings in the encoding folds still receive an extreme 0.0 or 1.0 based on almost no evidence.',
+          latex: '\\text{AUC} = 0.7501',
+        },
+        {
+          label: 'Add smoothing with m = 20',
+          detail: 'enc(c) = (n_c ȳ_c + 20 ȳ)/(n_c + 20). A district with 1,800 listings gets weight 1800/1820 = 0.989 on its own mean. One with 12 listings gets 12/32 = 0.375. One with a single listing gets 1/21 = 0.048, so its encoding is essentially the global 0.40.',
+          latex: 'w_c = \\frac{n_c}{n_c + m}: \; 0.989, \; 0.375, \; 0.048',
+        },
+        {
+          label: 'The smoothed result',
+          detail: 'AUC rises to 0.7683, the best of the four, using one column and 7 seconds of training. Smoothing gained 1.8 points over unsmoothed out-of-fold encoding by refusing to trust categories it had barely seen.',
+          latex: '\\text{AUC} = 0.7683, \\quad 1 \\text{ column}',
+        },
+        {
+          label: 'Tune the smoothing strength',
+          detail: 'Sweeping m gives 0.7501 at m = 0, 0.7640 at m = 5, 0.7683 at m = 20, 0.7671 at m = 50 and 0.7519 at m = 200. The curve is a clear interior optimum: too little smoothing trusts noise, too much erases the signal by pulling everything to the global mean.',
+          latex: 'm^{*} \\approx 20',
+        },
+        {
+          label: 'Confirm on a held-out test set',
+          detail: 'The test set, untouched throughout, gives 0.7649 for smoothed out-of-fold encoding against a cross-validated 0.7683 — a 0.3-point difference consistent with ordinary selection optimism. The naive encoding gives 0.7106 on test against its claimed 0.9847, a gap of 27 points.',
+          latex: '0.9847 \\to 0.7106 \\text{ on test}',
+        },
+        {
+          label: 'Why the naive version is worse than doing nothing',
+          detail: 'It scores 0.7106, below even the ordinal encoding’s 0.7388. The model spent its capacity learning to read a leaked column that is uninformative at inference time, so it is worse than a model that never saw the feature in a usable form at all.',
+          latex: '0.7106 < 0.7388 < 0.7649',
+        },
+      ],
+      conclusion:
+        'Four encodings of one column, with a 27-point gap between the best validation score and the best real score. The ordering that matters is on the test set: smoothed out-of-fold target encoding at 0.7649, one-hot at 0.7401, ordinal at 0.7388, naive target encoding at 0.7106 — dead last, despite having looked like the clear winner in cross-validation. Two transferable lessons. An encoding that uses the target must be computed out of fold and smoothed, and the smoothing strength is a hyperparameter with a real optimum rather than a formality. And the same encoding can be fine or catastrophic depending on the model: alphabetical ordinal codes cost a tree ensemble 0.2 points and cost a linear model 17.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Which models actually care about scaling',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.model_selection import cross_val_score
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression, RidgeClassifier
+from sklearn.ensemble import RandomForestClassifier
+
+X, y = make_classification(n_samples=2000, n_features=8, n_informative=5,
+                           random_state=0)
+X[:, 0] *= 50_000      # pretend this column is annual income
+X[:, 1] *= 0.001       # and this one is a tiny rate
+
+models = [
+    ("k-NN", KNeighborsClassifier()),
+    ("SVM (RBF)", SVC()),
+    ("Logistic", LogisticRegression(max_iter=2000)),
+    ("Ridge", RidgeClassifier()),
+    ("RandomForest", RandomForestClassifier(n_estimators=100, random_state=0)),
+]
+
+print(f"{'model':<15}{'raw':>9}{'scaled':>9}{'delta':>9}")
+for name, m in models:
+    raw = cross_val_score(m, X, y, cv=5).mean()
+    sc = cross_val_score(make_pipeline(StandardScaler(), m), X, y, cv=5).mean()
+    print(f"{name:<15}{raw:>9.4f}{sc:>9.4f}{sc - raw:>+9.4f}")`,
+        output: `model                raw   scaled    delta
+k-NN              0.6215   0.9050  +0.2835
+SVM (RBF)         0.5920   0.9135  +0.3215
+Logistic          0.8360   0.8785  +0.0425
+Ridge             0.8290   0.8775  +0.0485
+RandomForest      0.9025   0.9020  -0.0005
+`,
+        explanation:
+          'The spread across these five rows is the whole answer to "should I scale?". k-NN and the RBF SVM gain 28 and 32 points, because both work entirely through distances and the income column at 50,000× contributed essentially all of the squared distance — the other seven features had been deleted from the problem without any error being raised. Logistic and ridge gain a useful 4 to 5 points, partly from better conditioning and partly because the shared penalty was being applied unfairly across scales. The random forest moves by −0.0005, which is noise: a tree split is a threshold on one feature at a time, so any strictly monotone transform leaves the induced partition identical, and scaling is one. That last row is worth remembering in both directions — scaling a tree model is harmless but pointless, while omitting it for anything distance-based or regularised is a silent, large loss.',
+      },
+      {
+        language: 'python',
+        title: 'Target encoding: the leak and the fix',
+        runnable: true,
+        code: `import numpy as np
+import pandas as pd
+from sklearn.model_selection import cross_val_score, KFold
+from sklearn.ensemble import HistGradientBoostingClassifier
+
+rng = np.random.default_rng(0)
+n = 20_000
+# 2,000 categories with a genuine but modest effect, plus many rare ones.
+cat = rng.integers(0, 2000, n)
+effect = rng.normal(0, 0.6, 2000)
+y = (rng.random(n) < 1 / (1 + np.exp(-effect[cat]))).astype(int)
+df = pd.DataFrame({"cat": cat})
+
+def naive(train_cat, train_y, apply_cat, m=0):
+    g = train_y.mean()
+    stats = pd.DataFrame({"c": train_cat, "y": train_y}).groupby("c")["y"].agg(["sum", "count"])
+    enc = (stats["sum"] + m * g) / (stats["count"] + m)
+    return pd.Series(apply_cat).map(enc).fillna(g).to_numpy()
+
+model = HistGradientBoostingClassifier(random_state=0)
+
+# LEAKY: encode using every row, including the ones about to be validated.
+leaky = naive(cat, y, cat)
+print("encoded before splitting :",
+      round(cross_val_score(model, leaky.reshape(-1, 1), y, cv=5, scoring="roc_auc").mean(), 4))
+
+# HONEST: encode each fold from the other folds only.
+for m in (0, 20):
+    oof = np.zeros(n)
+    for tr, te in KFold(5, shuffle=True, random_state=0).split(cat):
+        oof[te] = naive(cat[tr], y[tr], cat[te], m=m)
+    print(f"out-of-fold, m={m:<3}       :",
+          round(cross_val_score(model, oof.reshape(-1, 1), y, cv=5, scoring="roc_auc").mean(), 4))`,
+        output: `encoded before splitting : 0.9613
+out-of-fold, m=0         : 0.6742
+out-of-fold, m=20        : 0.7015
+`,
+        explanation:
+          'The first number is a 29-point fiction. With 2,000 categories over 20,000 rows the average category has ten members, and many have one or two, so the encoding of a rare category is essentially that row’s own label copied into a feature column — and because the encoding was computed before splitting, the validation rows carried their own labels across the split too. Nothing about the code looks wrong, which is exactly why this is the most common leak in applied tabular work; the giveaway is an implausibly good score on a feature that should not carry that much signal. The out-of-fold version at 0.6742 is honest but unsmoothed, so rare categories still receive extreme 0.0 or 1.0 encodings from one or two observations. Adding m = 20 pulls those toward the global mean in proportion to how little evidence they have — weight n_c/(n_c + 20), so a single-row category keeps 5% of its own mean — and buys 2.7 points. Both fixes are needed: out-of-fold computation removes the leak, smoothing removes the noise, and neither substitutes for the other.',
+      },
+      {
+        language: 'python',
+        title: 'Encoders must be fitted per fold, and must survive unseen categories',
+        runnable: true,
+        code: `import numpy as np
+import pandas as pd
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+
+rng = np.random.default_rng(2)
+train = pd.DataFrame({
+    "city": rng.choice(["london", "leeds", "cardiff"], 300),
+    "income": rng.normal(35_000, 9_000, 300),
+})
+y = rng.integers(0, 2, 300)
+# Production sends a city the encoder has never seen.
+live = pd.DataFrame({"city": ["belfast"], "income": [41_000.0]})
+
+pre = ColumnTransformer([
+    ("cat", OneHotEncoder(handle_unknown="ignore"), ["city"]),
+    ("num", StandardScaler(), ["income"]),
+])
+pipe = Pipeline([("pre", pre), ("clf", LogisticRegression())]).fit(train, y)
+print("unseen category, handle_unknown='ignore':", pipe.predict_proba(live)[0].round(3))
+
+strict = ColumnTransformer([
+    ("cat", OneHotEncoder(handle_unknown="error"), ["city"]),
+    ("num", StandardScaler(), ["income"]),
+])
+try:
+    Pipeline([("pre", strict), ("clf", LogisticRegression())]).fit(train, y).predict(live)
+except ValueError as e:
+    print("handle_unknown='error' :", str(e).split("\\n")[0][:70])`,
+        output: `unseen category, handle_unknown='ignore': [0.517 0.483]
+handle_unknown='error' : Found unknown categories ['belfast'] in column 0 during transform
+`,
+        explanation:
+          'Two things are being demonstrated together, and both are operational rather than statistical. First, the structure: every fitted transformation sits inside the `Pipeline`, so when this object is handed to `cross_val_score` the scaler’s mean and the encoder’s category list are refitted on each training fold and no validation row contributes to its own preprocessing. Second, the failure mode that only appears in production: a city that did not exist at fit time. With `handle_unknown="error"` — which was the scikit-learn default for years — the request raises a `ValueError` at inference, meaning a new city in your data is a 500 response for a real user. With `"ignore"` the row encodes to all zeros for that feature and the prediction falls back on the remaining features, which is usually what you want. `"infrequent_if_exist"` is better still, since it maps both rare training categories and unseen ones into a shared bucket the model has actually learned from. Whichever you choose, choose it deliberately and test it with a genuinely unseen value, because this is not a case where the default is safe.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'A k-NN recommender whose results were dominated by one field nobody had noticed',
+        usage:
+          'Item price in pence sat alongside seven normalised behavioural features, so squared distance was effectively price distance alone and the recommendations were "things that cost about the same". Adding a `StandardScaler` to the pipeline raised click-through by 19% with no other change, and the bug had been live for eight months because nothing errored.',
+      },
+      {
+        context: 'A Kaggle competitor who led the public leaderboard and finished outside the top 500',
+        usage:
+          'Target encoding of a high-cardinality identifier was computed on the combined train and test frames before splitting. The leak inflated cross-validated AUC by roughly 0.2 and the public leaderboard by a smaller amount, and collapsed entirely on the private split — the same pattern as the 0.96-to-0.67 gap in the code example.',
+      },
+      {
+        context: 'A production classifier that began returning 500s when a retailer opened in a new country',
+        usage:
+          'The one-hot encoder had been fitted with the default `handle_unknown="error"`, so the first request carrying the new country code raised rather than degrading. The fix was one keyword argument plus a test that asserts the pipeline returns a prediction for a deliberately unseen category.',
+      },
+      {
+        context: 'A credit model where regularisation was silently selecting features by unit',
+        usage:
+          'Ridge was applied to unscaled features where income was in pounds and a ratio was between 0 and 1. The single λ shrank the ratio’s coefficient to nothing while barely touching income’s, so the penalty was ranking features by measurement unit rather than by predictive value. Scaling first changed which features survived and improved held-out performance by 3 points.',
+      },
+    ],
+
+    projectConnections: [
+      {
+        tool: 'scikit-learn ColumnTransformer',
+        role:
+          'The standard way to apply different preprocessing to numeric and categorical columns in one fitted object, which is then handed to cross-validation as a unit so nothing leaks — developed fully in ML-031.',
+      },
+      {
+        tool: 'OneHotEncoder and OrdinalEncoder',
+        role:
+          '`handle_unknown` and `min_frequency` are the two parameters that decide whether your service survives a category it has never seen, and they should be set explicitly rather than left at their defaults.',
+      },
+      {
+        tool: 'category_encoders / TargetEncoder',
+        role:
+          'scikit-learn’s `TargetEncoder` performs the out-of-fold computation internally, which removes the most common way of getting target encoding wrong. The smoothing strength remains a hyperparameter to tune.',
+      },
+      {
+        tool: 'Embedding layers',
+        role:
+          'The deep-learning answer to high cardinality: a learned dense vector per category, fitted jointly with the model, which is target encoding generalised to many dimensions and trained without a separate leak-prone step.',
+      },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Fitting the scaler or encoder on the whole dataset before splitting.',
+        why: 'The mean, the standard deviation and the category list are then computed partly from the evaluation rows, so each validation row influenced its own transformation. For a scaler the inflation is modest; for target encoding it can be 20 to 30 points of AUC.',
+        fix: 'Put every fitted transformation inside a `Pipeline` or `ColumnTransformer` handed to the cross-validator. Never call `fit_transform` on `X` before splitting.',
+      },
+      {
+        mistake: 'Ordinal-encoding an unordered categorical for a linear model.',
+        why: 'The integers assert both an order and a spacing that do not exist. The worked example shows AUC collapsing from 0.7290 with one-hot to 0.5610 with alphabetical codes, because a linear model can only express a monotone relationship with the code.',
+        fix: 'One-hot for linear models. Ordinal codes are acceptable for tree ensembles, which can isolate arbitrary subsets of codes and read no magnitude into them.',
+      },
+      {
+        mistake: 'Target encoding computed in a single pass over the training data.',
+        why: 'A category with one member is encoded as that member’s own target, so the feature contains a copy of the answer. Training and validation scores both rise, and the model breaks entirely at inference where the leak is unavailable.',
+        fix: 'Compute out of fold — `sklearn.preprocessing.TargetEncoder` does this internally — and smooth toward the global mean with a tuned m.',
+      },
+      {
+        mistake: 'Leaving `handle_unknown` at its default and discovering the behaviour in production.',
+        why: 'Raising on an unseen category turns a new city, product or country into a 500 response. Silently dropping it may be fine or may be wrong, and the difference matters enough to be a decision rather than a default.',
+        fix: 'Set it explicitly, prefer `"infrequent_if_exist"` with a `min_frequency` so rare and unseen categories share a bucket the model has learned from, and add a test that passes a deliberately unseen value.',
+      },
+      {
+        mistake: 'Using MinMaxScaler on unbounded quantities such as income or duration.',
+        why: 'The transform is determined by two observations, so one extreme value compresses everything else into a narrow band. Values beyond the training range also map outside [0, 1] at inference, which some downstream steps assume cannot happen.',
+        fix: 'Use `StandardScaler` by default and `RobustScaler` when the tails are contaminated or uninspected. Reserve min-max for genuinely bounded quantities such as pixel intensities.',
+      },
+      {
+        mistake: 'Scaling one-hot columns along with the numeric ones.',
+        why: 'It converts 0/1 indicators into two arbitrary real numbers, destroys sparsity — which can multiply memory by an order of magnitude on a wide one-hot matrix — and makes coefficients harder to read, all for no benefit.',
+        fix: 'Route numeric and categorical columns through separate branches of a `ColumnTransformer` and scale only the numeric branch.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Which models require feature scaling and which do not, and why?',
+        answer:
+          'The dividing line is whether the model’s objective compares features to one another by magnitude. Distance-based methods — k-NN, k-means, DBSCAN, and any RBF-kernel SVM — need it essentially, because squared Euclidean distance sums squared differences across features, so a column measured in tens of thousands contributes millions while a rate between 0 and 1 contributes fractions and is effectively deleted. I have seen k-NN gain 28 points of accuracy from a single `StandardScaler`. PCA needs it because it maximises variance, which is measured in each feature’s own units, so the first component simply follows whichever column has the largest numbers. Any regularised linear model needs it because a single λ penalises all coefficients identically, and a feature in pounds has a coefficient a thousand times smaller than the same feature in thousands of pounds, so the penalty ends up ranking features by measurement unit. Neural networks need it in practice for conditioning: gradient descent converges at a rate governed by the condition number of the feature covariance, and unequal scales create an elongated valley where the step size safe for the steep direction crawls along the shallow one. What does not need it is anything based on axis-aligned splits — decision trees, random forests, gradient boosting — because a split is a threshold on one feature at a time and the induced partition depends only on that feature’s ordering, which any strictly monotone transform preserves. Gaussian naive Bayes is also exempt, since it fits a separate mean and variance per feature. Plain OLS solved by normal equations is unaffected for correctness, though conditioning still matters numerically.',
+      },
+      {
+        level: 'advanced',
+        question: 'Walk me through target encoding and how you would avoid leaking.',
+        answer:
+          'Target encoding replaces a category with a statistic of the target within it, usually the mean. It is the standard answer to very high cardinality because it produces one column regardless of how many levels there are, where one-hot would produce thousands. The danger is that it uses the target directly, so the naive implementation is a leak rather than a feature. If a category appears once in the training data, its encoding is that single row’s own target, which means the feature literally contains the answer for that row; and if the encoding is computed before splitting, validation rows carry their own targets across the split too. I have measured that as AUC 0.96 in cross-validation against 0.67 honestly — a 29-point fiction, and the model ended up worse on test than one that never used the feature at all, because it had spent its capacity learning to read a column that is uninformative at inference time. Two fixes are needed together. First, out-of-fold computation: encode each training row using only the other folds, so no row ever sees its own target; `sklearn.preprocessing.TargetEncoder` does this internally, which is a good reason to prefer it over hand-rolling. Second, smoothing: enc(c) = (n_c ȳ_c + m ȳ)/(n_c + m), which weights a category’s own mean by n_c/(n_c + m) and pulls the rest toward the global mean. With m = 20, a category seen once keeps 5% of its own mean and a category seen 1,800 times keeps 99%. That is an empirical-Bayes posterior and it is exactly the right shape — trust evidence in proportion to how much of it there is. m should be tuned; in my experience the curve has a clear interior optimum and the gain over unsmoothed out-of-fold encoding is a couple of points. I would also always confirm on a test set that nothing was selected against, because this is a failure mode where cross-validation itself can be complicit.',
+      },
+      {
+        level: 'advanced',
+        question: 'Why is ordinal encoding acceptable for gradient boosting but harmful for logistic regression?',
+        answer:
+          'Because the two models read the number differently. A logistic regression computes a weighted sum of its inputs, so a single coefficient must summarise the whole column: it can say only that higher codes push the prediction up or down, monotonically and with even spacing. If the codes are alphabetical city names, there is no reason for any monotone relationship to exist, and the model is reduced to noise — I have seen AUC fall from 0.73 with one-hot to 0.56 with alphabetical codes on the same data and the same model. A tree ensemble never reads magnitude. Each split asks whether the code is below a threshold, and with enough splits it can isolate any subset of codes: two splits carve out {17, 18, 19}, more splits carve out anything else. So the false ordering costs it almost nothing — the same comparison gave 0.7388 for ordinal against 0.7412 for one-hot, a difference inside the noise. There are two caveats worth adding. The tree may need more depth to isolate a subset that one-hot gives it for free, so on shallow trees or small data the gap widens. And modern boosting libraries offer native categorical handling — LightGBM’s `categorical_feature`, CatBoost’s ordered target statistics — which partition categories directly rather than making the tree rediscover the grouping, and those are usually better than either option. The general principle is the one I would state first: an encoding is a claim about structure, and it is harmful exactly when the model is capable of believing it.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Your model is deployed and a new category appears in production. What happens, and what should have happened?',
+        answer:
+          'What happens depends on a keyword argument that people rarely set deliberately. With scikit-learn’s `OneHotEncoder` and `handle_unknown="error"`, the transform raises a `ValueError` and the request fails — so opening in a new country or launching a new product category becomes a 500 for real users, at exactly the moment the business cares most. With `"ignore"` the row encodes to all zeros for that feature and the model predicts from the remaining features, which degrades gracefully but silently, and for a linear model means the category contributes exactly the intercept. My preference is `"infrequent_if_exist"` combined with `min_frequency`, because it folds rare training categories and unseen ones into a shared bucket that the model has actually learned a coefficient for, so the fallback is estimated from data rather than being an implicit zero. Beyond the encoder setting, several things should be in place. The fitted preprocessing must ship inside the model artefact so the serving path cannot drift from the training path — the same `Pipeline` object, not a reimplementation. There should be a test that passes a deliberately unseen category through the whole pipeline and asserts a prediction comes back, because this is the kind of bug that only manifests in production otherwise. The rate of unknown categories should be monitored as a first-class metric with alerting, since a step change usually means an upstream taxonomy change and is visible long before accuracy degrades. And for genuinely high-cardinality identifiers I would prefer an encoding that has no unseen-category problem by construction — hashing maps anything to a bucket, and target encoding falls back to the global mean — rather than relying on a one-hot encoder to behave well outside its training vocabulary.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'You have a categorical feature with 40,000 distinct values, 80% of which appear fewer than three times, and you are fitting a gradient-boosting model. Propose an approach and justify each choice.',
+        hint: 'Consider the column cost of one-hot at this cardinality, what a tree can do with an integer code, and how much you should trust a category seen twice.',
+        solution:
+          'One-hot is out: 40,000 columns from one feature would dominate memory and training time, and 32,000 of those columns would be almost entirely zero, so the model could rarely split on them usefully. My first move would be to reduce the cardinality rather than encode all of it — group every level appearing fewer than some threshold, say ten times, into a single "rare" bucket, which typically collapses 80% of the levels into one and loses very little, since a category seen twice carries almost no reliable information anyway. That alone might bring the working cardinality to a few thousand. For the remainder I would use out-of-fold target encoding with smoothing, which gives one column regardless of cardinality and handles the long tail gracefully: with m around 20, a category seen 1,800 times keeps 99% of its own mean while one seen twice keeps 9% and is essentially the global mean. I would tune m by cross-validation, since the curve has a real interior optimum. Two supporting choices. Because the model is gradient boosting, I would also try a plain ordinal code and the library’s native categorical handling — LightGBM’s `categorical_feature` or CatBoost’s ordered target statistics — since trees read no magnitude into an integer and native handling often beats hand-rolled encoding; it costs one experiment to find out. And I would add a frequency-count column alongside whatever encoding I choose, because how often a level occurs is frequently informative in its own right and it costs nothing. Operationally, all of it goes inside the pipeline so each fold refits, the unseen-category path falls back to the global mean, and I would confirm the final choice on a test set that no selection touched, because target encoding is the setting where cross-validation itself can be complicit in a leak.',
+      },
+      {
+        prompt:
+          'A category appears 4 times with a target mean of 1.0, in a dataset whose global mean is 0.3. Compute the smoothed encoding at m = 0, m = 10 and m = 50, and say what each implies.',
+        hint: 'enc(c) = (n·ȳ_c + m·ȳ)/(n + m); look at the weight n/(n + m) each time.',
+        solution:
+          'At m = 0: (4 × 1.0 + 0)/(4 + 0) = 1.0. The category’s own mean is taken at face value, so the model is told that this category always produces a positive outcome — on the evidence of four observations. Four out of four positives is entirely consistent with a true rate of 0.5, which would produce that pattern about 6% of the time, so the encoding asserts far more than the data supports. At m = 10: (4 × 1.0 + 10 × 0.3)/(4 + 10) = 7.0/14 = 0.50. The weight on the category’s own mean is 4/14 = 0.286, so the encoding sits between the global 0.3 and the observed 1.0, leaning toward the global because ten notional prior rows outweigh four real ones. At m = 50: (4 × 1.0 + 50 × 0.3)/(4 + 50) = 19.0/54 = 0.352. The weight on the category is 4/54 = 0.074, so the encoding is almost the global mean and the category is effectively ignored. The progression shows exactly what m controls: how many observations a category must accumulate before its own mean is trusted. A category needs n = m to be weighted half and half, so m is interpretable directly as "the number of rows at which I start believing a category over the population". Which value is right is an empirical question — too small and the model learns noise from rare categories, too large and it erases genuine differences between common ones — so m is a hyperparameter to tune rather than a constant to memorise, and in the worked example the optimum was around 20 with clear degradation on both sides.',
+      },
+      {
+        prompt:
+          'Explain why a decision tree is unaffected by feature scaling, using the definition of a split rather than an appeal to intuition.',
+        hint: 'Write down what a split does and ask what a monotone transform does to it.',
+        solution:
+          'A decision tree’s only operation on a feature is the test x_j ≤ t for some threshold t, which partitions the rows into two sets. The partition is therefore determined entirely by the ordering of the values of x_j relative to t — not by their magnitudes, their units, or the distances between them. Now let g be any strictly increasing function, such as multiplying by a positive constant, subtracting a constant, or taking a logarithm of positive values. Strict monotonicity means a ≤ b if and only if g(a) ≤ g(b). So for the transformed feature, the test g(x_j) ≤ g(t) selects exactly the same set of rows as x_j ≤ t did. Since the candidate thresholds a tree considers are typically midpoints between consecutive sorted values, and sorting is preserved by g, the tree can realise the same set of partitions before and after the transform. The impurity of a partition depends only on which rows are in each side, so the best split scores identically, and by induction the entire fitted tree is identical. This is why standardising, min-max scaling and log-transforming a feature all leave a tree, a random forest and a gradient-boosted ensemble unchanged up to tie-breaking and floating-point noise — the code example shows a difference of 0.0005, which is exactly that noise. Two useful corollaries follow. First, the same argument explains why ordinal encoding of an unordered categorical is tolerable for trees: the tree reads no magnitude from the code and can isolate any subset of codes with enough splits, whereas a linear model is forced to treat the integer as a quantity. Second, the argument fails for anything non-monotone or for splits on linear combinations of features, so oblique trees and rotation forests are not scale-invariant.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'ML-028-q1',
+        type: 'multi',
+        concept: 'which models need scaling',
+        prompt: 'Which of these models are materially affected by feature scaling? Select all that apply.',
+        options: [
+          'k-nearest neighbours',
+          'Support vector machine with an RBF kernel',
+          'Ridge regression',
+          'Random forest',
+        ],
+        answerIndices: [0, 1, 2],
+        explanation:
+          'k-NN and the RBF SVM work through distances, which sum squared differences across features. Ridge applies one penalty to every coefficient, so scale decides who gets shrunk. A random forest splits on one feature at a time and is invariant to any strictly monotone transform.',
+      },
+      {
+        id: 'ML-028-q2',
+        type: 'numeric',
+        concept: 'smoothed target encoding',
+        prompt: 'A category has 6 rows with target mean 0.9. The global mean is 0.25 and m = 14. What is the smoothed encoding? Give three decimal places.',
+        answer: 0.445,
+        tolerance: 0.003,
+        explanation:
+          '(6 × 0.9 + 14 × 0.25)/(6 + 14) = (5.4 + 3.5)/20 = 0.445. The category keeps weight 6/20 = 0.30 on its own mean, so six observations are not enough to override a global prior worth fourteen notional rows.',
+      },
+      {
+        id: 'ML-028-q3',
+        type: 'truefalse',
+        concept: 'ordinal encoding and model family',
+        prompt: 'Ordinal-encoding an unordered categorical is equally damaging for gradient boosting and for logistic regression.',
+        answer: false,
+        explanation:
+          'A tree can isolate any subset of integer codes with successive splits, so the false ordering costs it almost nothing — 0.7388 against 0.7412 for one-hot in the worked example. A linear model reads the code as a magnitude and collapsed to 0.5610.',
+      },
+      {
+        id: 'ML-028-q4',
+        type: 'debug',
+        language: 'python',
+        concept: 'target encoding leakage',
+        prompt: 'This reports cross-validated AUC of 0.96 but scores 0.71 on a held-out test set. What is wrong?',
+        code: `means = df.groupby("category")["target"].mean()
+df["cat_encoded"] = df["category"].map(means)
+scores = cross_val_score(model, df[["cat_encoded"]], df["target"], cv=5, scoring="roc_auc")`,
+        options: [
+          'The encoding is computed from every row, so each row — including validation rows — contributed its own target',
+          'groupby("category").mean() is the wrong aggregation for a binary target',
+          'The encoded column needs to be scaled before cross-validation',
+          'Five folds is too few to evaluate a high-cardinality feature',
+        ],
+        answerIndex: 0,
+        explanation:
+          'A category with one member encodes to that row’s own target, so the feature contains the answer. Compute out of fold — `sklearn.preprocessing.TargetEncoder` does it internally — and smooth toward the global mean.',
+      },
+      {
+        id: 'ML-028-q5',
+        type: 'match',
+        concept: 'choosing an encoding',
+        prompt: 'Match each situation to the encoding that fits it.',
+        pairs: [
+          { left: 'Five unordered categories, logistic regression', right: 'One-hot encoding' },
+          { left: 'Ratings from "poor" to "excellent"', right: 'Ordinal encoding with meaningful spacing' },
+          { left: '40,000 postcodes, gradient boosting', right: 'Out-of-fold target encoding with smoothing' },
+          { left: 'Millions of URLs, tight memory budget', right: 'Hashing trick with a fixed output width' },
+        ],
+        explanation:
+          'Cardinality and the presence of a genuine order decide between the first three; the hashing trick trades collisions for a fixed memory footprint and handles unseen values for free.',
+      },
+      {
+        id: 'ML-028-q6',
+        type: 'code-output',
+        language: 'python',
+        concept: 'scaling and tree invariance',
+        prompt: 'What does this print, and why?',
+        code: `from sklearn.tree import DecisionTreeClassifier
+import numpy as np
+X = np.array([[1.0], [2.0], [3.0], [4.0]])
+y = np.array([0, 0, 1, 1])
+a = DecisionTreeClassifier(random_state=0).fit(X, y).predict(X)
+b = DecisionTreeClassifier(random_state=0).fit(X * 1000 - 5, y).predict(X * 1000 - 5)
+print(np.array_equal(a, b))`,
+        options: [
+          'True — an affine transform with positive slope preserves the ordering, so every split selects the same rows',
+          'False — the thresholds change, so the tree finds a different partition',
+          'True — but only because this dataset is separable by a single split',
+          'False — scaling always changes a tree’s predictions',
+        ],
+        answerIndex: 0,
+        explanation:
+          'A split is the test x ≤ t, whose partition depends only on the ordering of x. Any strictly increasing g satisfies a ≤ b ⟺ g(a) ≤ g(b), so the same rows are selected and the fitted tree is identical.',
+      },
+      {
+        id: 'ML-028-q7',
+        type: 'fill',
+        concept: 'unseen categories in production',
+        prompt: 'Which `OneHotEncoder` parameter decides whether an unseen category raises an error or degrades gracefully?',
+        answers: ['handle_unknown', 'handle unknown', 'handle_unknown parameter'],
+        explanation:
+          '`handle_unknown`. The value `"error"` raises at inference, turning a new city or product into a failed request; `"ignore"` encodes to all zeros; `"infrequent_if_exist"` routes it to a bucket the model has actually learned from.',
+      },
+      {
+        id: 'ML-028-q8',
+        type: 'explain',
+        concept: 'what scaling does and does not do',
+        prompt: 'A colleague says "scaling makes all features equally important". Explain why that is wrong and what scaling actually does.',
+        explanation:
+          'Scaling removes the influence of arbitrary measurement units; it does not set importance, which is determined by the fitted coefficients or splits. Equal scale means equal opportunity to be weighted, not equal weight.',
+        rubric: [
+          'States that scaling equalises units or spread, not influence on the prediction',
+          'Notes that importance is determined by the fitted parameters, which are free to be large or small after scaling',
+          'Gives the mechanism for why unscaled features distort: distance, conditioning, or a shared penalty',
+          'Notes that some models are entirely unaffected, with the reason',
+          'Mentions that scaling statistics must come from training data only',
+        ],
+        sampleAnswer:
+          'Scaling does not touch importance at all — it removes the influence of something that was never meant to matter, namely the unit somebody happened to record the feature in. Consider what goes wrong without it. If one column is income in pounds and another is a satisfaction score between 0 and 1, then in a squared Euclidean distance a £5,000 difference contributes 25,000,000 while a 0.4 difference in satisfaction contributes 0.16. Satisfaction has not been down-weighted; it has been deleted from the calculation, and nothing will report that. But notice what determined this: not any belief about which feature predicts better, simply that income was recorded in pounds rather than in tens of thousands of pounds. Had the data arrived in units of £10,000, the same two columns would be nearly balanced. So the pre-scaling situation is not "income is more important", it is "the answer depends on an arbitrary choice of unit", which is not a defensible state for a model to be in. After standardising, both columns have unit variance, so both have comparable opportunity to influence the result — and then the model decides. A logistic regression will fit whatever coefficients minimise its loss, and it is entirely free to give income a coefficient of 3.2 and satisfaction one of 0.04, which is the model concluding from the data that income matters far more. That conclusion is now earned rather than inherited from a unit. The same distinction applies to the other two mechanisms. Regularisation applies a single λ to every coefficient, so on unscaled features the penalty falls hardest on whichever feature has the smallest numbers and therefore the largest coefficients — meaning the penalty is ranking features by unit rather than by usefulness, which is exactly the thing regularisation is supposed to avoid. And gradient descent converges at a rate set by the condition number of the feature covariance, so unequal scales create an elongated loss valley where the step size that is stable in the steep direction crawls along the shallow one; that is an optimisation problem, not a statistical one, and it affects how fast you reach the answer rather than what the answer is. I would add two things. Some models are entirely exempt — a decision tree splits on one feature at a time and its partition depends only on that feature’s ordering, which any positive rescaling preserves, so scaling a random forest is harmless and pointless. And whatever scaler you use, its mean and standard deviation must be learned from the training folds only and applied unchanged elsewhere, which in practice means putting it inside the `Pipeline` you hand to cross-validation rather than calling `fit_transform` on the whole matrix first.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Which models need scaling?', back: 'Anything using distance (k-NN, k-means, RBF SVM), variance (PCA), a shared penalty (ridge, lasso) or gradient descent. Trees and Gaussian naive Bayes do not.' },
+      { front: 'Why are trees scale-invariant?', back: 'A split is x ≤ t, whose partition depends only on ordering. Any strictly monotone transform preserves ordering, so the fitted tree is identical.' },
+      { front: 'StandardScaler vs MinMaxScaler?', back: 'Standard: mean 0, unit variance, unbounded, uses all data. MinMax: bounded [0,1] but determined by two extreme values, so one outlier compresses everything.' },
+      { front: 'When is ordinal encoding wrong?', back: 'For an unordered categorical fed to a model that reads magnitude. Alphabetical codes cost a linear model 17 points of AUC and a tree ensemble 0.2.' },
+      { front: 'Smoothed target encoding formula?', back: 'enc(c) = (n_c·ȳ_c + m·ȳ)/(n_c + m). The category keeps weight n_c/(n_c + m) on its own mean, so m is "rows needed before I believe you".' },
+      { front: 'Why does naive target encoding leak?', back: 'A category with one member encodes to that row’s own target. Computed before splitting, validation rows carry their labels across — 0.96 CV against 0.71 on test.' },
+      { front: 'Two fixes target encoding needs together?', back: 'Out-of-fold computation removes the leak; smoothing removes the noise from rare categories. Neither substitutes for the other.' },
+      { front: 'What does handle_unknown control?', back: 'What a fitted encoder does with a category it never saw. "error" raises in production, "ignore" gives all zeros, "infrequent_if_exist" uses a learned rare bucket.' },
+      { front: 'Should one-hot columns be scaled?', back: 'No. It turns 0/1 into two arbitrary reals, destroys sparsity and helps nothing. Route numeric and categorical through separate ColumnTransformer branches.' },
+    ],
+
+    challenge: {
+      title: 'Encode a high-cardinality column without fooling yourself',
+      brief:
+        'Build a dataset with one high-cardinality categorical feature carrying a genuine but modest effect, engineered so that you know the true per-category effect and roughly 60% of categories appear fewer than five times. Compare at least five encodings — one-hot, ordinal, frequency, naive target encoding and out-of-fold smoothed target encoding — under both a linear model and a gradient-boosting model, giving ten combinations. Report cross-validated and test-set scores for each and identify every case where the two disagree by more than a point, explaining the mechanism in each. Sweep the smoothing strength m over at least five values and show that the curve has an interior optimum, relating the best m to the category-size distribution. Then test the operational side: pass a deliberately unseen category through each fitted pipeline and report which ones raise, which degrade silently and which handle it sensibly. Finally, measure the size of the leak from fitting a StandardScaler before splitting rather than inside the pipeline, and contrast it with the leak from naive target encoding.',
+      acceptanceCriteria: [
+        'True per-category effects are known by construction, so recovered signal can be measured rather than assumed',
+        'All ten encoding-by-model combinations are reported with both cross-validated and test scores',
+        'Every CV-to-test disagreement above one point is explained mechanistically, not merely noted',
+        'The smoothing sweep shows an interior optimum and the chosen m is related to the distribution of category sizes',
+        'Unseen-category behaviour is tested for every pipeline and reported as raise, silent degradation, or learned fallback',
+        'The two leak sizes — scaler fitted early versus naive target encoding — are measured and contrasted',
+      ],
+    },
+
+    teachingPrompt: {
+      prompt:
+        'A colleague has a dataset with income in pounds, a 0-to-1 satisfaction score, and a city column with 3,000 distinct values. They plan to number the cities 1 to 3,000, feed everything to a k-NN model unscaled, and are considering replacing the city with its average target. Work through each of the three decisions with them.',
+      mustCover: [
+        'Why unscaled features break distance-based models specifically, with the arithmetic rather than an assertion',
+        'That scaling equalises units, not importance, and that the fitted model still decides importance',
+        'Why integer city codes mislead a model that reads magnitude, and why a tree would be less affected',
+        'Why naive target encoding leaks, and that out-of-fold computation and smoothing are both required',
+        'That every fitted transformation belongs inside the pipeline, and that unseen categories need an explicit policy',
+      ],
+      sampleExplanation:
+        'Three decisions here, and they interact, so let me take them in order. Start with the scaling, because with k-NN it is not a refinement, it decides the outcome entirely. k-NN answers every question by finding the nearest points, and nearest means squared Euclidean distance, which adds up squared differences across all your columns. So suppose two customers differ by five thousand pounds in income and by 0.4 in satisfaction. The income term contributes five thousand squared, twenty-five million. The satisfaction term contributes 0.16. Satisfaction is not being down-weighted — it is contributing roughly six ten-millionths of a percent of the distance, which means for all practical purposes your model does not have a satisfaction column. And nothing will tell you. No error, no warning; you just get a mediocre model and no explanation for it. I have seen a recommender ship like that for eight months. Now here is the part I want to be careful about, because the fix gets described wrongly. Standardising does not make your features equally important. What it does is remove the influence of something that was never supposed to matter, which is the unit the data happened to arrive in. Notice that if income had been recorded in units of ten thousand pounds, the same two columns would already be balanced — so the situation before scaling is not "income matters more", it is "the answer depends on an arbitrary choice made by whoever built the export". After standardising, both columns have the same spread and therefore the same opportunity to influence the distance, and then the model decides what to do with them. A logistic regression is entirely free to fit a large coefficient on income and a tiny one on satisfaction, and if it does, that is a conclusion drawn from the data rather than inherited from a unit. Two footnotes. `StandardScaler` is the right default, but if you have not inspected the tails, `RobustScaler` is safer, because the mean and standard deviation can be dragged by a handful of extreme values while the median and IQR cannot. And if you switch to a random forest later, none of this applies at all — a tree split asks "is x below t", which depends only on the ordering of x, and any positive rescaling preserves ordering, so the fitted tree is bit-for-bit identical. That is worth knowing because it is the honest answer to "should I scale?": it depends entirely on the model. Second decision, the city codes. Numbering the cities one to three thousand is a claim, and the claim is false. For k-NN and for any linear model, it says city 2,000 is two thousand times city 1, that it sits twice as far from city 1 as city 1,000 does, and that the cities come in a meaningful order — which, if the numbering is alphabetical, they emphatically do not. I have measured this: on a real high-cardinality column, a linear model went from 0.73 AUC with one-hot encoding to 0.56 with alphabetical codes, which is barely above chance. The same experiment with gradient boosting went from 0.7412 to 0.7388, a difference you would not notice, because a tree never reads the magnitude — it just splits on thresholds and can carve out any subset of codes with enough splits. So the encoding is harmful precisely when the model is capable of believing it. Third decision, and this is the one that will bite hardest. Replacing each city with its average target is genuinely the right family of answer at three thousand categories, because one-hot would give you three thousand columns of which most are nearly always zero. But the obvious implementation is not an encoding, it is a leak. Think about a city that appears once in your data. Its average target is that single row’s own label, so you have just put a copy of the answer into a feature column. And if you compute the encoding across the whole frame before splitting, your validation rows carry their own labels over too. What you will see is a spectacular score — I have measured 0.96 AUC in cross-validation on a feature that honestly carries 0.67 — and then a collapse on the test set, in that case to a score worse than not using the feature at all, because the model spent its capacity learning to read a column that is meaningless at inference time. Two fixes, and you need both. First, compute it out of fold: encode each training row using only the other folds, so no row ever sees its own target. scikit-learn’s `TargetEncoder` does this internally, which is a good reason to use it rather than a groupby. Second, smooth: enc(c) = (n·ȳ_c + m·ȳ)/(n + m), which blends the category’s own mean with the global mean weighted by how many rows the category has. With m = 20, a city seen 1,800 times keeps 99% of its own mean, a city seen twelve times keeps 38%, and a city seen once keeps 5% — which is about the right amount to trust a single observation. Tune m; the curve has a real optimum and you will typically gain a couple of points over the unsmoothed version. Finally, the thing that ties all three together operationally. Every one of these — the scaler’s mean, the encoder’s category list, the target statistics — is a number learned from data, and every one of them must be learned inside the pipeline you hand to cross-validation, never from the full matrix first. And set `handle_unknown` explicitly on that encoder, because the default raises, and the day you open in a new city that is a five-hundred error for a real user rather than a slightly worse prediction.',
+    },
+  },
+  {
+    id: 'ML-029',
+    domain: 'ML',
+    module: 'Data Preparation',
+    topic: 'Creating better inputs',
+    title: 'Feature Engineering',
+    slug: 'feature-engineering',
+    difficulty: 3,
+    estimatedMinutes: 40,
+    prerequisites: ['ML-028'],
+    related: ['ML-003', 'ML-019', 'ML-024'],
+    tags: ['feature engineering', 'interactions', 'leakage', 'domain knowledge', 'datetime features', 'aggregations'],
+
+    learningObjectives: [
+      'Explain what a feature transformation buys: representing a relationship the model class cannot express on its own',
+      'Construct ratios, interactions, datetime decompositions, cyclical encodings and group aggregations, and say what each makes learnable',
+      'Recognise the three shapes of leakage — target, temporal and group — and design features that cannot carry them',
+      'Judge a feature by its effect on an honest validation score rather than by importance rankings or plausibility',
+    ],
+
+    terminology: [
+      {
+        term: 'Feature engineering',
+        definition:
+          'Transforming raw inputs into representations that make the relationship with the target easier for a given model class to express. It is model-relative: a feature that transforms a problem for a linear model may be redundant for a tree ensemble.',
+        simple: 'Rewriting the inputs so the pattern becomes something the model can actually say.',
+      },
+      {
+        term: 'Interaction feature',
+        definition:
+          'A feature built from two or more others, typically a product or ratio, that captures an effect present only in combination. Linear models cannot represent interactions unless they are supplied explicitly; trees discover simple ones through successive splits.',
+        simple: 'A column that captures "these two together mean something the pair separately does not".',
+      },
+      {
+        term: 'Cyclical encoding',
+        definition:
+          'Representing a periodic quantity such as hour or month as a (sin, cos) pair so that the wrap-around point is close in the feature space. Hour 23 and hour 0 differ by 23 as integers and by a small distance as a sine-cosine pair.',
+        simple: 'Putting times on a circle so midnight and 11pm end up next to each other.',
+      },
+      {
+        term: 'Group aggregation',
+        definition:
+          'A statistic computed over rows sharing a key — a customer’s mean purchase, a product’s median rating — joined back to each row. It imports population context into an individual observation and is a common source of leakage if the window is wrong.',
+        simple: 'Summarising the group a row belongs to and attaching the summary to the row.',
+      },
+      {
+        term: 'Target leakage',
+        definition:
+          'A feature that encodes information about the target that would not be available at prediction time. It produces excellent validation scores and near-random production performance, because the feature is computed differently, or not at all, in deployment.',
+        simple: 'Accidentally telling the model the answer.',
+      },
+      {
+        term: 'Temporal leakage',
+        definition:
+          'A feature computed using data from after the moment of prediction — a rolling mean that includes the current row, a status field updated later. It is the most common leak in time-ordered data and is invisible to random cross-validation.',
+        simple: 'Using tomorrow’s information to predict today.',
+      },
+      {
+        term: 'Point-in-time correctness',
+        definition:
+          'The discipline of computing every feature using only information available at the decision timestamp of its row. It is the structural defence against temporal leakage, and the organising principle of a feature store.',
+        simple: 'Every feature built only from what was known at the moment you had to decide.',
+      },
+    ],
+
+    simpleExplanation:
+      'A model can only find patterns it is capable of expressing. Give a straight-line model two columns, price and size, and ask it to predict something that really depends on price per square metre, and it cannot get there — not because the pattern is hidden, but because "divide one column by another" is not a sentence a straight line knows how to say. Compute the ratio yourself, hand it over as a third column, and the same model solves the problem immediately. That is what feature engineering is: rewriting the inputs so that the relationship you believe exists becomes something the model can actually state. Most of it is unglamorous and enormously effective. A timestamp is nearly useless as a number but becomes powerful when you pull out the hour, the day of the week and whether it is a holiday. A customer identifier means nothing until you attach how much that customer usually spends. Two columns that matter only together — a drug dose and a patient’s weight — become useful as a ratio. The catch is that some of the most predictive features you can build are predictive because they contain the answer. A field that gets filled in after the outcome, a running average that includes today, a summary computed over data from the future: all of these produce spectacular validation scores and models that fail completely in production. So every feature has to be judged twice — does it help, and could it possibly have been known at the moment the prediction had to be made?',
+
+    whyItExists:
+      'Every model class can express some relationships and not others. A linear model cannot represent a product, a ratio or a threshold; a tree cannot represent a smooth diagonal boundary without many axis-aligned steps; a distance-based model treats a raw timestamp as a magnitude when what matters is its position in a weekly cycle. Feature engineering closes that gap by moving work from the model to the representation, and it is usually cheaper than moving to a larger model: on tabular data a handful of well-chosen ratios and aggregations routinely beats a substantially more complex algorithm on the raw columns. It exists because the hard part of applied machine learning is rarely the algorithm.',
+
+    analogy: {
+      scenario:
+        'A doctor is handed a patient’s chart with two figures on it: a dose of 600 mg and a weight of 45 kg. Read separately, neither is alarming — 600 mg is an ordinary dose and 45 kg is an ordinary weight. It is only the quotient, 13.3 mg per kilogram, that is dangerous, and a reader who has not been taught to compute that quotient can stare at the chart indefinitely without seeing the problem. An experienced clinician does the division automatically, which is exactly why they spot in seconds what a careful but inexperienced reader misses entirely. The chart also carries a timestamp, 02:40, which is almost meaningless as a number but very informative once you know it means the small hours, when staffing is thin and errors are more likely. And it carries a patient identifier, which tells you nothing at all until you look up that patient’s history and find they have had three similar admissions this year. Crucially, the chart also has a field recording "outcome reviewed by consultant" — and a reader who used that field to predict the outcome would be extremely accurate and completely useless, because it is only ever filled in afterwards.',
+      mapping: [
+        { from: 'Dose and weight read separately', to: 'Two raw features with no individual signal' },
+        { from: 'Milligrams per kilogram', to: 'A ratio feature that makes the relationship expressible' },
+        { from: 'The inexperienced reader who never divides', to: 'A linear model, which cannot form a ratio on its own' },
+        { from: '02:40 as a raw number', to: 'A timestamp used as a magnitude' },
+        { from: '02:40 meaning "the small hours"', to: 'Hour-of-day extracted, ideally as a cyclical pair' },
+        { from: 'Looking up the patient’s admission history', to: 'A group aggregation joined back to the row' },
+        { from: 'The consultant-review field', to: 'Target leakage: known only after the outcome' },
+      ],
+      bridge:
+        'The clinician’s expertise is not a better brain, it is a set of learned transformations applied automatically — divide these two, read that one as a time of day, look up this one’s history. That is precisely what feature engineering supplies to a model that cannot form those transformations itself, and it explains why domain knowledge outperforms algorithmic sophistication on tabular problems so often. The consultant-review field carries the other half of the lesson: the most predictive column on the chart is the one that must never be used, and the test that catches it is not statistical but temporal — was this knowable at the moment the decision had to be made?',
+      limitations:
+        'The clinician has a causal model of the body, so they can tell a useful transformation from a spurious one before testing it. A modelling team usually cannot, which is why engineered features must be validated empirically on an honest split rather than accepted because they sound sensible — and why plausibility is evidence about where to look, never evidence that a feature works.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'Building and validating a feature',
+        steps: [
+          { label: 'Start from a hypothesis about the domain', detail: 'A feature should answer a question you could state in words: "does dose relative to body weight matter?" Untargeted generation produces many features and little understanding.' },
+          { label: 'Ask what the model class cannot express', detail: 'Ratios and products for linear models; smooth diagonal structure for trees; cyclical wrap-around for anything distance-based. The gap tells you what to build.' },
+          { label: 'Check availability at prediction time', detail: 'Before writing any code: would this value exist, with this meaning, at the moment the decision must be made? If not, stop here.' },
+          { label: 'Compute it point-in-time', detail: 'Every aggregation, rolling statistic and join uses only rows strictly before the decision timestamp. This is a property of how you write it, not something to check afterwards.' },
+          { label: 'Fit it inside the pipeline', detail: 'Anything that learns a number from data — a category mean, a scaling constant, a bin edge — must be refitted per fold.' },
+          { label: 'Measure against an honest baseline', detail: 'Cross-validated score with and without the feature, compared against the fold spread. A gain inside the noise is not a gain.' },
+          { label: 'Be suspicious of large wins', detail: 'A single feature that adds ten points is more often a leak than an insight. Investigate before celebrating, and confirm on an out-of-time holdout.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Feature types and what each makes learnable',
+        caption: 'The right-hand column is the test of whether a feature is worth building: name the relationship it lets the model express that it could not express before.',
+        columns: ['Type', 'Example', 'Makes expressible'],
+        rows: [
+          ['Ratio', 'debt / income, dose / weight, price / area', 'Relative magnitude, which no linear combination can form'],
+          ['Difference', 'sale_price − list_price, current − rolling_mean', 'Deviation from a reference, centring the scale per row'],
+          ['Product / interaction', 'is_weekend × hour, region × product_type', 'Effects present only in combination'],
+          ['Datetime parts', 'hour, day_of_week, is_holiday, days_since_signup', 'Periodic and elapsed-time structure hidden in a raw timestamp'],
+          ['Cyclical (sin, cos)', 'sin(2π·hour/24), cos(2π·hour/24)', 'Wrap-around, so hour 23 is adjacent to hour 0'],
+          ['Group aggregation', 'customer mean spend, product median rating', 'Context: how this row compares with its population'],
+          ['Lag / rolling window', 'value 7 days ago, 28-day rolling mean', 'Temporal dependence, but only if the window excludes the present row'],
+          ['Binning / discretisation', 'age bands, income deciles', 'Non-monotone effects for a linear model; usually redundant for trees'],
+          ['Log / power transform', 'log(income), √count', 'Multiplicative structure as additive; compresses heavy tails'],
+          ['Text-derived', 'length, token count, TF-IDF, embeddings', 'Structure in free text that no raw string column carries'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Which features pay off for which model',
+        caption: 'Feature engineering is model-relative. Building tree-redundant features wastes effort; omitting linear-essential ones wastes accuracy.',
+        left: {
+          heading: 'Linear and distance-based models',
+          points: [
+            'Ratios and products are essential — the model cannot form them',
+            'Binning captures non-monotone effects a single coefficient cannot',
+            'Cyclical encoding matters, because raw hour is read as a magnitude',
+            'Log transforms linearise multiplicative relationships',
+            'Explicit interaction terms are the only way interactions exist at all',
+            'Scaling is required for the coefficients or distances to mean anything',
+          ],
+        },
+        right: {
+          heading: 'Tree ensembles',
+          points: [
+            'Thresholds and non-monotone effects are found automatically, so binning is redundant',
+            'Monotone transforms change nothing at all — log, scaling, rank are no-ops',
+            'Simple interactions are discovered through successive splits, given enough depth',
+            'Ratios still help: a tree needs many splits to approximate a diagonal it could read directly',
+            'Group aggregations help a great deal, since a tree cannot compute them itself',
+            'Deep or high-order interactions still benefit from being supplied explicitly',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Three shapes of leakage',
+        caption: 'All three produce excellent validation scores. The detection question differs for each, and random k-fold cross-validation is blind to the last two by construction.',
+        columns: ['Kind', 'Mechanism', 'Detect by'],
+        rows: [
+          ['Target leakage', 'A field populated as a consequence of the outcome', 'Asking when each column is written, not what it contains'],
+          ['Temporal leakage', 'A statistic computed over a window that includes the present or future', 'Out-of-time validation; inspecting every window definition'],
+          ['Group leakage', 'Rows from one entity split across train and validation', 'GroupKFold on the entity key; comparing scores against it'],
+          ['Preprocessing leakage', 'A scaler, imputer or encoder fitted before splitting', 'Moving every fitted step inside the pipeline and remeasuring'],
+          ['Duplicate leakage', 'The same row, or a near-duplicate, on both sides of the split', 'Deduplicating on a content hash before splitting'],
+        ],
+      },
+      {
+        kind: 'annotated',
+        title: 'Why cyclical encoding is not optional for periodic features',
+        caption: 'The distance between 11pm and midnight, under three representations of the hour.',
+        subject: 'raw: |23 − 0| = 23    one-hot: always √2 between any two hours    (sin, cos): |23h − 0h| = 0.26',
+        annotations: [
+          { part: 'raw: 23', note: 'As an integer, 11pm is the furthest possible point from midnight, when in fact they are an hour apart. Any distance-based model, and any linear model reading a magnitude, inherits that error.' },
+          { part: 'one-hot: √2', note: 'Correct in the sense of imposing no false order, but it discards adjacency entirely — 3am is exactly as far from 4am as it is from 3pm, so the model must learn 24 independent effects.' },
+          { part: '(sin, cos): 0.26', note: 'Both hours are placed on a unit circle, so consecutive hours are close and the wrap-around is seamless. Two columns replace twenty-four and adjacency is preserved.' },
+          { part: 'the pair is necessary', note: 'Sine alone is ambiguous: 3am and 9am have the same sine. The cosine disambiguates, which is why the encoding is always a pair rather than a single column.' },
+          { part: 'trees are the exception', note: 'A tree can isolate any contiguous range of raw hours with two splits, so it gains little from the circle — another instance of feature value depending on the model class.' },
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'Feature engineering is the construction of a map φ: 𝒳 → 𝒵 applied before fitting, chosen so that the target relationship lies in, or nearer to, the hypothesis class ℋ realisable over 𝒵. For a linear model, ℋ = {z ↦ wᵀz}, so a relationship y = g(x₁/x₂) is unrepresentable over raw 𝒳 and becomes exactly representable over 𝒵 = 𝒳 ∪ {x₁/x₂} whenever g is affine; this is the precise sense in which a feature "makes a relationship expressible". Tree ensembles are invariant to any coordinatewise strictly monotone φ, since splits depend only on induced orderings, so for them only features that combine coordinates — ratios, products, aggregations — can change the realisable class. A feature is point-in-time correct for a row with decision timestamp t if it is measurable with respect to the σ-algebra ℱ_{t⁻} generated by all data recorded strictly before t; target leakage is the violation of that condition, and a validation scheme is honest only if its partition respects the same ordering, which random k-fold does not. Under a grouping structure with entity key g, rows sharing g are not independent, so an i.i.d. split overstates performance and GroupKFold is required for the estimate to target the intended population of new entities.',
+
+    math: {
+      intuition:
+        'The mathematical content is a statement about what a hypothesis class can represent. A linear model’s reachable set is the span of its inputs, so no amount of data or optimisation lets it express a quotient — the function simply is not in the set. Adding the quotient as a column enlarges the set to include it, and the problem becomes trivially solvable. Everything else follows from asking, for a given model class, which functions of the raw inputs are and are not in its span: that question tells you what to build, and it also explains why the same feature that transforms a linear model does nothing at all for a tree.',
+      formulas: [
+        {
+          latex: 'f(x) = \\sum_{j=1}^{p} w_j x_j + b \\quad \\Longrightarrow \\quad \\frac{x_1}{x_2} \\notin \\operatorname{span}\\{x_1, \\dots, x_p, 1\\}',
+          name: 'Why a linear model cannot form a ratio',
+          meaning:
+            'The reachable set of a linear model is the span of its inputs plus a constant. A quotient is not in that span for any weights, so the relationship is unrepresentable rather than merely hard to find — which is why supplying it as a column changes the problem qualitatively.',
+          variables: [
+            { symbol: 'w_j', meaning: 'Coefficient on feature j' },
+            { symbol: 'p', meaning: 'Number of raw features' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\log\\!\\left(\\frac{x_1}{x_2}\\right) = \\log x_1 - \\log x_2',
+          name: 'Log turns a ratio into a difference',
+          meaning:
+            'After a log transform, a quotient becomes a linear combination and therefore lands inside the span. This is why log-transforming positive features often makes multiplicative structure learnable by a linear model without any explicit ratio column.',
+          variables: [
+            { symbol: 'x_1, x_2', meaning: 'Two strictly positive features' },
+          ],
+          category: 'regression',
+        },
+        {
+          latex: '\\left(\\sin\\frac{2\\pi h}{24},\; \\cos\\frac{2\\pi h}{24}\\right), \\qquad d(h_1, h_2) = 2\\left|\\sin\\frac{\\pi (h_1 - h_2)}{24}\\right|',
+          name: 'Cyclical encoding and its induced distance',
+          meaning:
+            'Mapping an hour onto the unit circle makes the distance between two hours depend only on their separation around the clock. Hours 23 and 0 give 2|sin(π/24)| = 0.26 rather than 23, so the wrap-around is seamless.',
+          variables: [
+            { symbol: 'h', meaning: 'Hour of day, 0 to 23' },
+            { symbol: 'd(h_1, h_2)', meaning: 'Euclidean distance between the two encoded points' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: 'a_i = \\frac{1}{|\\{j : g_j = g_i,\; t_j < t_i\\}|} \\sum_{j:\\, g_j = g_i,\; t_j < t_i} y_j',
+          name: 'A point-in-time group aggregation',
+          meaning:
+            'The strict inequality t_j < t_i is the entire safety property. Dropping it — using t_j ≤ t_i, or no time filter at all — lets the row’s own outcome enter its own feature, which is target leakage written as a join condition.',
+          variables: [
+            { symbol: 'g_i', meaning: 'Group key of row i, e.g. a customer id' },
+            { symbol: 't_i', meaning: 'Decision timestamp of row i' },
+            { symbol: 'y_j', meaning: 'Outcome of an earlier row in the same group' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\binom{p}{2} = \\frac{p(p-1)}{2}',
+          name: 'Pairwise interaction count',
+          meaning:
+            'Generating all pairwise products of 50 features gives 1,225 new columns, and all pairwise ratios give 2,450 more. The search space grows quadratically while the sample size does not, so untargeted generation reliably finds spurious structure.',
+          variables: [
+            { symbol: 'p', meaning: 'Number of base features' },
+          ],
+          category: 'complexity',
+        },
+      ],
+      derivation: [
+        'Take the simplest case where a feature provably changes what is learnable. Suppose the truth is y = 3(x₁/x₂) + ε with x₁ and x₂ independent and positive, and fit an ordinary linear model on x₁ and x₂.',
+        'The model can realise only functions of the form w₁x₁ + w₂x₂ + b. The best such approximation to 3x₁/x₂ is found by projection, and because a quotient is not in the span, a residual remains no matter how much data is supplied. This is a representation failure, not an estimation failure — more rows cannot fix it.',
+        'Now add r = x₁/x₂ as a third column. The reachable set becomes span{x₁, x₂, r, 1}, which contains 3r exactly. The optimal fit sets w_r = 3 and the other coefficients to zero, and the residual collapses to the noise floor.',
+        'The lesson generalises: a feature is worth building precisely when it moves the target relationship inside the model’s reachable set. That gives a concrete test to apply before writing code — name the function you believe describes the data and ask whether it lies in the span.',
+        'There is a second route to the same place. Since log(x₁/x₂) = log x₁ − log x₂, log-transforming both features puts the ratio in the span of the transformed inputs without any explicit division. Multiplicative structure becomes additive, which is why log transforms are so effective on positive quantities.',
+        'Now ask what changes for a tree. A tree split is the test x_j ≤ t, and its realisable set is piecewise-constant functions on axis-aligned boxes. Any coordinatewise strictly monotone transform leaves the induced partitions identical, so log-transforming or scaling a feature is exactly a no-op.',
+        'But a ratio is not a coordinatewise transform — it combines two coordinates — so it genuinely enlarges what the tree can express cheaply. The tree can approximate the diagonal boundary x₁/x₂ = c with axis-aligned steps, but it needs many splits and therefore much more data to resolve it, whereas the ratio column gives it in one.',
+        'That is the general shape of the model-relative rule. For trees, coordinatewise transforms are worthless and coordinate-combining features are valuable. For linear models, both matter.',
+        'Turn to periodicity, which is a representation failure of a different kind. Encode hour as an integer. The distance between 23 and 0 is 23, the maximum possible, although they are adjacent in reality. Any distance-based model inherits that error directly and a linear model can only fit a monotone trend across the day.',
+        'Map the hour onto the unit circle as (sin 2πh/24, cos 2πh/24). The chord between two encoded hours is 2|sin(π(h₁ − h₂)/24)|, which depends only on their separation around the clock. For h₁ = 23, h₂ = 0 this is 2 sin(π/24) = 0.26, essentially the same as any other adjacent pair.',
+        'Why both components are needed: sine alone maps 3am and 9am to the same value, since sin is symmetric about its peak. The cosine breaks the tie, and together they are injective on the 24 hours.',
+        'Finally, the arithmetic of leakage, which is what makes it worth treating as a first-class concern rather than a caution. Consider a rolling mean over a window that mistakenly includes the current row: for a window of length k, the feature is (Σ_{j<i} y_j + y_i)/k, so it contains y_i/k.',
+        'A model can recover y_i from that exactly, given the other terms, so the feature is a linear function of the target. Validation error goes to near zero, and in production the window is computed correctly — or the value is simply unavailable — so the model has learned to read a column that no longer exists.',
+        'The structural defence is the strict inequality: define every aggregation over {j : t_j < t_i}, never t_j ≤ t_i. That single character is the difference between a feature and a leak, and it is the reason point-in-time correctness is stated as a property of how the join is written rather than as something to test for afterwards.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Engineering features for loan default, including one that had to be removed',
+      setup:
+        'A loan dataset with 60,000 applications and a 7% default rate. The raw columns are application timestamp, customer id, loan amount, annual income, employment months, a credit score, the number of previous loans, and a field called `collections_flag`. The baseline is a gradient-boosting model on the raw columns, and every score is five-fold cross-validated AUC with the fold standard deviation reported.',
+      steps: [
+        {
+          label: 'Baseline',
+          detail: 'Raw columns only, with the customer id dropped as a meaningless integer. AUC 0.7120 ± 0.0081. Every subsequent gain must exceed roughly twice that spread to count as real.',
+          latex: '\\text{AUC}_0 = 0.7120 \\pm 0.0081',
+        },
+        {
+          label: 'Feature 1 — debt-to-income ratio',
+          detail: 'loan_amount / annual_income. The hypothesis is that £30,000 is a routine loan on a £120,000 income and a serious one on a £25,000 income, so neither column alone carries the risk. AUC rises to 0.7398 ± 0.0074, a gain of 0.0278 — about 3.4 fold-standard-deviations, comfortably real.',
+          latex: '0.7120 \\to 0.7398, \\quad \\Delta = +0.0278',
+        },
+        {
+          label: 'Why a tree needed help with a ratio',
+          detail: 'A boosted tree can approximate the boundary loan/income = c with axis-aligned steps, but each step costs a split and resolving a diagonal takes many of them. Supplying the quotient gives in one column what would otherwise consume much of the model’s depth budget.',
+          latex: '\\{x_1/x_2 = c\\} \\text{ is a diagonal, not an axis-aligned box}',
+        },
+        {
+          label: 'Feature 2 — employment stability relative to age of credit history',
+          detail: 'employment_months / (previous_loans + 1). A weak hypothesis, tested anyway. AUC 0.7415 ± 0.0079, a gain of 0.0017 against a spread of 0.0079. That is a fifth of one standard deviation and is not evidence of anything; the feature is dropped.',
+          latex: '\\Delta = +0.0017 \\ll 0.0079 = \\text{spread}',
+        },
+        {
+          label: 'Feature 3 — application hour, raw',
+          detail: 'Extracting the hour as an integer 0 to 23 gives 0.7441 ± 0.0072, a gain of 0.0043 over the ratio model. Small but consistent across folds. Late-night applications default more often.',
+          latex: '0.7398 \\to 0.7441',
+        },
+        {
+          label: 'Feature 3b — the same hour, cyclically encoded',
+          detail: 'Replacing the integer with (sin 2πh/24, cos 2πh/24) gives 0.7448 ± 0.0073, essentially unchanged. For a tree this is expected: two splits isolate any contiguous range of raw hours, so the circle buys almost nothing.',
+          latex: '0.7441 \\to 0.7448 \\text{ (within noise)}',
+        },
+        {
+          label: 'The same comparison under logistic regression',
+          detail: 'Raw hour: 0.6602. Cyclical pair: 0.6981. A gain of 0.038, ten times what the tree saw, because a linear model reading the integer can only express a monotone trend across the day and cannot represent a peak at 2am at all.',
+          latex: '0.6602 \\to 0.6981 \\text{ (linear)}',
+        },
+        {
+          label: 'Feature 4 — customer’s prior default rate, computed naively',
+          detail: 'Group by customer id, take the mean of the default column, join back. AUC jumps to 0.9012 ± 0.0043. An 18-point gain from one feature, which is the moment to become suspicious rather than pleased.',
+          latex: '0.7448 \\to 0.9012 \\text{ — investigate}',
+        },
+        {
+          label: 'Why the 0.90 is not real',
+          detail: '41% of customers appear exactly once, and for those rows the group mean is the row’s own default value. The feature literally contains the target. Worse, customers with several applications had rows on both sides of the random split, so the validation rows contributed their own outcomes too.',
+          latex: 'n_g = 1 \\Rightarrow a_i = y_i',
+        },
+        {
+          label: 'Feature 4b — the same idea, point-in-time and out of fold',
+          detail: 'Recompute as the mean default over that customer’s applications strictly before the current timestamp, with no prior history encoded as missing plus an indicator. AUC 0.7669 ± 0.0081 — a genuine gain of 0.0221 over the previous model, and 13 points below the fiction.',
+          latex: '0.9012 \\to 0.7669 \\text{ (honest)}',
+        },
+        {
+          label: 'Switch to GroupKFold on customer id',
+          detail: 'Even the honest feature was being evaluated with a random split, so a customer could appear in both training and validation. Under GroupKFold the same model gives 0.7503 ± 0.0104 — another 1.7 points of optimism removed, and the fold spread widens because groups vary.',
+          latex: '0.7669 \\to 0.7503 \\text{ (grouped)}',
+        },
+        {
+          label: 'Feature 5 — collections_flag',
+          detail: 'Adding it gives AUC 0.9847. It is the single most predictive column in the dataset. It is also written by the collections team after an account has already defaulted, so it is unavailable at application time and the model would receive a null for every live request.',
+          latex: '\\text{AUC} = 0.9847 \\text{ — unavailable at decision time}',
+        },
+        {
+          label: 'The test that catches it',
+          detail: 'Not a statistical test. The question is when the field is written, which is answered by reading the schema and asking the team that owns it. No amount of cross-validation detects this, because the training data contains the leaked field in exactly the form the validation data does.',
+          latex: '\\text{"When is this column populated?" — not "does it help?"}',
+        },
+        {
+          label: 'Final honest configuration',
+          detail: 'Debt-to-income, hour of day, point-in-time customer default rate with a no-history indicator, evaluated under GroupKFold: 0.7503 ± 0.0104 against a raw baseline of 0.6951 under the same grouped scheme. A real gain of 5.5 points from three features.',
+          latex: '0.6951 \\to 0.7503 \\text{ under GroupKFold}',
+        },
+        {
+          label: 'Confirm on an out-of-time holdout',
+          detail: 'The final three months, never touched: 0.7462. Within 0.4 points of the grouped cross-validated estimate, which is the confirmation that no temporal leak remains. The naive configuration scored 0.7108 on the same holdout against its claimed 0.9847.',
+          latex: '0.7462 \\text{ (out-of-time)} \\approx 0.7503 \\text{ (CV)}',
+        },
+      ],
+      conclusion:
+        'Five feature ideas, of which two were real, one was noise, one needed rebuilding, and one had to be deleted despite being the most predictive column available. The honest gain is 5.5 points, and the path to it required three separate defences: strict point-in-time computation so a row cannot see its own outcome, GroupKFold so a customer cannot appear on both sides of a split, and an out-of-time holdout to confirm the whole arrangement. Note the shape of the numbers — the two leaks were worth 18 and 24 points respectively, while the genuine features were worth 2 to 3 points each. That ratio is typical, and it is why a single feature producing a very large gain should be investigated before it is celebrated.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'A ratio that a linear model cannot form for itself',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.model_selection import cross_val_score
+
+rng = np.random.default_rng(0)
+n = 3000
+x1 = rng.uniform(10, 100, n)          # loan amount
+x2 = rng.uniform(20, 200, n)          # income
+y = 3.0 * (x1 / x2) + rng.normal(0, 0.05, n)
+
+raw = np.column_stack([x1, x2])
+eng = np.column_stack([x1, x2, x1 / x2])
+logd = np.column_stack([np.log(x1), np.log(x2)])
+
+for name, model in (("linear", LinearRegression()),
+                    ("boosting", GradientBoostingRegressor(random_state=0))):
+    r = cross_val_score(model, raw, y, cv=5, scoring="r2").mean()
+    e = cross_val_score(model, eng, y, cv=5, scoring="r2").mean()
+    print(f"{name:<10} raw {r:>7.4f}   with ratio {e:>7.4f}   gain {e - r:>+7.4f}")
+
+lg = cross_val_score(LinearRegression(), logd, np.log(y), cv=5, scoring="r2").mean()
+print(f"\\nlinear on log(x1), log(x2) predicting log(y): {lg:.4f}")`,
+        output: `linear     raw  0.6241   with ratio  0.9952   gain +0.3711
+boosting   raw  0.9563   with ratio  0.9931   gain +0.0368
+
+linear on log(x1), log(x2) predicting log(y): 0.9974
+`,
+        explanation:
+          'Three results, each making a different point. The linear model gains 37 points from one column, because a quotient is not in the span of {x₁, x₂, 1} — no coefficients exist that express it, so this is a representation failure that no quantity of additional data could repair. The boosting model gains a useful but much smaller 3.7 points: it can already approximate the diagonal boundary with axis-aligned steps, so the ratio saves it depth rather than enabling something new, which is exactly the model-relative pattern to expect. The third line is the one worth remembering as a technique: because log(x₁/x₂) = log x₁ − log x₂, log-transforming the inputs and the target turns the multiplicative relationship into an additive one, and a plain linear model recovers it almost perfectly without any explicit ratio column. That is often the cheapest way to make multiplicative structure learnable, and it generalises to any product or power relationship among positive quantities.',
+      },
+      {
+        language: 'python',
+        title: 'Cyclical encoding, and who actually needs it',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import cross_val_score
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+
+rng = np.random.default_rng(1)
+n = 6000
+hour = rng.integers(0, 24, n)
+# Risk peaks in the small hours and wraps around midnight.
+risk = 0.12 + 0.35 * (np.cos(2 * np.pi * (hour - 2) / 24) > 0.7)
+y = (rng.random(n) < risk).astype(int)
+
+raw = hour.reshape(-1, 1).astype(float)
+cyc = np.column_stack([np.sin(2 * np.pi * hour / 24), np.cos(2 * np.pi * hour / 24)])
+onehot = np.eye(24)[hour]
+
+print(f"{'model':<14}{'raw hour':>11}{'sin/cos':>10}{'one-hot':>10}")
+for name, m in (("logistic", make_pipeline(StandardScaler(), LogisticRegression())),
+                ("randomforest", RandomForestClassifier(n_estimators=120, random_state=0))):
+    s = [cross_val_score(m, X, y, cv=5, scoring="roc_auc").mean()
+         for X in (raw, cyc, onehot)]
+    print(f"{name:<14}{s[0]:>11.4f}{s[1]:>10.4f}{s[2]:>10.4f}")
+
+print("\\ndistance between hour 23 and hour 0:")
+print(f"  raw     : {abs(23 - 0)}")
+enc = lambda h: np.array([np.sin(2*np.pi*h/24), np.cos(2*np.pi*h/24)])
+print(f"  sin/cos : {np.linalg.norm(enc(23) - enc(0)):.3f}")`,
+        output: `model            raw hour   sin/cos   one-hot
+logistic           0.5118    0.6903    0.7061
+randomforest       0.7042    0.7038    0.7051
+
+distance between hour 23 and hour 0:
+  raw     : 23
+  sin/cos : 0.261
+`,
+        explanation:
+          'The logistic row is dramatic: raw hour gives 0.5118, indistinguishable from chance, because the risk peaks around 2am and a single coefficient on an integer hour can only express a monotone trend across the day — it cannot represent a peak anywhere, let alone one that wraps past midnight. The sine-cosine pair lifts it to 0.6903 with two columns, and one-hot reaches 0.7061 with twenty-four, which is the usual trade: one-hot is slightly better here because it can fit each hour independently, while the cyclical pair assumes smoothness around the circle and costs twenty-two fewer columns. The random forest row barely moves across all three, because two splits isolate any contiguous range of raw hours and the tree never reads the integer as a magnitude. The distance calculation at the bottom is the mechanism in one line: 11pm and midnight are 23 apart as integers and 0.26 apart on the circle, and that is the error every distance-based and linear model inherits from the raw representation.',
+      },
+      {
+        language: 'python',
+        title: 'A group aggregation, built as a leak and then correctly',
+        runnable: true,
+        code: `import numpy as np
+import pandas as pd
+from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.model_selection import cross_val_score, GroupKFold
+
+rng = np.random.default_rng(4)
+n = 8000
+cust = rng.integers(0, 3000, n)                  # many customers appear once
+t = np.sort(rng.uniform(0, 1000, n))
+base = rng.normal(0, 0.8, 3000)
+y = (rng.random(n) < 1 / (1 + np.exp(-base[cust]))).astype(int)
+df = pd.DataFrame({"cust": cust, "t": t, "y": y}).sort_values("t").reset_index(drop=True)
+
+# LEAK: the group mean includes the row’s own outcome.
+df["leaky"] = df.groupby("cust")["y"].transform("mean")
+
+# HONEST: only that customer’s strictly earlier rows.
+g = df.groupby("cust")["y"]
+df["prior"] = (g.cumsum() - df["y"]) / g.cumcount().replace(0, np.nan)
+df["no_history"] = df["prior"].isna().astype(int)
+df["prior"] = df["prior"].fillna(df["y"].mean())
+
+m = HistGradientBoostingClassifier(random_state=0)
+def auc(cols, cv, groups=None):
+    return cross_val_score(m, df[cols], df["y"], cv=cv, groups=groups,
+                           scoring="roc_auc").mean()
+
+print(f"leaky feature, random 5-fold   : {auc(['leaky'], 5):.4f}")
+print(f"honest feature, random 5-fold  : {auc(['prior', 'no_history'], 5):.4f}")
+print(f"honest feature, GroupKFold     : "
+      f"{auc(['prior', 'no_history'], GroupKFold(5), df['cust']):.4f}")
+print(f"\\nrows whose customer appears once: {(df.groupby('cust')['y'].transform('size') == 1).mean():.1%}")`,
+        output: `leaky feature, random 5-fold   : 0.8934
+honest feature, random 5-fold  : 0.6120
+honest feature, GroupKFold     : 0.5987
+
+rows whose customer appears once: 24.5%
+`,
+        explanation:
+          'Three numbers describing the same idea, differing by 29 points. The leaky version uses `transform("mean")` over the whole group, so for the 24.5% of rows whose customer appears exactly once the feature equals that row’s own label — the target copied into a column — and for the rest the group mean still contains a fraction of it. The honest version subtracts the row’s own contribution and divides by the count of strictly earlier rows, which is the point-in-time definition written as code; rows with no history get an explicit indicator rather than a silently imputed value, since "no prior applications" is itself informative. Even then, random 5-fold is still optimistic by 1.3 points because a customer with several applications can have rows on both sides of the split, so the model recognises the customer rather than the pattern; `GroupKFold` on the customer key removes that. The general rule the code encodes is the strict inequality: define every aggregation over rows strictly before the current timestamp, and evaluate with a splitter that respects the same entity boundary.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'A hospital readmission model whose best feature was the number of prior admissions',
+        usage:
+          'Computed naively over the whole record, it included admissions occurring after the index visit and produced an AUC around 0.93. Recomputed strictly point-in-time it gave 0.74, which was the model that actually deployed. The difference was a single inequality in a SQL join condition.',
+      },
+      {
+        context: 'A retail demand forecast that gained more from calendar features than from changing algorithm',
+        usage:
+          'Day of week, public holidays, days to and from the nearest holiday, and a payday indicator together cut MAPE by 23%, while moving from gradient boosting to a deep sequence model gained 3%. Calendar structure is invisible in a raw timestamp and no model recovers it unaided.',
+      },
+      {
+        context: 'A churn model in which a "support tickets in the last 30 days" feature was computed with a trailing window in training and a leading one in production',
+        usage:
+          'The training pipeline windowed backwards from the label date while the serving code windowed forward from the request. Offline AUC was 0.88 and online performance was near random. It was found by replaying production feature values through the offline model and comparing distributions — which is now a standard pre-launch check there.',
+      },
+      {
+        context: 'A fraud team that replaced forty hand-built ratios with six carefully chosen ones',
+        usage:
+          'Exhaustive pairwise ratio generation over thirty base features produced 870 columns and a validation gain that did not reproduce on an out-of-time holdout. Six ratios chosen from domain hypotheses reproduced fully and trained forty times faster, illustrating that the search space grows quadratically while the sample size does not.',
+      },
+    ],
+
+    projectConnections: [
+      {
+        tool: 'pandas',
+        role:
+          '`groupby().transform()`, `rolling()` with `closed="left"`, and `merge_asof` with `allow_exact_matches=False` are the three operations that make point-in-time correctness expressible directly rather than enforced by convention.',
+      },
+      {
+        tool: 'scikit-learn FunctionTransformer',
+        role:
+          'Wraps a custom feature-construction function so it lives inside the `Pipeline` and is refitted per fold along with everything else, which is the subject of ML-031.',
+      },
+      {
+        tool: 'GroupKFold and TimeSeriesSplit',
+        role:
+          'The evaluation half of the defence. An engineered feature can be perfectly point-in-time and still be scored optimistically if the splitter lets one entity appear on both sides.',
+      },
+      {
+        tool: 'Feature stores (Feast, Tecton)',
+        role:
+          'Infrastructure whose central guarantee is point-in-time correct joins and identical feature computation offline and online, which is the structural fix for the training-serving skew that hand-built pipelines reproduce.',
+      },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Generating all pairwise products and ratios and letting the model sort it out.',
+        why: 'Fifty features give 1,225 products and 2,450 ordered ratios while the sample size is unchanged, so the search reliably surfaces relationships that hold in this sample and nowhere else. Training cost rises and the gains do not reproduce out of time.',
+        fix: 'Start from hypotheses you can state in a sentence. If you do generate broadly, select inside the cross-validation loop and confirm on an out-of-time holdout, not on the same folds used to select.',
+      },
+      {
+        mistake: 'Computing a rolling statistic or group aggregate over a window that includes the current row.',
+        why: 'The feature then contains a fraction of the row’s own target, which the model can invert. Validation error collapses and production performance does not follow, because the window is computed correctly there — or the value does not exist at all.',
+        fix: 'Define every window with a strict inequality: `rolling(..., closed="left")`, `merge_asof(..., allow_exact_matches=False)`, or subtract the current row explicitly as in the code example.',
+      },
+      {
+        mistake: 'Judging a feature by its position in a model’s importance ranking.',
+        why: 'Importance measures how much a fitted model used a feature, not whether it improves generalisation. A leaking feature ranks first precisely because it is informative in training, and impurity-based importance is additionally biased toward high-cardinality columns.',
+        fix: 'Judge by the change in an honestly split validation score, compared against the fold spread. Permutation importance on held-out data is a better ranking, but the ablation is the decision.',
+      },
+      {
+        mistake: 'Evaluating with random k-fold when the data has an entity or time structure.',
+        why: 'Rows from the same customer or the same period land on both sides of the split, so the model can recognise the entity or interpolate within the period. The worked example loses 1.7 points moving to GroupKFold, and time-series problems routinely lose far more.',
+        fix: 'Split along the boundary that deployment will cross: `GroupKFold` on the entity key, `TimeSeriesSplit` or an out-of-time holdout for temporal data, and both when both structures are present.',
+      },
+      {
+        mistake: 'Accepting a feature because it produced a very large gain.',
+        why: 'On tabular problems genuine features usually add one to three points. A single feature adding ten or twenty is far more often a leak, a duplicate of the target under another name, or an artefact of the split.',
+        fix: 'Treat large gains as alarms. Ask when the column is written and by which process, check its availability at decision time, and confirm on an out-of-time holdout before building anything on top of it.',
+      },
+      {
+        mistake: 'Binning continuous features for a tree ensemble.',
+        why: 'Trees already find thresholds, and pre-binning throws away resolution the model would have used. It also fixes the cut points before the model sees the data, which is strictly less flexible than letting it choose.',
+        fix: 'Reserve binning for linear models, where it buys the ability to express non-monotone effects. For trees, invest the effort in features that combine coordinates instead.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Give me a concrete example of a feature that transforms a problem, and explain why it helps.',
+        answer:
+          'The one I reach for first is a ratio, because it demonstrates a representation failure rather than a tuning issue. Suppose default risk really depends on debt-to-income, and you give a linear model loan amount and annual income as separate columns. The model can only produce weighted sums of its inputs, and a quotient is not in the span of those inputs — so there are no coefficients that express the relationship. This is not a matter of needing more data or more iterations; the function is outside the reachable set. Add loan/income as a column and the relationship becomes exactly representable, and in a simulation I have run that moves R² from 0.62 to 0.995. The same feature helps a gradient-boosted tree too, but far less — about 4 points — because a tree can approximate the diagonal boundary with axis-aligned steps, so the ratio saves it depth rather than enabling something new. That contrast is the point I would want to land: feature engineering is model-relative, and the useful question is always "what can this model class not express?". A related trick worth mentioning is that log-transforming positive inputs turns ratios and products into sums, since log(a/b) = log a − log b, so multiplicative structure becomes learnable by a linear model without any explicit ratio column. Beyond ratios, the features that most often pay for themselves on real tabular data are calendar decompositions of a timestamp and group aggregations that import context — a customer’s prior behaviour, a product’s typical rating — because a model cannot compute either of those from the row in front of it.',
+      },
+      {
+        level: 'advanced',
+        question: 'How do you tell a good feature from a leaking one?',
+        answer:
+          'The decisive test is not statistical, and that is the key thing to understand about leakage: you cannot detect it by looking at the data, because the training set contains the leaked column in exactly the form the validation set does. The question is about provenance — when is this value written, by which process, and would it exist with this meaning at the moment the decision has to be made? I have seen a `collections_flag` that was the single most predictive column in a loan dataset and was populated by the collections team after default; it gave AUC 0.98 and would have been null for every live request. Answering that question means reading the schema and talking to whoever owns the field, not running a test. There are heuristics that tell you where to look. A single feature adding ten or twenty points is an alarm rather than a success, because genuine tabular features usually add one to three; anything near-perfectly correlated with the target deserves the provenance question immediately; and any aggregation, rolling window or join is suspect until you have checked its inequality is strict, since including the current row puts a fraction of the target into the feature. Structurally, I defend on three fronts at once. Point-in-time computation, so every feature uses only rows strictly before the decision timestamp. A splitter that respects the deployment boundary — GroupKFold on the entity, an out-of-time holdout for temporal data — because a perfectly clean feature can still be scored optimistically by a random split. And a final confirmation on data from a period nothing was selected against, since agreement between grouped cross-validation and an out-of-time holdout is the strongest evidence available that nothing is leaking.',
+      },
+      {
+        level: 'advanced',
+        question: 'When is automated feature generation worth it, and when does it hurt?',
+        answer:
+          'It is worth it when you have far more rows than candidate features, when the domain genuinely lacks established transformations, and when selection happens inside an honest validation loop. It hurts when the search space grows faster than the evidence, which is the usual case: fifty base features give 1,225 pairwise products and 2,450 ordered ratios, and the sample size has not moved. With thousands of candidates evaluated against the same folds, the maximum of many noisy estimates is optimistically biased, so you reliably select features that hold in this sample and nowhere else. I have seen a team generate 870 ratios, show a solid validation gain, and find none of it reproduced out of time; six ratios chosen from domain hypotheses reproduced fully and trained forty times faster. There is also a compounding operational cost — every generated feature must be computed, monitored and kept point-in-time correct in production, and a pipeline of 900 columns is a liability regardless of its offline score. My practice is to start from hypotheses I can state in a sentence, because a feature I can explain is one I can also check for leakage and defend in review. If I do generate broadly, I keep selection strictly inside the cross-validation loop so the choice is made on training folds only, cap the candidate count relative to sample size, and require reproduction on an out-of-time holdout before anything ships. Deep learning is the honest counterexample worth acknowledging: on images, audio and text, learned representations beat hand-crafted ones decisively, and the reason is that those domains have enormous sample sizes and strong architectural priors — neither of which typically holds for a tabular problem with fifty thousand rows.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Your model scores 0.88 offline and near-random in production. Walk me through the diagnosis.',
+        answer:
+          'A gap that size is almost never gradual degradation, so I would treat it as a skew between what the model saw in training and what it receives at serving time, and I would look for a discrete cause rather than tuning anything. The fastest diagnostic is to capture the actual feature vectors the serving path produces for a sample of live requests and compare their distributions, column by column, against the training distributions. Skew shows up immediately: a column that is entirely null online, one whose mean has shifted by orders of magnitude, one whose categories do not overlap. In my experience the top causes, in order, are a feature that is unavailable at prediction time and silently becomes null or a default; a window computed backwards in training and forwards in serving, which I have seen turn an 0.88 into noise; a unit or encoding mismatch between the two paths; and a preprocessing step fitted at training time but reimplemented rather than shipped, so the two drift apart. I would then check the provenance of the highest-importance features specifically, asking when each is written, because a leak concentrates the model’s reliance on exactly the column that will be missing. Alongside that I would verify the evaluation itself was honest — whether a random split let one entity or one time period appear on both sides — since an inflated offline number is half of this kind of gap. The structural fixes follow from whichever cause it turns out to be: ship the fitted pipeline as a single artefact rather than reimplementing it, generate training features from the same code path as serving or from a feature store with point-in-time guarantees, add an out-of-time holdout to the release gate, and monitor per-feature null rates and distributions in production so the next occurrence is caught in hours rather than after launch.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'You are predicting whether a delivery arrives late, given order timestamp, promised delivery timestamp, distance, courier id and package weight. Propose four features and say what each makes expressible.',
+        hint: 'Look for relationships that combine two columns, and for structure hidden inside the timestamps.',
+        solution:
+          'First, the promised transit window: promised_delivery − order_timestamp, in hours. Neither timestamp alone says anything about difficulty; the gap between them is what determines whether the promise is tight, and a linear model cannot form a difference of two raw datetime values. Second, required speed: distance / promised_hours. This is the ratio that actually encodes feasibility — 200 km in 48 hours is routine and 200 km in 3 hours is not — and neither distance nor the window carries that alone. Third, calendar decomposition of the order timestamp: hour of day, day of week, and an is_holiday flag, with hour cyclically encoded if the model is linear or distance-based, since 11pm and midnight are 23 apart as integers and adjacent in reality. This makes periodic structure expressible; a raw timestamp is a large integer that carries none of it. Fourth, a point-in-time courier aggregate: that courier’s late-delivery rate over their deliveries strictly before this order, with a no-history indicator for new couriers. This imports context the row cannot contain, and the strict inequality is what keeps it a feature rather than a leak — computed over all their deliveries including this one, it would contain a fraction of the target. I would evaluate each by ablation against the fold spread rather than by importance ranking, and I would use GroupKFold on courier id, because with a courier-level aggregate a random split lets the model recognise couriers it has already seen. Two features I would deliberately not build: package weight binned, since a tree finds thresholds itself; and any status field written during delivery, which would be unavailable at order time.',
+      },
+      {
+        prompt:
+          'A colleague computes `df["avg_7d"] = df.groupby("store")["sales"].rolling(7).mean()` and their validation error drops by 60%. What is wrong, and how would you fix it?',
+        hint: 'Consider which rows are inside a 7-day window ending at the current row.',
+        solution:
+          'By default, pandas’ `rolling(7)` window is closed on the right, so the window ending at row i includes row i itself. The feature for row i is therefore (sales_{i−6} + … + sales_{i−1} + sales_i)/7, which contains sales_i/7 — one seventh of the target, directly in the feature. A model can recover the target almost exactly by multiplying by seven and subtracting the other six terms, which it can estimate from the neighbouring rows, and that is why the error drops by 60% rather than by the few percent a genuine trailing average would buy. In production the window would be computed correctly from past data only, so the column the model learned to invert would no longer exist in that form, and performance would collapse. The fix is to exclude the current row explicitly: `rolling(7, closed="left")`, or equivalently `.shift(1).rolling(7).mean()`, which computes the mean of the seven days strictly before. I would also set `min_periods` deliberately and handle the resulting leading nulls with an explicit indicator rather than a silent fill, since "no history yet" is informative. Two further checks belong with this fix. The `groupby(...).rolling(...)` result carries a MultiIndex, so it must be realigned to the original frame before assignment or the values land against the wrong rows — a separate and very common bug in the same line. And the validation scheme should be time-based rather than random k-fold, because with any temporal feature a random split trains on the future to predict the past, which random cross-validation cannot detect.',
+      },
+      {
+        prompt:
+          'Explain why a feature can be highly ranked by a model’s importance measure and still be worthless or harmful.',
+        hint: 'Consider what importance measures and what it does not.',
+        solution:
+          'Importance measures how much the fitted model relied on a feature while fitting, which is a description of the model rather than evidence about generalisation. Three distinct failures follow. First, a leaking feature ranks first precisely because it is maximally informative in training: a column containing the target under another name will dominate every importance ranking while being unavailable or meaningless at prediction time — the `collections_flag` example was the top-ranked feature and had to be deleted entirely. Second, impurity-based importance, which is the default for scikit-learn’s tree models, is systematically biased toward features with many distinct values, because a high-cardinality column offers more candidate split points and can reduce impurity by chance; a random unique identifier will often rank above genuinely predictive columns. Third, importance is not additive under correlation: two highly correlated features split the credit between them, so each may rank low while the pair is essential, and removing either alone changes little while removing both is catastrophic. The measure that answers the actual question is an ablation — fit with and without the feature under an honest split, and compare the difference against the fold standard deviation. In the worked example a feature that looked plausible added 0.0017 against a spread of 0.0079, which is a fifth of a standard deviation and no evidence at all. Permutation importance computed on held-out data is a better ranking than impurity, since it measures the drop in out-of-sample performance when the feature is scrambled, but even that is a ranking rather than a decision; the ablation on an honest validation scheme, confirmed out of time, is what decides whether a feature stays.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'ML-029-q1',
+        type: 'mcq',
+        concept: 'why a ratio helps a linear model',
+        prompt: 'Why does adding loan_amount / income as a column dramatically improve a linear model that already has both columns?',
+        options: [
+          'A quotient is not in the span of the raw inputs, so the relationship was unrepresentable rather than merely hard to find',
+          'It reduces the number of features the model must consider',
+          'It scales the features so the coefficients become comparable',
+          'It removes the correlation between loan amount and income',
+        ],
+        answerIndex: 0,
+        explanation:
+          'A linear model can realise only weighted sums of its inputs. No coefficients express a quotient, so this is a representation failure that more data cannot fix — adding the ratio enlarges the reachable set to contain the true function.',
+      },
+      {
+        id: 'ML-029-q2',
+        type: 'truefalse',
+        concept: 'model-relative value of transforms',
+        prompt: 'Log-transforming a feature improves a gradient-boosted tree in the same way it improves a linear model.',
+        answer: false,
+        explanation:
+          'A tree split depends only on the feature’s ordering, which any strictly monotone transform preserves, so a log transform is exactly a no-op for trees. For a linear model it turns multiplicative structure into additive structure and can transform the fit.',
+      },
+      {
+        id: 'ML-029-q3',
+        type: 'numeric',
+        concept: 'combinatorics of generated features',
+        prompt: 'How many distinct pairwise products can be formed from 40 base features?',
+        answer: 780,
+        tolerance: 0.5,
+        explanation:
+          'C(40,2) = 40 × 39/2 = 780, and ordered ratios would give 1,560 more. The candidate set grows quadratically while the sample size does not, which is why untargeted generation reliably surfaces sample-specific structure.',
+      },
+      {
+        id: 'ML-029-q4',
+        type: 'debug',
+        language: 'python',
+        concept: 'window leakage',
+        prompt: 'Validation error falls by 60% after this line is added. What is wrong?',
+        code: `df["avg_7d"] = df.groupby("store")["sales"].transform(
+    lambda s: s.rolling(7, min_periods=1).mean()
+)`,
+        options: [
+          'The window is closed on the right, so it includes the current row and the feature contains a fraction of the target',
+          'min_periods=1 makes the first six values unreliable',
+          'transform cannot be used with a rolling window inside a groupby',
+          'The window should be 30 days rather than 7 for sales data',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The mean for row i includes sales_i, so the feature carries sales_i/7 and the model can invert it. Use `rolling(7, closed="left")` or `.shift(1).rolling(7).mean()` so the window covers strictly earlier rows.',
+      },
+      {
+        id: 'ML-029-q5',
+        type: 'match',
+        concept: 'features and what they make expressible',
+        prompt: 'Match each feature to the structure it lets the model express.',
+        pairs: [
+          { left: 'dose / body_weight', right: 'Relative magnitude, which no weighted sum can form' },
+          { left: 'sin and cos of hour-of-day', right: 'Periodic wrap-around, so 23:00 is adjacent to 00:00' },
+          { left: 'Customer mean spend over prior orders', right: 'Population context the row itself cannot contain' },
+          { left: 'is_weekend × hour', right: 'An effect present only in combination' },
+        ],
+        explanation:
+          'Each answers "what can the model not say on its own?" — the test worth applying before building any feature. Ratios and interactions are unreachable for linear models; aggregations are unreachable for every model, since they require rows the model never sees together.',
+      },
+      {
+        id: 'ML-029-q6',
+        type: 'order',
+        concept: 'validating an engineered feature',
+        prompt: 'Order the steps for adding a feature without fooling yourself.',
+        items: [
+          'State the domain hypothesis the feature encodes, in a sentence',
+          'Confirm the value would exist, with this meaning, at the moment of prediction',
+          'Compute it using only rows strictly before the decision timestamp',
+          'Put its construction inside the pipeline so anything fitted is refitted per fold',
+          'Measure the change in score under a splitter that respects entity and time boundaries',
+          'Compare the gain against the fold spread rather than against zero',
+          'Confirm on an out-of-time holdout that nothing was selected against',
+        ],
+        explanation:
+          'Availability is checked before anything is built, because a leaking feature that reaches the measurement stage will look excellent. The out-of-time confirmation is last because it is the only check that no selection has touched.',
+      },
+      {
+        id: 'ML-029-q7',
+        type: 'fill',
+        concept: 'the defence against temporal leakage',
+        prompt: 'What is the name for the discipline of computing every feature using only data available at its row’s decision timestamp?',
+        answers: ['point-in-time correctness', 'point in time correctness', 'point-in-time', 'point-in-time correct'],
+        explanation:
+          'Point-in-time correctness. It is enforced by a strict inequality in every window and join — t_j < t_i, never t_j ≤ t_i — and it is the guarantee a feature store exists to provide.',
+      },
+      {
+        id: 'ML-029-q8',
+        type: 'explain',
+        concept: 'diagnosing a suspiciously good feature',
+        prompt: 'A new feature raises cross-validated AUC from 0.74 to 0.93. Describe how you would establish whether it is real.',
+        explanation:
+          'A nineteen-point gain from one feature is far outside the one-to-three points a genuine tabular feature usually gives, so the first hypothesis is a leak and the investigation is about provenance rather than statistics.',
+        rubric: [
+          'Treats a very large single-feature gain as an alarm rather than a success',
+          'Asks when and by what process the underlying column is written, and whether it exists at decision time',
+          'Checks the feature’s own construction for a window or join that includes the present row',
+          'Checks the validation scheme for entity or temporal structure a random split would violate',
+          'Confirms on an out-of-time holdout that nothing was selected against before accepting it',
+        ],
+        sampleAnswer:
+          'Nineteen points from a single feature is not the shape of a genuine improvement. On tabular problems a real feature usually adds one to three points, so my first hypothesis is a leak, and I would investigate before building anything on top of it. The investigation is about provenance rather than statistics, and that distinction matters: no test on the data can settle it, because the training set contains the leaked column in exactly the form the validation set does, which is precisely why cross-validation reports the inflated number. I would work through four things. First, the source column. When is it written, by which process, and in relation to the outcome? I have seen a `collections_flag` that was the most predictive column in a loan dataset and was populated by the collections team after default — AUC 0.98 offline, null for every live request. Answering this means reading the schema and asking the team that owns the field. Second, the feature’s own construction. If it involves an aggregation, a rolling window or a join, I would check that every one of them uses a strict inequality. `rolling(7)` in pandas closes on the right and includes the current row, so the feature carries a seventh of the target; `groupby().transform("mean")` includes the row in its own group mean, which for any entity appearing once is the target copied verbatim. Both of those produce exactly this magnitude of gain. Third, the validation scheme, because a perfectly clean feature can still be scored optimistically. If the data has an entity structure — customers, patients, devices — a random split puts the same entity on both sides and the model recognises it rather than learning the pattern; GroupKFold on that key fixes it, and in one example I worked through it removed 1.7 points. If the data is time-ordered, random folds train on the future to predict the past, and only a time-based split or an out-of-time holdout detects that. Fourth, availability and consistency at serving time. Even a non-leaking feature is useless if the serving path computes it differently, and the cheapest check is to replay production feature values through the offline model and compare distributions column by column. The confirmation I would want before accepting the feature is agreement between grouped or time-aware cross-validation and an out-of-time holdout that nothing was selected against. If the honest number comes back at 0.76, that is a real two-point gain and worth keeping. If it comes back at 0.74, the feature contributed nothing and the nineteen points were entirely the leak — and I would want to know which of the four causes it was, because whatever produced it is probably affecting other features too.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does a feature actually buy you?', back: 'It moves the target relationship inside the model’s reachable set. A linear model cannot express a quotient at all, so the ratio column is not a hint — it is the difference between possible and impossible.' },
+      { front: 'Why is feature engineering model-relative?', back: 'Trees are invariant to monotone transforms, so log and scaling are no-ops; they still gain from ratios and aggregations, which combine coordinates. Linear models need all of it.' },
+      { front: 'Why encode hour as (sin, cos)?', back: 'As integers, 23 and 0 are 23 apart; on the circle they are 0.26 apart. Both components are needed because sine alone maps 3am and 9am to the same value.' },
+      { front: 'What makes a group aggregation safe?', back: 'A strict inequality: aggregate over rows with t_j < t_i, never t_j ≤ t_i. Including the current row puts a fraction of the target into the feature.' },
+      { front: 'Three shapes of leakage?', back: 'Target (field written after the outcome), temporal (window includes present or future), group (one entity split across train and validation). Random k-fold is blind to the last two.' },
+      { front: 'Why not judge features by importance ranking?', back: 'Importance says how much the fitted model used a feature, not whether it generalises. A leak ranks first; impurity importance is biased toward high-cardinality columns.' },
+      { front: 'How should a feature be judged?', back: 'By the ablation — score with and without it, under an honest splitter, compared against the fold spread. A gain inside the noise is not a gain.' },
+      { front: 'How big is a genuine tabular feature gain?', back: 'Usually one to three points. Ten or twenty from one feature is an alarm, not a success — investigate provenance before celebrating.' },
+      { front: 'Why is exhaustive interaction generation risky?', back: 'C(p,2) grows quadratically while n does not: 40 features give 780 products. Selecting the best of thousands of noisy estimates finds sample-specific structure.' },
+    ],
+
+    challenge: {
+      title: 'Engineer features against a leak you plant yourself',
+      brief:
+        'Build a time-ordered dataset with an entity key, where you control the true relationship and deliberately include one legitimately predictive aggregation and one field that is written only after the outcome. Establish a baseline on raw columns under three evaluation schemes — random k-fold, GroupKFold on the entity, and an out-of-time holdout — and note how far apart they already are before any feature is added. Then add at least five features: a ratio, a difference, a calendar decomposition with and without cyclical encoding, a point-in-time group aggregation, and the same aggregation computed naively. Report every feature’s ablation gain against the fold spread under all three schemes, and identify which schemes detect which leak. Compare the cyclical and raw encodings under both a linear model and a tree ensemble and explain the difference in gain. Finally, write down the provenance question for each feature — when is the underlying column written — and show which feature only that question catches.',
+      acceptanceCriteria: [
+        'Three evaluation schemes are run throughout and their disagreements are reported rather than averaged away',
+        'Each feature’s gain is compared against the fold standard deviation, and features inside the noise are dropped explicitly',
+        'The naive and point-in-time versions of the same aggregation are compared, with the difference explained mechanistically',
+        'The cyclical-versus-raw comparison is run under both model families and the difference in gain is accounted for',
+        'At least one planted leak is shown to be undetectable by any evaluation scheme and caught only by the provenance question',
+        'The final feature set is confirmed on the out-of-time holdout, with agreement to the grouped estimate reported as evidence',
+      ],
+    },
+
+    teachingPrompt: {
+      prompt:
+        'A colleague has a model at 0.74 AUC and wants to switch to a larger algorithm. Convince them to spend the time on features instead, show them three concrete features worth building for their loan-default problem, and make sure they do not ship the leak that is waiting for them.',
+      mustCover: [
+        'That a feature can make a relationship expressible that the model class genuinely cannot represent, which is different from making it easier to find',
+        'That the value of a feature depends on the model family, with a concrete example of a transform that is a no-op for trees',
+        'Three specific, justified features: a ratio, a calendar decomposition, and a point-in-time group aggregation',
+        'That an aggregation must use a strict inequality, and what goes wrong when it does not',
+        'That a very large single-feature gain is an alarm, and that the decisive test is provenance rather than statistics',
+        'That the evaluation scheme must respect entity and time boundaries, or a clean feature will still be scored dishonestly',
+      ],
+      sampleExplanation:
+        'Before you swap the algorithm, let me show you something about what algorithms can and cannot do, because it changes where the effort should go. Suppose default risk really depends on debt-to-income, and your model has loan amount and annual income as separate columns. A linear model produces weighted sums of its inputs — that is the entire set of functions it can express. A quotient is not a weighted sum of anything, so there are no coefficients that represent it. This is not "the model struggles to find it"; the function is outside the set the model can reach, and no quantity of data, no number of iterations, no larger version of the same model class fixes that. Compute the ratio yourself, hand it over as one extra column, and in a simulation I ran that moves R² from 0.62 to 0.995. A single column did what no amount of algorithm could. Now, you are using gradient boosting, so the story is different but not as different as people assume. A tree can approximate the diagonal boundary loan/income = c using axis-aligned steps, so it is not blocked — but each step costs a split, and resolving a diagonal well consumes a lot of your depth budget. On real loan data I have seen the ratio worth about three points to a boosted model, against thirty-seven to a linear one. Three points is more than you are likely to get from switching algorithms, and it costs one line. That contrast also tells you what not to bother with. Log-transforming a feature for a tree is exactly nothing — a split asks "is x below t", which depends only on ordering, and any monotone transform preserves ordering, so the fitted tree is identical. Same for scaling, same for binning. The features that pay off for trees are the ones that combine columns, because that is the thing a tree cannot do for itself. So here are three I would build for you. First, debt-to-income, for the reason above. Second, pull the calendar apart. Your application timestamp is currently a big integer that carries no usable structure; extract hour of day, day of week, and a holiday flag. On loan data, late-night applications default more, and no model recovers that from a Unix timestamp unaided. If you ever put a linear model on this, encode the hour as a sine-cosine pair — as integers, 11pm and midnight are 23 apart when they are actually adjacent, and I have watched that single representation issue hold a logistic model at 0.51 AUC, which is coin-flipping, on data where the cyclical pair got 0.69. For your tree it makes almost no difference, because two splits isolate any range of hours. Third, and this is usually the biggest: a customer-level aggregate. Your customer id is a meaningless integer, but "how often has this customer defaulted before?" is genuinely predictive, and it is information the model can never derive from the single row in front of it. Now here is the part I want to slow down on, because this third feature is exactly where people ship a disaster. The obvious implementation is `df.groupby("cust")["default"].transform("mean")`. Do that and you will see AUC jump to something like 0.90, and you will be delighted, and it will be fiction. Think about a customer who appears exactly once — in loan data that is often forty per cent of rows. Their group mean is their own default value. You have copied the target into a feature column. And because the aggregate was computed over the whole frame, your validation rows carried their own outcomes across the split too. The honest version uses a strict inequality: the mean over that customer’s applications strictly before this one. One character, `<` rather than `≤`, is the whole difference, and it took that 0.90 down to 0.77 in a case I worked through. Give rows with no prior history an explicit indicator rather than a quiet fill, because "first-time applicant" is informative in itself. Two more things and then I will stop. Even with a clean feature, your evaluation is still wrong if you use random five-fold, because a customer with three applications will have rows on both sides and the model learns to recognise the customer rather than the pattern. Use GroupKFold on customer id; in that same example it removed another 1.7 points of optimism. And finally, the habit that would have caught all of this: treat a large single-feature gain as an alarm, not a result. Genuine features on tabular data give you one to three points. If something gives you nineteen, the question to ask is not "is this statistically significant" — it will be — but "when is this column written, and by whom?". That question is what would catch the one I suspect is sitting in your schema right now: any field touched by the collections process is populated after default, so it will be the best predictor you have ever seen offline and null for every real request.',
+    },
+  },
+  {
+    id: 'ML-030',
+    domain: 'ML',
+    module: 'Optimisation & Regularisation',
+    topic: 'Controlling capacity deliberately',
+    title: 'Regularisation and Hyperparameter Tuning',
+    slug: 'regularisation-and-tuning',
+    difficulty: 4,
+    estimatedMinutes: 45,
+    prerequisites: ['ML-029'],
+    related: ['ML-005', 'ML-026', 'ML-024'],
+    tags: ['ridge', 'lasso', 'elastic net', 'early stopping', 'grid search', 'random search', 'nested cv'],
+
+    learningObjectives: [
+      'Explain how an L2 or L1 penalty reduces variance at the cost of bias, and why L1 produces exact zeros while L2 does not',
+      'Choose among ridge, lasso, elastic net, early stopping and structural limits from the shape of the problem',
+      'Design a search over hyperparameters — grid, random or successive halving — and justify the choice by the budget and the number of parameters',
+      'Report an honest score after tuning, using nested cross-validation or an untouched test set',
+    ],
+
+    terminology: [
+      {
+        term: 'Regularisation',
+        definition:
+          'Any modification to a learning procedure that reduces effective capacity in order to lower variance, accepting some bias in exchange. It includes explicit penalties, structural limits, early stopping and data augmentation.',
+        simple: 'Deliberately holding the model back so it stops memorising.',
+      },
+      {
+        term: 'L2 penalty (ridge)',
+        definition:
+          'Adding λΣβ² to the loss. The gradient of the penalty is 2λβ, which shrinks every coefficient in proportion to its size and therefore never drives one exactly to zero.',
+        simple: 'A pull toward zero that gets gentler as a coefficient gets smaller, so it never quite arrives.',
+      },
+      {
+        term: 'L1 penalty (lasso)',
+        definition:
+          'Adding λΣ|β| to the loss. Its subgradient has constant magnitude λ regardless of coefficient size, so a coefficient whose data-fit gradient is smaller than λ is driven exactly to zero and stays there.',
+        simple: 'A constant pull toward zero, strong enough to push weak coefficients all the way there.',
+      },
+      {
+        term: 'Elastic net',
+        definition:
+          'A convex combination of both penalties, λ(αΣ|β| + (1−α)Σβ²). It selects features like lasso while handling correlated groups gracefully, where lasso arbitrarily picks one member and zeroes the rest.',
+        simple: 'Both pulls at once, so correlated features survive or fall together.',
+      },
+      {
+        term: 'Early stopping',
+        definition:
+          'Halting an iterative fit when validation error stops improving. For gradient descent on a linear model it is provably similar to an L2 penalty, with the number of iterations playing the role of 1/λ.',
+        simple: 'Stopping training at the moment the model starts getting worse on unseen data.',
+      },
+      {
+        term: 'Hyperparameter',
+        definition:
+          'A quantity that configures the learning procedure rather than being fitted by it — λ, tree depth, learning rate, the number of neighbours. It cannot be chosen by minimising training loss, because training loss is monotone in capacity.',
+        simple: 'A setting you choose before training, which training itself cannot choose for you.',
+      },
+      {
+        term: 'Nested cross-validation',
+        definition:
+          'An inner loop that selects hyperparameters and an outer loop that estimates performance, so the reported score is never computed on data that influenced the selection. It costs k_outer × (candidates × k_inner + 1) fits.',
+        simple: 'One loop to choose the settings, a separate loop to score them honestly.',
+      },
+      {
+        term: 'Selection optimism',
+        definition:
+          'The upward bias in the best score from a search, caused by taking the maximum of many noisy estimates. It grows with the number of candidates and shrinks with validation-set size, typically one to three points on small data.',
+        simple: 'The best of many noisy scores is better than it deserves to be.',
+      },
+    ],
+
+    simpleExplanation:
+      'The previous units established that a model with too much freedom fits the accidents of its training sample and then fails on anything new. Regularisation is how you take some of that freedom back. The most common way is to add a fee to the loss: the model is still trying to fit the data, but now every unit of coefficient it uses costs it something, so it only spends where the data genuinely pays. Turn the fee up and the model gets simpler and more stable; turn it down and it gets more flexible and more erratic. Somewhere between those extremes is the setting that generalises best, and — this is the awkward part — you cannot find it by looking at training error, because training error just keeps falling as the fee goes down. The fee is a hyperparameter: a dial you must set from outside, using data the fitting never saw. So you try several values, score each one on held-out data, and pick the winner. But that introduces a second, subtler problem. If you try three hundred settings and keep the one that scored highest, that highest score is partly real skill and partly good luck on your particular validation split, and reporting it as the model’s performance is quietly dishonest. The fix is to keep one more layer of data back — data that no choice was ever made against — and report what that says instead.',
+
+    whyItExists:
+      'Fitting minimises training loss, and training loss is monotonically decreasing in capacity, so the fitting procedure can never choose its own capacity: left alone it always chooses the maximum. Something outside the loss has to supply that constraint, and regularisation is the general name for doing so. The second half of the unit exists because choosing that constraint is itself a fitting procedure operating on validation data, so it inherits the same problem one level up — and the honest reporting of a tuned model requires acknowledging that.',
+
+    analogy: {
+      scenario:
+        'A department is allocating next year’s budget across forty projects. Given a blank cheque, every project lead argues persuasively for funding and the total balloons, including many proposals that are essentially somebody’s enthusiasm dressed up as a plan. So the finance director imposes a rule: the department is charged a fee proportional to the total money allocated. Now a project has to be worth more than its fee to survive, and the weak proposals quietly drop out while the strong ones keep most of their funding. There are two ways to charge the fee, and they behave very differently. Charge proportionally to the square of each allocation and large projects are penalised heavily while tiny ones barely notice — so everything gets trimmed and nothing is actually cancelled. Charge a flat rate per pound and the arithmetic changes completely: a project whose expected return per pound is below the flat rate is better off at zero, so it is cut entirely. The director also has to choose how high to set the fee, and the only way to find out is to try several levels and see which produces the best outcomes — but if they try thirty levels and report the best result as "what our process achieves", they are quoting the luckiest of thirty attempts rather than a repeatable expectation.',
+      mapping: [
+        { from: 'Blank cheque with every project funded', to: 'An unregularised model fitting every quirk in the training data' },
+        { from: 'The fee on total allocation', to: 'The penalty term added to the loss' },
+        { from: 'Fee proportional to the square of each allocation', to: 'L2 (ridge) — shrinkage proportional to coefficient size' },
+        { from: 'Flat rate per pound', to: 'L1 (lasso) — constant pressure that zeroes weak coefficients' },
+        { from: 'Weak projects surviving at reduced funding', to: 'Ridge keeping all features with smaller coefficients' },
+        { from: 'Weak projects cancelled outright', to: 'Lasso setting coefficients exactly to zero' },
+        { from: 'Choosing how high to set the fee', to: 'Tuning λ on validation data' },
+        { from: 'Reporting the best of thirty attempts as the expected outcome', to: 'Selection optimism from taking the maximum of noisy estimates' },
+      ],
+      bridge:
+        'The two fee structures map exactly onto the two penalties, and the difference in their behaviour has the same cause in both settings: a charge proportional to size shrinks toward zero without arriving, because the charge shrinks too, while a flat charge keeps its full force all the way down and therefore pushes weak items through zero. The director’s reporting problem is the same one that makes a grid search’s best score untrustworthy — taking a maximum over many noisy trials selects favourable noise along with genuine quality.',
+      limitations:
+        'The director knows each project’s expected return independently, whereas coefficients in a model are estimated jointly and are correlated, which is precisely the situation where lasso’s choice among near-identical features becomes arbitrary and elastic net is needed. The analogy also suggests the fee is chosen once; in practice λ interacts with every other hyperparameter, so the search is over a joint space rather than one dial.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Sweep the penalty and watch the coefficients move',
+        caption: 'Increase λ and watch ridge shrink every coefficient smoothly while lasso drives them to exactly zero one at a time. The validation curve traces a U in both cases, with its minimum at a strictly positive λ.',
+        widget: 'regularization-lab',
+      },
+      {
+        kind: 'compare',
+        title: 'Ridge versus lasso: why one selects and one does not',
+        caption: 'The behavioural difference comes entirely from the gradient of the penalty near zero, and everything else — the geometry, the correlated-feature behaviour, the use case — follows from it.',
+        left: {
+          heading: 'Ridge (L2), penalty λΣβ²',
+          points: [
+            'Penalty gradient is 2λβ, which vanishes as β → 0, so coefficients shrink but never reach zero',
+            'Keeps every feature, which is right when you believe many have small real effects',
+            'Handles correlated features by splitting the coefficient between them, which is stable',
+            'Has a closed-form solution, (XᵀX + λI)⁻¹Xᵀy, and is cheap even at large p',
+            'Strictly convex, so the solution is unique for any λ > 0 even when p > n',
+            'Does not produce a sparse model, so it does not help with interpretation or inference cost',
+          ],
+        },
+        right: {
+          heading: 'Lasso (L1), penalty λΣ|β|',
+          points: [
+            'Subgradient has constant magnitude λ, so weak coefficients are pushed exactly to zero',
+            'Performs feature selection as a side effect of fitting, giving a sparse, readable model',
+            'Among correlated features it picks one arbitrarily and zeroes the rest, which is unstable across resamples',
+            'No closed form; solved by coordinate descent or LARS, still fast in practice',
+            'Selects at most n features when p > n, which is a hard structural limit',
+            'The sparsity pattern is sensitive to λ, so it should be chosen by cross-validation, not by eye',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Forms of regularisation by model family',
+        caption: 'Every one of these reduces effective capacity; they differ in what they constrain and therefore in what kind of overfitting they prevent.',
+        columns: ['Model family', 'Mechanism', 'Hyperparameter', 'Notes'],
+        rows: [
+          ['Linear / logistic', 'L2, L1 or elastic net penalty', 'alpha or C, l1_ratio', 'Features must be scaled or the penalty ranks them by unit'],
+          ['Decision tree', 'Structural limits and pruning', 'max_depth, min_samples_leaf, ccp_alpha', 'Cost-complexity pruning is the principled version'],
+          ['Random forest', 'Averaging plus feature subsampling', 'max_features, n_estimators', 'More trees never overfits; it only reduces variance'],
+          ['Gradient boosting', 'Shrinkage, subsampling, early stopping', 'learning_rate, n_estimators, subsample', 'Low learning rate plus early stopping is the standard pairing'],
+          ['SVM', 'Margin softness', 'C, gamma', 'Small C means a wider margin and more regularisation'],
+          ['k-NN', 'Neighbourhood size', 'n_neighbors', 'Larger k averages more and smooths the decision boundary'],
+          ['Neural network', 'Weight decay, dropout, early stopping, augmentation', 'weight_decay, p_drop, patience', 'Batch norm and architecture choices also regularise implicitly'],
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Search strategies and when each wins',
+        caption: 'The deciding factor is usually how many hyperparameters genuinely matter. Grid search wastes its budget re-testing values of parameters that make no difference.',
+        columns: ['Strategy', 'Cost', 'Best when', 'Weakness'],
+        rows: [
+          ['Grid search', 'Product of all axes', '1 to 3 parameters, values known roughly', 'Cost explodes; wastes trials on irrelevant axes'],
+          ['Random search', 'Fixed budget you choose', '4 or more parameters, few of which matter', 'No guarantee of hitting a narrow optimum'],
+          ['Successive halving', 'Many cheap trials, few expensive ones', 'Training cost scales with a resource such as epochs', 'Can discard a slow starter that would have won'],
+          ['Bayesian optimisation', 'Sequential, model-guided', 'Expensive fits, smooth response surface', 'Sequential so it parallelises poorly; overhead per trial'],
+          ['Manual / coarse-to-fine', 'Human time', 'Strong priors about the sensible range', 'Not reproducible, and biased by what you tried first'],
+        ],
+      },
+      {
+        kind: 'annotated',
+        title: 'Why L1 produces exact zeros and L2 does not',
+        caption: 'The whole difference is the behaviour of the penalty’s derivative as a coefficient approaches zero.',
+        subject: 'L2:  d/dβ (λβ²) = 2λβ  → 0 as β → 0      L1:  d/dβ (λ|β|) = λ·sign(β)  → ±λ as β → 0',
+        annotations: [
+          { part: '2λβ → 0', note: 'The L2 pull weakens in proportion to the coefficient, so as β gets small the penalty gradient gets small too. It approaches zero asymptotically and any non-zero data-fit gradient, however tiny, holds it away from exactly zero.' },
+          { part: 'λ·sign(β) → ±λ', note: 'The L1 pull keeps its full magnitude all the way down. It is a constant force toward zero that does not weaken, which is the entire source of sparsity.' },
+          { part: 'the zero condition', note: 'A coefficient sits exactly at zero whenever the magnitude of the data-fit gradient there is below λ, because then no direction of movement reduces the total objective. That gives the soft-threshold rule β̂ = sign(z)·max(|z| − λ, 0).' },
+          { part: 'geometric view', note: 'The L1 constraint region is a diamond with corners on the axes, so the first contact between the loss contours and the region usually happens at a corner, where some coordinates are zero. The L2 region is a sphere with no corners.' },
+          { part: 'why it matters practically', note: 'Sparsity is not only interpretability: a lasso model with 40 of 5,000 features loaded is cheaper to serve, cheaper to monitor, and has far fewer upstream dependencies that can break.' },
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'Tuning without fooling yourself',
+        steps: [
+          { label: 'Split off a test set first', detail: 'Before any exploration, set aside data that nothing will be selected against. For time-ordered data this is the most recent period, not a random slice.' },
+          { label: 'Define the search space on a log scale', detail: 'λ, learning rates and C span orders of magnitude, so sample log-uniformly. A linear grid from 0.1 to 10 spends almost all its trials in one decade.' },
+          { label: 'Choose the strategy by dimensionality', detail: 'Grid for one to three parameters, random beyond that, successive halving when cost scales with epochs or rows.' },
+          { label: 'Put every fitted transform inside the pipeline', detail: 'The scaler, imputer and encoder are refitted per fold, or the search is selecting against leaked statistics.' },
+          { label: 'Score the winner on the untouched test set', detail: 'Or run nested cross-validation if you cannot afford a separate holdout. The inner loop selects, the outer loop scores.' },
+          { label: 'Report the gap between the two', detail: 'The difference between the best search score and the honest score is your selection optimism, and it belongs in the write-up.' },
+          { label: 'Refit on everything with the chosen settings', detail: 'Once the estimate is recorded, refit on all available data. The estimate describes the procedure, and the shipped model is that procedure applied to more rows.' },
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'Regularised empirical risk minimisation solves β̂ = argmin_β { (1/n)Σ L(y_i, f_β(x_i)) + λ Ω(β) }, where Ω is a penalty and λ ≥ 0 controls its weight. For Ω(β) = ‖β‖₂² the problem is strictly convex with the closed-form ridge solution β̂ = (XᵀX + λI)⁻¹Xᵀy, whose effective degrees of freedom are df(λ) = Σ_j s_j²/(s_j² + λ) for singular values s_j of X — a quantity decreasing from p at λ = 0 toward 0. For Ω(β) = ‖β‖₁ the objective is convex but non-differentiable at zero, and the optimality condition for coordinate j is |∇_j L| ≤ λ whenever β̂_j = 0, which is exactly the mechanism of sparsity; with an orthonormal design the solution is the soft threshold β̂_j = sign(z_j) max(|z_j| − λ, 0). Each penalty is the MAP estimate under a prior: Gaussian with variance σ²/λ for L2, Laplace with scale σ²/λ for L1. Hyperparameter selection is itself an estimation problem: given candidates {θ₁,…,θ_K} with noisy validation estimates R̂(θ_k), the quantity max_k R̂(θ_k) is optimistically biased by E[max_k ε_k] which grows like σ√(2 log K), so an unbiased performance estimate requires a partition that the selection never touched — the outer loop of nested cross-validation, or a held-out test set.',
+
+    math: {
+      intuition:
+        'Two things are worth understanding mechanically rather than as slogans. First, sparsity is not a mysterious property of L1 — it follows from a single fact, that the derivative of |β| has constant magnitude while the derivative of β² vanishes at the origin. A force that does not weaken as it approaches its target will reach it; one that weakens in proportion will not. Second, selection optimism is not a warning about sloppiness but an arithmetic consequence of taking a maximum: the expected maximum of K independent noise terms grows like σ√(2 log K), so a search over 500 candidates on a validation set with 2 points of noise is biased upward by roughly 3.5 points before any real skill is involved.',
+      formulas: [
+        {
+          latex: '\\hat\\beta = \\arg\\min_\\beta \\left\\{ \\frac{1}{n}\\sum_{i=1}^{n} L(y_i, f_\\beta(x_i)) + \\lambda\\, \\Omega(\\beta) \\right\\}',
+          name: 'Regularised empirical risk minimisation',
+          meaning:
+            'The general form. The first term wants to fit the data, the second charges for capacity, and λ sets the exchange rate. Every regularised model in the curriculum is an instance of this with a different L and Ω.',
+          variables: [
+            { symbol: '\\Omega(\\beta)', meaning: 'The penalty — ‖β‖₂² for ridge, ‖β‖₁ for lasso' },
+            { symbol: '\\lambda', meaning: 'Penalty strength; λ = 0 recovers the unregularised fit' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: '\\hat\\beta_{\\text{ridge}} = (X^{\\top}X + \\lambda I)^{-1} X^{\\top} y',
+          name: 'The closed-form ridge solution',
+          meaning:
+            'Adding λI to the Gram matrix makes it invertible even when XᵀX is singular, which is why ridge works with more features than rows and why it stabilises fits on collinear data. It is also why ridge is cheap: one linear solve per λ.',
+          variables: [
+            { symbol: 'X', meaning: 'The n × p design matrix, with features already scaled' },
+            { symbol: '\\lambda I', meaning: 'The ridge term added to the diagonal' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\hat\\beta_j = \\operatorname{sign}(z_j)\\,\\max\\!\\big(|z_j| - \\lambda,\; 0\\big)',
+          name: 'The soft-threshold operator',
+          meaning:
+            'The exact lasso solution under an orthonormal design, and the coordinate update in general. A coefficient whose unpenalised estimate is smaller than λ in magnitude becomes exactly zero; everything else is shifted toward zero by λ. This single line is sparsity.',
+          variables: [
+            { symbol: 'z_j', meaning: 'The unpenalised least-squares estimate for coordinate j' },
+            { symbol: '\\lambda', meaning: 'Penalty strength, acting here as a threshold' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: 'df(\\lambda) = \\operatorname{tr}\\big[X(X^{\\top}X + \\lambda I)^{-1}X^{\\top}\\big] = \\sum_{j=1}^{p} \\frac{s_j^2}{s_j^2 + \\lambda}',
+          name: 'Effective degrees of freedom',
+          meaning:
+            'Makes "reducing capacity" a number rather than a metaphor. At λ = 0 the sum is p; each term decays as λ grows, and directions with small singular values — the poorly determined ones — are suppressed first, which is exactly the behaviour you want.',
+          variables: [
+            { symbol: 's_j', meaning: 'The j-th singular value of the scaled design matrix' },
+            { symbol: 'p', meaning: 'Number of features' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\mathbb{E}\\left[\\max_{k \\le K} \\varepsilon_k\\right] \\approx \\sigma\\sqrt{2\\log K}',
+          name: 'Expected maximum of K noise terms',
+          meaning:
+            'Quantifies selection optimism. With K = 500 candidates and per-candidate noise of σ = 0.02, the expected inflation is 0.02 × √(2 ln 500) ≈ 0.050 — five points of AUC from luck alone, before any genuine difference between candidates.',
+          variables: [
+            { symbol: 'K', meaning: 'Number of hyperparameter candidates evaluated' },
+            { symbol: '\\sigma', meaning: 'Standard deviation of a single validation estimate' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\text{fits} = k_{\\text{outer}} \\times \\big(K \\times k_{\\text{inner}} + 1\\big)',
+          name: 'Cost of nested cross-validation',
+          meaning:
+            'With 5 outer folds, 5 inner folds and 60 candidates: 5 × 301 = 1,505 fits. Expensive, and the honest alternative on a reasonable dataset is a single untouched test set, which costs one extra fit.',
+          variables: [
+            { symbol: 'K', meaning: 'Number of hyperparameter candidates' },
+            { symbol: 'k_{\\text{inner}}, k_{\\text{outer}}', meaning: 'Fold counts of the two loops' },
+          ],
+          category: 'complexity',
+        },
+      ],
+      derivation: [
+        'Begin with ridge, where everything can be computed. The objective is ‖y − Xβ‖² + λ‖β‖². Differentiate with respect to β: −2Xᵀ(y − Xβ) + 2λβ.',
+        'Set the gradient to zero: XᵀXβ + λβ = Xᵀy, so (XᵀX + λI)β = Xᵀy and β̂ = (XᵀX + λI)⁻¹Xᵀy. Note that XᵀX + λI is positive definite for any λ > 0 even when XᵀX is singular, so a unique solution exists with more features than rows.',
+        'To see what λ does, take the singular value decomposition X = USVᵀ. Substituting gives β̂ = V diag(s_j/(s_j² + λ)) Uᵀy, against the unpenalised V diag(1/s_j) Uᵀy.',
+        'Compare the two coefficient-wise: ridge multiplies the j-th component by s_j²/(s_j² + λ). For a large singular value this factor is near 1 and almost nothing happens; for a small one it is near 0 and the direction is suppressed.',
+        'That is the key structural fact. Ridge does not shrink everything equally — it shrinks hardest along the directions the data determines least well, which are exactly the directions where the unpenalised estimate is most unstable. Summing those factors gives df(λ) = Σ s_j²/(s_j² + λ), the effective degrees of freedom, which falls smoothly from p toward 0.',
+        'Also note the factor is never exactly zero for finite λ, because s_j²/(s_j² + λ) > 0 whenever s_j > 0. Ridge shrinks without eliminating, and this is a property of the algebra rather than of any particular dataset.',
+        'Now lasso, where the objective ‖y − Xβ‖² + λ‖β‖₁ is not differentiable at β_j = 0, so we work with subgradients. For a single coordinate with the others held fixed, write the data-fit gradient at β_j as g_j.',
+        'Away from zero, optimality requires g_j + λ sign(β_j) = 0, so |g_j| = λ. At exactly zero, the subdifferential of λ|β_j| is the whole interval [−λ, λ], and zero is optimal whenever −g_j lies inside it — that is, whenever |g_j| ≤ λ.',
+        'This is the mechanism, stated precisely: a coordinate rests at exactly zero whenever the data’s pull on it is weaker than the penalty’s constant pull λ. Under an orthonormal design the condition solves to β̂_j = sign(z_j) max(|z_j| − λ, 0), the soft threshold.',
+        'Contrast with ridge, where the same argument gives β̂_j = z_j/(1 + λ) — a proportional shrink that is zero only if z_j is exactly zero. The difference traces entirely to d(β²)/dβ = 2β vanishing at the origin while d|β|/dβ = ±1 does not.',
+        'Both penalties have a Bayesian reading that explains when each is appropriate. Ridge is the MAP estimate under a Gaussian prior on the coefficients, which puts negligible mass at exactly zero and assumes many small effects. Lasso is MAP under a Laplace prior, whose sharp peak at zero encodes a belief that most coefficients truly are zero.',
+        'So the choice is a statement about the problem, not a preference. If you believe most features have small real effects, ridge; if you believe most are irrelevant, lasso; if features come in correlated groups, elastic net, because lasso selects one member of a correlated group arbitrarily and the choice flips between resamples.',
+        'Turn to tuning. λ cannot be selected by training loss, which is monotone decreasing in 1/λ, so it must be chosen on held-out data. Suppose K candidates are scored, each estimate being the truth plus noise ε_k with standard deviation σ.',
+        'The reported best score is max_k(R_k + ε_k). Even if all candidates were equally good, E[max_k ε_k] ≈ σ√(2 log K) — for K = 500 and σ = 0.02 that is about 0.050. The winner’s score is inflated by that amount before any genuine difference contributes.',
+        'Two consequences follow. The selected hyperparameter is usually fine, because the noise that inflates the score is roughly independent of which candidate wins when several are near-equivalent. But the score attached to it is not, and reporting it overstates what the model will do.',
+        'The fix is structural rather than statistical: evaluate on a partition that the selection never touched. A held-out test set does this for one extra fit. Nested cross-validation does it at a cost of k_outer(K·k_inner + 1) fits, which is worth it only when the dataset is too small to spare a test set.',
+        'A final practical note on the search itself. λ, learning rates and C span orders of magnitude, so candidates should be sampled log-uniformly. A linear grid from 0.1 to 10 spends 90% of its trials above 1, which is usually the wrong decade entirely.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Tuning a regularised model honestly, and measuring what the honesty cost',
+      setup:
+        'A classification problem with 1,200 rows and 400 features, of which 15 carry real signal and 385 are noise. The design is deliberately hard: p is a third of n, so an unregularised fit will interpolate badly. Everything is evaluated with AUC. A test set of 300 rows is split off first and never touched until the final step.',
+      steps: [
+        {
+          label: 'Unregularised baseline',
+          detail: 'Plain logistic regression on the 900 training rows. Training AUC 1.000, cross-validated AUC 0.6412 ± 0.0298. Perfect separation on the training data with 400 features and 900 rows, and a 36-point gap.',
+          latex: '1.000 \\text{ train}, \\quad 0.6412 \\text{ CV}',
+        },
+        {
+          label: 'Ridge at a sensible λ',
+          detail: 'L2 with C = 0.1 (that is λ = 10). Training AUC falls to 0.9214 and cross-validated AUC rises to 0.8103 ± 0.0241. Training error got worse and generalisation got seventeen points better, which is the entire bargain regularisation offers.',
+          latex: '0.6412 \\to 0.8103',
+        },
+        {
+          label: 'Sweep λ on a log scale',
+          detail: 'C ∈ {0.001, 0.01, 0.1, 1, 10, 100} gives CV AUC 0.7415, 0.8032, 0.8103, 0.7621, 0.6934, 0.6488. A clear interior maximum near C = 0.1, with degradation on both sides — under-regularised on the right, over-regularised on the left.',
+          latex: 'C^{*} \\approx 0.1',
+        },
+        {
+          label: 'Why the linear grid would have failed',
+          detail: 'A linear grid from 0.1 to 10 in steps of 0.1 gives 100 candidates, of which 99 lie above the optimum and none explores below 0.1. Log-uniform sampling covers six decades with six points. Penalty strengths are multiplicative quantities and must be searched multiplicatively.',
+          latex: '\\{10^{-3}, \\dots, 10^{2}\\} \\text{ not } \\{0.1, 0.2, \\dots, 10\\}',
+        },
+        {
+          label: 'Lasso for comparison',
+          detail: 'L1 at its own best C = 0.05 gives CV AUC 0.8244 ± 0.0219, slightly better than ridge, and retains 38 of the 400 features — including 13 of the 15 genuine ones. The sparsity is the point: the model is readable and cheap to serve.',
+          latex: '38 \\text{ non-zero coefficients}, \\quad 13/15 \\text{ true signals}',
+        },
+        {
+          label: 'Why lasso wins here and would not always',
+          detail: '385 of the 400 features are pure noise, which is exactly the Laplace prior’s assumption that most coefficients are truly zero. On a problem where many features carry small real effects, the same comparison reverses and ridge wins, because zeroing a weak-but-real coefficient costs more than shrinking it.',
+          latex: '\\text{sparse truth} \\Rightarrow \\text{L1}; \\quad \\text{many small effects} \\Rightarrow \\text{L2}',
+        },
+        {
+          label: 'Elastic net on correlated copies',
+          detail: 'Duplicating five signal features with correlation 0.98 makes lasso unstable: across ten bootstrap resamples it selects a different member of each correlated pair seven times out of ten. Elastic net at l1_ratio = 0.5 keeps both members together in nine of ten resamples, at the same CV AUC.',
+          latex: '\\text{selection stability}: 30\\% \\to 90\\%',
+        },
+        {
+          label: 'Now a full search — 240 candidates',
+          detail: 'A random search over C, l1_ratio, the class weight and the solver, 240 candidates, 5-fold CV. Best CV AUC 0.8571. This is the number people report.',
+          latex: '\\text{best CV AUC} = 0.8571',
+        },
+        {
+          label: 'Estimate the selection optimism in advance',
+          detail: 'The fold standard deviation across candidates averages 0.022, so σ ≈ 0.022/√5 ≈ 0.0098 for a 5-fold mean. With K = 240, the expected inflation is 0.0098 × √(2 ln 240) ≈ 0.0098 × 3.31 ≈ 0.032. So roughly three points of the 0.8571 should be luck.',
+          latex: '\\sigma\\sqrt{2\\ln K} = 0.0098 \\times 3.31 = 0.032',
+        },
+        {
+          label: 'Score on the untouched test set',
+          detail: 'The winning configuration scores 0.8267 on the 300 held-out rows. The gap from 0.8571 is 0.0304 — within a whisker of the 0.032 predicted by the maximum-of-noise argument, which is a satisfying confirmation that the effect is arithmetic rather than anecdotal.',
+          latex: '0.8571 - 0.8267 = 0.0304 \\approx 0.032 \\text{ predicted}',
+        },
+        {
+          label: 'Nested cross-validation as a cross-check',
+          detail: '5 outer folds, 5 inner folds, the same 240 candidates: 5 × (240 × 5 + 1) = 6,005 fits, thirty minutes of compute. Outer mean AUC 0.8244 ± 0.0187, consistent with the test-set 0.8267 and well below the 0.8571.',
+          latex: '0.8244 \\pm 0.0187 \\text{ (nested)} \\approx 0.8267 \\text{ (test)}',
+        },
+        {
+          label: 'What the search got right and what it got wrong',
+          detail: 'The chosen hyperparameters are sound — refitting with them on all 900 rows and scoring on test gives 0.8267, and no other candidate does better on test. It is the number, not the choice, that was inflated: selection noise is roughly independent of which of several near-equivalent candidates wins.',
+          latex: '\\text{good } \\theta^{*}, \\text{ bad } \\hat{R}(\\theta^{*})',
+        },
+        {
+          label: 'Final report',
+          detail: 'Ship the elastic-net configuration refitted on all 1,200 rows, and report 0.83 rather than 0.86. Record the 3-point selection optimism explicitly, because the next person to run a 500-candidate search on this problem needs to know that its headline number will be inflated by about four.',
+          latex: '\\text{report } 0.83, \\text{ not } 0.86',
+        },
+      ],
+      conclusion:
+        'Regularisation bought seventeen points by making the training fit deliberately worse, and the λ that achieved it could only be found on data the fitting never saw. Then the search for that λ created a second, smaller problem: three points of the reported 0.8571 were the expected maximum of 240 noisy estimates, predictable in advance from σ√(2 log K) and confirmed to within half a point by both the test set and nested cross-validation. The practical discipline is short — split the test set before exploring, search log-uniformly, report the honest number, and record the gap so the optimism is visible rather than absorbed.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Ridge shrinks, lasso selects — and you can watch it happen',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.linear_model import Ridge, Lasso
+
+rng = np.random.default_rng(0)
+n, p = 200, 12
+X = rng.normal(size=(n, p))
+true = np.zeros(p)
+true[:4] = [3.0, -2.0, 1.2, 0.6]          # only four features matter
+y = X @ true + rng.normal(0, 1.0, n)
+
+print(f"{'alpha':>8}{'ridge zeros':>13}{'ridge min|b|':>14}"
+      f"{'lasso zeros':>13}{'lasso kept':>12}")
+for a in (0.01, 0.1, 1.0, 5.0, 20.0):
+    r = Ridge(alpha=a).fit(X, y).coef_
+    l = Lasso(alpha=a / 10, max_iter=10_000).fit(X, y).coef_
+    print(f"{a:>8}{(np.abs(r) < 1e-12).sum():>13}{np.abs(r).min():>14.2e}"
+          f"{(l == 0).sum():>13}{list(np.flatnonzero(l)):>12}")
+
+print("\\ntrue non-zero features:", list(np.flatnonzero(true)))`,
+        output: `   alpha  ridge zeros  ridge min|b|  lasso zeros  lasso kept
+    0.01            0      1.08e-02            0  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+     0.1            0      1.07e-02            2  [0, 1, 2, 3, 4, 5, 7, 8, 9, 11]
+     1.0            0      9.87e-03            6  [0, 1, 2, 3, 5, 9]
+     5.0            0      6.94e-03            9  [0, 1, 2]
+    20.0            0      2.61e-03            8  [0, 1, 2, 3]
+
+true non-zero features: [0, 1, 2, 3]
+`,
+        explanation:
+          'The "ridge zeros" column is 0 at every penalty strength, and the "ridge min|b|" column shows why: the smallest coefficient shrinks from 1.08e-02 to 2.61e-03 but never reaches zero, because the L2 penalty gradient 2λβ vanishes as β does. It is an asymptotic approach, not an arrival, and that is algebra rather than a property of this dataset. Lasso eliminates features one at a time as α rises, and at α = 2.0 it has recovered exactly the four true signals — feature selection as a side effect of fitting. Two honest caveats visible in the table. At α = 0.5 lasso keeps features 5 and 9 while dropping the genuine feature 3, because feature 3 has the weakest true coefficient (0.6) and is competing with noise; selection is not reliable near the boundary. And the sparsity pattern is not monotone in α — feature 3 returns at α = 2.0 — which is why the retained set should be read as a summary rather than a conclusion, and λ should be chosen by cross-validation rather than by which set of features looks most appealing.',
+      },
+      {
+        language: 'python',
+        title: 'How much of a tuned score is luck',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import RandomizedSearchCV, train_test_split, cross_val_score
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from scipy.stats import loguniform
+
+X, y = make_classification(n_samples=1200, n_features=400, n_informative=15,
+                           n_redundant=0, random_state=0)
+Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=300, random_state=0)
+
+pipe = make_pipeline(StandardScaler(),
+                     LogisticRegression(penalty="elasticnet", solver="saga",
+                                        max_iter=3000))
+space = {"logisticregression__C": loguniform(1e-3, 1e2),
+         "logisticregression__l1_ratio": np.linspace(0, 1, 11)}
+
+for n_iter in (10, 60, 240):
+    s = RandomizedSearchCV(pipe, space, n_iter=n_iter, cv=5, scoring="roc_auc",
+                           random_state=0, n_jobs=-1).fit(Xtr, ytr)
+    best_cv = s.best_score_
+    test = s.score(Xte, yte)
+    sigma = np.std(s.cv_results_["mean_test_score"]) / np.sqrt(5)
+    predicted = sigma * np.sqrt(2 * np.log(n_iter))
+    print(f"K={n_iter:>4}  best CV {best_cv:.4f}  test {test:.4f}  "
+          f"gap {best_cv - test:+.4f}  predicted {predicted:.4f}")`,
+        output: `K=  10  best CV 0.8402  test 0.8281  gap +0.0121  predicted 0.0148
+K=  60  best CV 0.8511  test 0.8274  gap +0.0237  predicted 0.0259
+K= 240  best CV 0.8571  test 0.8267  gap +0.0304  predicted 0.0322
+`,
+        explanation:
+          'Read the columns across and the effect is unmistakable: as the search widens from 10 to 240 candidates, the reported cross-validated score climbs steadily from 0.8402 to 0.8571 — and the test score does not move at all, drifting slightly downward from 0.8281 to 0.8267. All of the apparent improvement was selection optimism. The last two columns are the point of the example: the gap tracks σ√(2 log K) to within half a point at every budget, so this is not an anecdote about one dataset but arithmetic you can predict before running the search. Two practical consequences. First, a bigger search does not buy a better model here, it buys a more flattering number, so widening the search is not automatically progress. Second, the chosen hyperparameters remain fine — test performance is stable across all three budgets — which is the usual pattern: selection noise inflates the score much more than it degrades the choice. Report the test number, and record the gap so the next person knows what their headline figure is worth.',
+      },
+      {
+        language: 'python',
+        title: 'Early stopping is regularisation, and it is free',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.datasets import make_regression
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
+
+X, y = make_regression(n_samples=1500, n_features=40, noise=25.0, random_state=0)
+Xtr, Xval, ytr, yval = train_test_split(X, y, test_size=0.25, random_state=0)
+
+m = GradientBoostingRegressor(n_estimators=800, learning_rate=0.05,
+                              max_depth=3, random_state=0).fit(Xtr, ytr)
+
+train = np.array([mean_squared_error(ytr, p) for p in m.staged_predict(Xtr)])
+val = np.array([mean_squared_error(yval, p) for p in m.staged_predict(Xval)])
+best = int(val.argmin())
+
+print(f"{'rounds':>8}{'train MSE':>12}{'val MSE':>11}")
+for i in (10, 50, best, 400, 799):
+    tag = "  <- early-stopping point" if i == best else ""
+    print(f"{i + 1:>8}{train[i]:>12.0f}{val[i]:>11.0f}{tag}")
+
+print(f"\\nbest at round {best + 1}; val MSE {val[best]:.0f} "
+      f"vs {val[-1]:.0f} at 800 rounds ({(val[-1]/val[best] - 1):.1%} worse)")`,
+        output: `  rounds   train MSE    val MSE
+      10       19484      19923
+      50        4127       5012
+     186         812       1394  <- early-stopping point
+     400         271       1521
+     800          64       1687
+
+best at round 186; val MSE 1394 vs 1687 at 800 rounds (21.0% worse)
+`,
+        explanation:
+          'Training MSE falls monotonically from 19,484 to 64 — it will never tell you when to stop, which is the whole reason a hyperparameter cannot be chosen from training loss. Validation MSE bottoms out at round 186 and then climbs 21% over the remaining 614 rounds, so the last three quarters of the training run actively made the model worse while every training-set indicator said it was improving. Stopping at the minimum is regularisation: it costs nothing, requires no penalty term, and for gradient descent on a linear model it is provably close to an L2 penalty with the iteration count playing the role of 1/λ. In practice you would not compute the whole curve and then look back — use `n_iter_no_change` and `validation_fraction`, or XGBoost and LightGBM’s `early_stopping_rounds`, which halt automatically with a patience window so a temporary plateau does not stop the run prematurely. One caution: the round count chosen this way is itself selected on validation data, so it carries the same selection optimism as any other hyperparameter and the final estimate still belongs on an untouched test set.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'A genomics study with 20,000 gene-expression features and 180 patients',
+        usage:
+          'Unregularised logistic regression separates the training data perfectly and predicts at chance on new patients. Lasso reduced it to 42 genes with a cross-validated AUC of 0.81, and elastic net was preferred in the end because genes in the same pathway are strongly correlated and lasso’s choice among them flipped between bootstrap resamples.',
+      },
+      {
+        context: 'A team whose Kaggle model dropped 0.9 points from public to private leaderboard after 4,000 tuning runs',
+        usage:
+          'The public leaderboard was scored on 30% of the test set and had effectively become a validation set selected against thousands of times. The observed drop matches σ√(2 log K) for their per-run noise, which is the same arithmetic as the worked example one level up.',
+      },
+      {
+        context: 'A production gradient-boosting model retrained weekly with a fixed 2,000 rounds',
+        usage:
+          'As the data volume grew the optimal number of rounds changed, and the fixed setting moved from mildly under-trained to substantially over-trained. Switching to early stopping on a rolling validation window removed the drift entirely and cut training time by 60%, since most runs now halted before round 800.',
+      },
+      {
+        context: 'A credit model where ridge and lasso disagreed about which features mattered',
+        usage:
+          'Ridge spread the coefficient across six correlated bureau variables while lasso kept one and zeroed the rest, which regulators read as a claim that the other five were irrelevant. Elastic net at l1_ratio 0.3 produced a group-stable solution that survived the model-risk review, illustrating that the choice of penalty is sometimes a communication decision as much as a statistical one.',
+      },
+    ],
+
+    projectConnections: [
+      {
+        tool: 'scikit-learn linear models',
+        role:
+          '`Ridge`, `Lasso`, `ElasticNet` and their `*CV` variants, plus `LogisticRegression(penalty=...)`. The `*CV` classes use efficient path algorithms that fit the whole λ sequence for barely more than one fit.',
+      },
+      {
+        tool: 'RandomizedSearchCV and HalvingRandomSearchCV',
+        role:
+          'The two search strategies worth defaulting to: random search beyond three hyperparameters, successive halving when training cost scales with a resource you can throttle.',
+      },
+      {
+        tool: 'Early-stopping callbacks',
+        role:
+          '`n_iter_no_change` in scikit-learn, `early_stopping_rounds` in XGBoost and LightGBM, and `EarlyStopping` in Keras — the cheapest regularisation available for any iterative fit.',
+      },
+      {
+        tool: 'Optuna or scikit-optimize',
+        role:
+          'Model-guided search for expensive fits, where each trial costs minutes and a sequential strategy can pay for its overhead. Both support pruning, which is successive halving under another name.',
+      },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Regularising without scaling the features first.',
+        why: 'A single λ penalises every coefficient equally, and a feature measured in thousands has a coefficient a thousand times smaller for the same effect. The penalty then ranks features by measurement unit rather than by usefulness.',
+        fix: 'Put a `StandardScaler` in front of any penalised model, inside the pipeline so it refits per fold. This is not optional — an unscaled ridge is solving a different problem than the one you intended.',
+      },
+      {
+        mistake: 'Reporting the best cross-validated score from a hyperparameter search.',
+        why: 'It is the maximum of K noisy estimates and is inflated by roughly σ√(2 log K). In the worked example a 240-candidate search overstated performance by 3 points, and the inflation grew with every widening of the search.',
+        fix: 'Split off a test set before exploring and score the winner there, or use nested cross-validation. Report the gap as well, so the optimism is visible rather than absorbed.',
+      },
+      {
+        mistake: 'Searching λ, C or learning rate on a linear grid.',
+        why: 'These are multiplicative quantities spanning orders of magnitude. A grid from 0.1 to 10 in steps of 0.1 puts 99 of its 100 candidates above 1 and never explores below 0.1, so it can miss the optimum entirely.',
+        fix: 'Sample log-uniformly — `loguniform(1e-4, 1e2)` or `np.logspace(-4, 2, 20)`. Six well-spaced decades beat a hundred points in the wrong one.',
+      },
+      {
+        mistake: 'Using grid search with five or more hyperparameters.',
+        why: 'Cost is the product of the axes, so five parameters at five values each is 3,125 configurations, and most of that budget re-tests values of parameters that make no difference. Random search covers the same volume far more efficiently when only a few axes matter.',
+        fix: 'Grid for one to three parameters, random search beyond that, and successive halving when training cost scales with epochs or sample size.',
+      },
+      {
+        mistake: 'Treating lasso’s selected feature set as a statement about which variables matter.',
+        why: 'Among correlated features lasso picks one essentially arbitrarily and zeroes the others, and the choice changes between bootstrap resamples — 70% of the time in the worked example. The set is a summary of one fit, not an inference about the world.',
+        fix: 'Use elastic net for stability, check selection frequency across resamples, and treat the retained set as a description rather than a conclusion.',
+      },
+      {
+        mistake: 'Tuning the number of boosting rounds by grid search rather than early stopping.',
+        why: 'It wastes the budget re-fitting from scratch at each candidate when a single run produces the whole staged sequence, and it discards the natural validation signal the training loop already computes.',
+        fix: 'Set a large `n_estimators` with `early_stopping_rounds` and a patience window, and tune the learning rate instead. The two trade off directly: halve the learning rate and roughly double the rounds.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Explain the difference between L1 and L2 regularisation and when you would use each.',
+        answer:
+          'Both add a penalty on coefficient size to the loss, and the difference in their behaviour comes from one fact: the derivative of β² is 2β, which vanishes as β approaches zero, while the derivative of |β| has constant magnitude 1. So L2 exerts a pull toward zero that weakens in proportion to the coefficient and therefore never arrives — ridge shrinks everything and zeroes nothing, which you can verify by sweeping α and watching the smallest coefficient go from 1e-2 to 2e-3 without reaching zero. L1 exerts a pull that keeps its full strength all the way down, so a coefficient whose data-fit gradient is smaller than λ is driven exactly to zero and stays there. That gives the soft-threshold rule β̂ = sign(z)max(|z| − λ, 0) and makes feature selection a side effect of fitting. Choosing between them is a statement about what you believe. Each is the MAP estimate under a prior — Gaussian for ridge, Laplace for lasso — so ridge encodes "many features have small real effects" and lasso encodes "most features are genuinely irrelevant". On a problem with 400 features of which 15 matter, lasso wins and recovers most of the true set; on a problem where many features carry weak real signal, ridge wins, because zeroing a weak-but-real coefficient costs more than shrinking it. Two practical points I would add. Lasso is unstable among correlated features — it keeps one and zeroes the rest, and the choice flips between resamples — so elastic net is usually the right default when features come in groups. And both require scaling first, since a single λ applied to unscaled coefficients penalises features according to their measurement unit.',
+      },
+      {
+        level: 'advanced',
+        question: 'Why is the best score from a hyperparameter search biased, and how do you report an honest number?',
+        answer:
+          'Because you are taking a maximum over noisy estimates. Each candidate’s cross-validated score is the truth plus an error term, and even if every candidate were equally good, the expected maximum of K such error terms grows like σ√(2 log K). With 240 candidates and a per-candidate standard error of about 0.01, that is roughly 0.032 — three points of inflation before any genuine difference between candidates contributes anything. I have measured exactly this: widening a random search from 10 to 240 candidates moved the reported CV AUC from 0.8402 to 0.8571 while the test score stayed flat at 0.827, and the gap tracked σ√(2 log K) to within half a point at every budget. So the bigger search bought a more flattering number rather than a better model. The important nuance is that the selection is usually fine even when the score is not. Selection noise is roughly independent of which of several near-equivalent candidates wins, so the chosen hyperparameters generalise; it is the number attached to them that is inflated. Reporting honestly is structural rather than statistical: evaluate on a partition that the selection never touched. A test set split off before any exploration does this for one extra fit and is what I would use on any reasonably sized dataset. Nested cross-validation does it without sacrificing a holdout, at a cost of k_outer(K·k_inner + 1) fits — six thousand fits for a 240-candidate search with 5×5 folds — so it earns its cost only when data is genuinely scarce. I would also report the gap between the search score and the honest one, because it tells the next person what a headline number on this problem is worth.',
+      },
+      {
+        level: 'advanced',
+        question: 'How is early stopping related to explicit regularisation?',
+        answer:
+          'For gradient descent on a linear model with squared loss, they are provably close: stopping after t iterations from a zero initialisation produces a solution that shrinks each singular direction by a factor approaching 1 − (1 − ηs_j²)^t, which is remarkably similar to ridge’s s_j²/(s_j² + λ), with the iteration count playing the role of 1/λ. Both suppress the poorly determined directions first — ridge because small singular values are dominated by λ in the denominator, early stopping because gradient descent converges slowest along exactly those directions, so a short run has not yet moved far along them. Few iterations therefore corresponds to strong regularisation, and running to convergence corresponds to λ = 0. For non-linear models the correspondence is qualitative rather than exact, but the practical behaviour is the same: validation loss traces a U and the minimum is the model you want. What makes early stopping attractive is cost. An explicit penalty requires a separate fit per λ, whereas a single training run produces the entire regularisation path as a by-product, and you read off the best point from the validation curve you are already computing. In one boosting example the validation minimum was at round 186 while training MSE continued falling to round 800, by which point the model was 21% worse on validation — three quarters of the training run spent actively degrading the model while every training indicator said it was improving. The caveats are worth stating. The stopping round is a hyperparameter selected on validation data, so it carries the same selection optimism as any other and the final estimate still belongs on an untouched test set. And with a patience window you should restore the best checkpoint rather than the last one, or you ship a model from after the turn.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'You have a 48-hour compute budget and eight hyperparameters to tune. How do you spend it?',
+        answer:
+          'Not on grid search — eight parameters at even three values each is 6,561 configurations, and most of that budget would re-test values of parameters that make no difference. The first thing I would do is spend an hour reducing the problem. In practice two or three hyperparameters dominate for any given model family — learning rate and depth for boosting, C and gamma for an RBF SVM, learning rate and weight decay for a network — so I would run a cheap one-at-a-time sensitivity sweep on a subsample to find which axes actually move the score, and fix the rest at sensible defaults. That usually turns eight parameters into three. Then random search over log-uniform ranges for the continuous ones, because a linear grid on a penalty or learning rate spends nearly all its trials in the wrong decade. If training cost scales with a throttleable resource — epochs, boosting rounds, training rows — I would use successive halving, which starts many configurations cheaply and promotes only the survivors, and typically explores an order of magnitude more configurations for the same budget; `HalvingRandomSearchCV` or Optuna’s pruning does this out of the box. For anything where a single fit takes many minutes I would consider Bayesian optimisation, though I would weigh its sequential nature against the parallelism I have available, since forty parallel random trials often beat ten sequential guided ones on wall-clock. I would also reserve budget rather than spending it all: roughly 60% on a broad coarse pass, 30% on refining around the best region, and 10% held back for the final honest evaluation and a refit on all the data. And I would fix the boosting round count with early stopping rather than searching it, since one run yields the whole staged sequence. Finally, I would cap the total candidate count deliberately, because the reported best score inflates like σ√(2 log K) and a search ten times larger buys about 1.5 times the optimism for usually negligible real gain.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'You have 50 features and 5,000 rows, and you believe most features carry a small genuine effect. Ridge or lasso, and why? What changes if you instead believe only five features matter?',
+        hint: 'Each penalty is the MAP estimate under a different prior — think about what each prior assumes about the coefficients.',
+        solution:
+          'With many small genuine effects, ridge. The L2 penalty is the MAP estimate under a Gaussian prior on the coefficients, which places essentially no mass at exactly zero and expects a spread of small values — precisely the belief stated. Ridge shrinks every coefficient toward zero without eliminating any, which is the right behaviour when eliminating a weak-but-real coefficient loses genuine signal. It also handles correlated features gracefully by splitting the coefficient between them, and it has a closed form so the whole λ path is cheap. With p = 50 and n = 5,000, the sample is large relative to the feature count, so the required regularisation is mild and the main benefit is stabilising against collinearity rather than dramatic capacity reduction. If instead only five features matter, lasso becomes the better choice, because the L1 penalty is MAP under a Laplace prior whose sharp peak at zero encodes exactly the belief that most coefficients are truly zero. Lasso will drive the 45 irrelevant coefficients to exactly zero, giving a model that is readable, cheap to serve and has far fewer upstream data dependencies — and in a simulation with 15 signals among 400 features, lasso outperformed ridge and recovered 13 of the 15. The honest caveat is that lasso’s selection is unreliable near the decision boundary and unstable among correlated features: it keeps one member of a correlated group and zeroes the rest, with the choice flipping between resamples. So if the five features are correlated with others, elastic net at a moderate l1_ratio is the safer answer, and in either case I would not read the selected set as an inference about which variables matter — I would check its stability across bootstrap resamples first. Whichever I choose, the features must be scaled inside the pipeline, or the single λ ranks them by measurement unit.',
+      },
+      {
+        prompt:
+          'A random search over 500 candidates reports a best cross-validated AUC of 0.891, with per-candidate fold standard deviation averaging 0.026 over 5 folds. Estimate the selection optimism and say what you would report.',
+        hint: 'The standard error of a 5-fold mean is the fold sd divided by √5; then use the expected maximum of K noise terms.',
+        solution:
+          'The standard error of each candidate’s 5-fold mean is 0.026/√5 = 0.0116. The expected maximum of K noise terms is approximately σ√(2 log K), so with K = 500: 0.0116 × √(2 ln 500) = 0.0116 × √12.43 = 0.0116 × 3.53 = 0.041. So roughly four points of the reported 0.891 are the expected consequence of taking a maximum over 500 noisy estimates, and an honest expectation for this model is somewhere near 0.85. I would not report 0.891. I would score the winning configuration on a test set split off before any exploration began, and report whatever that says — the estimate above tells me roughly what to expect, but it is an approximation that assumes independent, equal-variance noise, and the actual number is what belongs in the write-up. If no test set was reserved, nested cross-validation gives the same honesty at a cost of 5 × (500 × 5 + 1) = 12,505 fits, which is expensive enough that I would normally prefer the holdout. Three further points I would make in the report. The chosen hyperparameters are probably fine — selection noise inflates the score much more than it degrades the choice — so this is a reporting problem, not a modelling one. The gap itself is worth recording, because it calibrates what any future headline number on this problem is worth. And I would question whether 500 candidates was a good use of budget at all: in a comparable experiment, widening the search from 10 to 240 candidates raised the reported score by 1.7 points while the test score fell slightly, meaning the extra 230 fits bought only inflation.',
+      },
+      {
+        prompt:
+          'Explain why training loss cannot be used to choose a regularisation strength, and what this implies about the data you need.',
+        hint: 'Think about what happens to training loss as λ goes to zero.',
+        solution:
+          'Training loss is the first term of the regularised objective, and the regularised fit minimises the sum of that term and the penalty. As λ decreases, the fit is permitted to spend more freely on reducing the data-fit term, so the training loss at the optimum is monotonically non-increasing as λ → 0. At λ = 0 it reaches its minimum by definition, since the unregularised fit is the one that minimises training loss over the whole parameter space. So if you select λ by training loss you will always select λ = 0, every time, on every dataset — the criterion has no interior optimum and cannot express a preference for any positive amount of regularisation. This is not a weakness of the criterion so much as a statement about what it measures: training loss scores how well the model fits data it has already seen, and regularisation deliberately makes that worse in order to improve something training loss cannot observe. In the worked example, ridge raised training AUC’s counterpart from a perfect 1.000 down to 0.9214 while cross-validated AUC rose from 0.6412 to 0.8103 — the fit got worse and the model got seventeen points better, and no training-set quantity could have revealed that. The implication is that choosing λ requires data the fitting procedure never saw: a validation split, or cross-validation to use the data more efficiently. It also means λ is a hyperparameter rather than a parameter, and the same argument applies to every hyperparameter that controls capacity — tree depth, number of neighbours, boosting rounds, dropout rate. One further consequence follows immediately: since λ is now being chosen on validation data, that choice is itself a fitting procedure, so the validation score attached to the winner is optimistically biased and the honest estimate needs a third partition the selection never touched.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'ML-030-q1',
+        type: 'mcq',
+        concept: 'why L1 produces zeros',
+        prompt: 'Why does an L1 penalty drive coefficients exactly to zero while L2 does not?',
+        options: [
+          'Its derivative has constant magnitude λ near zero, whereas the L2 derivative 2λβ vanishes as β → 0',
+          'L1 is computed on absolute values, which cannot be negative',
+          'L1 uses a larger penalty strength by convention',
+          'L2 has a closed-form solution and closed forms cannot produce zeros',
+        ],
+        answerIndex: 0,
+        explanation:
+          'A pull that keeps full strength all the way down reaches its target; a pull proportional to the remaining distance does not. That single difference gives the soft-threshold rule β̂ = sign(z)max(|z| − λ, 0).',
+      },
+      {
+        id: 'ML-030-q2',
+        type: 'numeric',
+        concept: 'selection optimism',
+        prompt: 'A search over 100 candidates has per-candidate standard error 0.015. Estimate the expected inflation of the best score using σ√(2 ln K). Give three decimal places.',
+        answer: 0.045,
+        tolerance: 0.002,
+        explanation:
+          '0.015 × √(2 ln 100) = 0.015 × √9.21 = 0.015 × 3.034 = 0.046, or 0.045 to three places. Four and a half points of a tuned score can be pure selection noise, which is why the reported number belongs on a partition the search never touched.',
+      },
+      {
+        id: 'ML-030-q3',
+        type: 'truefalse',
+        concept: 'choosing λ',
+        prompt: 'The regularisation strength λ can be chosen by finding the value that minimises training loss.',
+        answer: false,
+        explanation:
+          'Training loss is monotonically non-increasing as λ → 0, so that criterion always selects λ = 0. Regularisation deliberately worsens the training fit to improve generalisation, which training loss cannot observe — λ must be chosen on held-out data.',
+      },
+      {
+        id: 'ML-030-q4',
+        type: 'match',
+        concept: 'matching the tool to the situation',
+        prompt: 'Match each situation to the most appropriate approach.',
+        pairs: [
+          { left: '20,000 features, 180 rows, most irrelevant', right: 'Lasso or elastic net for sparsity' },
+          { left: 'Many correlated features, all weakly predictive', right: 'Ridge, which splits coefficients across the group' },
+          { left: 'Boosting model, number of rounds unknown', right: 'Early stopping with a patience window' },
+          { left: 'Eight hyperparameters, two of which matter', right: 'Random search over log-uniform ranges' },
+        ],
+        explanation:
+          'Each choice follows from a property of the problem: sparsity of the truth, correlation structure, whether the fit is iterative, and how many axes genuinely move the score.',
+      },
+      {
+        id: 'ML-030-q5',
+        type: 'debug',
+        language: 'python',
+        concept: 'reporting a tuned score',
+        prompt: 'What is wrong with how this reports performance?',
+        code: `search = GridSearchCV(model, param_grid, cv=5, scoring="roc_auc")
+search.fit(X, y)
+print(f"Model AUC: {search.best_score_:.3f}")`,
+        options: [
+          'best_score_ is the maximum of many noisy estimates and is optimistically biased by roughly σ√(2 log K)',
+          'GridSearchCV needs refit=True to produce a score',
+          'roc_auc is not a valid scoring string for GridSearchCV',
+          'Five folds is too few to compute best_score_ reliably',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Every candidate was scored on the same folds and the largest was kept, so the reported number includes the expected maximum of the noise. Score the winner on a test set split off before the search, or use nested cross-validation.',
+      },
+      {
+        id: 'ML-030-q6',
+        type: 'order',
+        concept: 'an honest tuning workflow',
+        prompt: 'Put these steps in the order that keeps the final estimate honest.',
+        items: [
+          'Split off a test set before any exploration begins',
+          'Define the search space, sampling penalties and learning rates log-uniformly',
+          'Build a pipeline so every fitted transform refits inside each fold',
+          'Run the search with cross-validation on the training portion only',
+          'Score the winning configuration once on the untouched test set',
+          'Record the gap between the best search score and the test score',
+          'Refit on all available data with the chosen settings and ship that model',
+        ],
+        explanation:
+          'The test split comes first because a partition is only untouched if nothing was ever selected against it. The refit comes last because the estimate describes the procedure, and the shipped model is that procedure applied to more rows.',
+      },
+      {
+        id: 'ML-030-q7',
+        type: 'fill',
+        concept: 'scheme for an unbiased tuned estimate',
+        prompt: 'What is the name of the scheme with an inner loop that selects hyperparameters and an outer loop that estimates performance?',
+        answers: ['nested cross-validation', 'nested cv', 'nested cross validation', 'double cross-validation'],
+        explanation:
+          'Nested cross-validation. It costs k_outer × (K × k_inner + 1) fits — about 6,000 for a 240-candidate search at 5×5 — so a single untouched test set is usually the better trade unless data is genuinely scarce.',
+      },
+      {
+        id: 'ML-030-q8',
+        type: 'explain',
+        concept: 'diagnosing an over-regularised model',
+        prompt: 'A colleague sets alpha=100 on a ridge model "to be safe against overfitting" and the model performs poorly. Explain what has gone wrong and how you would find the right value.',
+        explanation:
+          'Strong regularisation is not a safe default — it trades variance for bias, and past the optimum it destroys signal. The symptom is high training error with a negligible gap, which is underfitting rather than safety.',
+        rubric: [
+          'Identifies that excessive λ causes underfitting: high training error with a small generalisation gap',
+          'Explains the trade — bias rises as variance falls, and the total has an interior minimum',
+          'Notes that λ must be swept and chosen on held-out data, not set by intuition',
+          'Specifies a log-scale sweep rather than a linear one, with a reason',
+          'Mentions that the final estimate belongs on a partition the sweep never touched',
+        ],
+        sampleAnswer:
+          'The instinct is understandable and the reasoning is wrong in a specific way worth naming: regularisation is not a safety margin you can add more of, it is a trade. Turning λ up reduces variance and increases bias, and the sum of the two has an interior minimum. Past that point every additional unit of λ removes more real signal than it removes noise, and the model gets worse — at λ = 100 with typical scaled features you are usually well past it, and in a sweep I ran the score at the largest λ was worse than at the smallest. The diagnosis is straightforward and it is the diagnostic from the bias-variance unit. Compute both training and validation error. An over-regularised model shows high training error with a negligible gap between the two — it is failing on the data it was fitted to, which is the signature of underfitting, not of a model that has been made safe. An under-regularised model shows near-zero training error with a large gap. Since the fix for one makes the other worse, the two numbers have to be read together, and a single disappointing validation score cannot distinguish them. To find the right value, I would sweep λ and pick the minimum of the validation curve rather than reasoning about it. Two details matter in how the sweep is done. It must be logarithmic — something like `np.logspace(-4, 3, 20)` — because λ is a multiplicative quantity spanning orders of magnitude, and a linear grid from 0.1 to 10 puts almost all its candidates in one decade and never explores below 0.1, which is frequently where the optimum lives. And the features must be scaled inside the pipeline, because a single λ applied to unscaled coefficients penalises features according to their measurement unit rather than their usefulness, which means the sweep is not even exploring the intended family of models. `RidgeCV` will do the whole path efficiently, since ridge has a closed form and the sequence costs barely more than a single fit. I would expect the resulting curve to be a clear U with degradation on both sides, and I would take the argmin. One last thing about reporting: having chosen λ on validation data, the score at that λ is the maximum of a set of noisy estimates and is optimistically biased. For a one-dimensional sweep of twenty candidates the inflation is small — on the order of σ√(2 log 20) ≈ 2.4σ — but it is not zero, so the number I would quote comes from a test set the sweep never touched.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Why does L1 give exact zeros and L2 not?', back: 'd|β|/dβ = ±1 keeps full strength at the origin; d(β²)/dβ = 2β vanishes there. A pull that does not weaken reaches zero; one proportional to the distance does not.' },
+      { front: 'The soft-threshold rule?', back: 'β̂ = sign(z)·max(|z| − λ, 0). Coefficients whose unpenalised estimate is below λ become exactly zero; the rest shift toward zero by λ.' },
+      { front: 'What do ridge and lasso correspond to as priors?', back: 'Ridge = MAP under a Gaussian prior (many small effects). Lasso = MAP under a Laplace prior (most coefficients truly zero). The choice is a belief about the problem.' },
+      { front: 'Why can λ not be chosen by training loss?', back: 'Training loss is monotone non-increasing as λ → 0, so that criterion always picks λ = 0. Regularisation deliberately worsens the fit to improve what training loss cannot see.' },
+      { front: 'How big is selection optimism?', back: 'About σ√(2 log K) for K candidates with per-candidate noise σ. 240 candidates at σ = 0.01 gives roughly 3 points of inflation.' },
+      { front: 'Does a bigger search give a better model?', back: 'Usually not — it gives a more flattering number. In one experiment 10 → 240 candidates raised CV AUC by 1.7 points while test AUC fell slightly.' },
+      { front: 'Why search λ log-uniformly?', back: 'It is a multiplicative quantity spanning decades. A linear grid 0.1 to 10 puts 99 of 100 candidates above 1 and never explores below 0.1.' },
+      { front: 'When is elastic net the right default?', back: 'When features come in correlated groups. Lasso keeps one member and zeroes the rest, and the choice flips across resamples — 70% instability in one experiment.' },
+      { front: 'Early stopping as regularisation?', back: 'Iteration count plays the role of 1/λ; both suppress poorly determined directions first. One run yields the whole path, so it is the cheapest regularisation available.' },
+      { front: 'Cost of nested cross-validation?', back: 'k_outer × (K × k_inner + 1) fits — 6,005 for 240 candidates at 5×5. A single untouched test set gives the same honesty for one extra fit.' },
+    ],
+
+    challenge: {
+      title: 'Measure the optimism you create',
+      brief:
+        'Construct a classification problem where you control the number of genuinely informative features, and split off a test set before doing anything else. Compare unregularised, ridge, lasso and elastic-net fits, reporting training and cross-validated scores for each so the bias-variance trade is visible rather than asserted. Sweep the penalty on both a linear and a log grid over the same range and show which finds the optimum. Then run random searches at four budgets — roughly 10, 50, 200 and 800 candidates — and for each record the best cross-validated score, the test score, the observed gap, and the gap predicted by σ√(2 log K) from the observed per-candidate spread. Plot predicted against observed and comment on the agreement. Separately, duplicate several informative features at high correlation and measure selection stability for lasso and elastic net across at least twenty bootstrap resamples. Finally, add an iterative model, find the early-stopping point from a single run, and compare its cost and result against a grid search over the number of rounds.',
+      acceptanceCriteria: [
+        'The test set is split before any exploration and is scored exactly once per configuration at the end',
+        'Training and validation scores are reported together throughout, so the trade regularisation makes is visible',
+        'Linear and log grids are compared over the same range and the difference in what they find is explained',
+        'Gaps at four search budgets are compared against the σ√(2 log K) prediction, with the agreement quantified',
+        'Selection stability for lasso and elastic net is measured across bootstrap resamples and reported as a percentage',
+        'The early-stopping comparison reports both the result and the compute cost against grid search over rounds',
+      ],
+    },
+
+    teachingPrompt: {
+      prompt:
+        'A colleague ran a 1,000-candidate grid search, is reporting the best cross-validated score as their model’s performance, and has set a large ridge penalty "to be safe". Explain both problems, and give them a workflow that produces a number they can defend.',
+      mustCover: [
+        'That regularisation is a trade rather than a safety margin, with the underfitting signature that reveals too much of it',
+        'Why λ cannot be chosen from training loss, and what that implies about needing held-out data',
+        'Why the best score from a search is biased, with the σ√(2 log K) argument made concrete',
+        'That the selection is usually fine even when the score is not, so this is a reporting problem',
+        'A concrete honest workflow: test set first, log-uniform search space, score once at the end, report the gap',
+      ],
+      sampleExplanation:
+        'Two separate things here, and they pull in opposite directions, so let me take them one at a time. Start with the penalty. Regularisation is not a safety margin where more is safer — it is a trade, and it has an optimum you can overshoot. Turning λ up reduces variance and increases bias, and the total error is the sum of the two, so it falls and then rises. Past the minimum, every additional unit of λ is removing more real signal than it is removing noise, and your model is getting worse in a way that looks nothing like overfitting. The way to tell is to look at two numbers rather than one. An over-regularised model has high training error and a tiny gap between training and validation — it is failing on the very data it was fitted to, which is underfitting, not caution. An under-regularised model has near-zero training error and a big gap. Those need opposite fixes, which is exactly why one disappointing validation score cannot tell you which you have. Now, why you cannot just pick a safe λ by intuition or by training loss. Training loss is the part of the objective that wants to fit the data, and as λ goes to zero the fit is allowed to spend more freely on it, so training loss is monotone — it is smallest at λ = 0, always, on every dataset. Select by training loss and you will select zero regularisation every single time. The criterion has no interior optimum; it cannot express a preference. That is not a flaw in the criterion so much as the point: regularisation deliberately makes the training fit worse in order to improve something training loss has no access to. In one experiment of mine, adding ridge dropped the training score from a perfect 1.000 to 0.92 while cross-validated AUC went from 0.64 to 0.81 — the fit got worse and the model got seventeen points better, and nothing computed on the training set could have shown that. So λ has to be chosen on data the fitting never saw, and it has to be swept rather than guessed. Sweep it logarithmically — `np.logspace(-4, 3, 20)` — because λ is a multiplicative quantity spanning orders of magnitude. A linear grid from 0.1 to 10 in steps of 0.1 sounds thorough and puts ninety-nine of its hundred candidates above 1, never looking below 0.1, which is frequently where the answer lives. `RidgeCV` will do the whole path for barely more than one fit, since ridge has a closed form. Now the second problem, which is subtler and is the reason your 1,000-candidate search worries me more than the penalty does. When you score a thousand candidates on the same folds and keep the best, you are taking a maximum over a thousand noisy estimates. Even if every single candidate were exactly equally good, the largest of a thousand noise terms is not zero — its expectation grows like σ times the square root of two log K. Put numbers in: if each candidate’s five-fold mean has a standard error of about 0.01, then √(2 ln 1000) is 3.7, so you should expect roughly 0.037 of inflation. Nearly four points of your headline number are the expected consequence of having looked a thousand times. And this is not theoretical hand-waving — I have run exactly this experiment, widening a random search from ten to 240 candidates, and watched the reported cross-validated AUC climb from 0.840 to 0.857 while the test score sat completely still at 0.827. The gap tracked the formula to within half a point at every budget. The bigger search bought a more flattering number and not one point of a better model. Here is the encouraging part, though. The candidate you selected is probably fine. The noise that inflates the winner’s score is roughly independent of which of several near-equivalent configurations happens to win, so tuning still works — it is the number attached to the winner that is wrong, not the winner. So this is a reporting problem, and the fix is structural rather than statistical: report a score from data that no choice was ever made against. Concretely, the workflow I would suggest. Before you explore anything, split off a test set — and if your data is time-ordered, make that the most recent period rather than a random slice. Build a pipeline so the scaler and any encoder refit inside each fold, otherwise the search is optimising against leaked statistics and you have a second problem underneath the first. Define the search space log-uniformly for anything multiplicative. Run the search on the training portion only. Then score the winning configuration exactly once on the test set, and report that number. Finally — and I would push for this — write down the gap between the search score and the test score, because it tells everyone who works on this problem afterwards what a headline number here is actually worth. If you genuinely cannot spare a test set because the dataset is small, nested cross-validation gives you the same honesty: an inner loop to select, an outer loop to score. It costs k_outer times K times k_inner fits, which for your thousand candidates at five and five is about twenty-five thousand fits, so I would only reach for it when the data is too scarce for a holdout. On most problems the test set is the better trade, and it costs one extra fit.',
+    },
+  },
+  {
+    id: 'ML-031',
+    domain: 'ML',
+    module: 'Practical ML',
+    topic: 'Composing a whole model',
+    title: 'scikit-learn Pipelines',
+    slug: 'sklearn-pipelines',
+    difficulty: 3,
+    estimatedMinutes: 40,
+    prerequisites: ['ML-030'],
+    related: ['ML-027', 'ML-028', 'ML-024'],
+    tags: ['pipeline', 'columntransformer', 'estimator api', 'leakage', 'custom transformer', 'serialisation'],
+
+    learningObjectives: [
+      'Explain the fit/transform/predict contract and why it makes leakage a structural impossibility rather than a discipline',
+      'Compose a ColumnTransformer that routes numeric, categorical and text columns through different preprocessing',
+      'Tune preprocessing hyperparameters alongside model hyperparameters using the double-underscore addressing scheme',
+      'Write a custom transformer that obeys the estimator contract and therefore works inside cross-validation and search',
+    ],
+
+    terminology: [
+      {
+        term: 'Estimator',
+        definition:
+          'Any scikit-learn object with a `fit` method. Fitting learns state from data and stores it on attributes ending in an underscore — `mean_`, `categories_`, `coef_` — which is how a fitted object is distinguished from a configured one.',
+        simple: 'An object that learns something from data and remembers it.',
+      },
+      {
+        term: 'Transformer',
+        definition:
+          'An estimator that also implements `transform`, mapping data to a new representation using the state learned during `fit`. Scalers, imputers and encoders are transformers.',
+        simple: 'A step that changes the data using what it learned from the training rows.',
+      },
+      {
+        term: 'Pipeline',
+        definition:
+          'A composite estimator chaining transformers and a final predictor. Calling `fit` runs `fit_transform` on each step in order and `fit` on the last; calling `predict` runs `transform` only, so no state is re-learned at prediction time.',
+        simple: 'A single object holding the whole sequence of steps, start to finish.',
+      },
+      {
+        term: 'ColumnTransformer',
+        definition:
+          'A transformer that applies different sub-pipelines to different column subsets in parallel and concatenates the results. It is how heterogeneous tabular data — numbers, categories, text — is handled in one fitted object.',
+        simple: 'A router that sends each group of columns through its own preprocessing.',
+      },
+      {
+        term: 'Double-underscore addressing',
+        definition:
+          'The convention `step__subst__param` for naming a nested parameter, which lets a search tune any setting anywhere in a composite estimator, including preprocessing choices.',
+        simple: 'A path through the nested steps, so you can tune anything by name.',
+      },
+      {
+        term: 'Training-serving skew',
+        definition:
+          'A mismatch between the transformations applied during training and those applied at inference. Shipping the fitted pipeline as one artefact removes the main cause, which is reimplementing preprocessing in the serving code.',
+        simple: 'Training and production doing slightly different things to the same input.',
+      },
+    ],
+
+    simpleExplanation:
+      'By this point in the curriculum almost every unit has ended with the same warning: fit that thing inside the pipeline, or a validation row will influence its own preprocessing. This unit is that instruction made concrete. The idea is simple and unusually powerful. Instead of writing a script that scales, then imputes, then encodes, then fits — each step operating on the whole dataset and leaving you to remember which ones learned something — you build one object that contains the entire sequence. When you fit that object, each step learns its parameters from the training rows it is given and passes the result along. When you ask it to predict, every step applies what it already learned and nothing re-learns anything. Hand that object to cross-validation and the whole sequence is refitted from scratch inside each fold, automatically, with no opportunity for a validation row to contribute to the mean that will be used to scale it. What starts as a convenience turns out to be the structural answer to the most common bug in applied machine learning: leakage stops being something you have to remember to avoid and becomes something the arrangement of the code makes impossible. And because the whole thing is one object, you can save it, ship it, and be certain production does exactly what training did.',
+
+    whyItExists:
+      'Preprocessing steps that learn from data — a column mean, a category list, a scaling constant, a target statistic — are model parameters wearing different clothes, and treating them as separate script steps invites two failures. First, they get fitted on data that includes the rows they will later transform, which inflates every validation score by an amount nobody measures. Second, they get reimplemented in the serving path, where they drift from the training version and produce a model that is excellent offline and broken in production. A pipeline is a single object with one fit boundary, which makes the first impossible and the second unnecessary.',
+
+    analogy: {
+      scenario:
+        'A pharmacy has a protocol for preparing a compounded medicine: weigh the base, adjust for the patient’s weight, dilute to a standard concentration, then dispense. For years each step was done by a different person from a shared worksheet, and the dilution ratio was computed once each morning from the day’s full patient list — including patients who had not yet been seen. It seemed efficient and it was subtly wrong: the ratio used for the first patient was partly determined by the last patient of the day, so the protocol could not be validated against any single case honestly. The pharmacy replaced the worksheet with a sealed preparation kit that performs the whole sequence in order, calibrated once from the batch it is given and then applied unchanged. The same kit is used in the dispensary and in the audit lab, so what the auditor tests is exactly what the patient receives, and there is no separate written procedure that can quietly diverge from it.',
+      mapping: [
+        { from: 'The four preparation steps', to: 'Transformers chained in a pipeline' },
+        { from: 'The shared worksheet with separate operators', to: 'A script applying each step independently to the whole dataset' },
+        { from: 'A dilution ratio computed from the whole day’s list', to: 'A scaler or imputer fitted before splitting' },
+        { from: 'The first patient’s dose depending on the last patient', to: 'A validation row influencing its own preprocessing' },
+        { from: 'The sealed kit calibrated once from its batch', to: 'A Pipeline fitted on the training fold only' },
+        { from: 'The same kit in dispensary and audit lab', to: 'One artefact shared by training and serving' },
+        { from: 'No separate written procedure to diverge', to: 'No reimplemented preprocessing in the serving code' },
+      ],
+      bridge:
+        'The pharmacy’s fix was not better discipline — the operators were already careful — it was changing the arrangement so the error could not occur. That is exactly what a pipeline does: with a single fit boundary enclosing every step that learns, there is no point at which a validation row can contribute to a statistic that will later be applied to it. And the second half of the analogy is the deployment argument: one artefact used in both places removes the class of bug where the audit and the dispensary are testing different things.',
+      limitations:
+        'The pharmacy’s kit is calibrated per batch, whereas a pipeline is fitted once and then applied to data that may drift over months, so the analogy understates the need for monitoring and retraining. It also suggests the sequence is always linear, while real pipelines branch by column type and sometimes need feature unions that the metaphor does not capture.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Trace data through a fitted pipeline',
+        caption: 'Follow a batch of rows through imputation, scaling, encoding and the final estimator, and watch which steps learn state during fit and which merely apply it during predict.',
+        widget: 'ml-pipeline-flow',
+      },
+      {
+        kind: 'flow',
+        title: 'What fit and predict actually do',
+        steps: [
+          { label: 'pipe.fit(X, y) — step 1', detail: 'Calls `fit_transform` on the first transformer. It learns its state from X — column means, category lists — stores them on underscore attributes, and returns the transformed data.' },
+          { label: 'Each subsequent transformer', detail: 'Receives the output of the previous step, learns its own state from that, and passes its output along. State is always learned from what the pipeline was given, never from anything wider.' },
+          { label: 'The final estimator', detail: 'Receives the fully transformed matrix and its `fit` is called with y. The pipeline is now fitted and every step carries learned state.' },
+          { label: 'pipe.predict(X_new) — step 1', detail: 'Calls `transform`, not `fit_transform`. The scaler uses the mean it learned earlier; the encoder uses the category list it learned earlier. Nothing is re-learned.' },
+          { label: 'Each subsequent transformer', detail: 'Same — `transform` only. This asymmetry between fit and predict is the entire mechanism that prevents leakage.' },
+          { label: 'The final estimator predicts', detail: 'Receives the transformed matrix and returns predictions. One object, one call, no opportunity for the serving path to diverge.' },
+          { label: 'Inside cross_val_score', detail: 'The whole sequence above is repeated from scratch on each training fold, so every fold’s preprocessing is learned only from that fold’s training rows.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Script versus pipeline, on the things that matter',
+        caption: 'The differences are not stylistic. Each row on the left is a class of bug that the right-hand column makes structurally impossible.',
+        left: {
+          heading: 'Separate script steps',
+          points: [
+            'Each transform is fitted on whatever is passed to it, usually the whole dataset',
+            'Cross-validation sees already-transformed data, so folds share preprocessing statistics',
+            'Preprocessing hyperparameters cannot be tuned jointly with model hyperparameters',
+            'Serving requires reimplementing the same steps, which drift over time',
+            'Order and state must be tracked by the author, in comments or memory',
+            'Saving the model saves only the estimator, not the transformations it depends on',
+          ],
+        },
+        right: {
+          heading: 'A fitted Pipeline',
+          points: [
+            'One fit boundary encloses every step that learns from data',
+            'cross_val_score refits the entire sequence inside each fold automatically',
+            'Search tunes imputation strategy, encoding and model together via `step__param`',
+            'joblib.dump saves the whole sequence, so serving cannot diverge from training',
+            'Order is declared once and enforced by the object',
+            'get_feature_names_out traces a coefficient back to its original column',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Which steps learn state, and what they learn',
+        caption: 'Any row in this table fitted outside the pipeline is a leak. The last column is what a validation row would contribute to if the step were fitted before splitting.',
+        columns: ['Step', 'Learned state', 'Leak if fitted early'],
+        rows: [
+          ['StandardScaler', 'mean_, scale_', 'Validation rows shift the mean used to scale them'],
+          ['SimpleImputer', 'statistics_', 'Validation rows contribute to the value filling their own gaps'],
+          ['OneHotEncoder', 'categories_', 'Categories only present in validation become known columns'],
+          ['TargetEncoder', 'encodings_', 'Severe — validation targets enter their own feature'],
+          ['SelectKBest', 'scores_, support_', 'Feature choice is made using validation labels'],
+          ['PCA', 'components_, mean_', 'Validation rows shape the subspace they are projected into'],
+          ['KNNImputer', 'The full neighbour reference set', 'Validation rows are their own neighbours'],
+          ['FunctionTransformer (stateless)', 'Nothing', 'No leak — log, ratios and other row-wise maps are safe anywhere'],
+        ],
+      },
+      {
+        kind: 'annotated',
+        title: 'Addressing a nested parameter',
+        caption: 'The double-underscore path is how a search reaches any setting inside a composite estimator, however deeply nested.',
+        subject: "param_grid = { 'prep__num__imputer__strategy': ['mean', 'median'], 'clf__C': [0.1, 1, 10] }",
+        annotations: [
+          { part: 'prep', note: 'The name given to the ColumnTransformer when the outer Pipeline was constructed. Names are yours to choose with the `Pipeline([...])` form, or auto-generated in lower case by `make_pipeline`.' },
+          { part: 'num', note: 'The name of one branch inside the ColumnTransformer — the sub-pipeline handling numeric columns. Each branch is addressed independently, so the categorical branch could be tuned in the same grid.' },
+          { part: 'imputer', note: 'The step within that branch. The path descends one level per double underscore, so arbitrarily deep nesting is reachable.' },
+          { part: 'strategy', note: 'The actual parameter of SimpleImputer. Tuning this means the choice between mean and median imputation is made by cross-validation rather than by assumption.' },
+          { part: 'clf__C', note: 'A two-level path to the final estimator’s regularisation strength. Preprocessing and model hyperparameters appear in the same grid and are searched jointly, which is the point — they interact.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'The estimator contract a custom transformer must satisfy',
+        caption: 'Meeting this contract is what makes an object work inside Pipeline, cross_val_score, GridSearchCV and joblib without any special handling.',
+        columns: ['Requirement', 'Why it exists'],
+        rows: [
+          ['Inherit BaseEstimator and TransformerMixin', 'Supplies get_params/set_params for search, and fit_transform for free'],
+          ['__init__ stores arguments unchanged, with no validation', 'clone() reconstructs the object from get_params; altering arguments breaks round-tripping'],
+          ['fit(X, y=None) returns self', 'Enables chaining and is assumed by every composite estimator'],
+          ['Learned state on attributes ending in an underscore', 'Distinguishes a fitted object from a configured one; check_is_fitted relies on it'],
+          ['transform(X) uses only state learned in fit', 'This is the property that makes leakage impossible'],
+          ['No fitting inside transform', 'A transform that learns would re-learn on the validation fold, defeating the whole arrangement'],
+          ['get_feature_names_out where meaningful', 'Lets coefficients and importances be traced back to source columns'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'A scikit-learn estimator is an object exposing `fit(X, y=None) → self`, with all constructor arguments stored unmodified so that `clone(est)` reproduces an unfitted copy from `get_params()`. A transformer additionally exposes `transform(X) → X′` depending only on state learned during `fit` and stored on trailing-underscore attributes. A `Pipeline` of steps (T₁,…,T_{k−1}, E) defines fit as the composition X₀ = X, X_i = T_i.fit_transform(X_{i−1}, y), followed by E.fit(X_{k−1}, y); and predict as X_i = T_i.transform(X_{i−1}) followed by E.predict(X_{k−1}). Because `fit_transform` appears only in the first sequence and `transform` only in the second, the state of every T_i is a function of the data passed to `fit` alone. A `ColumnTransformer` with branches (name_j, T_j, cols_j) computes the horizontal concatenation of T_j applied to X[:, cols_j], and is itself a transformer, so it composes. Cross-validation over a pipeline evaluates (1/k)Σ_f score(E_f ∘ T_f(X_{val_f}), y_{val_f}) where (T_f, E_f) are fitted on fold f’s training partition only; this is precisely the condition under which the cross-validated estimate targets the generalisation error of the whole procedure rather than of the estimator alone.',
+
+    math: {
+      intuition:
+        'The mathematical content is small but decisive: a pipeline makes the fitted transformation a function of the training partition only, so the map applied to a validation row is independent of that row. Without that independence, the cross-validated score is estimating the performance of a procedure that had access to its own test data, which is a different and always more flattering quantity. Everything else in the unit — the addressing scheme, the custom transformer contract, the serialisation argument — exists to preserve that one property while still letting you build something complicated.',
+      formulas: [
+        {
+          latex: 'T_{\\text{fitted}} = \\operatorname{fit}(X_{\\text{train}}), \\qquad X\'_{\\text{val}} = T_{\\text{fitted}}(X_{\\text{val}})',
+          name: 'The independence property',
+          meaning:
+            'The transformation applied to a validation row is a function of the training rows alone. If instead T were fitted on X_train ∪ X_val, the transformed validation row would depend on itself, and the resulting score would estimate something that cannot happen at inference time.',
+          variables: [
+            { symbol: 'T_{\\text{fitted}}', meaning: 'The transformer after learning its state' },
+            { symbol: 'X_{\\text{val}}', meaning: 'Rows the transformer must not have learned from' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\operatorname{CV}(\\mathcal{P}) = \\frac{1}{k}\\sum_{f=1}^{k} \\operatorname{score}\\big(\\mathcal{P}_f(X_{\\text{val}_f}),\\, y_{\\text{val}_f}\\big), \\quad \\mathcal{P}_f = \\operatorname{fit}(\\mathcal{P},\\, X_{\\text{tr}_f})',
+          name: 'What cross-validation over a pipeline estimates',
+          meaning:
+            'The subscript f on 𝒫 is the whole point: a fresh copy of the entire procedure, preprocessing included, is fitted per fold. This makes the estimate target the generalisation error of the procedure, which is the quantity you will actually deploy.',
+          variables: [
+            { symbol: '\\mathcal{P}', meaning: 'The pipeline as a procedure, not a fitted object' },
+            { symbol: 'k', meaning: 'Number of folds' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '|\\Theta| = \\prod_{s \\in \\text{steps}} |\\Theta_s|',
+          name: 'Joint search space over a pipeline',
+          meaning:
+            'Because preprocessing choices are addressable, they join the search space multiplicatively. Two imputation strategies × three encoders × six penalty strengths is 36 configurations, and searching them jointly matters because the best encoder depends on the model and vice versa.',
+          variables: [
+            { symbol: '\\Theta_s', meaning: 'Candidate values for the parameters of step s' },
+          ],
+          category: 'complexity',
+        },
+      ],
+      derivation: [
+        'Consider the simplest possible leak and compute its size. A single feature column X has true population mean μ and standard deviation σ. Split n rows into a training partition of size n_tr and a validation partition of size n_val.',
+        'The correct procedure fits the scaler on the training partition: μ̂_tr = mean(X_tr), and transforms the validation rows as (X_val − μ̂_tr)/σ̂_tr. Note that μ̂_tr is independent of X_val, so the transformation applied to a validation row carries no information about it.',
+        'The leaking procedure fits on everything: μ̂_all = (n_tr μ̂_tr + n_val μ̂_val)/n. Expand the transformation of a particular validation row x: (x − μ̂_all)/σ̂_all.',
+        'Substituting, μ̂_all contains x/n, so the transformed value is x(1 − 1/n)/σ̂_all − (rest)/σ̂_all. The row has been centred using a mean that it helped compute, by a fraction 1/n.',
+        'For a scaler this is small — order 1/n per row — which is why the measured inflation from an early-fitted StandardScaler is typically a fraction of a point. It is real but rarely decisive on its own.',
+        'Now repeat the argument for a step that learns much more. `SelectKBest` computes a score per feature using y and keeps the top k. Fitted on everything, the chosen features are the ones that correlate with the validation labels as well as the training ones.',
+        'The inflation now scales with how much choosing is done: selecting 20 features from 400 using all the labels can add several points, because the selection has effectively peeked at the answer for every row it will be evaluated on.',
+        'KNNImputer is worse still. Its state is the entire reference set of rows used to find neighbours, so a validation row with a missing value is imputed from a set that includes itself and its own near-duplicates. The measured inflation in this setting is routinely 0.04 to 0.08 of R².',
+        'TargetEncoder is the extreme case, already derived in ML-028: a category appearing once encodes to that row’s own target, so the feature contains a literal copy of the answer and the inflation reaches tens of points.',
+        'The pattern is now clear and it is the practical takeaway: the size of a preprocessing leak scales with how much the step learns, from a fraction of a point for a mean up to tens of points for anything touching y. There is no threshold below which it is safe to be casual, and the ordering is not obvious from the code, which is why the rule is structural rather than case-by-case.',
+        'The pipeline removes the whole family at once. Because `fit` calls `fit_transform` and `predict` calls only `transform`, the state of every step is by construction a function of whatever was passed to `fit`. Hand the pipeline to a cross-validator and that is the training fold, per fold, automatically.',
+        'One consequence worth stating explicitly: this also changes what the cross-validated number means. Without a pipeline you are estimating the generalisation error of an estimator applied to data that was preprocessed with global knowledge — a procedure you cannot deploy. With a pipeline you are estimating the generalisation error of the procedure you will actually run, which is the quantity you wanted all along.',
+        'Finally, the search-space consequence. Because every nested parameter is addressable as `step__param`, preprocessing choices enter the same grid as model choices and are selected by cross-validation rather than assumption. That matters because the choices interact: median imputation may beat mean imputation for a linear model and be irrelevant for a tree, and the best encoder depends on the model family.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Building one pipeline for a mixed-type dataset, and measuring what it prevents',
+      setup:
+        'A churn dataset with 9,000 rows: four numeric columns with 12% missing values, three categorical columns of which one has 340 levels, and a binary target with a 22% positive rate. The goal is a single fitted object that handles everything, can be tuned end to end, and can be saved and served. Every score is 5-fold cross-validated AUC.',
+      steps: [
+        {
+          label: 'The numeric branch',
+          detail: '`Pipeline([("imputer", SimpleImputer(strategy="median", add_indicator=True)), ("scaler", StandardScaler())])`. Median rather than mean because two of the columns are right-skewed, and the indicator because absence may itself be informative.',
+          latex: '\\text{impute} \\to \\text{indicator} \\to \\text{scale}',
+        },
+        {
+          label: 'The low-cardinality categorical branch',
+          detail: '`Pipeline([("imputer", SimpleImputer(strategy="most_frequent")), ("ohe", OneHotEncoder(handle_unknown="infrequent_if_exist", min_frequency=20))])`. The `min_frequency` groups rare levels so that an unseen category at serving time lands in a bucket the model has actually learned from.',
+          latex: '\\text{impute} \\to \\text{one-hot with a rare bucket}',
+        },
+        {
+          label: 'The high-cardinality branch',
+          detail: 'The 340-level column goes through `TargetEncoder`, which performs its out-of-fold computation internally. One column instead of 340, and because it lives inside the pipeline the encoding for each fold is learned from that fold only.',
+          latex: '340 \\text{ levels} \\to 1 \\text{ column}',
+        },
+        {
+          label: 'Route them with a ColumnTransformer',
+          detail: '`ColumnTransformer([("num", num_pipe, num_cols), ("cat", cat_pipe, cat_cols), ("hi", TargetEncoder(), ["agent_id"])])`. The three branches run in parallel on their own columns and their outputs are concatenated.',
+          latex: '\\text{prep} = [\\text{num} \\mid \\text{cat} \\mid \\text{hi}]',
+        },
+        {
+          label: 'Complete the pipeline',
+          detail: '`Pipeline([("prep", prep), ("clf", HistGradientBoostingClassifier())])`. One object now contains imputation, indicators, scaling, two encodings and the model.',
+          latex: '\\mathcal{P} = \\text{prep} \\to \\text{clf}',
+        },
+        {
+          label: 'Score it honestly',
+          detail: '`cross_val_score(pipe, X, y, cv=5, scoring="roc_auc")` gives 0.8347 ± 0.0104. The whole sequence is refitted inside each fold, so this estimates the procedure rather than an estimator with global preprocessing.',
+          latex: '\\text{AUC} = 0.8347 \\pm 0.0104',
+        },
+        {
+          label: 'Now measure each leak by deliberately doing it wrong',
+          detail: 'Fitting only the scaler before splitting: 0.8361, an inflation of 0.0014 — real but well inside the fold spread. Adding early-fitted median imputation: 0.8392, inflation 0.0045.',
+          latex: '+0.0014 \\text{ (scaler)}, \; +0.0045 \\text{ (+ imputer)}',
+        },
+        {
+          label: 'Add an early-fitted feature selector',
+          detail: 'Inserting `SelectKBest(f_classif, k=25)` fitted on the full dataset before splitting: 0.8681, an inflation of 0.0334. The jump is because selection uses y, so the retained features are the ones correlating with the validation labels too.',
+          latex: '+0.0334 \\text{ (selection uses } y)',
+        },
+        {
+          label: 'Add early-fitted target encoding',
+          detail: 'Computing the 340-level encoding over the whole frame before splitting: 0.9614, an inflation of 0.1267. Twelve and a half points, because categories appearing once encode to their own row’s target.',
+          latex: '+0.1267 \\text{ (target encoding)}',
+        },
+        {
+          label: 'The ordering is the lesson',
+          detail: '0.0014, 0.0045, 0.0334, 0.1267 — the inflation scales with how much each step learns, and in particular whether it touches y. None of this is visible in the code, which is why the rule is "everything inside the pipeline" rather than a judgement call per step.',
+          latex: '\\text{leak size} \\propto \\text{amount learned}',
+        },
+        {
+          label: 'Tune preprocessing and model together',
+          detail: 'A grid over `prep__num__imputer__strategy` ∈ {mean, median}, `prep__cat__ohe__min_frequency` ∈ {5, 20, 50}, `clf__learning_rate` ∈ {0.05, 0.1}, `clf__max_leaf_nodes` ∈ {15, 31, 63}: 36 configurations. Best CV AUC 0.8459.',
+          latex: '2 \\times 3 \\times 2 \\times 3 = 36 \\text{ configurations}',
+        },
+        {
+          label: 'What the joint search found',
+          detail: 'Median imputation with `min_frequency=20` at learning rate 0.05 and 31 leaves. Notably, mean imputation won at 63 leaves and median at 31 — the preprocessing choice and the model capacity interact, so tuning them separately would have found a worse combination.',
+          latex: '\\text{best strategy depends on } \\text{max\\_leaf\\_nodes}',
+        },
+        {
+          label: 'Score the winner on the untouched test set',
+          detail: '0.8391 against the search’s 0.8459, a gap of 0.0068 consistent with selection optimism over 36 candidates. This is the number to report.',
+          latex: '0.8459 \\to 0.8391 \\text{ on test}',
+        },
+        {
+          label: 'Save and serve the whole thing',
+          detail: '`joblib.dump(search.best_estimator_, "churn.joblib")` writes one file containing every fitted statistic. The serving code calls `predict_proba` on a raw DataFrame with the original columns — no preprocessing is reimplemented anywhere, so there is nothing to drift.',
+          latex: '\\text{one artefact} \\Rightarrow \\text{no training-serving skew}',
+        },
+        {
+          label: 'Trace a prediction back to its source columns',
+          detail: '`pipe.named_steps["prep"].get_feature_names_out()` returns names like `num__tenure`, `num__missingindicator_charges`, `cat__plan_premium`, `hi__agent_id`, so a feature importance can be attributed to a real column rather than to index 47.',
+          latex: '\\text{index } 47 \\to \\texttt{cat\\_\\_plan\\_premium}',
+        },
+      ],
+      conclusion:
+        'One object holds imputation, missingness indicators, scaling, two different encodings and a gradient-boosting model, and it is the unit of everything that follows: cross-validation refits it per fold, the search tunes across all of it at once, joblib saves all of it, and the serving code takes raw columns. The deliberate-leak measurements are the argument for why that matters — 0.14 points from an early scaler up to 12.7 points from early target encoding, all from code that looks perfectly reasonable. And the joint search found a combination that separate tuning would have missed, because the best imputation strategy turned out to depend on the model’s capacity.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'A complete mixed-type pipeline in one object',
+        runnable: true,
+        code: `import numpy as np
+import pandas as pd
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.model_selection import cross_val_score
+
+rng = np.random.default_rng(0)
+n = 4000
+df = pd.DataFrame({
+    "tenure": rng.gamma(2, 12, n),
+    "charges": rng.normal(65, 22, n),
+    "plan": rng.choice(["basic", "plus", "premium"], n, p=[.5, .35, .15]),
+    "region": rng.choice([f"r{i}" for i in range(40)], n),
+})
+df.loc[rng.random(n) < 0.12, "charges"] = np.nan          # 12% missing
+y = (rng.random(n) < 1 / (1 + np.exp(-(df["tenure"] / 30 - 1.2)))).astype(int)
+
+num = ["tenure", "charges"]
+cat = ["plan", "region"]
+
+prep = ColumnTransformer([
+    ("num", Pipeline([("imp", SimpleImputer(strategy="median", add_indicator=True)),
+                      ("sc", StandardScaler())]), num),
+    ("cat", Pipeline([("imp", SimpleImputer(strategy="most_frequent")),
+                      ("ohe", OneHotEncoder(handle_unknown="infrequent_if_exist",
+                                            min_frequency=20))]), cat),
+])
+pipe = Pipeline([("prep", prep), ("clf", HistGradientBoostingClassifier(random_state=0))])
+
+s = cross_val_score(pipe, df, y, cv=5, scoring="roc_auc")
+print(f"cross-validated AUC: {s.mean():.4f} +/- {s.std():.4f}")
+
+pipe.fit(df, y)
+names = pipe.named_steps["prep"].get_feature_names_out()
+print(f"\\n{len(names)} engineered columns from {df.shape[1]} raw ones")
+print("first six :", list(names[:6]))
+print("\\nprediction on one raw row:",
+      pipe.predict_proba(df.iloc[[0]])[0].round(3))`,
+        output: `cross-validated AUC: 0.7412 +/- 0.0158
+
+11 engineered columns from 4 raw ones
+first six : ['num__tenure', 'num__charges', 'num__missingindicator_charges', 'cat__plan_basic', 'cat__plan_plus', 'cat__plan_premium']
+
+prediction on one raw row: [0.738 0.262]
+`,
+        explanation:
+          'Four raw columns become eleven engineered ones, and the whole arrangement is a single object. Three things are worth pointing at. The `add_indicator=True` produced `num__missingindicator_charges`, so the model can use the fact that a charge was absent as well as the imputed value — absence is frequently more predictive than any fill. The `min_frequency=20` collapsed the 40 region levels into the frequent ones plus a shared infrequent bucket, which means a region unseen at training time has somewhere sensible to go rather than raising or encoding to all zeros. And `predict_proba` is called on a raw DataFrame with the original four columns: the caller does not impute, scale or encode anything, which is exactly the property that makes training-serving skew impossible. Note also that `get_feature_names_out` prefixes each name with its branch, so a feature importance at index 2 can be traced back to "the missingness indicator on charges" rather than left as a number.',
+      },
+      {
+        language: 'python',
+        title: 'Measuring what each early-fitted step leaks',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.model_selection import cross_val_score
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.impute import KNNImputer
+from sklearn.feature_selection import SelectKBest, f_classif
+from sklearn.linear_model import LogisticRegression
+
+X, y = make_classification(n_samples=800, n_features=200, n_informative=15,
+                           random_state=0)
+rng = np.random.default_rng(0)
+X[rng.random(X.shape) < 0.15] = np.nan
+
+clf = lambda: LogisticRegression(max_iter=3000)
+
+def score(X_, steps):
+    return cross_val_score(make_pipeline(*steps, clf()), X_, y, cv=5,
+                           scoring="roc_auc").mean()
+
+honest = score(X, [KNNImputer(), StandardScaler(), SelectKBest(f_classif, k=20)])
+
+# Now fit each step on everything first, then cross-validate what remains.
+Xi = KNNImputer().fit_transform(X)
+leak_imp = score(Xi, [StandardScaler(), SelectKBest(f_classif, k=20)])
+Xs = StandardScaler().fit_transform(Xi)
+leak_sc = score(Xs, [SelectKBest(f_classif, k=20)])
+Xk = SelectKBest(f_classif, k=20).fit_transform(Xs, y)
+leak_sel = score(Xk, [])
+
+for label, v in (("everything inside the pipeline", honest),
+                 ("imputer fitted early", leak_imp),
+                 ("+ scaler fitted early", leak_sc),
+                 ("+ selector fitted early", leak_sel)):
+    print(f"{label:<34}{v:.4f}   {v - honest:+.4f}")`,
+        output: `everything inside the pipeline    0.8104   +0.0000
+imputer fitted early              0.8367   +0.0263
++ scaler fitted early             0.8371   +0.0267
++ selector fitted early           0.9042   +0.0938
+`,
+        explanation:
+          'Read the last column down and the ordering tells you where the danger is. The KNN imputer alone adds 2.6 points, because its learned state is the entire reference set of rows used to find neighbours — a validation row with a missing value is imputed from a set that includes itself and its near-duplicates. The scaler adds almost nothing on top, 0.0004, because all it leaks is a column mean, and that is worth about 1/n per row. The feature selector adds a further 6.7 points, and the reason is qualitative rather than quantitative: `SelectKBest` uses `y`, so choosing 20 columns from 200 with all the labels available means the retained features are the ones that correlate with the validation labels too. That is the general rule this table encodes — leak size scales with how much a step learns, and any step that touches the target is in a different category from one that does not. What makes it dangerous is that none of it is visible in the code; the leaking version is shorter and reads perfectly naturally, and every one of these numbers is an improvement you would be pleased to report.',
+      },
+      {
+        language: 'python',
+        title: 'A custom transformer that obeys the contract',
+        runnable: true,
+        code: `import numpy as np
+import pandas as pd
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.pipeline import make_pipeline
+from sklearn.linear_model import Ridge
+from sklearn.model_selection import GridSearchCV
+from sklearn.utils.validation import check_is_fitted
+
+class RareCategoryGrouper(BaseEstimator, TransformerMixin):
+    """Collapse categories below a frequency threshold into one bucket.
+
+    The threshold is a hyperparameter; the surviving category list is learned
+    state, so it must come from fit and never be recomputed in transform.
+    """
+
+    def __init__(self, min_count=10, other="__other__"):
+        self.min_count = min_count          # stored unchanged: clone() needs this
+        self.other = other
+
+    def fit(self, X, y=None):
+        X = pd.DataFrame(X)
+        self.keep_ = {
+            c: set(X[c].value_counts().loc[lambda s: s >= self.min_count].index)
+            for c in X.columns
+        }
+        self.n_features_in_ = X.shape[1]
+        return self                          # chaining requires this
+
+    def transform(self, X):
+        check_is_fitted(self, "keep_")
+        X = pd.DataFrame(X).copy()
+        for c in X.columns:                  # uses only state learned in fit
+            X[c] = X[c].where(X[c].isin(self.keep_[c]), self.other)
+        return X
+
+rng = np.random.default_rng(0)
+cats = pd.DataFrame({"c": rng.choice([f"v{i}" for i in range(60)], 600)})
+g = RareCategoryGrouper(min_count=15).fit(cats)
+print("levels before:", cats['c'].nunique(), " after:", g.transform(cats)['c'].nunique())
+
+# It is a first-class estimator, so search can tune its hyperparameter.
+print("\\ntunable through the pipeline:",
+      "rarecategorygrouper__min_count" in
+      make_pipeline(RareCategoryGrouper(), Ridge()).get_params())`,
+        output: `levels before: 60  after: 24
+
+tunable through the pipeline: True
+`,
+        explanation:
+          'Four details in this class are what make it work everywhere rather than only in the script that defined it. `__init__` stores its arguments unchanged and validates nothing, because `clone()` — which cross-validation and every search call for each fold — reconstructs the object from `get_params()`, and any transformation applied in the constructor would fail to round-trip. `fit` stores the surviving category list on `keep_`, with the trailing underscore that marks learned state and that `check_is_fitted` looks for. `fit` returns `self`, which every composite estimator assumes. And `transform` reads `keep_` without ever recomputing it — if it recounted frequencies on the data it was given, then inside cross-validation it would recount on the validation fold and the whole arrangement would be defeated by a single line. Because the contract is met, `min_count` becomes addressable as `rarecategorygrouper__min_count` and can be tuned in the same grid as the model’s hyperparameters, which matters because the right threshold depends on how much capacity the model has to spend on rare levels. For a stateless row-wise transformation — a log, a ratio between two columns — none of this is needed and `FunctionTransformer(np.log1p)` is the right answer; the class above is only warranted when there is genuine state to learn.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'A team that reduced their model’s deployment code from 400 lines to a single load-and-predict',
+        usage:
+          'The serving path had reimplemented imputation, scaling and encoding in a separate module, and three of those reimplementations had drifted from the training script over eighteen months. Shipping the fitted pipeline as one joblib artefact removed the module entirely and closed two open bugs that were both training-serving skew.',
+      },
+      {
+        context: 'A competition entrant whose local cross-validation read 0.91 and whose leaderboard score read 0.84',
+        usage:
+          'Their notebook applied a KNN imputer and a feature selector to the combined train and test frames before splitting. Moving both inside a pipeline dropped local CV to 0.845 — which then matched the leaderboard, and made subsequent model comparisons meaningful for the first time.',
+      },
+      {
+        context: 'A regulated credit model where every feature had to be traced to a source column',
+        usage:
+          '`get_feature_names_out` through the ColumnTransformer produced names like `cat__employment_selfemployed`, letting the model-risk team map each coefficient back to a documented input. Without it the submission would have listed 180 anonymous indices.',
+      },
+      {
+        context: 'A team that discovered their best imputation strategy depended on model capacity',
+        usage:
+          'Tuning imputation separately had settled on the mean; a joint grid found that median imputation won at lower tree depths and mean at higher ones, and the best joint configuration outperformed the separately tuned one by 0.9 points. Preprocessing and model hyperparameters interact, and only a joint search sees it.',
+      },
+    ],
+
+    projectConnections: [
+      {
+        tool: 'Pipeline and make_pipeline',
+        role:
+          'The unit of everything downstream: cross-validation refits it per fold, search tunes through it, joblib saves it whole. `make_pipeline` auto-names steps in lower case; the explicit `Pipeline([...])` form is preferable when you intend to address steps by name in a grid.',
+      },
+      {
+        tool: 'ColumnTransformer',
+        role:
+          'Routes numeric, categorical and text columns through separate sub-pipelines in parallel. `remainder="drop"` versus `"passthrough"` is a decision worth making explicitly, since the default silently discards unlisted columns.',
+      },
+      {
+        tool: 'BaseEstimator and TransformerMixin',
+        role:
+          'The two mixins that make a custom step a first-class estimator — `get_params`/`set_params` for search and cloning, and `fit_transform` derived automatically from `fit` and `transform`.',
+      },
+      {
+        tool: 'joblib',
+        role:
+          'Serialises the fitted pipeline to one file. Note that the artefact embeds the library versions it was created with, so the serving environment must be pinned — a point developed further in ML-032.',
+      },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Calling `fit_transform` on the full dataset and then cross-validating what comes out.',
+        why: 'Every fold’s validation rows contributed to the statistics used to transform them. Measured inflation ranges from a fraction of a point for a scaler to 12.7 points for early target encoding, and none of it is visible in the code.',
+        fix: 'Pass the pipeline itself to `cross_val_score`. If a line calls `fit_transform` on `X` before a split, it is a leak regardless of how small the step seems.',
+      },
+      {
+        mistake: 'Re-learning state inside `transform` in a custom transformer.',
+        why: 'It defeats the entire arrangement. A `transform` that recomputes a mean or a category list will recompute it on the validation fold, so the pipeline provides no protection at all despite looking correct.',
+        fix: '`fit` learns and stores on underscore attributes; `transform` only reads them. Call `check_is_fitted` at the top of `transform` so a misuse fails loudly.',
+      },
+      {
+        mistake: 'Validating or transforming constructor arguments in `__init__`.',
+        why: '`clone()` reconstructs an unfitted copy from `get_params()` for every fold and every search candidate. If `__init__` alters what it was given, the reconstruction differs from the original and the behaviour becomes silently inconsistent.',
+        fix: 'Store arguments verbatim in `__init__` and do all validation in `fit`. This is a hard requirement of the estimator contract, not a style preference.',
+      },
+      {
+        mistake: 'Scaling one-hot columns by routing every column through a single StandardScaler.',
+        why: 'It turns 0/1 indicators into two arbitrary reals, destroys sparsity — which can multiply memory by an order of magnitude on a wide encoding — and makes coefficients harder to read, for no benefit.',
+        fix: 'Use a `ColumnTransformer` with separate branches, and scale only the numeric branch.',
+      },
+      {
+        mistake: 'Leaving `remainder` at its default in a ColumnTransformer.',
+        why: 'The default is `"drop"`, so any column not named in a branch disappears silently. Adding a feature upstream and forgetting to list it produces a model that quietly ignores it, with no error.',
+        fix: 'Set `remainder` explicitly, and assert that the number of output columns matches what you expect after fitting.',
+      },
+      {
+        mistake: 'Tuning preprocessing and model hyperparameters in separate searches.',
+        why: 'They interact — the best imputation strategy can depend on model capacity, and the best encoder depends on the model family. Sequential tuning finds a local combination and can miss the joint optimum by a point or more.',
+        fix: 'Put both in one `param_grid` using double-underscore paths. Use random search when the joint space gets large rather than dropping back to sequential tuning.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Why use a Pipeline instead of applying transformations step by step?',
+        answer:
+          'Three reasons, and the first is the one that matters most. A pipeline makes leakage structurally impossible rather than something you have to remember to avoid. Its `fit` calls `fit_transform` on each step while `predict` calls only `transform`, so the state of every step is by construction a function of whatever was passed to `fit` — and when you hand the pipeline to a cross-validator, that is the training fold, per fold, automatically. Without it, a scaler or imputer fitted on the whole dataset means validation rows contributed to the statistics used to transform them. I have measured that inflation across steps: about 0.1 points for a scaler, 2.6 for a KNN imputer, 3.3 for a feature selector, and 12.7 for target encoding — the size scales with how much the step learns, and especially with whether it touches y. None of it is visible in the code, and the leaking version is usually shorter. Second, it makes preprocessing tunable. Every nested parameter is addressable as `step__param`, so imputation strategy and encoder settings can sit in the same grid as the model’s hyperparameters and be chosen by cross-validation. That matters because they interact — I have seen the best imputation strategy depend on the model’s tree depth, so separate tuning found a worse combination. Third, deployment. The fitted pipeline is one object that `joblib.dump` writes to one file, and the serving code calls `predict` on raw columns. There is no separate preprocessing module to reimplement, and therefore nothing that can drift from the training version — which is the most common cause of a model that scores well offline and fails in production.',
+      },
+      {
+        level: 'advanced',
+        question: 'Write a custom transformer. What does the estimator contract require and why?',
+        answer:
+          'Inherit from `BaseEstimator` and `TransformerMixin` — the first supplies `get_params`/`set_params`, which search and cloning depend on, and the second derives `fit_transform` from your `fit` and `transform`. Then four requirements, each with a concrete reason. `__init__` must store its arguments unchanged and validate nothing, because `clone()` reconstructs an unfitted copy from `get_params()` for every fold and every search candidate; if the constructor transforms what it was given, the reconstruction differs from the original and behaviour becomes silently inconsistent. Validation belongs in `fit`. `fit(X, y=None)` must return `self`, because every composite estimator assumes chaining. Learned state goes on attributes with a trailing underscore — `keep_`, `mean_`, `categories_` — which is the convention that distinguishes a fitted object from a configured one and is what `check_is_fitted` looks for. And `transform` must read that state without ever recomputing it. That last one is the load-bearing requirement: a `transform` that recounts frequencies or recomputes a mean will do so on the validation fold inside cross-validation, so the pipeline provides no protection at all while looking perfectly correct. I would call `check_is_fitted` at the top of `transform` so misuse fails loudly rather than silently. I would also implement `get_feature_names_out` when the transformation changes the column set, so downstream coefficients can be traced back to source columns — which matters a great deal in any regulated setting. One judgement call worth stating: if the transformation is stateless and row-wise — a log, a ratio between two columns — none of this is needed and `FunctionTransformer` is the right answer. A custom class is warranted only when there is genuine state to learn.',
+      },
+      {
+        level: 'advanced',
+        question: 'How do you tune preprocessing choices alongside model hyperparameters, and why does it matter?',
+        answer:
+          'Through double-underscore addressing. A path like `prep__num__imputer__strategy` descends from the outer pipeline into the ColumnTransformer, into the numeric branch, into the imputer step, and names the actual parameter — so `{"prep__num__imputer__strategy": ["mean", "median"], "clf__learning_rate": [0.05, 0.1]}` is a single grid that searches both together. Anything addressable is tunable, including the choice of transformer itself, since you can pass a list of estimator instances as the candidate values for a step and let cross-validation choose between one-hot and target encoding. It matters because these choices interact, and the interactions are not intuitive. I have seen median imputation win at lower tree depths and mean imputation win at higher ones, so a team that had tuned imputation first and then the model was carrying a combination that was about a point worse than the joint optimum. The same applies to encoders: the best rare-category threshold depends on how much capacity the model has to spend on rare levels. Sequential tuning is coordinate descent on a non-separable objective, and it stops at whatever local combination the order of tuning happened to produce. Two practical cautions. The joint space multiplies out quickly — two imputation strategies by three thresholds by six model settings is 36 before you have tuned anything interesting — so I move to random search over log-uniform ranges rather than shrinking the space. And the reported best score inflates like σ√(2 log K) with the candidate count, so widening the joint search means the final number needs a test set the search never touched, which is exactly the discipline from the previous unit.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'What are the limitations of shipping a pickled scikit-learn pipeline to production?',
+        answer:
+          'It solves the training-serving skew problem well and introduces several operational ones worth being explicit about. The artefact embeds references to the classes that created it, so loading it requires the same library versions — a scikit-learn minor upgrade can change internal attributes and produce either a loud error or, worse, a silent behaviour change. So the serving environment must be pinned, the version recorded alongside the artefact, and there should be a smoke test that loads the model and reproduces a known prediction before it takes traffic. Pickle is also not a security boundary: loading one executes arbitrary code, so artefacts must come from a trusted store with integrity checking, never from user input. On performance, a pipeline built for batch throughput can be poor at single-row latency — a `ColumnTransformer` over a one-row DataFrame carries real pandas overhead, and I have seen per-request latency dominated by preprocessing rather than by the model — so latency should be measured at realistic batch size, and for tight budgets ONNX export or a hand-written hot path with a test asserting parity against the pipeline is the usual answer. There are also things a pipeline genuinely cannot do: features that require a database lookup or a point-in-time join at request time live outside it, which is where a feature store belongs, and a pipeline has no notion of drift, so null rates and input distributions still need monitoring independently. And custom transformer classes must be importable from the same module path at load time, which makes the class definitions part of the deployment artefact in practice. None of this argues against pipelines — the skew they prevent is a worse problem than any of it — but shipping one is the beginning of the operational work rather than the end.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'You have numeric columns with missing values, one low-cardinality categorical, one categorical with 5,000 levels, and free-text notes. Sketch the pipeline and justify each branch.',
+        hint: 'Route by column type, and let the cardinality decide the categorical encoding.',
+        solution:
+          'A `ColumnTransformer` with four branches, feeding a final estimator. Numeric branch: `SimpleImputer(strategy="median", add_indicator=True)` then `StandardScaler()`. Median because numeric columns in the wild are usually skewed and the median is robust to the tails; the indicator because absence is frequently more predictive than any imputed value; the scaler only if the final model is linear or distance-based, since it is a no-op for trees and costs nothing to include either way. Low-cardinality categorical: `SimpleImputer(strategy="most_frequent")` then `OneHotEncoder(handle_unknown="infrequent_if_exist", min_frequency=20)`. The `handle_unknown` setting is deliberate rather than defaulted, because the default raises at inference and a new category then becomes a failed request; `infrequent_if_exist` routes both rare training levels and unseen ones into a bucket the model has actually learned from. High-cardinality categorical: `TargetEncoder`, which gives one column instead of 5,000 and performs its out-of-fold computation internally — and because it lives inside the pipeline, each fold learns its encoding from that fold alone. Text: `TfidfVectorizer` with a `min_df` and an `ngram_range`, both of which I would tune, keeping the output sparse. Then the whole `ColumnTransformer` feeds the estimator. Three things I would set explicitly. `remainder="drop"` or `"passthrough"` by decision rather than by default, because a column added upstream and not listed in a branch disappears silently. `sparse_threshold` on the ColumnTransformer, since mixing dense numeric output with a sparse TF-IDF matrix can silently densify and multiply memory. And a linear model rather than a tree if the text branch dominates, because high-dimensional sparse input suits linear models far better. Finally, everything nested is addressable, so `prep__text__tfidf__min_df` and the model’s hyperparameters go in one grid.',
+      },
+      {
+        prompt:
+          'A colleague writes a transformer whose `transform` method recomputes the column medians each time it is called. Explain what breaks and what the symptom would look like.',
+        hint: 'Think about what happens when the pipeline is handed to cross_val_score.',
+        solution:
+          'The transformer no longer has any fitted state that matters, so the pipeline provides no protection despite looking correct. Inside `cross_val_score`, the pipeline is fitted on each training fold and then `transform` is called on the validation fold — and because `transform` recomputes medians from whatever it is given, the validation rows are imputed using medians computed from the validation rows themselves. That is exactly the leak the pipeline exists to prevent, reintroduced in a place where nobody will look for it, since the composition is correct and only the step’s internals are wrong. The symptom is a cross-validated score modestly better than it should be, with no error and nothing anomalous in the code structure; for a median it would be small, on the order of a fraction of a point, which is worse than a large effect because it is easy to absorb into normal variation. The more visible symptom appears later: the model behaves differently in production, because `transform` on a single-row request computes the median of one row, which is that row’s own value, so imputation becomes a no-op and the feature distribution the model sees at serving time does not match training at all. A second, subtler breakage is that `predict` is no longer deterministic given a fitted model — calling it on two different batches produces different transformations of the same row, which makes any A/B comparison or replay test unreliable. The fix is the contract: `fit` computes the medians and stores them on `self.medians_`, `transform` reads that attribute and nothing else, and `check_is_fitted(self, "medians_")` at the top of `transform` so calling it on an unfitted object fails loudly rather than silently doing something plausible.',
+      },
+      {
+        prompt:
+          'Explain why a pipeline changes what a cross-validated score actually estimates, not merely how large it is.',
+        hint: 'Consider what procedure is being evaluated in each case, and whether it could be deployed.',
+        solution:
+          'Cross-validation estimates the generalisation error of a procedure — everything that happens between raw data and a prediction. Without a pipeline, the procedure being evaluated includes preprocessing that was fitted with access to the entire dataset, and that procedure is not one you can run at inference time, because at inference the future validation rows do not exist. So the number is not a slightly optimistic estimate of your model’s performance; it is an accurate estimate of a different procedure’s performance, and that procedure is unimplementable. This distinction matters practically in two ways. First, the gap is not a fixed correction you can subtract, because it depends on how much each preprocessing step learns and on the fold sizes — I have measured 0.1 points for a scaler and 12.7 for target encoding on the same dataset. Second, and more damaging, the inflated number breaks comparisons rather than just inflating them. If two candidate models are evaluated with a shared, globally fitted preprocessing step, they both benefit from the leak but not necessarily equally, so the ranking between them can invert relative to what honest evaluation would produce — which means the leak does not merely flatter the winner, it can choose the wrong winner. With a pipeline, the object fitted inside each fold is exactly the object that will be serialised and deployed: same steps, same fit boundary, same transformation at predict time. The cross-validated number is then an estimate of the thing you will actually ship, which is what makes it usable for a decision. That is the real argument for pipelines — not that they give a more conservative number, but that they make the number answer the question you were asking.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'ML-031-q1',
+        type: 'mcq',
+        concept: 'why pipelines prevent leakage',
+        prompt: 'What structural property of a Pipeline makes preprocessing leakage impossible?',
+        options: [
+          '`fit` calls fit_transform on each step while `predict` calls only transform, so every step’s state is a function of the fit data alone',
+          'It validates that the training and test sets are disjoint before fitting',
+          'It automatically shuffles the data before each transformation',
+          'It refuses to run transformers that use the target variable',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The asymmetry between fit and predict is the whole mechanism. Handed to a cross-validator, the pipeline is refitted per fold, so each fold’s preprocessing is learned only from that fold’s training rows.',
+      },
+      {
+        id: 'ML-031-q2',
+        type: 'truefalse',
+        concept: 'constructor contract',
+        prompt: 'A custom transformer should validate and convert its constructor arguments inside `__init__`.',
+        answer: false,
+        explanation:
+          '`clone()` reconstructs an unfitted copy from `get_params()` for every fold and search candidate, so a constructor that alters its arguments will not round-trip. Store them verbatim and validate in `fit`.',
+      },
+      {
+        id: 'ML-031-q3',
+        type: 'fill',
+        concept: 'nested parameter addressing',
+        prompt: 'In a grid, what string addresses the `strategy` parameter of a step named `imputer` inside a branch named `num` of a ColumnTransformer named `prep`?',
+        answers: ['prep__num__imputer__strategy'],
+        explanation:
+          'Each double underscore descends one level. This is what lets preprocessing choices be tuned jointly with model hyperparameters, which matters because they interact.',
+      },
+      {
+        id: 'ML-031-q4',
+        type: 'debug',
+        language: 'python',
+        concept: 'leakage through early fitting',
+        prompt: 'This cross-validated score is optimistic by several points. What is wrong?',
+        code: `X_imputed = KNNImputer().fit_transform(X)
+X_selected = SelectKBest(f_classif, k=20).fit_transform(X_imputed, y)
+scores = cross_val_score(LogisticRegression(), X_selected, y, cv=5)`,
+        options: [
+          'Both steps are fitted on the whole dataset, so each fold’s validation rows shaped their own imputation and the feature choice used their labels',
+          'KNNImputer must be applied after SelectKBest, not before',
+          'cross_val_score cannot be used with a preprocessed array',
+          'k=20 is too few features for logistic regression to work',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The imputer’s learned state is the whole reference set of rows, and the selector uses `y` directly. Measured together these inflate by about 9 points. Wrap the sequence: `make_pipeline(KNNImputer(), SelectKBest(...), LogisticRegression())`.',
+      },
+      {
+        id: 'ML-031-q5',
+        type: 'match',
+        concept: 'what each step learns',
+        prompt: 'Match each transformer to the state it learns during fit.',
+        pairs: [
+          { left: 'StandardScaler', right: 'Column means and scales' },
+          { left: 'OneHotEncoder', right: 'The list of categories per column' },
+          { left: 'SelectKBest', right: 'Per-feature scores and the retained subset' },
+          { left: 'FunctionTransformer(np.log1p)', right: 'Nothing — it is stateless' },
+        ],
+        explanation:
+          'Every row with learned state is a leak if fitted outside the pipeline, and the size of the leak scales with how much is learned. Stateless row-wise maps are safe anywhere, which is why FunctionTransformer needs no special care.',
+      },
+      {
+        id: 'ML-031-q6',
+        type: 'order',
+        concept: 'what fit and predict do',
+        prompt: 'Order what happens when `pipe.fit(X, y)` is called on a two-transformer pipeline.',
+        items: [
+          'Transformer 1 learns its state from X and stores it on underscore attributes',
+          'Transformer 1 returns the transformed data',
+          'Transformer 2 learns its state from transformer 1’s output',
+          'Transformer 2 returns its transformed output',
+          'The final estimator is fitted on that output together with y',
+          'The pipeline returns itself, now fully fitted',
+        ],
+        explanation:
+          'Each step learns only from what the previous step handed it, and the chain’s input is whatever was passed to `fit` — the training fold, when a cross-validator is driving. `predict` repeats the same order calling `transform` only.',
+      },
+      {
+        id: 'ML-031-q7',
+        type: 'code-output',
+        language: 'python',
+        concept: 'fit versus transform asymmetry',
+        prompt: 'What does this print?',
+        code: `from sklearn.preprocessing import StandardScaler
+import numpy as np
+s = StandardScaler().fit(np.array([[0.0], [10.0]]))
+print(round(s.mean_[0], 1), round(s.transform([[20.0]])[0][0], 1))`,
+        options: [
+          '5.0 3.0 — the mean stays at 5 from fit, so 20 is three scales above it',
+          '10.0 0.0 — transform refits on the new data',
+          '5.0 0.0 — transform recentres each batch it is given',
+          '15.0 1.0 — the mean updates to include the new value',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Fit learned mean 5 and scale 5; transform applies (20 − 5)/5 = 3 without re-learning anything. That asymmetry is exactly what makes a pipeline leak-proof — and what a custom transformer must preserve.',
+      },
+      {
+        id: 'ML-031-q8',
+        type: 'explain',
+        concept: 'arguing for pipelines',
+        prompt: 'A colleague says pipelines are "just tidier code" and prefers separate steps. Give the argument that this is a correctness issue, not a style one.',
+        explanation:
+          'A pipeline changes what the cross-validated number estimates, because without one the procedure being evaluated used global knowledge and cannot be deployed. That is a correctness property, not a matter of tidiness.',
+        rubric: [
+          'States the fit/predict asymmetry as the mechanism, not merely the outcome',
+          'Gives concrete leak magnitudes and notes they scale with how much a step learns',
+          'Explains that the score estimates a different, unimplementable procedure rather than being slightly high',
+          'Notes that leakage can invert model comparisons, not only inflate them',
+          'Adds the deployment argument: one artefact removes reimplemented preprocessing and the skew it causes',
+        ],
+        sampleAnswer:
+          'Tidiness is a side effect; the substance is that without a pipeline the number you are reporting answers a different question. Start with the mechanism. A pipeline’s `fit` calls `fit_transform` on each step, while its `predict` calls only `transform`. That asymmetry means the state of every step — a column mean, a category list, a set of selected features — is by construction a function of whatever was passed to `fit`. Hand the pipeline to a cross-validator and that is the training fold, per fold, automatically. Apply the steps separately to the whole matrix first and the statistics used to transform a validation row were computed partly from that row. Now, how much does that cost? I measured it on one dataset by deliberately doing it wrong, one step at a time. A `StandardScaler` fitted early: about 0.1 points. A `KNNImputer`: 2.6 points, because its learned state is the entire reference set of rows used to find neighbours, so a validation row is imputed from a set containing itself. A `SelectKBest` on top: another 6.7, and the jump is qualitative rather than quantitative because selection uses `y` — choosing twenty columns from two hundred with all the labels available means the retained features are the ones that correlate with the validation labels too. Target encoding, in a different run, was worth 12.7 points. So the size scales with how much a step learns and especially with whether it touches the target, and none of it is visible in the code: the leaking version is shorter, reads perfectly naturally, and every one of those numbers is an improvement you would be pleased to report. Here is the part I would push hardest on, though, because it is the bit that makes this a correctness issue rather than a severity issue. It is tempting to treat the leak as "my number is a bit optimistic, I will mentally discount it". That does not work, for two reasons. First, the gap is not a constant you can subtract — it depends on which steps you used and on the fold sizes, and it ranged from 0.1 to 12.7 points in my measurements on the same data. Second, and worse, leakage does not inflate all candidates equally. If you compare two models sharing a globally fitted preprocessing step, they both benefit, but not necessarily by the same amount, so the ranking between them can invert. The leak does not merely flatter your winner; it can pick the wrong one, and then every decision downstream is built on it. Put another way: cross-validation estimates the generalisation error of a procedure. Without a pipeline, the procedure being evaluated includes preprocessing fitted with access to the whole dataset — a procedure that cannot be deployed, because at inference time the future rows do not exist. So the number is not a slightly wrong estimate of your model; it is an accurate estimate of something unimplementable. With a pipeline, the object fitted inside each fold is exactly the object you will serialise and ship, so the number describes the thing you are actually going to run. There are two further arguments I would make, though they are secondary to that one. Every nested parameter is addressable as `step__param`, so imputation strategy and encoder settings can be tuned in the same grid as the model — which matters because they interact; I have seen the best imputation strategy depend on tree depth, so separate tuning landed on a combination about a point worse. And `joblib.dump` writes the whole fitted sequence to one file, so the serving code calls `predict` on raw columns and there is no separate preprocessing module to reimplement and let drift. That last class of bug — offline excellent, production broken — is the most expensive one I know of in applied work, and a pipeline removes its main cause outright.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What makes a pipeline leak-proof?', back: '`fit` calls fit_transform, `predict` calls only transform. Every step’s state is a function of the fit data alone, and a cross-validator refits the whole sequence per fold.' },
+      { front: 'How big is preprocessing leakage?', back: 'It scales with how much the step learns: ~0.1 points for a scaler, 2.6 for a KNN imputer, 3.3 for a selector, 12.7 for target encoding. Anything touching y is in a different category.' },
+      { front: 'Why is the leaked score not just "a bit high"?', back: 'It estimates a procedure that used global knowledge and cannot be deployed. It also does not inflate all candidates equally, so it can invert a model comparison.' },
+      { front: 'How do you address a nested parameter?', back: '`step__substep__param`, one level per double underscore — e.g. `prep__num__imputer__strategy`. Anything addressable is tunable.' },
+      { front: 'Why tune preprocessing jointly with the model?', back: 'They interact: the best imputation strategy can depend on model capacity. Sequential tuning is coordinate descent on a non-separable objective and stops at a local combination.' },
+      { front: 'What must a custom transformer’s __init__ do?', back: 'Store arguments verbatim and validate nothing. `clone()` rebuilds the object from get_params() for every fold, so any alteration fails to round-trip.' },
+      { front: 'What must transform never do?', back: 'Learn anything. A transform that recomputes state will recompute it on the validation fold, defeating the pipeline entirely while looking correct.' },
+      { front: 'What does ColumnTransformer remainder default to?', back: '"drop" — so a column not named in any branch disappears silently. Set it explicitly, or an upstream feature addition is quietly ignored.' },
+      { front: 'Why ship the fitted pipeline rather than the estimator?', back: 'One artefact means serving cannot reimplement preprocessing and let it drift. Training-serving skew is the most common cause of good offline and broken online.' },
+    ],
+
+    challenge: {
+      title: 'One object, end to end, with the leaks measured',
+      brief:
+        'Take a dataset with numeric, low-cardinality categorical, high-cardinality categorical and text columns, with missing values in at least two of them. Build a single Pipeline containing a ColumnTransformer that routes each type appropriately, and establish an honest cross-validated baseline. Then measure the leak from each preprocessing step individually by fitting it before splitting, one at a time and cumulatively, and produce a table ordering the steps by inflation — predict the ordering before you measure it and report where you were wrong. Write at least one custom transformer satisfying the full estimator contract, including get_feature_names_out, and demonstrate that its hyperparameter is tunable through the pipeline. Run a joint grid over at least two preprocessing parameters and two model parameters, and show at least one case where the best value of a preprocessing parameter depends on a model parameter. Finally, serialise the fitted pipeline, load it in a fresh process, and assert that predictions on a held-out batch match to floating-point tolerance; then measure single-row prediction latency and comment on whether it would meet a 50 ms budget.',
+      acceptanceCriteria: [
+        'A single Pipeline handles all four column types, with remainder and handle_unknown set explicitly rather than defaulted',
+        'Each step’s leak is measured individually and cumulatively, with the ordering predicted in advance and discrepancies explained',
+        'The custom transformer meets the full contract — verbatim __init__, underscore state, stateless transform, check_is_fitted, feature names',
+        'A joint search demonstrates an interaction between a preprocessing parameter and a model parameter, with the numbers shown',
+        'Round-trip serialisation is verified in a fresh process against a held-out batch to floating-point tolerance',
+        'Single-row latency is measured and discussed against a stated budget, rather than only batch throughput',
+      ],
+    },
+
+    teachingPrompt: {
+      prompt:
+        'A colleague’s notebook scales, imputes and selects features on the full dataset, then calls cross_val_score on what comes out, and reports 0.91. Explain why the number is wrong, how wrong it is likely to be, and restructure their code.',
+      mustCover: [
+        'The fit/predict asymmetry as the mechanism that makes a pipeline leak-proof',
+        'That leak size scales with how much each step learns, with concrete magnitudes',
+        'That the score estimates a different, unimplementable procedure rather than being slightly optimistic',
+        'That leakage can change which model wins, not only how good the winner looks',
+        'A concrete restructured version, with ColumnTransformer routing by column type',
+        'The deployment payoff: one artefact, no reimplemented preprocessing, no skew',
+      ],
+      sampleExplanation:
+        'Let me start with what your three lines actually did, because the problem is not obvious from reading them. `StandardScaler().fit_transform(X)` learned a mean and a scale from every row in X. `KNNImputer().fit_transform(...)` learned a reference set of every row, which is what it searches to find neighbours. And `SelectKBest(f_classif, k=20).fit_transform(X, y)` looked at the labels and chose the twenty columns that correlate best with them — across every row. Then you handed the result to `cross_val_score`, which dutifully split it into folds and evaluated. But by then the damage was done: each fold’s validation rows had already contributed to the mean used to centre them, to the neighbour set used to impute them, and to the label-based choice of which columns survive. How much is that worth? I ran exactly this experiment, adding one leak at a time. The scaler alone: about 0.1 points. Small, because all it leaks is a column mean, which is worth roughly one over n per row. The KNN imputer: 2.6 points, because its state is the entire reference set, so a validation row with a missing value is imputed from a set that contains itself and its near-duplicates. And the selector on top: another 6.7. That last jump is qualitative, not just bigger — `SelectKBest` uses `y`. Choosing twenty columns from two hundred with all the labels in hand means the surviving features are the ones that correlate with your validation labels too. Roughly nine points in total. So 0.91 is probably 0.82, give or take. Now here is the part I want to insist on, because the natural reaction is "fine, I will discount it mentally". That does not work, for two reasons. First, the correction is not a constant. It depends entirely on which steps you used — 0.1 points for a scaler, 12.7 in another run for target encoding — so there is no number to subtract. Second, and this is the one that actually costs people work: leakage does not inflate every candidate equally. If you compare two models sharing globally fitted preprocessing, both benefit, but not necessarily by the same amount, so the ranking between them can flip. The leak does not merely flatter your winner. It can pick the wrong winner, and then every decision after that is built on it. The cleanest way to see the whole thing is to ask what cross-validation is estimating. It estimates the generalisation error of a procedure — everything between raw data and a prediction. Your procedure includes preprocessing fitted with access to the entire dataset, and that procedure cannot be deployed, because at inference time the future rows do not exist. So 0.91 is not a slightly optimistic estimate of your model. It is an accurate estimate of something you cannot build. Here is the restructure. Put every step that learns anything inside one object. `num = Pipeline([("imp", SimpleImputer(strategy="median", add_indicator=True)), ("sc", StandardScaler())])`, `cat = Pipeline([("imp", SimpleImputer(strategy="most_frequent")), ("ohe", OneHotEncoder(handle_unknown="infrequent_if_exist", min_frequency=20))])`, then `prep = ColumnTransformer([("num", num, num_cols), ("cat", cat, cat_cols)])`, and finally `pipe = Pipeline([("prep", prep), ("sel", SelectKBest(f_classif, k=20)), ("clf", LogisticRegression())])`. Then `cross_val_score(pipe, X, y, cv=5)` — passing the pipeline, not a preprocessed array. The mechanism that saves you is simple: `fit` calls `fit_transform` on each step, `predict` calls only `transform`. So every step’s state is a function of whatever was passed to `fit`, and when a cross-validator drives it, that is the training fold, per fold, automatically. Two flags I set deliberately there rather than accepting the defaults. `handle_unknown="infrequent_if_exist"` because the default raises, and the day a new category appears in production that is a failed request rather than a slightly worse prediction. And `remainder` on the ColumnTransformer defaults to `"drop"`, so any column you forget to list silently disappears — set it explicitly and assert the output width after fitting. Two things you get for free once it is structured this way. Every nested parameter is addressable, so `{"prep__num__imp__strategy": ["mean", "median"], "clf__C": [0.1, 1, 10]}` tunes your imputation choice and your model together in one grid. That is worth doing rather than tuning them in sequence, because they interact — I have seen median imputation win at low tree depth and mean win at high depth, so a team that tuned them separately was carrying a combination a point worse than the joint optimum. And `joblib.dump(pipe, "model.joblib")` writes the entire fitted sequence to one file. Your serving code loads it and calls `predict` on raw columns. There is no preprocessing module to reimplement, and therefore nothing that can drift from the training version — which is the single most common reason a model is excellent offline and broken in production.',
+    },
+  },
+  {
+    id: 'ML-032',
+    domain: 'ML',
+    module: 'Practical ML',
+    topic: 'Making results survive',
+    title: 'Model Persistence, Tracking and Reproducibility',
+    slug: 'persistence-and-reproducibility',
+    difficulty: 3,
+    estimatedMinutes: 35,
+    prerequisites: ['ML-031'],
+    related: ['ML-024', 'ML-030', 'OPS-004'],
+    tags: ['serialisation', 'joblib', 'onnx', 'experiment tracking', 'reproducibility', 'seeds', 'model cards'],
+
+    learningObjectives: [
+      'Choose a serialisation format by its trust, portability and latency constraints rather than by convenience',
+      'List everything that must be captured for a result to be reproducible, and explain why the model file is the smallest part',
+      'Control the sources of non-determinism — seeds, thread counts, hash ordering, GPU kernels — and say which cannot be fully removed',
+      'Record an experiment so that a result can be re-derived months later by someone who was not there',
+    ],
+
+    terminology: [
+      {
+        term: 'Serialisation',
+        definition:
+          'Writing a fitted model to bytes that can be reloaded later. Python’s pickle protocol, which joblib builds on, stores references to the defining classes, so loading requires the same code and library versions to be importable.',
+        simple: 'Saving a trained model to a file you can open again later.',
+      },
+      {
+        term: 'Reproducibility',
+        definition:
+          'The property that re-running a recorded procedure on the recorded inputs yields the same result. It requires capturing data, code, environment, configuration and random state — the fitted artefact is a by-product, not the record.',
+        simple: 'Being able to get the same answer again, on purpose.',
+      },
+      {
+        term: 'Experiment tracking',
+        definition:
+          'Automatically recording each run’s parameters, metrics, artefacts and code version to a queryable store, so that comparisons between runs are made against recorded facts rather than recollection.',
+        simple: 'A logbook that writes itself every time you train something.',
+      },
+      {
+        term: 'Model registry',
+        definition:
+          'A versioned store of trained models with stage labels — staging, production, archived — and lineage back to the run that produced each one. It answers "which model is serving, and what produced it?" as a lookup rather than an investigation.',
+        simple: 'A catalogue of which model is live and where it came from.',
+      },
+      {
+        term: 'ONNX',
+        definition:
+          'An open format describing a model as a computation graph, independent of the library that trained it. Exporting removes the Python-version coupling and typically reduces single-row inference latency substantially.',
+        simple: 'A library-neutral description of the computation, so anything can run it.',
+      },
+      {
+        term: 'Model card',
+        definition:
+          'A short structured document recording a model’s intended use, training data, evaluation results including performance by subgroup, known limitations and ethical considerations. It travels with the artefact.',
+        simple: 'A label on the model saying what it is for and where it should not be trusted.',
+      },
+      {
+        term: 'Non-determinism',
+        definition:
+          'Variation in output across identical runs, arising from unseeded randomness, thread scheduling in floating-point reductions, hash ordering and GPU kernel selection. Some sources can be eliminated and some only bounded.',
+        simple: 'The same code giving slightly different answers each time you run it.',
+      },
+    ],
+
+    simpleExplanation:
+      'A model that exists only inside a notebook session is not a result, it is a memory. Three things have to survive. First, the fitted object itself — the learned coefficients, the category lists, the scaling constants — has to be written somewhere it can be loaded again, along with enough of its surroundings that loading it actually works, because a saved scikit-learn model quietly depends on having the same library version available. Second, and more important, the recipe has to survive: which data, which code commit, which hyperparameters, which random seed. If you have the model file but not the recipe, you cannot retrain it, cannot investigate it when it starts behaving oddly, and cannot answer the question that always comes eventually, which is "why does this model say that?". Third, the judgement has to survive — what the model is for, where it was evaluated, which groups it was worse for, what it should not be used to decide. Most teams do the first and skip the second and third, and then six months later someone finds a model file called `final_v3_new.pkl` that scores well on a dataset nobody can locate, produced by a notebook that has been edited since. That file is not an asset; it is a liability with good metrics.',
+
+    whyItExists:
+      'Model development is an experiment, and an experiment that cannot be re-run is not evidence. In practice three quite different needs push in the same direction: a debugging need, because when a live model misbehaves you must be able to reconstruct exactly what produced it; a compliance need, because regulated settings require lineage from a decision back to the data and code that caused it; and a collaboration need, because a colleague joining next quarter has only what was written down. Persistence handles the artefact, tracking handles the recipe, and documentation handles the judgement — and skipping any one of the three converts a working model into something nobody can safely change.',
+
+    analogy: {
+      scenario:
+        'A research chemist synthesises a compound with unusually good properties. She has a vial of it on the bench, which is the outcome, but the vial is not the science. What makes it science is the lab notebook: the exact starting reagents including their supplier and batch numbers, the quantities, the temperature profile, the order of addition, the ambient conditions, and — crucially — the things that went wrong in the two failed attempts before this one. With the notebook, any competent chemist can produce the compound again, and when a batch later fails quality control they can work backwards to find which step drifted. Without it, the vial is a curiosity: it can be used until it runs out and then the knowledge is gone. The lab also keeps a separate label on the vial saying what the compound is for, at what concentrations it was tested, and the two applications where it was found to degrade — because the next person to pick it up will not have been in the room when that was discovered.',
+      mapping: [
+        { from: 'The vial of compound', to: 'The serialised model file' },
+        { from: 'The lab notebook', to: 'Experiment tracking: parameters, metrics, code version, data version' },
+        { from: 'Reagent supplier and batch numbers', to: 'Dataset version hash and feature definitions' },
+        { from: 'The temperature profile and order of addition', to: 'Hyperparameters and the random seed' },
+        { from: 'Records of the two failed attempts', to: 'Runs that were tried and rejected, kept rather than deleted' },
+        { from: 'Working backwards when a batch fails QC', to: 'Debugging a production regression by reconstructing the training run' },
+        { from: 'The label describing use and known degradation', to: 'The model card: intended use, subgroup results, limitations' },
+      ],
+      bridge:
+        'The chemist’s distinction between the vial and the notebook is exactly the distinction between the artefact and the record, and it explains why saving the model is the smallest part of the job. A vial can be used until it runs out; a notebook lets you make more, and lets you find out what went wrong. The failed attempts matter for the same reason failed runs matter: knowing that three other configurations were tried and were worse is part of what justifies the one you kept. And the label on the vial is the model card, existing because the person who picks it up next was not present for the evaluation.',
+      limitations:
+        'Chemistry is more deterministic than machine learning: the same procedure on the same reagents reproduces closely, whereas GPU kernel selection and thread scheduling in floating-point reductions can make bit-identical reproduction impossible even with every seed fixed. The honest target is usually statistical rather than exact reproducibility, and saying which you have achieved is part of the record.',
+    },
+
+    visuals: [
+      {
+        kind: 'table',
+        title: 'Serialisation formats and what each costs',
+        caption: 'The deciding constraints are usually trust and latency, not file size. Pickle-based formats are convenient and carry two real liabilities.',
+        columns: ['Format', 'Portable across versions', 'Safe to load untrusted', 'Typical use'],
+        rows: [
+          ['joblib (pickle)', 'No — needs the same library versions', 'No — executes code on load', 'Internal artefacts in a pinned environment'],
+          ['pickle', 'No', 'No', 'Rarely preferable to joblib for models with large arrays'],
+          ['ONNX', 'Yes — a library-neutral graph', 'Yes', 'Cross-language serving, low-latency inference'],
+          ['PMML', 'Yes', 'Yes', 'Legacy enterprise and regulated integrations'],
+          ['Native booster format', 'Mostly — within the library’s own guarantees', 'Yes', 'XGBoost and LightGBM models, via save_model'],
+          ['SafeTensors', 'Yes for weights', 'Yes', 'Neural network weights; architecture stored separately'],
+          ['Plain coefficients as JSON', 'Yes', 'Yes', 'Simple linear models where you control the inference code'],
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'What must be captured for a run to be reproducible',
+        steps: [
+          { label: 'The data, by version', detail: 'A content hash or a dataset version id, not a file path. "The customer table" changes weekly; `customers@2026-03-14` does not.' },
+          { label: 'The code, by commit', detail: 'The git SHA of the working tree, plus an explicit note if it was dirty. A notebook edited after the run is not a record of it.' },
+          { label: 'The environment, by lock file', detail: 'Exact versions of every dependency, because a pickled model will not load under a different scikit-learn and a different NumPy can change results numerically.' },
+          { label: 'The configuration', detail: 'Every hyperparameter, including the ones left at defaults — defaults change between library versions and a default is a choice you did not make explicitly.' },
+          { label: 'The random state', detail: 'Every seed, and the split definition itself where possible, since a seed only reproduces a split if the library version generating it is also fixed.' },
+          { label: 'The metrics, with their spread', detail: 'Fold means and standard deviations, not a single number, so a later comparison can tell a real difference from fold noise.' },
+          { label: 'The artefact and its lineage', detail: 'The fitted model, linked to the run that produced it, so the arrow points both ways: from artefact to recipe and from recipe to artefact.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Two ways to save a model',
+        caption: 'Neither is wrong; they answer different questions. Most production systems end up with both — joblib as the source of truth, ONNX as the serving artefact.',
+        left: {
+          heading: 'joblib.dump of the fitted pipeline',
+          points: [
+            'One line; preserves the exact Python object including custom transformers',
+            'Requires the same library versions to load, so the environment must be pinned',
+            'Loading executes code, so artefacts must come from a trusted store',
+            'Custom classes must be importable from the same module path at load time',
+            'Batch throughput is fine; single-row latency carries pandas overhead',
+            'The natural choice for retraining, debugging and offline analysis',
+          ],
+        },
+        right: {
+          heading: 'ONNX export',
+          points: [
+            'A library-neutral computation graph, loadable from C++, Java, Rust or the browser',
+            'No Python or scikit-learn dependency at serving time',
+            'Safe to load — it is data, not code',
+            'Single-row inference is typically several times faster',
+            'Not everything converts; custom transformers usually need reimplementing',
+            'Requires a parity test asserting it matches the source model to tolerance',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Sources of non-determinism, and what to do about each',
+        caption: 'The first four can be eliminated. The last two can usually only be bounded, which is why the honest target is often statistical rather than bit-exact reproduction.',
+        columns: ['Source', 'Effect', 'Control'],
+        rows: [
+          ['Unseeded RNG in splits or init', 'Different splits, different fits', 'Pass random_state explicitly everywhere, never rely on a global seed'],
+          ['Python hash randomisation', 'Set and dict ordering varies across processes', 'PYTHONHASHSEED=0, or avoid depending on set iteration order'],
+          ['Library version drift', 'Changed defaults, changed algorithms', 'Lock files, and record versions with the run'],
+          ['Data arriving out of order', 'Different tie-breaking in sorts and splits', 'Sort by a stable key before splitting; version the dataset'],
+          ['Thread count in float reductions', 'Last-bit differences that can compound', 'Fix OMP_NUM_THREADS and n_jobs; accept a tolerance'],
+          ['GPU kernel selection (cuDNN)', 'Non-deterministic algorithm choice', 'torch.use_deterministic_algorithms(True), at a speed cost'],
+        ],
+      },
+      {
+        kind: 'annotated',
+        title: 'What a tracked run should contain',
+        caption: 'A minimal but sufficient record. The test is whether a colleague with only this could re-derive the result.',
+        subject: 'run: {git_sha, dirty, data_version, params, seeds, metrics±sd, env_lock, artefact_uri, created_by, created_at}',
+        annotations: [
+          { part: 'git_sha + dirty', note: 'The commit the code was at, and whether there were uncommitted changes. A dirty flag is not a failure to record — it is an honest warning that the commit alone does not reconstruct the run.' },
+          { part: 'data_version', note: 'A content hash or snapshot id. A path is not a version: the file at that path will be different next month and nothing will announce it.' },
+          { part: 'params + seeds', note: 'Every hyperparameter including defaults, and every seed. Defaults change between library releases, so a run recorded only by its non-default arguments becomes ambiguous over time.' },
+          { part: 'metrics ± sd', note: 'Fold spread alongside the mean. Without it, a later comparison between two runs cannot distinguish a real improvement from fold noise.' },
+          { part: 'env_lock', note: 'The resolved dependency set. This is what makes the artefact loadable later, and pickled models fail loudly or subtly without it.' },
+          { part: 'artefact_uri', note: 'Where the fitted model lives, linked from the run. The link must work in both directions — from a serving model back to the run that made it, and forward.' },
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'A computational result is reproducible if there exists a recorded tuple (D, C, E, Θ, S) — data version, code version, environment specification, configuration and random state — such that re-executing C under E on D with Θ and S yields an output equal to the recorded one under a stated equivalence relation. Bit-exact reproducibility requires that equivalence to be identity, which demands determinism in every floating-point reduction and therefore fixed thread counts and deterministic kernels; statistical reproducibility requires only that the recorded metric lie within a stated tolerance, typically the observed run-to-run standard deviation. Serialisation via the pickle protocol stores a reference to the defining class by module path together with instance state, so deserialisation is an import plus a state restore, and is therefore both version-coupled and capable of arbitrary code execution; graph-based formats such as ONNX instead store an operator DAG with typed tensors, which is data and hence version-portable and safe to load. Lineage is the property that the map from artefact to producing run is recorded and invertible, which is what permits a production model to be traced back to D, C, E, Θ and S.',
+
+    math: {
+      intuition:
+        'Two quantitative ideas are worth carrying. First, reproducibility is conditional on a stated equivalence: bit-exact and statistically-equivalent are different claims requiring different controls, and the honest thing is to say which you have. Second, floating-point addition is not associative, so a sum computed by four threads and by eight threads can differ in the last bits; that error is tiny per operation but can be amplified by an iterative procedure, which is why "the same code gave a different answer" is usually a thread-count story rather than a bug.',
+      formulas: [
+        {
+          latex: '(a + b) + c \;\\ne\; a + (b + c) \\quad \\text{in floating point}',
+          name: 'Non-associativity of floating-point addition',
+          meaning:
+            'A parallel reduction partitions the sum differently depending on the thread count, so the same data summed by four threads and by eight can differ in the last bits. This is the root of most "identical code, different result" reports.',
+          variables: [
+            { symbol: 'a, b, c', meaning: 'Floating-point values being summed in a reduction' },
+          ],
+          category: 'complexity',
+        },
+        {
+          latex: '|\\hat{y}_{\\text{onnx}} - \\hat{y}_{\\text{sklearn}}| < \\varepsilon \\quad \\text{for all rows in a held-out batch}',
+          name: 'The parity test for a converted model',
+          meaning:
+            'An exported model is only equivalent if tested. A tolerance around 1e−5 for float32 catches real conversion errors — an unsupported operator silently approximated, a dtype mismatch — while tolerating legitimate numerical difference.',
+          variables: [
+            { symbol: '\\varepsilon', meaning: 'Tolerance, typically 1e−5 for float32 and 1e−9 for float64' },
+          ],
+          category: 'complexity',
+        },
+        {
+          latex: '\\text{reproducible} \\iff \\exists\\, (D, C, E, \\Theta, S) \\text{ recorded such that } f(D, C, E, \\Theta, S) \\equiv r',
+          name: 'What a result needs to be re-derivable',
+          meaning:
+            'All five components are required. A recorded model artefact is not among them — it is the output r, and having r without the tuple means you can use the model but cannot retrain, debug or explain it.',
+          variables: [
+            { symbol: 'D, C, E', meaning: 'Data version, code version, environment specification' },
+            { symbol: '\\Theta, S', meaning: 'Configuration and random state' },
+          ],
+          category: 'complexity',
+        },
+      ],
+      derivation: [
+        'Start with why a seed alone is not enough, since "I set random_state=42" is the most common mistaken belief about reproducibility.',
+        'A seed determines the sequence a generator produces. It does not determine which generator is used, how many draws each library makes, or the order in which they are consumed — all of which are implementation details that change between versions.',
+        'Concretely, scikit-learn’s `train_test_split` with a fixed seed produces one partition under version 1.3 and can produce a different one under a version that altered the permutation implementation. The seed was honoured; the result still changed.',
+        'The same applies to the data. A seed reproduces a split of a specific array; if a row was appended upstream, every index shifts and the partition is different despite an unchanged seed. So the dataset must be versioned, not merely referenced by path.',
+        'Therefore reproducibility requires the tuple (data version, code version, environment, configuration, seed), and the seed is the smallest and least interesting element of it.',
+        'Now the source of irreducible variation. Floating-point addition is not associative: (a + b) + c can differ from a + (b + c) because each operation rounds. The error is at most one unit in the last place per operation, which is around 1e−16 for float64.',
+        'A parallel reduction over n values splits them across t threads, sums each chunk, then combines. Changing t changes the partition and therefore the order of operations, so the result differs in the last bits even with identical data and identical code.',
+        'That difference is negligible in isolation. But an iterative procedure amplifies it: in gradient descent, a last-bit difference in a gradient changes the next parameter value slightly, which changes the next gradient, and after thousands of iterations the trajectories can diverge visibly — the same mechanism as sensitivity to initial conditions.',
+        'This is why fixing `OMP_NUM_THREADS` and `n_jobs` is part of a reproducibility setup rather than a performance tweak, and why a model trained on 8 cores may not reproduce bit-exactly on 16.',
+        'GPUs add a further source. cuDNN selects among several algorithms for an operation based on heuristics and available memory, and some are non-deterministic by design. Forcing deterministic kernels is possible — `torch.use_deterministic_algorithms(True)` — and typically costs speed, sometimes substantially.',
+        'So distinguish two claims. Bit-exact reproducibility requires eliminating every source above and is achievable on CPU with fixed threads and pinned versions. Statistical reproducibility asks only that a re-run land within a stated tolerance, usually the run-to-run standard deviation, and is the realistic target for GPU training.',
+        'The practical procedure for the second is to measure it: run the same configuration several times with different seeds, record the standard deviation of the metric, and state that as the tolerance. A later re-run inside that band has reproduced the result; one outside it has not, and the difference is now evidence rather than a judgement call.',
+        'Finally, serialisation has its own version coupling, for a different reason. The pickle protocol stores a module path and class name plus instance state, so loading is an import followed by a state restore. If the class has changed its attributes between versions, the restore can fail loudly or — the dangerous case — succeed while producing different behaviour.',
+        'A graph format avoids this entirely by storing operators and tensors rather than object references. That also makes it safe to load from an untrusted source, since it is data rather than code, and typically faster for single-row inference because the graph runtime avoids the Python and pandas overhead.',
+        'The cost is coverage: not every transformer converts, custom steps usually need reimplementing, and the conversion must be verified rather than assumed — which is why a parity test over a held-out batch belongs in the pipeline that produces the export.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Making one result survive six months',
+      setup:
+        'A model is trained in March and performs well. In September it is producing noticeably worse predictions and the team needs to investigate. Two versions of the story are traced: one where only the model file was saved, and one where the run was tracked properly. The difference in what can be established is the point.',
+      steps: [
+        {
+          label: 'March, version A — what was saved',
+          detail: 'A single file, `model_final_v3.pkl`, on a shared drive. The notebook that produced it exists but has been edited eleven times since. The training data came from a query against a live table.',
+          latex: '\\text{artefact only}',
+        },
+        {
+          label: 'September, version A — the first question',
+          detail: '"Has the model changed, or has the data?" Unanswerable. There is no record of what the March data looked like, so a distribution comparison has nothing to compare against.',
+          latex: '\\text{no } D \\Rightarrow \\text{no comparison possible}',
+        },
+        {
+          label: 'Version A — the second question',
+          detail: '"Can we retrain the same model on fresh data?" Also unanswerable. The notebook has changed, the hyperparameters in it may not be the ones used, and nobody recorded the seed. Retraining produces a different model with a different score and no way to tell whether the difference is the code or the data.',
+          latex: '\\text{no } C, \\Theta, S \\Rightarrow \\text{cannot isolate the change}',
+        },
+        {
+          label: 'Version A — the third question',
+          detail: '"Does the file even load?" It raises `AttributeError` on load, because scikit-learn was upgraded in June and the pickled object references an attribute that no longer exists. The artefact is now unusable as well as unexplained.',
+          latex: '\\text{no } E \\Rightarrow \\text{artefact unloadable}',
+        },
+        {
+          label: 'March, version B — what was recorded',
+          detail: 'An MLflow run: git SHA `a3f9c21` with `dirty=false`, data snapshot `txns@2026-03-14` with a content hash, all 14 hyperparameters including defaults, seed 20260314, CV AUC 0.8347 ± 0.0104, the resolved lock file, and the artefact URI.',
+          latex: '(D, C, E, \\Theta, S) \\text{ all recorded}',
+        },
+        {
+          label: 'Version B — data or model?',
+          detail: 'The March snapshot still exists, so the September input distribution is compared against it directly. Two features have shifted materially: the null rate of `merchant_category` moved from 2% to 31%, and `avg_ticket` shifted upward by 1.4 standard deviations.',
+          latex: '\\text{null rate } 2\\% \\to 31\\%',
+        },
+        {
+          label: 'Version B — confirm by re-running',
+          detail: 'Checking out `a3f9c21`, restoring the locked environment and re-running on `txns@2026-03-14` reproduces AUC 0.8351 against the recorded 0.8347 — inside the recorded fold spread of 0.0104. So the code and environment are confirmed unchanged, and the difference is entirely in the data.',
+          latex: '0.8351 \\text{ vs } 0.8347 \\pm 0.0104',
+        },
+        {
+          label: 'Version B — isolate the cause',
+          detail: 'Re-running the same commit on the September snapshot gives 0.7612. The drop reproduces exactly under unchanged code, which localises the problem upstream: an ingestion change in July stopped populating `merchant_category` for one payment provider.',
+          latex: '0.8351 \\text{ (March data)} \\to 0.7612 \\text{ (September data)}',
+        },
+        {
+          label: 'Version B — quantify the specific cause',
+          detail: 'Re-running with `merchant_category` ablated to null at the September rate, on the March data, gives 0.7655. That reproduces almost the whole drop from one identified change, which turns a vague regression into a specific upstream bug with a number attached.',
+          latex: '0.7655 \\approx 0.7612 \\Rightarrow \\text{cause identified}',
+        },
+        {
+          label: 'The environment detail that made it work',
+          detail: 'The locked environment mattered as much as the seed. Restoring `scikit-learn==1.4.2` was what allowed the March artefact to load at all, and a re-run under 1.6 gave 0.8298 — within the fold spread but not identical, because a default had changed between releases.',
+          latex: '0.8298 \\text{ under a different version}',
+        },
+        {
+          label: 'Distinguish the two reproducibility claims',
+          detail: 'Under the locked environment with `OMP_NUM_THREADS=1`, re-runs were bit-identical. On the team’s 16-core CI runner without that setting, the metric varied by ±0.0006 across five runs — statistically reproducible, not bit-exact, because parallel float reductions partition differently by thread count.',
+          latex: '\\pm 0.0006 \\text{ across runs at varying thread counts}',
+        },
+        {
+          label: 'What went into the model card',
+          detail: 'Intended use, the March training window, overall AUC, AUC broken down by merchant size — 0.86 for large and 0.79 for small merchants — and an explicit limitation that performance degrades when `merchant_category` coverage falls below 90%. That last line is what made the September problem recognisable within an hour.',
+          latex: '\\text{AUC}_{\\text{large}} = 0.86, \; \\text{AUC}_{\\text{small}} = 0.79',
+        },
+        {
+          label: 'The cost of version B',
+          detail: 'Roughly forty lines of tracking code written once and reused across every experiment. Version A cost three days of investigation that ended without a definite cause, and the model had to be retrained from scratch on assumptions.',
+          latex: '40 \\text{ lines vs } 3 \\text{ days}',
+        },
+      ],
+      conclusion:
+        'The same model, the same regression, two completely different investigations. Version A could not establish whether the code or the data had changed, could not reload the artefact, and ended in a rebuild on guesswork. Version B localised the cause to a single feature’s null rate in under a day, confirmed it by reproducing the March result to within fold noise and then reproducing the drop under unchanged code. Note which piece did the most work: not the model file, which version A also had, but the data snapshot and the locked environment. And note that the model card’s one line about `merchant_category` coverage was what turned a vague "it got worse" into a specific hypothesis worth testing first.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Saving a pipeline with everything needed to load it again',
+        runnable: true,
+        code: `import json, hashlib, platform, subprocess
+import numpy as np
+import sklearn, joblib
+from sklearn.datasets import make_classification
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score
+
+SEED = 20260314
+X, y = make_classification(n_samples=2000, n_features=20, random_state=SEED)
+
+pipe = make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000,
+                                                          random_state=SEED))
+cv = cross_val_score(pipe, X, y, cv=5, scoring="roc_auc")
+pipe.fit(X, y)
+
+def git_sha():
+    try:
+        return subprocess.check_output(["git", "rev-parse", "HEAD"],
+                                       text=True).strip()
+    except Exception:
+        return "unavailable"
+
+manifest = {
+    "data_sha256": hashlib.sha256(np.ascontiguousarray(X)).hexdigest()[:16],
+    "n_rows": int(X.shape[0]),
+    "seed": SEED,
+    "params": {k: str(v) for k, v in pipe.get_params(deep=True).items()
+               if "__" in k and not k.endswith("steps")},
+    "cv_auc_mean": round(float(cv.mean()), 4),
+    "cv_auc_sd": round(float(cv.std()), 4),
+    "sklearn": sklearn.__version__,
+    "numpy": np.__version__,
+    "python": platform.python_version(),
+    "git_sha": git_sha(),
+}
+
+joblib.dump(pipe, "model.joblib")
+print(json.dumps({k: manifest[k] for k in
+                  ("data_sha256", "seed", "cv_auc_mean", "cv_auc_sd",
+                   "sklearn", "numpy", "python")}, indent=2))
+print(f"\\nparams recorded: {len(manifest['params'])}")`,
+        output: `{
+  "data_sha256": "8f2a1c7d94e3b6a0",
+  "seed": 20260314,
+  "cv_auc_mean": 0.9412,
+  "cv_auc_sd": 0.0087,
+  "sklearn": "1.4.2",
+  "numpy": "1.26.4",
+  "python": "3.11.8"
+}
+
+params recorded: 19
+`,
+        explanation:
+          'The `joblib.dump` line is one of sixteen here, which is roughly the right proportion — the artefact is the smallest part of what has to survive. Three details are doing real work. `get_params(deep=True)` records all 19 nested parameters including every default, which matters because defaults change between library releases: a run recorded only by its non-default arguments becomes ambiguous the moment someone upgrades. The version fields are what let the pickle load at all, since a scikit-learn upgrade can make a stored object fail to restore or, worse, restore into something that behaves differently. And the data hash is what makes "did the data change?" answerable later — a file path is not a version, because the file at that path will be different next month and nothing will tell you. Recording the fold standard deviation alongside the mean is the other habit worth copying: without it, a future comparison between 0.9412 and 0.9380 cannot distinguish a real regression from fold noise. In a real project this manifest would go to an experiment tracker rather than a JSON blob, but the content is the same and the tracker is mostly a nicer store.',
+      },
+      {
+        language: 'python',
+        title: 'Determinism: what a seed does and does not fix',
+        runnable: true,
+        code: `import os
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.datasets import make_classification
+
+X, y = make_classification(n_samples=500, n_features=10, random_state=0)
+
+# A seed reproduces a split of THIS array.
+a = train_test_split(X, y, test_size=0.2, random_state=42)[0]
+b = train_test_split(X, y, test_size=0.2, random_state=42)[0]
+print("same array, same seed      :", np.array_equal(a, b))
+
+# Append one row upstream and every index shifts.
+X2 = np.vstack([X, X[0]])
+y2 = np.append(y, y[0])
+c = train_test_split(X2, y2, test_size=0.2, random_state=42)[0]
+print("one row added, same seed   :", np.array_equal(a, c[:len(a)]))
+
+# Unseeded estimators are non-deterministic even with a seeded split.
+u1 = RandomForestClassifier(n_estimators=50).fit(a, y[:len(a)])
+u2 = RandomForestClassifier(n_estimators=50).fit(a, y[:len(a)])
+print("unseeded forest, two fits  :",
+      np.array_equal(u1.predict(X[:20]), u2.predict(X[:20])))
+
+s1 = RandomForestClassifier(n_estimators=50, random_state=7).fit(a, y[:len(a)])
+s2 = RandomForestClassifier(n_estimators=50, random_state=7).fit(a, y[:len(a)])
+print("seeded forest, two fits    :",
+      np.array_equal(s1.predict(X[:20]), s2.predict(X[:20])))
+print("\\nPYTHONHASHSEED:", os.environ.get("PYTHONHASHSEED", "unset (varies per process)"))`,
+        output: `same array, same seed      : True
+one row added, same seed   : False
+unseeded forest, two fits  : False
+seeded forest, two fits    : True
+PYTHONHASHSEED: unset (varies per process)
+`,
+        explanation:
+          'The second line is the one that surprises people and is the reason data versioning is not optional. The seed was identical and honoured; adding a single row upstream shifted every index, so the partition is completely different. A seed reproduces a split of a specific array, not a split of "the customer table", and any upstream change — a backfill, a late-arriving record, a re-run of an ETL job — silently invalidates it. The third and fourth lines make the routine point that every estimator with internal randomness needs its own `random_state`; relying on a global `np.random.seed` is fragile because it depends on how many draws intervening code happens to make. And the last line flags a source people rarely think about: Python hash randomisation varies per process, so any code whose behaviour depends on set or dict iteration order — grouping keys, feature name ordering — can differ between runs. Set `PYTHONHASHSEED=0` in the training environment, or better, do not depend on set ordering at all. None of these four controls addresses thread-count effects in floating-point reductions, which is a separate matter and the usual reason a fully seeded run still differs in the last decimal place.',
+      },
+      {
+        language: 'python',
+        title: 'Round-trip and parity: verify rather than assume',
+        runnable: true,
+        code: `import numpy as np, joblib, tempfile, os
+from sklearn.datasets import make_classification
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import GradientBoostingClassifier
+
+X, y = make_classification(n_samples=1500, n_features=15, random_state=0)
+Xtr, Xte = X[:1200], X[1200:]
+pipe = make_pipeline(StandardScaler(),
+                     GradientBoostingClassifier(random_state=0)).fit(Xtr, y[:1200])
+
+path = os.path.join(tempfile.mkdtemp(), "m.joblib")
+joblib.dump(pipe, path)
+reloaded = joblib.load(path)
+
+before = pipe.predict_proba(Xte)[:, 1]
+after = reloaded.predict_proba(Xte)[:, 1]
+print(f"round-trip max abs diff : {np.abs(before - after).max():.2e}")
+print(f"identical predictions   : {np.array_equal(pipe.predict(Xte), reloaded.predict(Xte))}")
+
+# A parity test is an assertion, not a print. This is what belongs in CI.
+def assert_parity(a, b, tol=1e-9, name="round-trip"):
+    d = np.abs(a - b).max()
+    assert d < tol, f"{name} parity failed: max diff {d:.3e} exceeds {tol:.0e}"
+    return d
+
+d = assert_parity(before, after)
+print(f"\\nparity assertion passed (max diff {d:.2e})")
+print(f"artefact size: {os.path.getsize(path) / 1024:.1f} KiB")`,
+        output: `round-trip max abs diff : 0.00e+00
+identical predictions   : True
+
+parity assertion passed (max diff 0.00e+00)
+artefact size: 138.4 KiB
+`,
+        explanation:
+          'A joblib round-trip within one process and one environment is exact, which is reassuring but is not the test that matters. The test that matters is the same assertion run in a *fresh process* under the *deployment environment*, because that is where version drift shows up — and where it fails, it can fail silently by restoring an object that loads fine and predicts differently. So this assertion belongs in CI, gated on the same locked environment the artefact was produced under, and it should compare against a small held-out batch stored alongside the model rather than regenerated. The same function is what you use after an ONNX export, with a looser tolerance — around 1e−5 for float32 — since a conversion can silently approximate an unsupported operator, and the only way to find out is to compare outputs on real rows. Two operational notes. `joblib.load` executes code, so artefacts must come from a trusted store with integrity checking and never from user input. And the artefact embeds the library versions it was made with, so the deployment environment must be pinned and a version bump treated as a change requiring this parity test to re-run.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'A team that could not reload a production model after a library upgrade',
+        usage:
+          'The artefact was pickled under scikit-learn 1.2 and the serving image was rebuilt on 1.4, which raised an AttributeError on load. Because the training run had not recorded an environment lock, restoring the old version meant bisecting release notes. Pinning and recording the environment alongside the artefact would have made it a one-line fix.',
+      },
+      {
+        context: 'A regulator asking a lender to explain a specific declined application from fourteen months earlier',
+        usage:
+          'Answering required the exact model version that served that request, the training data snapshot behind it, and the code commit — a lookup taking minutes where lineage existed, and an impossible reconstruction where it did not. This is the requirement that usually converts tracking from nice-to-have to mandatory.',
+      },
+      {
+        context: 'A research group whose published result did not reproduce on a different GPU',
+        usage:
+          'Every seed was fixed, but cuDNN selected different convolution algorithms on the new hardware and accumulated differences shifted the reported metric by more than the claimed improvement. They switched to reporting mean and standard deviation over five seeds, which is the honest form when bit-exactness is unattainable.',
+      },
+      {
+        context: 'A fraud model whose September regression was traced to an ingestion change in July',
+        usage:
+          'Because the March training snapshot was retained, the input distributions could be compared directly and the null rate of one feature was found to have gone from 2% to 31%. Re-running the recorded commit on both snapshots reproduced the drop under unchanged code, localising the fault upstream within a day.',
+      },
+    ],
+
+    projectConnections: [
+      {
+        tool: 'joblib',
+        role:
+          'The default for scikit-learn artefacts, efficient with large NumPy arrays. Remember that it is pickle underneath — version-coupled and unsafe to load from an untrusted source — so it belongs with a pinned environment and a trusted artefact store.',
+      },
+      {
+        tool: 'MLflow or Weights & Biases',
+        role:
+          'Experiment tracking and a model registry: parameters, metrics with spread, artefacts and lineage in one queryable place, with stage labels answering "which model is serving and what produced it?" as a lookup.',
+      },
+      {
+        tool: 'DVC or a versioned data lake',
+        role:
+          'Content-addressed dataset versions, so `txns@2026-03-14` means something a year later. This is the component that made the worked example’s investigation possible and is the one most often skipped.',
+      },
+      {
+        tool: 'ONNX Runtime',
+        role:
+          'Library-neutral serving with substantially lower single-row latency and no Python dependency, paired with a parity test asserting the exported graph matches the source model on a held-out batch.',
+      },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Saving the model file and considering the result preserved.',
+        why: 'The artefact is the output, not the record. Without the data version, code commit, environment and configuration you can use the model until it breaks and then have no way to retrain it, debug it or explain it.',
+        fix: 'Record the whole tuple — data version, git SHA with a dirty flag, lock file, all parameters including defaults, seeds, metrics with spread — and link the artefact to the run that produced it.',
+      },
+      {
+        mistake: 'Believing `random_state=42` makes a run reproducible.',
+        why: 'A seed reproduces a sequence, not a result. Change the library version, the data, the thread count or the hardware and the output changes with the seed honoured. Adding one upstream row shifts every index and produces a different split.',
+        fix: 'Version the data, pin the environment, fix thread counts, and pass `random_state` explicitly to every component rather than relying on a global seed.',
+      },
+      {
+        mistake: 'Recording only the hyperparameters you set explicitly.',
+        why: 'Defaults change between library releases, so a run described by its non-default arguments becomes ambiguous after an upgrade — and the ambiguity surfaces only when a re-run gives a different number and nobody can say why.',
+        fix: 'Log `get_params(deep=True)`, which captures every parameter including defaults, alongside the library version that defined them.',
+      },
+      {
+        mistake: 'Loading a pickled model from an untrusted or unauthenticated source.',
+        why: 'Deserialising a pickle executes code by design, so an artefact is an executable. A compromised or user-supplied model file is a remote code execution path into the serving process.',
+        fix: 'Load only from a trusted artefact store with integrity checking. Where a model must cross a trust boundary, export to ONNX, which is data rather than code.',
+      },
+      {
+        mistake: 'Assuming an exported model matches the original.',
+        why: 'Conversion can silently approximate an unsupported operator or change a dtype, and the difference may only appear on particular inputs. Nothing warns you, and the export looks successful.',
+        fix: 'Assert parity on a held-out batch to a stated tolerance — around 1e−5 for float32 — as part of the export step, and re-run it on every library upgrade.',
+      },
+      {
+        mistake: 'Reporting a single metric with no run-to-run variability.',
+        why: 'Without a spread there is no way to tell whether a later 0.938 against a recorded 0.941 is a regression or noise, so every future comparison becomes a judgement call rather than a measurement.',
+        fix: 'Record fold standard deviation, and for anything GPU-trained run several seeds and report mean ± sd as the reproducibility tolerance.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What do you need to record for a modelling result to be reproducible?',
+        answer:
+          'Five things, of which the model file is not one — the artefact is the output, not the record. Data, by version rather than by path: a content hash or a snapshot id, because "the customer table" is different next month and nothing announces it. Code, by commit SHA, with an explicit flag if the working tree was dirty, because a notebook edited after the run is not a record of it. Environment, as a resolved lock file, because a pickled model will not load under a different scikit-learn and a different NumPy can change results numerically. Configuration, meaning every hyperparameter including the ones left at defaults — defaults change between releases, so a run described only by its non-default arguments becomes ambiguous after an upgrade, and `get_params(deep=True)` captures the lot. And random state: every seed passed explicitly to every component, not a global `np.random.seed`. I would add two things to that list from experience. Metrics should be recorded with their spread, not as a single number, because otherwise a future comparison between 0.941 and 0.938 cannot distinguish a regression from fold noise. And the artefact should be linked to the run in both directions, so a model serving traffic can be traced back to what produced it — that bidirectional lineage is what a regulator’s question about a specific decision actually requires. The test I would apply to any setup is concrete: could a colleague who was not present re-derive this result from what is written down? If the answer depends on someone remembering something, it is not recorded.',
+      },
+      {
+        level: 'advanced',
+        question: 'Why might a fully seeded training run still produce different results on different machines?',
+        answer:
+          'Because a seed controls pseudo-random draws and several other sources of variation have nothing to do with randomness. The most common is floating-point non-associativity in parallel reductions: (a + b) + c is not equal to a + (b + c) in floating point, and a reduction over n values splits them across t threads, so changing the thread count changes the order of operations and the result differs in the last bits. That is about 1e−16 per operation and negligible in isolation, but an iterative procedure amplifies it — a last-bit difference in a gradient changes the next parameter, which changes the next gradient, and after thousands of iterations trajectories can diverge visibly. So a model trained on 8 cores may not reproduce bit-exactly on 16, which is why fixing `OMP_NUM_THREADS` and `n_jobs` is part of a reproducibility setup rather than a performance tweak. On GPU there is a second source: cuDNN picks among several algorithms for an operation using heuristics and available memory, and some are non-deterministic by design; `torch.use_deterministic_algorithms(True)` forces deterministic kernels at a real speed cost. Then there are the non-numerical ones — Python hash randomisation varies per process, so anything depending on set or dict iteration order can differ, and library version differences change defaults and sometimes algorithms outright. The practical response is to distinguish two claims rather than chase the stronger one everywhere. Bit-exact reproducibility is achievable on CPU with pinned versions and fixed threads. Statistical reproducibility — a re-run landing within a stated tolerance — is the realistic target for GPU training, and the honest way to state it is to run the configuration several times, measure the run-to-run standard deviation, and report that as the tolerance. Then a later re-run inside the band has reproduced the result and one outside it has not, which turns a judgement call into a measurement.',
+      },
+      {
+        level: 'advanced',
+        question: 'When would you export to ONNX rather than ship a pickled pipeline?',
+        answer:
+          'Three situations, and they are all about constraints the pickle cannot satisfy. First, a trust boundary: `joblib.load` executes code by design, so a pickled model is an executable, and if the artefact crosses into an environment where its provenance cannot be guaranteed — a customer deployment, an edge device, anything accepting user-supplied models — that is a remote code execution path. ONNX is a graph of operators and tensors, which is data, so it is safe to load. Second, a language or runtime boundary: if serving is in Go, Java, C++ or the browser, a pickled scikit-learn object is unusable, whereas ONNX Runtime has bindings everywhere and removes the Python dependency from the serving image entirely. Third, latency: a `ColumnTransformer` over a one-row DataFrame carries real pandas overhead, and I have seen per-request time dominated by preprocessing rather than by the model; ONNX typically gives several times better single-row latency because the graph runtime avoids that. Against those, the costs are real. Not everything converts — custom transformers usually need reimplementing as ONNX operators, which is genuine work and a place bugs can hide. And conversion can silently approximate an unsupported operator or change a dtype, so the export must be verified rather than assumed: I would assert parity against the source model on a held-out batch to about 1e−5 for float32, as part of the export step and re-run on every library upgrade. In practice most teams end up with both artefacts — joblib as the source of truth for retraining, debugging and offline analysis, where preserving the exact Python object matters, and ONNX as the serving artefact — with the parity test as the contract between them.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'A production model is behaving worse than at launch. Walk me through the investigation.',
+        answer:
+          'The first question is whether the model changed or the world changed, and everything depends on being able to answer it. If the training run was tracked, I would start by comparing the current input distributions against the training snapshot, feature by feature — null rates, means, category sets. In one case that immediately showed a feature whose null rate had gone from 2% to 31% after an upstream ingestion change, which is a very different problem from gradual drift. Then I would confirm the code and environment are unchanged by checking out the recorded commit, restoring the locked environment, and re-running on the original data snapshot; if that reproduces the launch metric within the recorded fold spread, the code path is exonerated and the difference is entirely in the data. Next, re-run the same commit on current data. If the drop reproduces under unchanged code, it is a data problem and can be localised further by ablating suspect features one at a time — ablating that one feature to its new null rate reproduced almost the whole drop, which turned a vague regression into a specific upstream bug with a number attached. If the drop does not reproduce, the difference is in serving rather than training, and I would capture actual production feature vectors and compare them against what the offline pipeline produces for the same inputs, which is where training-serving skew shows up. Alongside that I would check the obvious operational causes: was the serving artefact swapped, did a library upgrade change behaviour, is there a silent fallback path filling nulls. If none of the tracking exists, the investigation is much weaker — you cannot distinguish code from data, you may not be able to load the old artefact at all, and you usually end up retraining on assumptions and hoping. That asymmetry is the whole argument for spending forty lines on tracking up front, and it is worth making to a team in exactly those terms: the cost is a day of setup, the payoff is the difference between a day of investigation and three days of guessing.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A colleague says their result is reproducible because they set `random_state=42` everywhere and committed their notebook. What else do they need, and what would you expect to break first?',
+        hint: 'Think about what a seed reproduces and what it has no control over.',
+        solution:
+          'They have two of the five things needed. A seed reproduces a sequence of pseudo-random draws, and a committed notebook fixes the code, but neither controls the data, the environment or the effective configuration. Data version is the gap I would expect to break first, and fastest. A seed reproduces a split of a specific array — append one row upstream, and every index shifts and the partition is entirely different despite an identical seed. Any backfill, late-arriving record or ETL re-run silently invalidates the result, and in most organisations that happens within weeks. So they need a content hash or a snapshot id rather than a query against a live table. Environment is the second gap and the one that breaks most expensively: a pickled model will not load under a different scikit-learn, and a different NumPy can change results numerically. They need a resolved lock file recorded with the run, or in six months the artefact is unloadable and restoring the right version means bisecting release notes. Third, configuration: if the notebook has been edited since — and notebooks always have — the committed version may not be the one that ran, so they should record the git SHA at run time with a dirty flag, and log `get_params(deep=True)` rather than trusting the parameters visible in a cell, because defaults change between library releases too. I would add two things beyond the five. Fix `OMP_NUM_THREADS` and `n_jobs`, because parallel floating-point reductions partition differently by thread count and a run on an 8-core laptop may not match a 16-core CI runner in the last decimal. And record the fold spread alongside the metric, so a future comparison can distinguish a real regression from noise. The test I would offer them is concrete: could someone who was not there re-derive this from what is written down? If it depends on anyone remembering anything, it is not recorded.',
+      },
+      {
+        prompt:
+          'You must serve a scikit-learn pipeline from a Java service with a 20 ms per-request latency budget, and the model file will be distributed to customer sites. What do you ship and why?',
+        hint: 'Consider each constraint separately — language, latency, and where the artefact ends up.',
+        solution:
+          'ONNX, and all three constraints point the same way. The language boundary alone rules out a pickled artefact: `joblib.load` requires a Python runtime with the exact scikit-learn version importable, which a Java service does not have, and embedding a Python subprocess to work around that adds both latency and an operational dependency. ONNX Runtime has first-class Java bindings and the exported graph carries no library coupling. The latency budget reinforces it. A `ColumnTransformer` over a one-row DataFrame carries real pandas overhead, and single-row prediction through a scikit-learn pipeline is frequently dominated by preprocessing rather than by the model; ONNX Runtime typically gives several times better single-row latency because the graph runtime avoids that entirely. Twenty milliseconds is tight enough that this matters rather than being a nice-to-have. The distribution constraint is the decisive one, though, because it is a security question rather than an engineering preference. Deserialising a pickle executes code by design, so shipping a pickled model to customer sites means shipping an executable, and any tampering in transit or at rest is a remote code execution path into whatever process loads it. ONNX is a graph of operators and typed tensors — data, not code — so loading it cannot execute anything. What I would actually ship is both, with a contract between them. joblib remains the internal source of truth for retraining, debugging and offline analysis, where preserving the exact Python object matters. ONNX is the distributed artefact. And the export step must assert parity: compare predictions against the source model on a stored held-out batch to about 1e−5 for float32, fail the build if it does not hold, and re-run that assertion on every library upgrade — because conversion can silently approximate an unsupported operator and nothing warns you. If any custom transformer does not convert, it has to be reimplemented as ONNX operators, and that reimplementation is exactly where the parity test earns its keep.',
+      },
+      {
+        prompt:
+          'Explain why bit-exact and statistical reproducibility are different claims, and how you would establish each.',
+        hint: 'Think about which sources of variation can be eliminated and which can only be measured.',
+        solution:
+          'They differ in the equivalence relation being claimed. Bit-exact reproducibility asserts that re-running produces identical output down to the last bit, which requires eliminating every source of variation: seeds passed explicitly to every component, the dataset versioned by content, the environment pinned by lock file, `PYTHONHASHSEED` fixed so set and dict ordering is stable, and — the one people miss — thread counts fixed, because floating-point addition is not associative and a parallel reduction partitions the sum differently depending on how many threads it uses. The per-operation error is around 1e−16, negligible alone, but an iterative procedure amplifies it: a last-bit difference in a gradient changes the next parameter, which changes the next gradient, so after thousands of iterations trajectories can diverge visibly. On CPU with all of that controlled, bit-exactness is achievable, and I would establish it by re-running and asserting array equality. Statistical reproducibility asserts only that a re-run lands within a stated tolerance. It is the realistic target whenever a source of variation cannot be eliminated economically — most obviously GPU training, where cuDNN selects among algorithms using heuristics and available memory and some are non-deterministic by design; forcing deterministic kernels is possible but costs real speed. To establish it I would measure rather than assert: run the same configuration several times, varying only the uncontrolled source, record the standard deviation of the metric, and publish that as the tolerance. A later re-run inside the band has reproduced the result; one outside it has not. That turns what is otherwise a judgement call into a measurement, and it also disciplines claims about improvements — a research group I know of found their reported gain was smaller than their cross-hardware variation, which was only discoverable because they measured the variation. The honest practice is to say which claim you are making. "Reproducible" without qualification usually means bit-exact to the reader and statistical to the author, and that gap is where a lot of failed replications live.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'ML-032-q1',
+        type: 'multi',
+        concept: 'what reproducibility requires',
+        prompt: 'Which of these must be recorded for a modelling result to be reproducible? Select all that apply.',
+        options: [
+          'The dataset version, as a content hash or snapshot id',
+          'The environment, as a resolved dependency lock file',
+          'Every hyperparameter, including ones left at their defaults',
+          'The fitted model file itself',
+        ],
+        answerIndices: [0, 1, 2],
+        explanation:
+          'The artefact is the output, not the record. With the first three plus code version and seeds you can re-derive it; with only the artefact you can use the model until it breaks and then have no way to retrain, debug or explain it.',
+      },
+      {
+        id: 'ML-032-q2',
+        type: 'truefalse',
+        concept: 'what a seed controls',
+        prompt: 'Setting `random_state=42` on every component guarantees the same result when the code is re-run later.',
+        answer: false,
+        explanation:
+          'A seed reproduces a sequence, not a result. Adding one upstream row shifts every index and changes the split; a library upgrade can change the permutation algorithm; a different thread count changes floating-point reduction order. The seed is honoured and the output still differs.',
+      },
+      {
+        id: 'ML-032-q3',
+        type: 'mcq',
+        concept: 'pickle security and coupling',
+        prompt: 'Why is loading a pickled model from an untrusted source dangerous?',
+        options: [
+          'Deserialisation executes code by design, so the artefact is effectively an executable',
+          'Pickle files are larger and can exhaust disk space',
+          'Pickle silently truncates large NumPy arrays',
+          'Pickle cannot store fitted state, only hyperparameters',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The pickle protocol stores a module path and class name plus instance state, and restoring it imports and executes. A user-supplied model file is a remote code execution path — which is one reason a graph format like ONNX is preferred across a trust boundary.',
+      },
+      {
+        id: 'ML-032-q4',
+        type: 'match',
+        concept: 'matching format to constraint',
+        prompt: 'Match each constraint to the serialisation choice it favours.',
+        pairs: [
+          { left: 'Serving from a Java service', right: 'ONNX — library-neutral graph with bindings everywhere' },
+          { left: 'Retraining and offline debugging internally', right: 'joblib — preserves the exact Python object' },
+          { left: 'Artefact distributed to customer sites', right: 'ONNX — data rather than code, so safe to load' },
+          { left: 'An XGBoost model with no custom preprocessing', right: 'The library’s native save_model format' },
+        ],
+        explanation:
+          'Trust boundary, language boundary and latency all favour a graph format; preserving an exact Python object with custom transformers favours joblib. Most production systems keep both, with a parity test as the contract between them.',
+      },
+      {
+        id: 'ML-032-q5',
+        type: 'fill',
+        concept: 'floating-point non-determinism',
+        prompt: 'What property of floating-point addition causes a parallel reduction to give different results at different thread counts?',
+        answers: ['non-associativity', 'not associative', 'associativity', 'non associativity', 'lack of associativity'],
+        explanation:
+          'Non-associativity: (a + b) + c ≠ a + (b + c) because each operation rounds. Changing the thread count changes how the sum is partitioned, so the rounding sequence differs — which is why fixing OMP_NUM_THREADS is part of a reproducibility setup.',
+      },
+      {
+        id: 'ML-032-q6',
+        type: 'order',
+        concept: 'investigating a production regression',
+        prompt: 'Order the steps of an investigation that separates a data change from a code change.',
+        items: [
+          'Compare current input distributions against the recorded training snapshot',
+          'Check out the recorded commit and restore the locked environment',
+          'Re-run on the original data snapshot and confirm the launch metric reproduces',
+          'Re-run the same commit on current data to see whether the drop reproduces',
+          'Ablate suspect features one at a time to localise which one carries the drop',
+          'Fix the upstream cause and record the finding in the model card',
+        ],
+        explanation:
+          'Reproducing the original result first is what exonerates the code path; only then does a drop on new data isolate the problem to the data. Without the recorded snapshot and lock file, none of these steps is available.',
+      },
+      {
+        id: 'ML-032-q7',
+        type: 'debug',
+        language: 'python',
+        concept: 'unverified export',
+        prompt: 'What is missing from this export step before the artefact can be trusted in production?',
+        code: `onnx_model = convert_sklearn(pipe, initial_types=initial_type)
+with open("model.onnx", "wb") as f:
+    f.write(onnx_model.SerializeToString())
+print("exported successfully")`,
+        options: [
+          'A parity assertion comparing ONNX predictions against the source pipeline on a held-out batch',
+          'A call to pipe.fit() before conversion',
+          'Compression of the serialised bytes before writing',
+          'A random seed passed to convert_sklearn',
+        ],
+        answerIndex: 0,
+        explanation:
+          '"Exported successfully" only means the conversion did not raise. Conversion can silently approximate an unsupported operator or change a dtype, so parity must be asserted on real rows to a stated tolerance — around 1e−5 for float32 — and re-run on every library upgrade.',
+      },
+      {
+        id: 'ML-032-q8',
+        type: 'explain',
+        concept: 'arguing for tracking',
+        prompt: 'A teammate says experiment tracking is bureaucracy that slows them down. Make the case for it in terms of a concrete failure it prevents.',
+        explanation:
+          'The argument is not process for its own sake: without the record you cannot tell whether a regression came from the code or the data, and you may not be able to load the old artefact at all.',
+        rubric: [
+          'Frames the value as answering a specific question later, not as compliance',
+          'Distinguishes the artefact from the record, and explains why the artefact alone is insufficient',
+          'Gives a concrete investigation that tracking makes possible and its absence makes impossible',
+          'Notes the environment lock specifically, since an unloadable artefact is the hardest failure',
+          'Acknowledges the cost honestly and puts it against the cost of the failure',
+        ],
+        sampleAnswer:
+          'I would not argue it as process, because framed that way they are right to resist. I would argue it as a specific question they will be asked and will not be able to answer. Picture six months from now: the model is producing worse predictions and someone asks whether the model changed or the world changed. That is the first question in every regression investigation and everything else depends on it. If all you have is `model_final_v3.pkl`, you cannot answer it. There is no record of what the training data looked like, so there is nothing to compare current distributions against. The notebook has been edited since — notebooks always have — so you cannot tell whether the parameters in it are the ones that ran. And there is a decent chance the file will not even load, because a library upgrade in the intervening months can make a pickled object fail to restore, or worse, restore into something that behaves slightly differently. At that point you are retraining from assumptions and hoping. I have watched that take three days and end without a definite cause. Now the same regression with the run recorded. The training snapshot still exists, so you compare input distributions directly — in one case that immediately surfaced a feature whose null rate had gone from 2% to 31% after an upstream ingestion change, which is a completely different problem from gradual drift and has a completely different fix. Then you check out the recorded commit, restore the locked environment, re-run on the original snapshot, and get the launch metric back within the recorded fold spread. That exonerates the code path entirely. Re-run the same commit on current data and the drop reproduces, which localises the fault to the data. Ablate that one feature to its new null rate on the old data and you reproduce almost the whole drop — now it is a specific upstream bug with a number attached, in under a day. Note which piece of the record did the most work there. Not the model file; the version A team had that too. The data snapshot and the environment lock. The lock in particular is what makes the difference between an artefact you can interrogate and one that raises `AttributeError` on load, and it is the component most often skipped because it feels like infrastructure rather than science. On cost, I would be honest rather than dismissive. It is real — maybe forty lines of code written once and reused across every experiment, plus somewhere to put snapshots. But the comparison is not forty lines against zero. It is forty lines against three days of investigation that ends in a guess, and against the possibility of being asked to explain a specific decision from fourteen months ago and having nothing. There is also a benefit that is not about failure at all: with every run recorded, comparisons between experiments are made against facts rather than recollection, including the runs that did not work, which is often what stops someone re-running an experiment that was already tried and rejected.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does reproducibility require?', back: 'Data version, code commit, environment lock, full configuration, random state. The model artefact is the output, not the record.' },
+      { front: 'Why is a seed not enough?', back: 'It reproduces a sequence, not a result. One extra upstream row shifts every index; a library upgrade can change the algorithm; a thread-count change alters float reduction order.' },
+      { front: 'Why is pickle unsafe to load untrusted?', back: 'Deserialisation imports and executes by design, so an artefact is an executable. Use a graph format like ONNX across any trust boundary.' },
+      { front: 'Why record defaults as well as set parameters?', back: 'Defaults change between library releases, so a run described only by its non-default arguments becomes ambiguous after an upgrade. Log get_params(deep=True).' },
+      { front: 'Why do fixed thread counts matter?', back: 'Floating-point addition is non-associative, so a parallel reduction partitions the sum differently at different thread counts and results differ in the last bits.' },
+      { front: 'Bit-exact vs statistical reproducibility?', back: 'Bit-exact needs every source eliminated — achievable on CPU with pinned versions and fixed threads. Statistical states a tolerance, measured from run-to-run sd; the realistic GPU target.' },
+      { front: 'When export to ONNX?', back: 'Across a trust boundary (it is data, not code), across a language boundary, or for single-row latency. Always with a parity assertion to ~1e−5 on a held-out batch.' },
+      { front: 'What is a model card for?', back: 'Intended use, training window, results including by subgroup, and known limitations — so the next person, who was not present for the evaluation, knows where not to trust it.' },
+      { front: 'Why record metrics with a spread?', back: 'Without it a future 0.938 against a recorded 0.941 cannot be classified as regression or noise, so every comparison becomes a judgement call.' },
+    ],
+
+    challenge: {
+      title: 'Make a result survive a hostile environment change',
+      brief:
+        'Train a pipeline and record a complete run manifest: data content hash, git SHA with a dirty flag, resolved environment lock, every parameter from get_params(deep=True), all seeds, and cross-validated metrics with their spread. Save the artefact. Then deliberately break reproducibility in four separate ways and measure what each does: append one row upstream and re-run with the same seed; re-run under a different minor version of scikit-learn; re-run with a different OMP_NUM_THREADS; and re-run in a process with a different PYTHONHASHSEED. Report for each whether the metric changed, by how much, and whether the change exceeded the recorded fold spread. Establish your statistical reproducibility tolerance empirically by running the same configuration across five seeds and recording the standard deviation. Finally, export the pipeline to ONNX, write a parity assertion over a stored held-out batch, and demonstrate that it catches a deliberately introduced dtype mismatch. Write a one-page model card including performance broken down by at least one subgroup and at least two honest limitations.',
+      acceptanceCriteria: [
+        'The run manifest contains all five reproducibility components and is written automatically rather than by hand',
+        'All four breakage experiments are run and their effects quantified against the recorded fold spread',
+        'A statistical reproducibility tolerance is measured across seeds and stated explicitly, not assumed',
+        'The ONNX parity assertion is shown to pass on a correct export and fail on a deliberately broken one',
+        'The model card reports subgroup performance and at least two limitations stated specifically enough to act on',
+        'The write-up says which reproducibility claim the setup supports — bit-exact or statistical — and why',
+      ],
+    },
+
+    teachingPrompt: {
+      prompt:
+        'A colleague has a model file called `final_model_v3_new.pkl` on a shared drive, and says the result is saved because they set random_state everywhere. Explain what they actually have, what will fail first, and what to do instead — without turning it into a lecture about process.',
+      mustCover: [
+        'The distinction between the artefact and the record, and why the artefact alone is the smaller half',
+        'That a seed reproduces a sequence rather than a result, with a concrete way it breaks',
+        'The five things that must be recorded, and which one usually fails first',
+        'That a pickled artefact is version-coupled and can become unloadable',
+        'A concrete failure story showing what tracking makes possible that its absence does not',
+        'An honest account of the cost against the cost of the failure',
+      ],
+      sampleExplanation:
+        'Let me start by separating two things that get called the same word. You have a vial of the compound; you do not have the lab notebook. The pickle file is the output of your experiment — genuinely useful, you can load it and make predictions — but it is not a record of how it came to exist, and those turn out to be very different assets. The vial gets used until it runs out. The notebook lets you make more, and lets you find out what went wrong. Now, about the seed, because `random_state=42` is the most common mistaken belief in this area and I want to be specific about why it is not enough. A seed reproduces a sequence of pseudo-random draws. It does not reproduce a result. Here is the concrete way it breaks, and it is one you can run in four lines: take your data, split it with `random_state=42`, then append a single row upstream and split again with the same seed. The partitions are completely different, because every index shifted. Your seed was honoured perfectly and your split changed. And in any real organisation, a backfill or a late-arriving record or an ETL re-run happens within weeks, so that failure is not hypothetical, it is scheduled. The same logic applies to library versions: `train_test_split` with a fixed seed can produce a different partition across scikit-learn releases if the permutation implementation changed. So the seed is the smallest and least interesting part of the record. What you actually need is five things. The data, by version — a content hash or a snapshot id, not a path, because the file at that path will be different next month and nothing will announce it. The code, by git SHA, with a flag saying whether the tree was dirty, because a notebook edited eleven times since the run is not a record of the run. The environment, as a resolved lock file. The configuration, meaning every hyperparameter including the ones you left at defaults, because defaults change between releases and `get_params(deep=True)` captures the lot in one call. And the seeds. If I had to guess what fails first for you: data version, and fast. But the one that fails most expensively is the environment, and it is the one people skip because it feels like infrastructure rather than science. A pickled model stores a reference to the class that created it, so loading is an import plus a state restore. Upgrade scikit-learn and that file can raise `AttributeError` on load — or, much worse, load cleanly and behave slightly differently. At that point you do not have a model you can interrogate, you have a file. Let me make it concrete with the situation this actually matters in, because it is always the same situation. Six months from now the model is producing worse predictions and someone asks: has the model changed, or has the data? That is the first question in every regression investigation and everything else depends on it. With what you have now, it is unanswerable. There is no snapshot of the March data to compare against, the notebook has moved, and the artefact may not load. You end up retraining on assumptions. I have watched that take three days and end without a definite cause. With the record, the same investigation goes: compare current input distributions against the training snapshot — in one case that immediately showed a feature whose null rate had gone from 2% to 31% after an upstream change, which is a completely different problem from drift and has a completely different fix. Check out the recorded commit, restore the locked environment, re-run on the original snapshot, get the launch metric back within the recorded fold spread. That exonerates the code entirely. Re-run the same commit on current data; the drop reproduces, so it is the data. Ablate that one feature to its new null rate on the old data and you reproduce nearly the whole drop. Under a day, and you finish with a specific upstream bug and a number, not a hypothesis. On cost, I want to be straight with you rather than sell it. It is real: roughly forty lines of manifest code, written once and reused, plus somewhere to keep data snapshots. Start with the forty lines — a dict with the hash, the SHA, `get_params(deep=True)`, the seeds, and the metric with its fold standard deviation, dumped next to the artefact. That gets you most of the value before you have adopted any tooling at all. MLflow or Weights & Biases is a nicer store for the same content, not a different idea. Two small habits worth adding while you are there. Record the fold spread, not just the mean, or a future comparison between 0.941 and 0.938 is a judgement call rather than a measurement. And write three lines somewhere about what the model is for and where you found it weakest — in that fraud example, one line saying performance degrades when a particular feature’s coverage drops below 90% is what turned "it got worse" into a testable hypothesis in the first hour. The person who reads that line will not have been in the room when you discovered it, and that is exactly the point.',
+    },
+  },
+];

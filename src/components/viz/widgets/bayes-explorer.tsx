@@ -177,10 +177,17 @@ export default function BayesExplorer() {
       const fpCol = resolve('var(--viz-cat-learning)', '#3987e5');
       const tnCol = resolve('var(--viz-cat-none)', '#7c8496');
 
-      const side = Math.min(w - 8, h - 8);
+      // Reserve room above the grid for its caption, which was being clipped
+      // against the top edge.
+      const CAPTION = 16;
+      const side = Math.min(w - 8, h - 8 - CAPTION);
       const cell = side / COLS;
+      // A gap between squares only reads as a gap when there is room for one.
+      // Below ~4px the inset plus antialiasing ate most of the fill and the
+      // whole population block looked like empty space.
+      const inset = cell >= 4 ? 0.3 : 0;
       const x0 = (w - side) / 2;
-      const y0 = (h - side) / 2;
+      const y0 = CAPTION + (h - CAPTION - side) / 2;
 
       const dim = view === 'positive';
       const order: Group[] = ['tn', 'fp', 'fn', 'tp'];
@@ -192,12 +199,15 @@ export default function BayesExplorer() {
       for (const g of order) {
         if (counts[g] === 0) continue;
         ctx.fillStyle = colours[g];
-        ctx.globalAlpha = dim && (g === 'tn' || g === 'fn') ? 0.13 : g === 'tn' ? 0.35 : 0.95;
+        // The true negatives are the bulk of the population, so they have to
+        // be visible as a block — at 0.35 on a dark surface the whole grid
+        // read as empty.
+        ctx.globalAlpha = dim && (g === 'tn' || g === 'fn') ? 0.22 : g === 'tn' ? 0.8 : 1;
         ctx.beginPath();
         for (let i = starts[g]; i < starts[g] + counts[g]; i++) {
           const col = i % COLS;
           const row = Math.floor(i / COLS);
-          ctx.rect(x0 + col * cell + 0.15, y0 + row * cell + 0.15, Math.max(0.7, cell - 0.4), Math.max(0.7, cell - 0.4));
+          ctx.rect(x0 + col * cell + inset, y0 + row * cell + inset, cell - inset * 2, cell - inset * 2);
         }
         ctx.fill();
       }
@@ -230,7 +240,7 @@ export default function BayesExplorer() {
       ctx.fillStyle = axis;
       ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
       ctx.textAlign = 'left';
-      ctx.fillText('10,000 people · 1 square = 1 person', x0, Math.max(9, y0 - 3));
+      ctx.fillText('10,000 people · 1 square = 1 person', x0, y0 - 5);
     },
     [c, view, latest],
   );
@@ -421,7 +431,7 @@ export default function BayesExplorer() {
         </>
       }
     >
-      <div className="h-64 w-full sm:h-72">
+      <div className="h-[20rem] w-full sm:h-[26rem]">
         <canvas
           ref={grid.canvasRef}
           className="block"

@@ -333,7 +333,7 @@ export default function GradientSurface3D() {
           </div>
         ) : (
           <Canvas
-            camera={{ position: [5.4, 5.2, 6.4], fov: 45 }}
+            camera={{ position: [6.8, 6.4, 8.2], fov: 42 }}
             dpr={[1, 1.5]}
             gl={{ antialias: true, powerPreference: 'low-power' }}
           >
