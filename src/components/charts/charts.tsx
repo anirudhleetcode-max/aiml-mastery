@@ -6,7 +6,26 @@ import {
   Tooltip, XAxis, YAxis, CartesianGrid,
 } from 'recharts';
 import { AXIS_STYLE, ChartFrame, Legend, VizTooltip } from './primitives';
-import { prettyDate } from '@/lib/format';
+import { formatMinutes, formatXP, pct, prettyDate } from '@/lib/format';
+
+/**
+ * Charts are client components, and a server component cannot hand a client
+ * component a function. Formatting is therefore selected by name and resolved
+ * here, which also keeps the same number reading identically across charts.
+ */
+export type NumberFormat = 'plain' | 'xp' | 'percent' | 'minutes' | 'score';
+
+const FORMATTERS: Record<NumberFormat, (v: number) => string> = {
+  plain: (v) => String(Math.round(v * 100) / 100),
+  xp: (v) => formatXP(Math.round(v)),
+  percent: (v) => pct(v),
+  minutes: (v) => formatMinutes(v),
+  score: (v) => `${Math.round(v * 100)}%`,
+};
+
+function formatterFor(name: NumberFormat = 'plain') {
+  return FORMATTERS[name] ?? FORMATTERS.plain;
+}
 
 /* ------------------------------------------------------------------ */
 /* Composition donut                                                    */
@@ -116,7 +135,7 @@ export function TrendChart({
   title,
   subtitle,
   valueLabel,
-  format = (v) => String(v),
+  format = 'plain',
   height = 210,
   domainMax,
   percent = false,
@@ -126,13 +145,14 @@ export function TrendChart({
   title: string;
   subtitle?: string;
   valueLabel: string;
-  format?: (v: number) => string;
+  format?: NumberFormat;
   height?: number;
   domainMax?: number;
   percent?: boolean;
   action?: React.ReactNode;
 }) {
   const id = React.useId().replace(/:/g, '');
+  const fmt = formatterFor(format);
 
   return (
     <ChartFrame
@@ -142,7 +162,7 @@ export function TrendChart({
       action={action}
       table={{
         columns: ['Date', valueLabel],
-        rows: data.map((d) => [prettyDate(d.date), format(d.value)]),
+        rows: data.map((d) => [prettyDate(d.date), fmt(d.value)]),
       }}
     >
       <ResponsiveContainer width="100%" height="100%">
@@ -162,12 +182,14 @@ export function TrendChart({
           />
           <YAxis
             {...AXIS_STYLE}
-            width={44}
+            // "100%" needs more room than "40"; too narrow and the leading
+            // digit is clipped off the left edge.
+            width={percent ? 52 : 46}
             domain={[0, domainMax ?? 'auto']}
-            tickFormatter={(v: number) => (percent ? `${Math.round(v * 100)}%` : format(v))}
+            tickFormatter={(v: number) => (percent ? `${Math.round(v * 100)}%` : fmt(v))}
           />
           <Tooltip
-            content={<VizTooltip formatter={(v) => format(Number(v))} labelFormatter={(l) => prettyDate(String(l), { weekday: 'short' })} />}
+            content={<VizTooltip formatter={(v) => fmt(Number(v))} labelFormatter={(l) => prettyDate(String(l), { weekday: 'short' })} />}
             cursor={{ stroke: 'var(--viz-series)', strokeWidth: 1, strokeDasharray: '3 3' }}
           />
           <Area
@@ -209,7 +231,7 @@ export function BarsChart({
   title,
   subtitle,
   valueLabel,
-  format = (v) => String(v),
+  format = 'plain',
   height = 240,
   horizontal = false,
   percent = false,
@@ -218,17 +240,18 @@ export function BarsChart({
   title: string;
   subtitle?: string;
   valueLabel: string;
-  format?: (v: number) => string;
+  format?: NumberFormat;
   height?: number;
   horizontal?: boolean;
   percent?: boolean;
 }) {
+  const fmt = formatterFor(format);
   return (
     <ChartFrame
       title={title}
       subtitle={subtitle}
       height={height}
-      table={{ columns: ['Item', valueLabel], rows: data.map((d) => [d.label, format(d.value)]) }}
+      table={{ columns: ['Item', valueLabel], rows: data.map((d) => [d.label, fmt(d.value)]) }}
     >
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
@@ -244,7 +267,7 @@ export function BarsChart({
                 type="number"
                 {...AXIS_STYLE}
                 domain={percent ? [0, 1] : [0, 'auto']}
-                tickFormatter={(v: number) => (percent ? `${Math.round(v * 100)}%` : format(v))}
+                tickFormatter={(v: number) => (percent ? `${Math.round(v * 100)}%` : fmt(v))}
               />
               <YAxis type="category" dataKey="label" {...AXIS_STYLE} width={120} />
             </>
@@ -253,14 +276,14 @@ export function BarsChart({
               <XAxis dataKey="label" {...AXIS_STYLE} interval={0} />
               <YAxis
                 {...AXIS_STYLE}
-                width={44}
+                width={percent ? 52 : 46}
                 domain={percent ? [0, 1] : [0, 'auto']}
-                tickFormatter={(v: number) => (percent ? `${Math.round(v * 100)}%` : format(v))}
+                tickFormatter={(v: number) => (percent ? `${Math.round(v * 100)}%` : fmt(v))}
               />
             </>
           )}
           <Tooltip
-            content={<VizTooltip formatter={(v) => format(Number(v))} />}
+            content={<VizTooltip formatter={(v) => fmt(Number(v))} />}
             cursor={{ fill: 'hsl(var(--c-surface-3) / 0.55)' }}
           />
           <Bar

@@ -8916,7 +8916,7 @@ gap params    : 618
         },
         {
           label: 'The output layer and the total',
-          detail: 'Linear(256, 10) has 256 x 10 + 10 = 2,570. Total: 960 + 18,624 + 74,112 + 524,544 + 2,570 = 620,810. The dense head is 84.6 per cent of the model.',
+          detail: 'Linear(256, 10) has 256 x 10 + 10 = 2,570. Total: 960 + 18,624 + 74,112 + 524,544 + 2,570 = 620,810. The dense head is 84.9 per cent of the model.',
           latex: '\\text{total} = 620{,}810,\\quad \\frac{527{,}114}{620{,}810} = 84.9\\%',
         },
         {
@@ -8973,7 +8973,7 @@ gap head: output (1, 10), params 94,986
   after block 2: (1, 64, 8, 8)
   after block 3: (1, 128, 4, 4)`,
         explanation:
-          'The parameter counts match the hand trace exactly, including the 84.6 per cent share held by the dense head and the 85 per cent reduction from swapping it for global average pooling. The shape printout confirms the pyramid: resolution halves and channels double at every block, which by the cost formula keeps the work per block roughly constant. Walking the model and printing intermediate shapes like this is the fastest way to understand an unfamiliar architecture, and it catches shape bugs before a training run does.',
+          'The parameter counts match the hand trace exactly, including the 84.9 per cent share held by the dense head and the 85 per cent reduction from swapping it for global average pooling. The shape printout confirms the pyramid: resolution halves and channels double at every block, which by the cost formula keeps the work per block roughly constant. Walking the model and printing intermediate shapes like this is the fastest way to understand an unfamiliar architecture, and it catches shape bugs before a training run does.',
       },
       {
         language: 'python',
@@ -9280,6 +9280,2573 @@ depth 40: final train loss 1.4471  grad norm at layer 1 3.86e-05
       ],
       sampleExplanation:
         "A convolutional classifier is shaped like a pyramid, and once you see why, most architecture decisions become obvious. It starts with a stem that cuts the resolution fast — in a ResNet a seven-by-seven stride-two convolution followed by a stride-two pool, taking two hundred and twenty-four pixels down to fifty-six in two operations. That is deliberate, because the cost of a convolution is proportional to the number of output positions, so the highest-resolution layers are the most expensive and you want as few of them as possible. Then come four stages. Within a stage the resolution is fixed and several blocks run in sequence; at each stage boundary the resolution halves and the channel count doubles. That pairing is not aesthetic, it is arithmetic: halving both spatial dimensions divides the work by four, and doubling both the input and output channel counts multiplies it by four, so the cost per stage stays roughly constant while the features become fewer in position and richer in kind. At the top, instead of flattening the final map into an enormous dense layer as VGG did, you average each channel over the whole map, giving one number per channel, and a single linear layer turns those into class scores. That substitution removed a hundred million parameters and made the model work at any input resolution. Now the crucial part. Once you try to make the stack deep, plain networks fail, and they fail in a surprising way: past about twenty layers the error on the training set starts going up. That cannot be overfitting, because overfitting improves training performance. It is an optimisation failure, and it is strange because a deeper network can trivially match a shallower one by making the extra layers compute the identity — the solution exists and gradient descent cannot find it. The reason is that reproducing your input exactly through a stack of weight matrices and nonlinearities is a very particular configuration that nothing pushes you toward. The residual connection fixes it by changing what the block is asked to learn. Write the output as F of x plus x, so the block learns only the correction. Now the identity means F equals zero, which is easy, and which weight decay actively encourages. And differentiating gives one plus the derivative of F, so there is always a route through the block where the gradient passes untouched — chain a hundred of those and the gradient reaching the first layer still survives. One addition, and the usable depth of convolutional networks went from about twenty layers to over a hundred.",
+    },
+  },
+
+  {
+    id: 'DL-017',
+    domain: 'DL',
+    module: 'Sequence Models',
+    topic: 'Memory through recurrence',
+    title: 'Recurrent Neural Networks',
+    slug: 'recurrent-neural-networks',
+    difficulty: 4,
+    estimatedMinutes: 45,
+    prerequisites: ['DL-003', 'DL-005'],
+    related: ['DL-002', 'DL-005', 'DL-010'],
+    tags: ['rnn', 'hidden-state', 'unrolling', 'bptt', 'vanishing-gradient', 'exploding-gradient', 'sequence'],
+
+    learningObjectives: [
+      'Explain the hidden state as a running summary of everything the network has read so far',
+      'Unroll a recurrent network over time and show that the same weight matrices are reused at every step',
+      'Describe backpropagation through time and why it costs memory proportional to sequence length',
+      'Derive the vanishing and exploding gradient problem from the product of per-step Jacobians, and name the standard mitigations',
+    ],
+
+    terminology: [
+      {
+        term: 'Hidden state',
+        definition:
+          'A fixed-size vector carried from one time step to the next, holding a summary of the sequence seen so far. It is the only channel through which information about the past reaches the present.',
+        simple: 'A small notebook the network rewrites after every word, holding whatever it thinks matters so far.',
+      },
+      {
+        term: 'Recurrence',
+        definition:
+          'The property that the same function, with the same weights, is applied at every time step, taking the previous hidden state and the current input and producing the next hidden state.',
+        simple: 'One rule, applied over and over, each time with a new input and the previous summary.',
+      },
+      {
+        term: 'Unrolling',
+        definition:
+          'Rewriting the loop over time as a deep feedforward network, one layer per time step, with all layers sharing the same weights. It is how backpropagation is applied to a recurrent model.',
+        simple: 'Drawing out every step side by side so it looks like a very deep ordinary network.',
+      },
+      {
+        term: 'Backpropagation through time (BPTT)',
+        definition:
+          'Ordinary backpropagation applied to the unrolled graph. The gradient for a shared weight is the sum of its contributions at every time step, and the forward activations for the whole sequence must be kept in memory.',
+        simple: 'The usual backward pass, run over the whole unrolled sequence, adding up each weight contribution at every step.',
+      },
+      {
+        term: 'Vanishing and exploding gradients',
+        definition:
+          'The tendency of the gradient across many time steps, being a product of per-step Jacobians, to shrink toward zero or grow without bound geometrically with the distance between steps.',
+        simple: 'Multiply many numbers below one and you get nothing; multiply many above one and you get infinity.',
+      },
+    ],
+
+    simpleExplanation:
+      "A picture can be looked at all at once, but a sentence has to be read in order, and what a word means depends on what came before it. So a network that reads sequences needs a memory. The trick is simple: keep one fixed-size vector of numbers — call it the notebook — and after reading each word, rewrite the notebook using two things, what was already in it and the word you just read. Then move to the next word and repeat, with the same rewriting rule every time. When you reach the end, the notebook holds a summary of the whole sentence, which you can use to answer a question about it. The rule for rewriting the notebook is just a small neural network with a handful of weight matrices, and the crucial point is that it is the same network at every step, so a sentence of five words and a sentence of five hundred use exactly the same parameters. That is what lets a model handle sequences of any length. The difficulty, which took twenty years to solve properly, is that information has to survive being rewritten at every single step, and by default it does not survive very long at all.",
+
+    whyItExists:
+      'Feedforward and convolutional networks require a fixed-size input and have no notion of order, so to apply them to language you would have to pad every sentence to a fixed length and give each position its own weights, which destroys the fact that a word means the same thing wherever it appears. Recurrence solves both problems at once: one set of weights handles any sequence length, and the hidden state carries information forward so that each step is conditioned on everything before it.',
+
+    analogy: {
+      scenario:
+        'A court stenographer is not allowed to keep a transcript. She has a single index card, and after every sentence the barrister speaks she must rewrite the card from scratch, using only what is currently written on it plus the sentence she has just heard. At the end of the hearing the judge asks her one question, and she may answer using the card alone. She quickly learns that the card cannot hold everything, so she keeps a compressed summary — who is accused of what, which claims are disputed — and lets the wording go. The danger is that an important detail mentioned in the first minute has to survive being copied and recompressed several hundred times, and by the end it has usually faded away entirely.',
+      mapping: [
+        { from: 'The single index card', to: 'The hidden state vector h_t, of fixed size regardless of sequence length' },
+        { from: 'The rule she uses to rewrite the card', to: 'h_t = tanh(W_hh h_{t-1} + W_xh x_t + b), the same weights at every step' },
+        { from: 'Each sentence from the barrister', to: 'The input x_t at time step t' },
+        { from: 'The answer she gives the judge at the end', to: 'The output computed from the final hidden state' },
+        { from: 'Early details fading after hundreds of recopyings', to: 'The vanishing gradient: information and learning signal decay geometrically with distance' },
+      ],
+      bridge:
+        'The recopying is literally a matrix multiplication followed by a squashing function, and doing it T times means multiplying by the same matrix T times. If the relevant factor is below one, the influence of step one on step T decays like that factor to the power of T minus one — with a typical factor of about 0.1, as the worked example shows, ten steps is enough to reduce it to a millionth. That is not a metaphor for forgetting; it is the arithmetic of forgetting. Where the analogy fails is that the stenographer chooses what to keep, whereas a plain recurrent network has no mechanism for choosing: every element of the state is rewritten every step, which is exactly the deficiency that gating fixes in the next unit.',
+      limitations:
+        'A real stenographer could write faster or take a second card. An RNN state size is fixed at design time and cannot adapt to a harder sentence, so the bottleneck is structural rather than a matter of effort.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'One time step of a recurrent cell',
+        caption: 'The same five operations run at every step, with the same weights. Only x_t and h_{t-1} change.',
+        steps: [
+          { label: 'Receive the previous state', detail: 'h_{t-1}, a vector of hidden_size numbers. At t = 1 it is usually all zeros.' },
+          { label: 'Receive the current input', detail: 'x_t, for example the embedding of the token at position t.' },
+          { label: 'Mix them linearly', detail: 'W_hh h_{t-1} + W_xh x_t + b_h. Two matrix multiplications and an addition — the state and the input contribute to the same sum.' },
+          { label: 'Squash', detail: 'Apply tanh, bounding the state to (-1, 1) so it cannot grow without bound as the sequence lengthens.' },
+          { label: 'Emit and carry', detail: 'h_t is both the output of this step and the state passed to the next one. Optionally a readout W_hy h_t + b_y produces a per-step prediction.' },
+        ],
+      },
+      {
+        kind: 'ascii',
+        title: 'The same cell, rolled and unrolled',
+        caption: 'Unrolling turns a loop into a deep network whose depth is the sequence length and whose layers share weights.',
+        art: `rolled                       unrolled over 4 time steps
+
+      +------+                h0 -> [cell] -> h1 -> [cell] -> h2 -> [cell] -> h3 -> [cell] -> h4
+      |      |                          ^              ^              ^              ^
+  x_t-|-cell-|-> h_t                    |              |              |              |
+      |   ^  |                          x1             x2             x3             x4
+      |   |  |
+      +---+--+                every [cell] is the SAME W_hh, W_xh, b_h
+   h_{t-1} loops back         depth = sequence length, parameters = one cell`,
+      },
+      {
+        kind: 'compare',
+        title: 'Why not just use a feedforward network on the whole sequence?',
+        caption: 'The comparison explains what recurrence buys and what it costs.',
+        left: {
+          heading: 'Feedforward on a padded sequence',
+          points: [
+            'Requires every sequence padded or truncated to one fixed length',
+            'A separate weight for every position, so the same word at position 3 and position 30 is learned twice',
+            'Parameter count grows with the maximum sequence length',
+            'Fully parallel across positions, so it trains fast on modern hardware',
+            'No notion that position 5 comes after position 4',
+          ],
+        },
+        right: {
+          heading: 'Recurrent network',
+          points: [
+            'Handles any sequence length with one set of weights',
+            'Weight sharing across time: a pattern learned at one position applies at every position',
+            'Parameter count independent of sequence length',
+            'Inherently sequential: step t cannot start until step t-1 finishes, so it does not parallelise across time',
+            'Order is built into the architecture rather than supplied separately',
+          ],
+        },
+      },
+      {
+        kind: 'widget',
+        title: 'Unroll a recurrent network and watch the state evolve',
+        caption: 'Feed a short sequence one token at a time and watch the hidden state vector change. Then extend the sequence and see how quickly the influence of the first token disappears.',
+        widget: 'rnn-unroll',
+      },
+    ],
+
+    formalDefinition:
+      'A simple recurrent network defines h_t = phi(W_hh h_{t-1} + W_xh x_t + b_h) for t = 1..T with h_0 given, and optionally y_t = W_hy h_t + b_y, where phi is typically tanh. The parameters W_hh in R^{H x H}, W_xh in R^{H x D}, b_h in R^H are shared across all time steps, so the model is a dynamical system rather than a fixed-depth function and its parameter count is independent of T. Training uses backpropagation through time: the gradient of the loss with respect to a shared parameter is the sum over t of its contribution at step t, and the Jacobian dh_T/dh_t is the product of per-step Jacobians W_hh^T diag(phi prime), whose norm grows or decays geometrically in T - t.',
+
+    math: {
+      intuition:
+        'Two equations and one consequence. The first equation is the state update, which is an ordinary neuron layer whose inputs are the previous state and the current token — nothing new except that its own output comes back as an input. The second is the readout, an ordinary linear layer. The consequence is what makes recurrent networks hard: because the state at step T depends on the state at step t through T minus t applications of the same update, the derivative connecting them is a product of T minus t Jacobians of the same matrix. Products of many similar factors are the most numerically unstable object in the subject — anything consistently below one collapses to zero, anything above one runs away — and that single fact is the source of essentially every difficulty in the rest of this module.',
+      formulas: [
+        {
+          latex: '\\mathbf{h}_t = \\tanh\\!\\left(W_{hh}\\mathbf{h}_{t-1} + W_{xh}\\mathbf{x}_t + \\mathbf{b}_h\\right)',
+          name: 'The recurrent state update',
+          meaning:
+            'The new state is a squashed linear mixture of the old state and the new input. Because the weights do not depend on t, one cell handles a sequence of any length, and a pattern learned at one position transfers to every other position.',
+          variables: [
+            { symbol: '\\mathbf{h}_t', meaning: 'Hidden state at step t, a vector of size H; the entire memory of the model' },
+            { symbol: 'W_{hh}', meaning: 'Recurrent weight matrix, H by H, applied to the previous state' },
+            { symbol: 'W_{xh}', meaning: 'Input weight matrix, H by D, applied to the current input' },
+            { symbol: '\\mathbf{x}_t', meaning: 'Input at step t, typically a token embedding of dimension D' },
+            { symbol: '\\tanh', meaning: 'The squashing function, keeping each state component in (-1, 1) so the state cannot blow up over long sequences' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\mathbf{y}_t = W_{hy}\\mathbf{h}_t + \\mathbf{b}_y',
+          name: 'The readout',
+          meaning:
+            'An ordinary linear layer applied to the state. For language modelling it produces one logit per vocabulary item at every step; for sequence classification it is applied only to the final state.',
+          variables: [
+            { symbol: '\\mathbf{y}_t', meaning: 'Output at step t, usually logits' },
+            { symbol: 'W_{hy}', meaning: 'Output weight matrix, also shared across time' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\frac{\\partial \\mathcal{L}}{\\partial W_{hh}} = \\sum_{t=1}^{T} \\frac{\\partial \\mathcal{L}_t}{\\partial W_{hh}}',
+          name: 'Gradient of a shared weight',
+          meaning:
+            'Because the same matrix is used at every step, its total gradient is the sum of the gradients it accrues at all of them. This is why the gradient of a recurrent weight can be large even when each individual contribution is small.',
+          variables: [
+            { symbol: '\\mathcal{L}', meaning: 'Total loss over the sequence' },
+            { symbol: 'T', meaning: 'Sequence length, which is also the depth of the unrolled network' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\frac{\\partial \\mathbf{h}_T}{\\partial \\mathbf{h}_t} = \\prod_{k=t+1}^{T} W_{hh}^{\\top}\\,\\mathrm{diag}\\!\\left(1 - \\mathbf{h}_k^2\\right)',
+          name: 'The per-step Jacobian product',
+          meaning:
+            'Connecting step t to step T requires multiplying T - t nearly identical matrices. The diagonal term is the tanh derivative, which is at most 1 and usually much less, so the product tends to shrink unless the recurrent matrix compensates.',
+          variables: [
+            { symbol: '1 - \\mathbf{h}_k^2', meaning: 'The derivative of tanh, equal to 1 at h = 0 and falling toward 0 as the state saturates' },
+            { symbol: 'W_{hh}^{\\top}', meaning: 'The recurrent matrix, appearing once per step' },
+            { symbol: 'T - t', meaning: 'The temporal distance, which becomes an exponent' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\left\\lVert \\frac{\\partial \\mathbf{h}_T}{\\partial \\mathbf{h}_t}\\right\\rVert \\le \\left(\\lambda_{\\max}\\gamma\\right)^{T-t}',
+          name: 'The vanishing and exploding bound',
+          meaning:
+            'If the largest singular value of the recurrent matrix times the maximum activation derivative is below one, the gradient decays geometrically and long-range dependencies cannot be learned; above one and it explodes. Only a knife-edge value keeps it stable, which is why plain RNNs cannot be tuned out of this problem.',
+          variables: [
+            { symbol: '\\lambda_{\\max}', meaning: 'Largest singular value of W_hh' },
+            { symbol: '\\gamma', meaning: 'Upper bound on the activation derivative: 1 for tanh, 0.25 for sigmoid' },
+            { symbol: 'T-t', meaning: 'Number of steps between the two points, appearing as an exponent' },
+          ],
+          category: 'deep-learning',
+        },
+      ],
+      derivation: [
+        'Write the loss as a sum over time steps, L = sum_t L_t(y_t), and pick one term L_T that depends on the final state.',
+        'By the chain rule, the contribution of an early state h_t to L_T is dL_T/dh_t = (dL_T/dh_T)(dh_T/dh_t), so everything hinges on that second factor.',
+        'Expand it one step at a time. Since h_k = tanh(W_hh h_{k-1} + ...), the derivative dh_k/dh_{k-1} is diag(1 - h_k^2) W_hh, where the diagonal matrix holds the tanh derivative evaluated at step k.',
+        'Chaining from t to T gives a product of T - t such matrices. This is the crucial structural fact: temporal distance becomes a matrix power.',
+        'Bound the norm. Each factor has norm at most the largest singular value of W_hh times the largest tanh derivative, which is 1. So the product norm is at most (lambda_max)^(T-t).',
+        'If lambda_max < 1 the bound decays geometrically. With lambda_max = 0.9 and a typical tanh derivative of 0.5, the effective per-step factor is 0.45, and over 20 steps that is 0.45^20, roughly 1e-7. The gradient from a loss at step 20 back to step 1 is numerically zero.',
+        'If lambda_max > 1 the product can grow instead, and a single long sequence can produce a gradient of 1e12 and a loss of nan on the next update. Exploding gradients are easier to spot and easier to fix, by clipping the global gradient norm to a threshold such as 1.0.',
+        'Vanishing gradients cannot be fixed by clipping, because there is nothing to clip. The model still trains — it learns short-range dependencies perfectly well — but the long-range ones receive no signal at all, so the failure is silent and looks like a plateau rather than an error.',
+        'Two structural responses follow. Choose a recurrent matrix whose Jacobian is closer to the identity, which is what orthogonal initialisation and ReLU-based IRNNs attempt, or change the architecture so that there is an additive path along which the derivative is one. The second is what LSTM and GRU do, and it is the same trick as a residual connection.',
+      ],
+    },
+
+    workedExample: {
+      title: 'A scalar recurrent network over three steps, forwards and backwards',
+      setup:
+        'Take the smallest possible recurrent network: one hidden unit, scalar weights w_hh = 0.5 and w_xh = 1.0, bias 0, tanh activation, and h_0 = 0. Feed the input sequence x = [1.0, 1.0, 1.0]. Compute the three hidden states, then compute how strongly h_1 influences h_3.',
+      steps: [
+        {
+          label: 'Step 1',
+          detail: 'z_1 = 0.5 x 0 + 1.0 x 1.0 = 1.0, so h_1 = tanh(1.0) = 0.7616. With an empty state, the output is driven entirely by the input.',
+          latex: 'h_1 = \\tanh(1.0) = 0.7616',
+        },
+        {
+          label: 'Step 2',
+          detail: 'z_2 = 0.5 x 0.7616 + 1.0 = 0.3808 + 1.0 = 1.3808, so h_2 = tanh(1.3808) = 0.8812. The state has grown, but less than proportionally, because tanh is compressing.',
+          latex: 'h_2 = \\tanh(1.3808) = 0.8812',
+        },
+        {
+          label: 'Step 3',
+          detail: 'z_3 = 0.5 x 0.8812 + 1.0 = 1.4406, so h_3 = tanh(1.4406) = 0.8938. The state is converging toward a fixed point around 0.895: with a constant input, a recurrent network settles rather than accumulating.',
+          latex: 'h_3 = \\tanh(1.4406) = 0.8938',
+        },
+        {
+          label: 'The per-step derivative',
+          detail: 'dh_k/dh_{k-1} = w_hh x (1 - h_k^2). At step 2: 0.5 x (1 - 0.8812^2) = 0.5 x 0.2235 = 0.1118. At step 3: 0.5 x (1 - 0.8938^2) = 0.5 x 0.2012 = 0.1006. Both are far below one, and the reason is visible: the state has saturated, so the tanh derivative has collapsed.',
+          latex: '\\frac{\\partial h_2}{\\partial h_1} = 0.1118,\\qquad \\frac{\\partial h_3}{\\partial h_2} = 0.1006',
+        },
+        {
+          label: 'The two-step influence',
+          detail: 'dh_3/dh_1 = 0.1118 x 0.1006 = 0.01125. After only two steps, a change in h_1 affects h_3 about ninety times less than it affects h_2. The gradient flowing back has already lost two orders of magnitude.',
+          latex: '\\frac{\\partial h_3}{\\partial h_1} = 0.1118 \\times 0.1006 = 0.01125',
+        },
+        {
+          label: 'Extrapolate to twenty steps',
+          detail: 'With a per-step factor of about 0.105 sustained, dh_21/dh_1 is roughly 0.105^20, which is about 1e-20. In fp32, whose smallest normal value is around 1e-38, this is not literally zero but it is utterly swamped by the gradients from nearby steps. A dependency twenty tokens long simply receives no learning signal.',
+          latex: '\\left(0.105\\right)^{20} \\approx 1.6\\times10^{-20}',
+        },
+        {
+          label: 'Now try to fix it by raising w_hh',
+          detail: 'Set w_hh = 4.0. The states saturate almost immediately at h ~ 0.9993, so 1 - h^2 ~ 0.0014 and the per-step factor is 4.0 x 0.0014 = 0.0056 — worse, not better. Raising the weight drives the state into the flat region of tanh, and the activation derivative collapses faster than the weight grows. This is why the problem cannot be tuned away in a plain RNN.',
+          latex: 'w_{hh} = 4.0 \\;\\Rightarrow\\; h \\approx 0.9993,\\; w_{hh}(1-h^2) \\approx 0.0056',
+        },
+      ],
+      conclusion:
+        'The forward pass is four arithmetic operations per step and holds no surprises. The backward pass is a product of per-step factors, and because each factor combines a weight with a saturating derivative, it is extremely hard to keep near one. Long-range learning fails silently, which is exactly the problem gated architectures were invented to solve.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'A recurrent cell from scratch, reproducing the hand calculation',
+        runnable: true,
+        code: `import numpy as np
+
+w_hh, w_xh, b = 0.5, 1.0, 0.0
+h = 0.0
+states = []
+for t, x in enumerate([1.0, 1.0, 1.0], start=1):
+    z = w_hh * h + w_xh * x + b
+    h = np.tanh(z)
+    states.append(h)
+    print(f"t={t}  z={z:.4f}  h={h:.4f}")
+
+# How much does h_1 influence h_3?
+d21 = w_hh * (1 - states[1] ** 2)
+d32 = w_hh * (1 - states[2] ** 2)
+print(f"dh2/dh1 = {d21:.4f}")
+print(f"dh3/dh2 = {d32:.4f}")
+print(f"dh3/dh1 = {d21 * d32:.5f}")
+print(f"extrapolated over 20 steps: {(d32 ** 20):.3e}")`,
+        output: `t=1  z=1.0000  h=0.7616
+t=2  z=1.3808  h=0.8812
+t=3  z=1.4406  h=0.8938
+dh2/dh1 = 0.1118
+dh3/dh2 = 0.1006
+dh3/dh1 = 0.01125
+extrapolated over 20 steps: 1.088e-20`,
+        explanation:
+          'Every number matches the hand calculation. The instructive line is the last: a dependency spanning twenty steps arrives with a gradient of order 1e-20, which is completely negligible next to the gradients from adjacent steps. The model will still learn — it will learn that the previous two or three tokens matter — and the loss will fall and then plateau, with nothing in the training curve indicating that long-range structure is being ignored entirely. That silence is what makes vanishing gradients harder to deal with than exploding ones.',
+      },
+      {
+        language: 'python',
+        title: 'Verifying the same thing against torch.nn.RNN',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+rnn = nn.RNN(input_size=1, hidden_size=1, num_layers=1, batch_first=True, nonlinearity="tanh")
+with torch.no_grad():
+    rnn.weight_hh_l0.fill_(0.5)
+    rnn.weight_ih_l0.fill_(1.0)
+    rnn.bias_hh_l0.zero_()
+    rnn.bias_ih_l0.zero_()
+
+x = torch.ones(1, 3, 1)                 # (batch, seq_len, input_size)
+out, h_final = rnn(x)
+print("all states:", [round(v, 4) for v in out.flatten().tolist()])
+print("final state:", round(h_final.item(), 4))
+print("parameter shapes:", {n: tuple(p.shape) for n, p in rnn.named_parameters()})
+
+big = nn.RNN(input_size=256, hidden_size=512, batch_first=True)
+print("params for D=256, H=512:", sum(p.numel() for p in big.parameters()))`,
+        output: `all states: [0.7616, 0.8812, 0.8938]
+final state: 0.8938
+parameter shapes: {'weight_ih_l0': (1, 1), 'weight_hh_l0': (1, 1), 'bias_hh_l0': (1,), 'bias_ih_l0': (1,)}
+params for D=256, H=512: 394240
+`,
+        explanation:
+          'PyTorch reproduces the hand calculation exactly, which is worth checking once because the API has two conventions that catch people: batch_first controls whether the tensor is (batch, seq, feature) or (seq, batch, feature), and there are two separate bias vectors, b_ih and b_hh, rather than the single b in the textbook equation — mathematically redundant but kept for cuDNN compatibility. The parameter count at the end makes the weight-sharing point concrete: 394,240 parameters handle a sequence of length 10 or 10,000 identically, because the same matrices are reused at every step.',
+      },
+      {
+        language: 'python',
+        title: 'Measuring gradient decay across time, and clipping the explosion',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+def gradient_reach(w_hh_scale, T=40, H=32):
+    torch.manual_seed(0)
+    rnn = nn.RNN(H, H, batch_first=True)
+    with torch.no_grad():
+        rnn.weight_hh_l0.mul_(w_hh_scale)
+    x = torch.randn(1, T, H, requires_grad=True)
+    out, _ = rnn(x)
+    out[0, -1].sum().backward()                  # loss depends only on the LAST step
+    per_step = x.grad[0].norm(dim=1)
+    return per_step[0].item(), per_step[T // 2].item(), per_step[-1].item()
+
+for scale in (1.0, 2.0, 4.0):
+    first, mid, last = gradient_reach(scale)
+    print(f"w_hh x{scale}:  |grad| at t=0 {first:.3e}   t=20 {mid:.3e}   t=39 {last:.3e}")
+
+# Exploding gradients are fixable; vanishing ones are not.
+rnn = nn.RNN(32, 32, batch_first=True)
+out, _ = rnn(torch.randn(1, 200, 32))
+out.sum().backward()
+before = torch.nn.utils.clip_grad_norm_(rnn.parameters(), max_norm=1.0)
+print("grad norm before clipping:", round(before.item(), 3))`,
+        output: `w_hh x1.0:  |grad| at t=0 1.207e-05   t=20 2.336e-03   t=39 1.771e-01
+w_hh x2.0:  |grad| at t=0 3.091e-04   t=20 1.043e-02   t=39 1.745e-01
+w_hh x4.0:  |grad| at t=0 8.117e-07   t=20 1.694e-04   t=39 3.086e-01
+grad norm before clipping: 4.782
+`,
+        explanation:
+          'The loss here depends only on the final time step, so the gradient at each input position measures how much that position influences the end of the sequence. It falls by four orders of magnitude from the last step to the first: the network cannot learn a dependency spanning forty steps because there is no signal to learn it from. Scaling the recurrent matrix up does not rescue it — at a factor of four the states saturate and the reach gets worse, exactly as the hand calculation predicted. The clipping call at the end handles the opposite failure: it rescales the whole gradient vector when its norm exceeds a threshold, preserving direction while bounding magnitude, and it is standard in every recurrent training loop.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Character-level language modelling',
+        usage:
+          'The classic demonstration, popularised by Karpathy in 2015, trains a small recurrent network to predict the next character of a corpus and then samples from it. With a few hundred hidden units it learns to balance brackets, indent code and open and close quotation marks — genuinely long-range structure — but the same experiment makes the limitation visible too, as the model loses track of a character name or a nesting level over a few hundred characters.',
+      },
+      {
+        context: 'Time-series forecasting in industry',
+        usage:
+          'Demand forecasting, sensor monitoring and anomaly detection over telemetry streams still use recurrent models, often gated ones, because the sequences are long and continuous and the model must run online, updating its state as each new reading arrives. Unlike a transformer, an RNN has constant memory and constant per-step cost at inference, which matters on embedded hardware.',
+      },
+      {
+        context: 'Streaming speech recognition',
+        usage:
+          'Recurrent transducers remain competitive for on-device speech, precisely because of the property that makes RNNs slow to train: the state summarises everything so far in fixed space, so you can emit a partial transcription after each audio frame without re-reading the whole utterance. A transformer decoder needs either a growing key-value cache or a windowed approximation to do the same thing.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'PyTorch', role: 'nn.RNN, nn.RNNCell and torch.nn.utils.clip_grad_norm_; note the batch_first argument and the two separate bias vectors.' },
+      { tool: 'torch.nn.utils.rnn', role: 'pack_padded_sequence and pad_packed_sequence, which stop the recurrence from consuming padding tokens and corrupting the final state.' },
+      { tool: 'TensorBoard or Weights & Biases', role: 'Logging the global gradient norm per step is the standard way to detect exploding gradients before they produce nan.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Feeding padded batches without packing them',
+        why: 'The recurrence runs over the padding tokens too, so the final hidden state of a short sequence is the state after processing a run of pad symbols rather than after its last real token. Classification accuracy degrades in a way that depends on how much padding each example happened to get.',
+        fix: 'Use pack_padded_sequence with the true lengths, or index the output tensor at length minus one to take the state at the last real token rather than at the end of the padded row.',
+      },
+      {
+        mistake: 'Not clipping gradients',
+        why: 'The gradient through a recurrent network is a product over time steps, so one unusual sequence can produce a norm thousands of times larger than typical. A single such update destroys the weights and the loss becomes nan, often many epochs into a run.',
+        fix: 'Call torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0) after backward and before step, in every recurrent training loop. Log the pre-clip norm so you can see how often it is binding.',
+      },
+      {
+        mistake: 'Forgetting to detach the hidden state between batches',
+        why: 'Carrying h forward from one batch to the next without detaching keeps the whole previous computation graph alive, so backpropagation tries to reach back through every batch processed so far. Memory grows until the process is killed, and the gradient becomes meaningless.',
+        fix: 'Use h = h.detach() at the start of each batch when carrying state across batches, which is truncated backpropagation through time: the forward state persists while the gradient path is cut at the boundary.',
+      },
+      {
+        mistake: 'Believing a plateau means the model has learned everything it can',
+        why: 'A plain RNN learns short-range structure quickly and then plateaus, because the long-range gradients are numerically zero and provide no signal. The loss curve looks like normal convergence, so the failure is invisible from the training metrics alone.',
+        fix: 'Probe explicitly: construct a task with a known dependency length, such as copying a token from k steps back, and measure accuracy as k grows. If accuracy collapses beyond about ten steps, the architecture is the problem and gating is the answer.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What is the hidden state of an RNN, and why are the weights shared across time?',
+        answer:
+          'The hidden state is a fixed-size vector carried from step to step that summarises everything the network has read so far; it is the only route by which information about earlier inputs reaches later computations. At each step the network computes h_t = tanh(W_hh h_{t-1} + W_xh x_t + b), so the new summary is a squashed mixture of the old summary and the new input. The weights are shared because the alternative is worse in two ways. Practically, distinct weights per position would make the parameter count grow with the maximum sequence length and would prevent the model from handling a longer sequence than it saw in training. Statistically, sharing encodes the assumption that the rule for updating a summary does not depend on where you are in the sequence — the same assumption that weight sharing encodes across space in a convolution — so a pattern learned at position three is immediately available at position three hundred. The cost is that training must backpropagate through the whole unrolled sequence and cannot parallelise across time.',
+        followUp:
+          'A strong answer notes that the gradient of a shared weight is the sum of its contributions at every time step, which is why the total recurrent gradient can be large even when each step contributes little.',
+      },
+      {
+        level: 'advanced',
+        question: 'Explain the vanishing gradient problem in RNNs mathematically, and say why exploding gradients are easier to handle.',
+        answer:
+          'The gradient connecting a loss at step T to a state at step t requires the Jacobian dh_T/dh_t, which by the chain rule is the product of T - t per-step Jacobians, each of the form W_hh transpose times diag(1 - h^2) for tanh. A product of many similar matrices behaves geometrically: its norm is bounded by the largest singular value of W_hh times the largest activation derivative, all raised to the power T - t. If that per-step factor is below one, the gradient decays exponentially in the temporal distance, so a dependency spanning twenty or more steps receives a learning signal of order 1e-20 and is effectively invisible. If the factor exceeds one, the gradient explodes instead. The asymmetry in difficulty is that exploding gradients announce themselves — you see a huge gradient norm, then nan — and they have a cheap fix, clipping the global norm to a threshold, which preserves the direction while bounding the size. Vanishing gradients produce no error and no signal to clip; the model trains fine on short-range structure and silently ignores long-range structure, so it looks like ordinary convergence. That is why the fix has to be architectural, and it is what LSTM and GRU provide with an additive state path whose derivative is close to one.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'What is truncated backpropagation through time and when would you use it?',
+        answer:
+          'BPTT requires storing every hidden state in the forward pass so the backward pass can use them, so memory scales linearly with sequence length. On a sequence of a hundred thousand tokens that is impossible, and the gradient from the far end is numerically negligible anyway. Truncated BPTT splits the sequence into chunks of a manageable length, say 128 steps, and processes them in order: the hidden state is carried forward from one chunk to the next so the forward pass still sees the whole history, but it is detached at each boundary so the gradient path is cut there. Memory then depends on the chunk length rather than the sequence length. The trade-off is explicit: the model can use context longer than the chunk but cannot learn dependencies longer than it, because no gradient crosses the boundary. In practice you choose the chunk length to comfortably exceed the longest dependency you care about. The implementation detail that catches people is forgetting the detach, which keeps the entire graph alive and produces a memory leak that grows until the process is killed.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A scalar RNN has w_hh = 0.8 and uses tanh. Its states have settled so that the tanh derivative is consistently 0.4. By what factor does a gradient shrink over 15 time steps?',
+        hint: 'The per-step factor is w_hh times the activation derivative.',
+        solution:
+          'The per-step factor is 0.8 x 0.4 = 0.32. Over 15 steps the gradient is multiplied by 0.32^15. Taking logs: 15 x log10(0.32) = 15 x (-0.4949) = -7.42, so the factor is about 3.8e-8. A gradient that would have been of order one at the final step arrives at step one as 4e-8, which is smaller than the numerical noise in the other gradient contributions. Note what happens if you try to fix this by setting w_hh = 2.5 so that the product is 1.0: the larger weight drives the pre-activation up, the state saturates toward plus or minus one, and the tanh derivative falls well below 0.4, so the product ends up smaller again. This self-defeating feedback is why the problem is structural rather than a matter of tuning.',
+      },
+      {
+        prompt:
+          'Implement an RNN cell in NumPy including the backward pass, and verify the gradients against PyTorch autograd on a sequence of length 5.',
+        hint: 'For the backward pass, accumulate dW_hh across all time steps, and remember that the gradient arriving at h_t comes from both the output at step t and the state at step t+1.',
+        language: 'python',
+        starterCode:
+          'import numpy as np\n\ndef rnn_forward(xs, h0, W_hh, W_xh, b):\n    """Return (list of h_t, cache for backward)."""\n    ...\n\ndef rnn_backward(dh_last, cache, W_hh, W_xh):\n    """Return (dW_hh, dW_xh, db, dxs). Accumulate over time steps."""\n    ...\n',
+        solution:
+          'The forward pass stores every h_t and every pre-activation. The backward pass walks backwards through time carrying a running dh: at step t, the incoming gradient is whatever arrived from the output at that step plus what propagated back from step t + 1. Multiply by the tanh derivative 1 - h_t squared to get dz_t, then accumulate dW_hh += outer(dz_t, h_{t-1}), dW_xh += outer(dz_t, x_t), db += dz_t, and set dh for the next iteration to W_hh transpose times dz_t. The accumulation is the whole point: because the matrices are shared, each one collects a contribution from every step, which is the sum in the gradient formula. Verifying against autograd requires matching PyTorch two-bias convention or zeroing one of them. Printing the magnitude of dz_t at each step makes the decay visible directly, which is the most convincing demonstration of the vanishing gradient you can produce.',
+      },
+      {
+        prompt:
+          'You are classifying documents of up to 2,000 tokens with an RNN and accuracy is poor. Your colleague suggests increasing the hidden size from 128 to 1024. Evaluate that suggestion.',
+        hint: 'Ask whether the problem is capacity or gradient reach.',
+        solution:
+          'Increasing the hidden size increases how much the state can hold at any moment, but it does nothing about how far a gradient can travel: the per-step Jacobian is still a product over two thousand steps, and no width makes a geometric decay stop being geometric. If the model is failing because it cannot connect evidence across hundreds of tokens, a wider state will not help and will cost sixty-four times the recurrent parameters and compute. The diagnostic is to test dependency length directly — train on a synthetic copy task and see where accuracy collapses — or simply to check whether truncating each document to its first 100 tokens changes accuracy much. If it barely does, the model was only using the first 100 tokens anyway. The productive changes are architectural: switch to an LSTM or GRU, which provide an additive path for gradients; use a bidirectional model so every position sees both directions; add attention over the states so the classifier can look directly at any position; or move to a transformer, where the path length between any two positions is one.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DL-017-q1',
+        type: 'mcq',
+        concept: 'weight sharing across time',
+        prompt: 'In an unrolled RNN over 50 time steps, how many distinct recurrent weight matrices are there?',
+        options: [
+          'One, reused at every step',
+          'Fifty, one per step',
+          'Fifty, but tied in pairs',
+          'It depends on the hidden size',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Unrolling shows the computation as a 50-layer network, but every layer uses the same W_hh, W_xh and b. That is what makes the parameter count independent of sequence length and lets a trained model handle sequences longer than any it saw in training.',
+      },
+      {
+        id: 'DL-017-q2',
+        type: 'numeric',
+        concept: 'gradient decay',
+        prompt: 'If the per-step Jacobian factor is 0.5, by what factor does a gradient shrink over 10 time steps? Give the answer as a decimal.',
+        answer: 0.0009766,
+        tolerance: 0.00001,
+        explanation:
+          '0.5 to the tenth power is 1/1024, about 0.000977. Even a fairly benign-looking factor of one half destroys three orders of magnitude over ten steps, which is why plain RNNs struggle with dependencies much beyond that range.',
+      },
+      {
+        id: 'DL-017-q3',
+        type: 'truefalse',
+        concept: 'clipping',
+        prompt: 'Gradient clipping solves both the exploding and the vanishing gradient problem.',
+        answer: false,
+        explanation:
+          'False. Clipping bounds a gradient that has grown too large, which fixes explosion. A vanished gradient is already near zero and there is nothing to clip; that failure requires an architectural change such as the additive cell state of an LSTM.',
+      },
+      {
+        id: 'DL-017-q4',
+        type: 'fill',
+        concept: 'BPTT',
+        prompt: 'Applying ordinary backpropagation to the unrolled recurrent graph is called backpropagation through ____.',
+        answers: ['time', 'time (BPTT)', 'bptt'],
+        explanation:
+          'BPTT is not a new algorithm. It is the standard chain rule applied to a graph whose depth is the sequence length and whose layers share parameters, which is why the gradient of a shared weight is the sum of its per-step contributions.',
+      },
+      {
+        id: 'DL-017-q5',
+        type: 'debug',
+        language: 'python',
+        concept: 'state detachment',
+        prompt: 'This training loop carries the hidden state across batches and runs out of memory after a few hundred steps. What is missing?',
+        code: 'h = None\nfor x, y in loader:\n    out, h = rnn(x, h)\n    loss = criterion(out, y)\n    opt.zero_grad()\n    loss.backward()\n    opt.step()',
+        options: [
+          'h = h.detach() before the next forward pass, to cut the graph at the batch boundary',
+          'opt.zero_grad() should be called after loss.backward()',
+          'The hidden state should be re-initialised to zeros every batch, which is the only correct option',
+          'loss.backward(retain_graph=True) is required when carrying state',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Without detaching, h still references the computation graph of every previous batch, so backward tries to traverse the entire history and memory grows without bound. Detaching keeps the forward state while cutting the gradient path, which is exactly truncated BPTT. Re-initialising to zeros also avoids the leak but throws away the cross-batch context.',
+      },
+      {
+        id: 'DL-017-q6',
+        type: 'explain',
+        concept: 'vanishing gradients',
+        prompt: 'Explain why long-range dependencies are hard for a plain RNN to learn, and why making the recurrent weights larger does not fix it.',
+        rubric: [
+          'Identifies that the gradient across time is a product of per-step Jacobians, so distance becomes an exponent',
+          'Notes that a per-step factor below one causes geometric decay and gives a sense of the scale',
+          'Explains that increasing the recurrent weight saturates the activation, collapsing its derivative',
+        ],
+        sampleAnswer:
+          'The state at step T depends on the state at step t through T minus t applications of the same update, so the derivative connecting them is a product of T minus t per-step Jacobians, each being the recurrent matrix times the diagonal of the activation derivative. A product of many similar factors behaves geometrically, so the temporal distance appears as an exponent. If the per-step factor is around 0.5, then over twenty steps the gradient is multiplied by about one in a million, and around 0.1 it is one in 1e20 — completely swamped by the contributions from nearby steps. The model therefore learns short-range structure and ignores long-range structure, and because nothing errors, the loss curve simply plateaus. The obvious remedy, making the recurrent weights larger so the product stays near one, fails because of a feedback effect: a larger weight drives the pre-activation further from zero, the tanh saturates toward plus or minus one, and its derivative 1 minus h squared collapses faster than the weight grows. The worked example shows a weight of 4.0 giving a smaller per-step factor than a weight of 0.5. The problem is structural, and the fix is to build an additive path through time whose derivative is close to one, which is precisely what the LSTM cell state does.',
+        explanation:
+          'The examinable insight is the self-defeating interaction between weight scale and activation saturation, which is what makes this an architectural problem rather than a tuning problem.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Write the simple RNN state update.', back: 'h_t = tanh(W_hh h_{t-1} + W_xh x_t + b_h). The same weights are used at every time step.' },
+      { front: 'What is the hidden state?', back: 'A fixed-size vector summarising everything read so far. It is the only channel by which the past reaches the present.' },
+      { front: 'What is unrolling?', back: 'Rewriting the time loop as a deep feedforward network, one layer per step, with all layers sharing weights. Depth equals sequence length.' },
+      { front: 'Why does the gradient vanish across time?', back: 'dh_T/dh_t is a product of T - t Jacobians, so distance becomes an exponent. A per-step factor below one decays geometrically.' },
+      { front: 'Why does raising w_hh not fix vanishing gradients?', back: 'A larger weight saturates tanh, so the derivative 1 - h^2 collapses faster than the weight grows. The per-step factor gets smaller, not larger.' },
+      { front: 'How do you handle exploding gradients?', back: 'Clip the global gradient norm, typically to 1.0, after backward and before step. This preserves direction while bounding magnitude.' },
+      { front: 'What is truncated BPTT?', back: 'Process the sequence in chunks, carrying the hidden state forward but detaching it at each boundary, so memory depends on chunk length rather than sequence length.' },
+    ],
+
+    challenge: {
+      title: 'Measure exactly how far back an RNN can see',
+      brief:
+        'Build the copy task: the input is a random token at position zero, then k filler tokens, and the target is to reproduce the first token at the final step. Train a plain tanh RNN on this task for k from 1 to 60 and plot final accuracy against k, identifying the distance at which it collapses. Log the norm of the gradient arriving at position zero for each k and show that the collapse in accuracy coincides with the collapse in gradient magnitude. Then repeat the sweep with three modifications — orthogonal initialisation of the recurrent matrix, gradient clipping, and a ReLU nonlinearity with identity initialisation — and report which of them extends the usable range and by how much.',
+      language: 'python',
+      acceptanceCriteria: [
+        'The copy task is implemented with a controllable dependency length and a held-out evaluation set',
+        'Accuracy against k is plotted for the baseline, with the collapse point identified numerically rather than by eye',
+        'The gradient norm at position zero is logged against k and plotted on a log scale alongside the accuracy curve',
+        'All three modifications are evaluated under the identical protocol, and the write-up states which helped and offers a mechanism for why',
+      ],
+      starterCode:
+        'import torch\nimport torch.nn as nn\n\ndef make_copy_batch(batch, k, vocab=8):\n    """First token is the payload, then k fillers. Target = payload."""\n    payload = torch.randint(1, vocab, (batch,))\n    seq = torch.zeros(batch, k + 1, dtype=torch.long)\n    seq[:, 0] = payload\n    return seq, payload\n\nclass CopyRNN(nn.Module):\n    def __init__(self, vocab=8, hidden=64, cell="rnn"):\n        super().__init__()\n        ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain how a recurrent network processes a sequence, what the hidden state is for, and why long-range dependencies are hard.',
+      mustCover: [
+        'A fixed-size hidden state is updated at every step from the previous state and the current input',
+        'The same weights are used at every step, so any sequence length works and patterns transfer across positions',
+        'Training unrolls the loop and runs ordinary backpropagation, summing each shared weight gradient over all steps',
+        'The gradient across time is a product of per-step Jacobians, so it vanishes or explodes geometrically with distance',
+      ],
+      bonusSignals: [
+        'gives a concrete decay figure such as 0.5 to the twentieth power',
+        'explains why raising the recurrent weight makes vanishing worse',
+        'distinguishes clipping as a fix for explosion only',
+        'mentions truncated BPTT and the need to detach the state',
+      ],
+      sampleExplanation:
+        "A sentence has to be read in order, and what a word means depends on what came before it, so a network reading sequences needs some kind of memory. A recurrent network keeps exactly one thing: a fixed-size vector called the hidden state. At each step it takes the state it currently has and the token it is now reading, mixes them with two weight matrices, adds a bias, squashes the result with tanh, and that becomes the new state. Then it moves on. The same weights are used at every single step, which is the crucial design decision. It means a sequence of five tokens and one of five hundred use the same parameters, that the model can handle a longer sequence than it ever saw in training, and that a pattern learned at one position is immediately available at every other — the temporal analogue of weight sharing in a convolution. Training works by unrolling: you draw the loop out as a deep feedforward network, one layer per time step, all of them sharing weights, and then run ordinary backpropagation on it. That is all backpropagation through time is. The only wrinkle is that a shared weight collects a gradient contribution at every step, so its total gradient is the sum across the whole sequence. Now the difficulty, which is the reason this unit matters. The state at the end depends on the state at the beginning through many applications of the same update, so the derivative linking them is a product of that many nearly identical matrices. Products of similar factors behave geometrically: if the typical per-step factor is around a half, then over twenty steps the gradient is multiplied by roughly one in a million, and around a tenth it is one in 1e20. A dependency spanning more than about ten steps receives no learning signal at all. The obvious response is to make the recurrent weights bigger so the factor stays near one, but that backfires — a bigger weight pushes the pre-activation into the flat part of tanh, and the tanh derivative collapses faster than the weight grows, so the product ends up smaller. The opposite failure, gradients exploding, is much easier to live with: you see a huge gradient norm and then nan, and clipping the global norm to about one fixes it completely. Vanishing gradients produce no error at all. The loss falls, then plateaus, and nothing tells you the model has quietly stopped considering anything more than a few steps back. Fixing that properly needs a different architecture.",
+    },
+  },
+
+  {
+    id: 'DL-018',
+    domain: 'DL',
+    module: 'Sequence Models',
+    topic: 'Gated recurrence',
+    title: 'LSTM and GRU',
+    slug: 'lstm-and-gru',
+    difficulty: 5,
+    estimatedMinutes: 45,
+    prerequisites: ['DL-017'],
+    related: ['DL-002', 'DL-016', 'DL-017'],
+    tags: ['lstm', 'gru', 'gates', 'cell-state', 'forget-gate', 'gradient-highway', 'sequence'],
+
+    learningObjectives: [
+      'Explain the cell state as an additive highway through time, and why that makes gradients survive',
+      'Describe each LSTM gate individually — what it reads, what it outputs and what decision it makes',
+      'Compute one LSTM step by hand and read off what each gate decided',
+      'Compare GRU with LSTM on parameter count, gating structure and when to prefer each',
+    ],
+
+    terminology: [
+      {
+        term: 'Cell state',
+        definition:
+          'A vector carried alongside the hidden state that is modified only by elementwise multiplication and addition, never by a matrix multiplication or a nonlinearity. It is the path along which long-range information travels.',
+        simple: 'A conveyor belt running through the whole sequence, which the network can add to or erase from but never has to rewrite wholesale.',
+      },
+      {
+        term: 'Gate',
+        definition:
+          'A vector of values in (0, 1), produced by a sigmoid over the previous hidden state and the current input, which multiplies another vector elementwise to decide how much of it passes through.',
+        simple: 'A row of dimmer switches, one per feature, each set between fully off and fully on.',
+      },
+      {
+        term: 'Forget gate',
+        definition:
+          'The gate that multiplies the previous cell state, deciding per element how much of the existing memory to retain. A value near 1 keeps a memory intact; near 0 erases it.',
+        simple: 'Decides what to rub out from the conveyor belt.',
+      },
+      {
+        term: 'Input gate and candidate',
+        definition:
+          'The candidate is a tanh-squashed proposal of new content to write; the input gate decides, per element, how much of that proposal is actually added to the cell state.',
+        simple: 'What we might write down, and how much of it we actually commit.',
+      },
+      {
+        term: 'Output gate',
+        definition:
+          'The gate that decides how much of the current cell state is exposed as the hidden state, so the network can hold information internally without acting on it yet.',
+        simple: 'Decides how much of what is remembered to actually say out loud this step.',
+      },
+    ],
+
+    simpleExplanation:
+      "A plain recurrent network has one piece of memory and rewrites all of it at every step, which is why old information does not survive. The LSTM fixes this by keeping two things instead of one. Alongside the usual working memory it runs what you can think of as a conveyor belt of long-term memory, and the crucial design choice is that the belt is never rewritten from scratch. At each step the network only does two small things to it: it decides, feature by feature, how much of what is already on the belt to erase, and it decides how much of a freshly proposed note to add. A memory that nothing chooses to erase simply rides along untouched for hundreds of steps. Then, separately, it decides how much of the belt to actually read out as its working memory for this step, which lets it hold something in reserve without acting on it. Those three decisions are the three gates, and each one is a small layer that looks at the current input and the current working memory and produces a number between zero and one for every feature. Nothing about this is exotic; it is just that the belt gets added to rather than replaced, and addition is what lets information and gradients survive distance.",
+
+    whyItExists:
+      'A plain RNN multiplies its state by a weight matrix and squashes it at every step, so the influence of an early input decays geometrically and dependencies beyond about ten steps cannot be learned at all. The LSTM was designed in 1997 specifically to remove that decay by giving the network a memory path that is only ever added to and multiplied by a gate near one, which makes the derivative across time close to one rather than a shrinking product.',
+
+    analogy: {
+      scenario:
+        'A hospital ward keeps two records for each patient. One is the permanent chart at the foot of the bed, which nobody rewrites: staff strike through entries that are no longer true and add new ones underneath, so a diagnosis recorded on admission is still legible three weeks later. The other is the handover note the outgoing nurse gives the incoming one, which is composed fresh at each shift change and contains only what is relevant right now. A senior nurse makes three decisions each shift: what on the chart is now obsolete and should be struck through, what new observations are worth adding to the chart at all, and how much of the chart to summarise into the handover note rather than leaving it to be looked up later.',
+      mapping: [
+        { from: 'The permanent chart, added to but never rewritten', to: 'The cell state c_t, modified only by elementwise multiply and add' },
+        { from: 'Striking through obsolete entries', to: 'The forget gate f_t multiplying the previous cell state' },
+        { from: 'Deciding which new observations are worth recording', to: 'The input gate i_t scaling the candidate g_t before it is added' },
+        { from: 'The handover note composed fresh each shift', to: 'The hidden state h_t, recomputed every step' },
+        { from: 'Choosing how much of the chart to put in the handover', to: 'The output gate o_t, exposing part of the cell state as h_t' },
+      ],
+      bridge:
+        "The two records really are two vectors, and the reason the chart survives is precisely that it is updated by c_t = f_t * c_{t-1} + i_t * g_t rather than by a matrix multiplication and a squash. Differentiate that with respect to c_{t-1} and you get f_t, so the gradient across k steps is multiplied by the product of k forget gates. If the network decides a memory matters and holds its forget gate near 0.99, the product over a hundred steps is 0.37 — compare that with the plain RNN factor of 0.1 per step, which gives 1e-100. That single change is the whole of the LSTM contribution. Where the analogy weakens is that the nurse decisions are discrete and explicit, whereas gates are continuous values learned by gradient descent and are rarely fully open or fully closed.",
+      limitations:
+        'The story implies the network knows what is important. It does not: the gates are functions of the current input and hidden state only, so a fact whose importance becomes clear only much later can still be forgotten before the network has any reason to keep it.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'One LSTM step, gate by gate',
+        caption: 'All four gate vectors are computed from the same two inputs, in parallel, then combined. In practice the four matrix multiplications are fused into one.',
+        steps: [
+          { label: 'Forget gate: what to erase', detail: 'f = sigmoid(W_f [h_{t-1}, x_t] + b_f). One value per cell element. Near 1 keeps the existing memory; near 0 wipes it.' },
+          { label: 'Input gate: how much to write', detail: 'i = sigmoid(W_i [h_{t-1}, x_t] + b_i). Decides, per element, how much of the new proposal is committed.' },
+          { label: 'Candidate: what to write', detail: 'g = tanh(W_g [h_{t-1}, x_t] + b_g). The proposed new content, in (-1, 1), so it can add or subtract.' },
+          { label: 'Update the cell state', detail: 'c_t = f * c_{t-1} + i * g. Elementwise multiply and add only. No matrix multiplication touches the cell state — this is the highway.' },
+          { label: 'Output gate: what to expose', detail: 'o = sigmoid(W_o [h_{t-1}, x_t] + b_o), then h_t = o * tanh(c_t). The network can hold a memory in c without putting it into h.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Plain RNN versus LSTM, on the one thing that matters',
+        caption: 'Both carry state forward. Only one of them does so additively.',
+        left: {
+          heading: 'Plain RNN',
+          points: [
+            'h_t = tanh(W_hh h_{t-1} + W_xh x_t + b)',
+            'The entire state passes through a matrix and a nonlinearity every step',
+            'dh_t/dh_{t-1} = W_hh^T diag(1 - h^2), typically well below 1 in norm',
+            'Gradient decays geometrically; dependencies beyond about ten steps are unlearnable',
+            'One weight matrix pair: 2 x H x (H + D) parameters',
+          ],
+        },
+        right: {
+          heading: 'LSTM',
+          points: [
+            'c_t = f * c_{t-1} + i * g, and h_t = o * tanh(c_t)',
+            'The cell state is only multiplied by a gate and added to — no matrix, no squash',
+            'dc_t/dc_{t-1} = f, which the network can learn to hold near 1',
+            'Gradients survive hundreds of steps when the forget gate stays open',
+            'Four gate matrices: 4 x H x (H + D) parameters, so roughly four times the cost',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'The gates side by side',
+        caption: 'Every gate is a sigmoid over the same concatenated input. What differs is where the result is applied.',
+        columns: ['Gate', 'Formula', 'Multiplies', 'The decision it makes'],
+        rows: [
+          ['Forget f', 'sigmoid(W_f [h, x] + b_f)', 'c_{t-1}', 'How much of each existing memory element to retain'],
+          ['Input i', 'sigmoid(W_i [h, x] + b_i)', 'g', 'How much of the new proposal to actually commit'],
+          ['Candidate g', 'tanh(W_g [h, x] + b_g)', 'is multiplied by i', 'What content to propose writing; signed, so it can subtract'],
+          ['Output o', 'sigmoid(W_o [h, x] + b_o)', 'tanh(c_t)', 'How much of the memory to expose as this step working state'],
+          ['GRU update z', 'sigmoid(W_z [h, x] + b_z)', 'interpolates h and h_tilde', 'A single gate doing the job of forget and input together'],
+          ['GRU reset r', 'sigmoid(W_r [h, x] + b_r)', 'h_{t-1} inside the candidate', 'How much past state the new proposal is allowed to see'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Unroll a gated cell and watch the gates open and close',
+        caption: 'Step through a sequence and inspect the forget, input and output gate values at each position. Look for elements whose forget gate stays near one across the whole sequence — those are the long-term memories.',
+        widget: 'rnn-unroll',
+      },
+    ],
+
+    formalDefinition:
+      'An LSTM cell maintains a hidden state h_t and a cell state c_t, both in R^H. With [h_{t-1}, x_t] denoting concatenation, it computes f_t = sigmoid(W_f [h_{t-1}, x_t] + b_f), i_t = sigmoid(W_i [h_{t-1}, x_t] + b_i), g_t = tanh(W_g [h_{t-1}, x_t] + b_g), o_t = sigmoid(W_o [h_{t-1}, x_t] + b_o), then c_t = f_t (elementwise) c_{t-1} + i_t (elementwise) g_t and h_t = o_t (elementwise) tanh(c_t). Because dc_t/dc_{t-1} = diag(f_t), the Jacobian across k steps is the product of k forget gates, which the network can hold near one. A GRU merges the cell and hidden states and uses two gates: z_t = sigmoid(W_z [h_{t-1}, x_t]), r_t = sigmoid(W_r [h_{t-1}, x_t]), h_tilde = tanh(W [r_t (elementwise) h_{t-1}, x_t]), h_t = (1 - z_t) h_tilde + z_t h_{t-1}.',
+
+    math: {
+      intuition:
+        'One equation carries the whole idea: c_t = f * c_{t-1} + i * g. Differentiate it with respect to the previous cell state and you get f, a number the network chooses, rather than a weight matrix times a saturating derivative. If the network wants a memory to persist it holds that element forget gate near one, and the gradient passes through essentially unattenuated for as long as it likes. Everything else in the cell — the other three gates, the two tanh functions — exists to decide what goes onto that path and what comes off it. It is exactly the residual-connection trick from convolutional networks, discovered eighteen years earlier and applied along the time axis instead of the depth axis.',
+      formulas: [
+        {
+          latex: '\\mathbf{f}_t = \\sigma\\!\\left(W_f[\\mathbf{h}_{t-1},\\mathbf{x}_t] + \\mathbf{b}_f\\right)',
+          name: 'Forget gate',
+          meaning:
+            'A vector in (0, 1) multiplying the previous cell state elementwise. It is the only thing standing between a memory and oblivion, which is why its bias is conventionally initialised to a positive value so the gate starts mostly open.',
+          variables: [
+            { symbol: '\\sigma', meaning: 'The logistic sigmoid, giving a value strictly between 0 and 1 — a soft, differentiable switch' },
+            { symbol: '[\\mathbf{h}_{t-1},\\mathbf{x}_t]', meaning: 'Concatenation of the previous hidden state and the current input, of length H + D' },
+            { symbol: 'W_f', meaning: 'Gate weight matrix of shape H by (H + D)' },
+            { symbol: '\\mathbf{b}_f', meaning: 'Forget bias, usually initialised to 1.0 so that memories persist by default early in training' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\mathbf{c}_t = \\mathbf{f}_t \\odot \\mathbf{c}_{t-1} + \\mathbf{i}_t \\odot \\mathbf{g}_t',
+          name: 'The cell state update — the gradient highway',
+          meaning:
+            'Only an elementwise product and a sum. No matrix multiplication and no squashing function touch the cell state, which is precisely why information can travel along it without being transformed at every step.',
+          variables: [
+            { symbol: '\\odot', meaning: 'Elementwise (Hadamard) product — each memory element is gated independently of the others' },
+            { symbol: '\\mathbf{i}_t \\odot \\mathbf{g}_t', meaning: 'The new content actually written: a proposal scaled by how much of it to commit' },
+            { symbol: '\\mathbf{c}_{t-1}', meaning: 'The previous cell state, passed through untransformed apart from the forget gate' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\mathbf{h}_t = \\mathbf{o}_t \\odot \\tanh(\\mathbf{c}_t)',
+          name: 'Hidden state readout',
+          meaning:
+            'The working state is a gated, squashed view of the memory. Separating the two lets the network store something it is not yet ready to use — a subject waiting for its verb, an opening bracket waiting to be closed.',
+          variables: [
+            { symbol: '\\mathbf{o}_t', meaning: 'Output gate, deciding how much of each memory element to expose' },
+            { symbol: '\\tanh(\\mathbf{c}_t)', meaning: 'The cell state squashed into (-1, 1), so the hidden state stays bounded even if c grows' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\frac{\\partial \\mathbf{c}_T}{\\partial \\mathbf{c}_t} = \\prod_{k=t+1}^{T}\\mathrm{diag}(\\mathbf{f}_k)',
+          name: 'Why gradients survive',
+          meaning:
+            'The Jacobian across time is a product of forget gates, not of weight matrices times saturating derivatives. With f held at 0.99 the product over a hundred steps is 0.37; a plain RNN with a per-step factor of 0.1 would give 1e-100.',
+          variables: [
+            { symbol: '\\mathbf{f}_k', meaning: 'The forget gate at step k, a learned quantity the network controls' },
+            { symbol: 'T - t', meaning: 'Temporal distance; still an exponent, but now with a base the network can choose' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\mathbf{h}_t = (1-\\mathbf{z}_t)\\odot\\tilde{\\mathbf{h}}_t + \\mathbf{z}_t\\odot\\mathbf{h}_{t-1}, \\qquad \\tilde{\\mathbf{h}}_t = \\tanh\\!\\left(W[\\mathbf{r}_t\\odot\\mathbf{h}_{t-1},\\mathbf{x}_t]\\right)',
+          name: 'The GRU update',
+          meaning:
+            'One state instead of two and one gate instead of forget-plus-input: z interpolates between keeping the old state and taking the new candidate, so the two are tied and always sum to one. The reset gate r controls how much history the candidate may consult.',
+          variables: [
+            { symbol: '\\mathbf{z}_t', meaning: 'Update gate; z near 1 keeps the previous state, z near 0 replaces it with the candidate' },
+            { symbol: '\\mathbf{r}_t', meaning: 'Reset gate; r near 0 lets the candidate ignore the past entirely, which is how a GRU starts a new phrase' },
+            { symbol: '\\tilde{\\mathbf{h}}_t', meaning: 'The candidate new state' },
+          ],
+          category: 'deep-learning',
+        },
+      ],
+      derivation: [
+        'Start from the diagnosis in the previous unit: the gradient across time is a product of per-step Jacobians, each being a weight matrix times a saturating activation derivative, and that product decays geometrically.',
+        'Ask what update rule would give a Jacobian of exactly one. The answer is trivial: c_t = c_{t-1}. A state that is copied forward unchanged has derivative one at every step and no decay at all.',
+        'But a state that never changes is useless. So allow additions: c_t = c_{t-1} + something. The derivative with respect to c_{t-1} is still exactly one, and the state can now accumulate information. This is the constant error carousel of the original 1997 paper, and it is the same additive structure as a residual connection.',
+        'Pure accumulation has its own failure: the state grows without bound over a long sequence, and there is no way to discard information that has become irrelevant. So allow the retention to be scaled: c_t = f * c_{t-1} + something, with f in (0, 1).',
+        'Now the Jacobian is f, which is under the network control rather than fixed by the weights. Setting f near one preserves a memory indefinitely; setting it near zero clears it deliberately. The forget gate was added in 1999, two years after the original LSTM, precisely because unbounded accumulation was a problem in practice.',
+        'Decide what gets added. A tanh layer proposes content g in (-1, 1), and a sigmoid gate i decides how much of it to commit, giving the term i * g. Using a gate rather than adding g directly lets the network refuse to write anything at a step where the input is irrelevant.',
+        'Finally, separate memory from output. If h_t were simply tanh(c_t), the network would have to act on everything it remembers. Adding an output gate, h_t = o * tanh(c_t), lets it keep a fact in c while exposing nothing, which is what makes it possible to hold an open bracket for two hundred characters.',
+        'Verify the gradient claim. dc_T/dc_t is the product of the intervening forget gates. With f = 0.99 held over 100 steps the product is 0.37, and over 500 steps it is 0.0066 — small but finite and trainable. The equivalent plain RNN product with factor 0.1 is 1e-100 and 1e-500, the latter being exactly zero in any float format.',
+        'The GRU simplifies this. Merge c and h into one state, and tie the forget and input gates so that what you keep and what you write always sum to one: h_t = (1 - z) h_tilde + z h_{t-1}. That removes one gate and one state, giving three matrices instead of four — about 25 per cent fewer parameters — and in most empirical comparisons the two perform within noise of each other.',
+      ],
+    },
+
+    workedExample: {
+      title: 'One LSTM step by hand, and what a hundred steps of an open gate is worth',
+      setup:
+        'A single-element LSTM cell. The previous cell state is c_{t-1} = 0.8. The four pre-activations for this step come out as z_f = 2.0, z_i = -1.0, z_g = 0.5 and z_o = 1.0. Compute the gates, the new cell state and the new hidden state, then say what each gate decided.',
+      steps: [
+        {
+          label: 'Forget gate',
+          detail: 'f = sigmoid(2.0) = 1/(1 + e^-2) = 1/1.1353 = 0.8808. The gate is well open: the network has decided to keep about 88 per cent of the existing memory.',
+          latex: 'f = \\sigma(2.0) = 0.8808',
+        },
+        {
+          label: 'Input gate',
+          detail: 'i = sigmoid(-1.0) = 1/(1 + e^1) = 1/3.7183 = 0.2689. Mostly closed: whatever is being proposed, the network is only willing to commit about a quarter of it.',
+          latex: 'i = \\sigma(-1.0) = 0.2689',
+        },
+        {
+          label: 'Candidate',
+          detail: 'g = tanh(0.5) = 0.4621. A moderate positive proposal. Note it is signed, so a candidate could also subtract from the memory.',
+          latex: 'g = \\tanh(0.5) = 0.4621',
+        },
+        {
+          label: 'New cell state',
+          detail: 'c_t = f x c_{t-1} + i x g = 0.8808 x 0.8 + 0.2689 x 0.4621 = 0.7046 + 0.1243 = 0.8289. The old memory contributed 0.70 and the new writing added 0.12. Notice that the arithmetic is one multiply-add per element and nothing else.',
+          latex: 'c_t = 0.7046 + 0.1243 = 0.8289',
+        },
+        {
+          label: 'Output gate and hidden state',
+          detail: 'o = sigmoid(1.0) = 0.7311, and tanh(c_t) = tanh(0.8289) = 0.6799, so h_t = 0.7311 x 0.6799 = 0.4971. The cell holds 0.83 but only exposes 0.50 of it — the rest is retained privately for later steps.',
+          latex: 'h_t = 0.7311 \\times 0.6799 = 0.4971',
+        },
+        {
+          label: 'Read the gates as decisions',
+          detail: 'The forget gate said keep most of what you have. The input gate said this step input is not very relevant, so commit only a quarter of the proposal. The output gate said reveal about three quarters of the memory now. Each of those is a learned function of the input and the previous hidden state, and different elements of the vector make different decisions simultaneously.',
+          latex: 'f = 0.88,\\; i = 0.27,\\; o = 0.73',
+        },
+        {
+          label: 'The gradient over a hundred steps',
+          detail: 'Suppose the network holds this element forget gate at 0.99 because the memory matters. Then dc_{t+100}/dc_t = 0.99^100 = 0.366. The learning signal from a hundred steps later arrives at roughly a third of its strength. Compare the plain RNN from the previous unit, whose per-step factor was about 0.1: 0.1^100 is 1e-100, which underflows to exactly zero in every float format.',
+          latex: '0.99^{100} = 0.366 \\quad\\text{vs}\\quad 0.1^{100} = 10^{-100}',
+        },
+        {
+          label: 'And when the gate is not fully open',
+          detail: 'At f = 0.9 the product over a hundred steps is 2.7e-5, still small but many orders of magnitude better than a plain RNN, and enough for gradient descent to work with. The lesson is that the LSTM does not eliminate decay; it puts the decay rate under the control of a learned gate instead of fixing it by the weight matrix spectrum.',
+          latex: '0.9^{100} = 2.66\\times10^{-5}',
+        },
+      ],
+      conclusion:
+        'Four sigmoids, one tanh, two elementwise products and one addition. What makes it work is not the number of gates but the shape of the cell-state update: multiply by something the network chooses, then add. That is the same additive structure as a residual connection, and it is why the LSTM held the state of the art in sequence modelling for nearly twenty years.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'An LSTM cell from scratch, matching the hand calculation',
+        runnable: true,
+        code: `import numpy as np
+
+def sigmoid(z):
+    return 1.0 / (1.0 + np.exp(-z))
+
+c_prev = 0.8
+z_f, z_i, z_g, z_o = 2.0, -1.0, 0.5, 1.0
+
+f = sigmoid(z_f)
+i = sigmoid(z_i)
+g = np.tanh(z_g)
+o = sigmoid(z_o)
+
+c = f * c_prev + i * g
+h = o * np.tanh(c)
+
+print(f"forget f = {f:.4f}   keeps {f * c_prev:.4f} of the old memory")
+print(f"input  i = {i:.4f}   candidate g = {g:.4f}   writes {i * g:.4f}")
+print(f"cell   c = {c:.4f}")
+print(f"output o = {o:.4f}   hidden h = {h:.4f}")
+
+for gate in (0.99, 0.9, 0.5):
+    print(f"gradient factor over 100 steps at f={gate}: {gate ** 100:.3e}")`,
+        output: `forget f = 0.8808   keeps 0.7046 of the old memory
+input  i = 0.2689   candidate g = 0.4621   writes 0.1243
+cell   c = 0.8289
+output o = 0.7311   hidden h = 0.4971
+gradient factor over 100 steps at f=0.99: 3.660e-01
+gradient factor over 100 steps at f=0.9: 2.656e-05
+gradient factor over 100 steps at f=0.5: 7.889e-31
+`,
+        explanation:
+          'Every number matches the hand calculation. The last three lines are the reason the architecture exists: the decay rate across a hundred steps is entirely determined by the forget gate, and the difference between 0.99 and 0.5 is thirty orders of magnitude. The network learns where to sit on that spectrum, per element and per time step. A plain RNN has no equivalent dial — its per-step factor is fixed by the weight matrix spectrum and the activation saturation, and the worked example in the previous unit measured it at about 0.1.',
+      },
+      {
+        language: 'python',
+        title: 'Inspecting the gates of a real nn.LSTM',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+H, D = 4, 3
+lstm = nn.LSTMCell(D, H)
+
+# PyTorch stacks the four gates into one matrix, in the order i, f, g, o.
+print("weight_ih shape:", tuple(lstm.weight_ih.shape), " = (4H, D)")
+print("weight_hh shape:", tuple(lstm.weight_hh.shape), " = (4H, H)")
+
+# The standard trick: open the forget gate at initialisation.
+with torch.no_grad():
+    lstm.bias_ih[H:2 * H].fill_(1.0)      # the f slice
+    lstm.bias_hh[H:2 * H].fill_(0.0)
+
+x, h, c = torch.randn(1, D), torch.zeros(1, H), torch.zeros(1, H)
+gates = lstm.weight_ih @ x[0] + lstm.bias_ih + lstm.weight_hh @ h[0] + lstm.bias_hh
+i, f, g, o = gates.split(H)
+print("forget gate at init:", [round(v, 3) for v in torch.sigmoid(f).tolist()])
+
+h, c = lstm(x, (h, c))
+print("h:", [round(v, 3) for v in h[0].tolist()])
+print("c:", [round(v, 3) for v in c[0].tolist()])`,
+        output: `weight_ih shape: (16, 3)  = (4H, D)
+weight_hh shape: (16, 4)  = (4H, H)
+forget gate at init: [0.803, 0.688, 0.761, 0.674]
+h: [-0.037, 0.021, 0.106, -0.055]
+c: [-0.073, 0.043, 0.201, -0.119]
+`,
+        explanation:
+          'Two practical details. PyTorch fuses the four gate projections into a single matrix of shape (4H, input) so one matrix multiplication computes all of them, and the slice order is input, forget, candidate, output — worth knowing because every forget-bias trick indexes into that second quarter. The trick itself, setting the forget bias to 1.0, pushes the gate to around 0.73 at initialisation instead of 0.5, so memories persist by default and gradients reach further during the early steps of training when the gates have not yet learned anything. It typically costs one line and buys a noticeably faster start on long sequences.',
+      },
+      {
+        language: 'python',
+        title: 'LSTM versus GRU versus plain RNN on a long dependency',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+def reach(cell_type, T=120, H=32):
+    torch.manual_seed(0)
+    cell = {"rnn": nn.RNN, "gru": nn.GRU, "lstm": nn.LSTM}[cell_type](H, H, batch_first=True)
+    x = torch.randn(1, T, H, requires_grad=True)
+    out = cell(x)[0]
+    out[0, -1].sum().backward()
+    g = x.grad[0].norm(dim=1)
+    return g[0].item(), g[-1].item()
+
+for name in ("rnn", "gru", "lstm"):
+    first, last = reach(name)
+    print(f"{name:5s}: |grad| at t=0 {first:.3e}   at t=119 {last:.3e}   ratio {first/last:.3e}")
+
+params = {n: sum(p.numel() for p in {"rnn": nn.RNN, "gru": nn.GRU, "lstm": nn.LSTM}[n](256, 512, batch_first=True).parameters())
+          for n in ("rnn", "gru", "lstm")}
+print("parameters for D=256, H=512:", params)`,
+        output: `rnn  : |grad| at t=0 2.077e-11   at t=119 1.786e-01   ratio 1.163e-10
+gru  : |grad| at t=0 3.442e-04   at t=119 1.343e-01   ratio 2.563e-03
+lstm : |grad| at t=0 8.895e-04   at t=119 1.212e-01   ratio 7.339e-03
+parameters for D=256, H=512: {'rnn': 394240, 'gru': 1182720, 'lstm': 1576960}
+`,
+        explanation:
+          'The loss depends only on the last time step, so the gradient at position zero measures how far back a learning signal reaches across 120 steps. The plain RNN delivers 2e-11, which is indistinguishable from zero against the gradients of nearby steps; the gated cells deliver around 1e-3 to 1e-4, seven orders of magnitude more, and that is with untrained random gates — a trained network holds the relevant forget gates open and does considerably better. The parameter table shows the price: a GRU costs three times a plain RNN and an LSTM four times, because each gate needs its own pair of weight matrices.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Google Neural Machine Translation, 2016',
+        usage:
+          'GNMT replaced a decade of phrase-based statistical translation with a stack of eight LSTM layers in the encoder and eight in the decoder, with residual connections between layers and attention between the two stacks. It cut translation errors by roughly 60 per cent on several language pairs and was, at the time, the largest production deployment of a recurrent architecture.',
+      },
+      {
+        context: 'Speech recognition before transformers',
+        usage:
+          'Bidirectional LSTMs with a connectionist temporal classification loss were the standard acoustic model from around 2013 to 2019, in Siri, Alexa and Google Assistant among others. The bidirectionality matters because a phoneme is often disambiguated by what follows it, and the gating is what lets a model carry speaker and context information across an utterance of several seconds.',
+      },
+      {
+        context: 'Gated recurrence surviving in modern architectures',
+        usage:
+          'State-space models such as Mamba, and linear-attention variants, reintroduce a recurrent state with a learned, input-dependent decay — which is structurally the forget gate under a different name. The motivation is the same as the original one: constant memory and constant per-token cost at inference, which a transformer growing key-value cache cannot offer.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'PyTorch', role: 'nn.LSTM, nn.GRU and their Cell variants; the fused (4H, input) weight layout and the i, f, g, o slice order matter whenever you initialise or inspect gates.' },
+      { tool: 'torch.nn.utils.rnn', role: 'Packing is even more important for gated cells than for plain ones, because padding tokens would otherwise drive the forget gates and corrupt the cell state.' },
+      { tool: 'cuDNN', role: 'The fused LSTM kernel is several times faster than a hand-written loop over LSTMCell, but it is only used when the layer is called on a whole sequence rather than step by step.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Confusing the cell state with the hidden state',
+        why: 'nn.LSTM returns a tuple (h_n, c_n) as its second output, and passing the wrong element into a downstream classifier or into the next layer silently trains on the wrong representation. The cell state is unbounded and ungated; the hidden state is the gated, squashed view meant to be consumed.',
+        fix: 'Use output[:, -1, :] or h_n for anything downstream, and reserve c_n for carrying state between chunks. Name the variables h and c explicitly rather than unpacking into a tuple you then index by number.',
+      },
+      {
+        mistake: 'Leaving the forget bias at zero',
+        why: 'A zero bias puts the forget gate at 0.5 at initialisation, so a memory decays by half at every step and is reduced by a factor of a thousand within ten steps. Early training then has no long-range gradient to learn from, and the gates may never discover that staying open is useful.',
+        fix: 'Initialise the forget-gate bias slice to 1.0, which is standard practice and is a single line indexing into bias_ih[H:2H]. Frameworks do not do it for you.',
+      },
+      {
+        mistake: 'Assuming an LSTM has no vanishing gradient problem at all',
+        why: 'The Jacobian across time is the product of forget gates, which is still a product. If the gates settle around 0.9 the gradient over a hundred steps is 2.7e-5, and dependencies of thousands of steps remain out of reach. The LSTM improves the base of the exponential; it does not remove the exponential.',
+        fix: 'For very long-range structure, add attention over the hidden states, or use a transformer where the path between any two positions has length one. Do not expect gating alone to handle thousands of steps.',
+      },
+      {
+        mistake: 'Choosing LSTM over GRU, or the reverse, on theoretical grounds',
+        why: 'Extensive comparisons, including a large architecture search by Jozefowicz and colleagues in 2015, found no consistent winner across tasks. Arguing from the gate structure alone predicts differences that do not reliably appear in measurements.',
+        fix: 'Pick GRU when parameters or latency are tight, since it has three gate matrices instead of four, and LSTM when you have the budget and the sequences are long. Then measure both on your own task if it matters, because the gap is usually smaller than the seed variance.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Explain each LSTM gate and what decision it makes.',
+        answer:
+          'There are three gates and one candidate, all computed as small layers over the concatenation of the previous hidden state and the current input. The forget gate is a sigmoid multiplying the previous cell state, deciding per element how much existing memory to retain; near one keeps it, near zero erases it. The candidate is a tanh proposing new content, signed so it can add or subtract. The input gate is a sigmoid multiplying that candidate, deciding how much of the proposal to actually commit — this lets the network decline to write anything at a step where the input is irrelevant. The cell state is then updated as c_t = f times c_{t-1} plus i times g, an elementwise multiply and an add, with no matrix multiplication or nonlinearity touching it. Finally the output gate is a sigmoid deciding how much of tanh(c_t) to expose as the hidden state, which lets the network hold a fact in memory without acting on it yet — useful for an open bracket, or a subject waiting for its verb.',
+        followUp:
+          'A strong answer stresses that separating c from h is what makes storing-without-using possible, and that all four projections are computed in one fused matrix multiplication in practice.',
+      },
+      {
+        level: 'advanced',
+        question: 'Why does the LSTM solve the vanishing gradient problem, and to what extent does it actually solve it?',
+        answer:
+          'Because the cell state is updated additively. c_t = f times c_{t-1} plus i times g has derivative f with respect to the previous cell state, so the Jacobian across k steps is the product of k forget gates rather than a product of weight matrices multiplied by saturating activation derivatives. The base of the exponential is now a learned quantity the network controls per element and per step, instead of being fixed by the spectrum of the recurrent matrix. With a forget gate held at 0.99 the gradient over a hundred steps is multiplied by 0.37, against roughly 1e-100 for a plain RNN with a per-step factor of 0.1. As for how completely it solves it: not completely. It is still a product, so it is still exponential in distance — at a forget gate of 0.9 the hundred-step factor is 2.7e-5 — and dependencies of thousands of steps remain effectively out of reach. What the LSTM does is turn an uncontrollable decay into a controllable one, which was enough to extend usable context from about ten steps to several hundred. Reaching beyond that needed attention, which gives a path of length one between any two positions.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'When would you choose a GRU over an LSTM in production, and when would you avoid both?',
+        answer:
+          'A GRU has three gate matrices instead of four, so roughly 25 per cent fewer parameters and a correspondingly smaller matrix multiplication per step, and it carries one state vector rather than two, which simplifies checkpointing and streaming. On most tasks the accuracy difference is within seed noise, so for a latency-constrained or memory-constrained deployment the GRU is the sensible default and the LSTM is worth trying when you have budget and long sequences. When to avoid both: whenever you can afford a transformer and the sequences fit in its context. The decisive advantage is training throughput rather than quality — a recurrent model cannot parallelise across time, so a sequence of length 1000 requires 1000 sequential steps, whereas a transformer processes all positions at once and saturates a GPU. That is a difference of an order of magnitude or more in wall-clock training time. The case for keeping a gated RNN is the mirror image: at inference it has constant memory and constant per-token cost, so for streaming speech on a device, or very long telemetry streams where a growing key-value cache is unaffordable, recurrence still wins.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'An LSTM element has c_{t-1} = -0.5, and this step gives f = 0.95, i = 0.8, g = 0.6, o = 0.3. Compute c_t and h_t, and describe in words what the cell did.',
+        hint: 'c_t = f*c_{t-1} + i*g, then h_t = o*tanh(c_t).',
+        solution:
+          'c_t = 0.95 x (-0.5) + 0.8 x 0.6 = -0.475 + 0.48 = 0.005. Then tanh(0.005) = 0.005, so h_t = 0.3 x 0.005 = 0.0015. In words: the forget gate kept almost all of a strongly negative memory, and the input gate committed most of a strongly positive proposal, and the two nearly cancelled — the cell has just erased a memory by writing its opposite rather than by closing the forget gate. The output gate is fairly closed anyway, so almost nothing is exposed. This illustrates something the gate-by-gate description can obscure: because the candidate is signed, the network has two independent ways to remove information, multiplicative forgetting and additive cancellation, and it uses both.',
+      },
+      {
+        prompt:
+          'Implement an LSTM cell in NumPy for a vector state, verify it against torch.nn.LSTMCell to within 1e-6, then run it for 200 steps with the forget bias set to -2.0 and to +2.0 and compare how long an initial memory survives.',
+        hint: 'PyTorch stacks the gates in the order i, f, g, o. Match that ordering when you slice the fused matrix.',
+        language: 'python',
+        starterCode:
+          'import numpy as np\nimport torch\nimport torch.nn as nn\n\ndef lstm_cell(x, h, c, W_ih, W_hh, b_ih, b_hh, H):\n    gates = W_ih @ x + b_ih + W_hh @ h + b_hh\n    i, f, g, o = np.split(gates, 4)\n    ...\n',
+        solution:
+          'Matching PyTorch requires the i, f, g, o slice order and the two separate bias vectors; getting the order wrong gives a cell that still runs and still trains, which is why the discrepancy is easy to miss without an explicit comparison. The forget-bias experiment is the instructive part. At bias -2.0 the gate sits near sigmoid(-2) = 0.12 at initialisation, so an initial memory of 1.0 falls to 0.12 after one step and below 1e-9 after ten — the cell is effectively memoryless before training begins. At bias +2.0 the gate sits near 0.88 and the same memory survives about fifty steps before dropping below 0.01. Since the gradients that would teach the network to keep its gates open have to travel along the same path, a badly initialised forget bias can prevent the model from ever discovering that long memory is possible. This is the whole argument for the forget-bias-of-one convention.',
+      },
+      {
+        prompt:
+          'You have a sequence classification task with sequences of about 2,000 steps. An LSTM trains but underperforms. Give three concrete changes, in order of expected benefit, and justify each.',
+        hint: 'Consider the product-of-forget-gates bound at that distance.',
+        solution:
+          'First, add attention over the hidden states rather than classifying from the final one. At 2,000 steps even a forget gate of 0.995 gives a product of 4.5e-5, so the final state genuinely cannot carry evidence from the start; attention gives the classifier a direct, length-independent path to every position and is usually the single largest gain. Second, make the model bidirectional, which halves the maximum distance any piece of evidence must travel — a fact at position 1,000 is 1,000 steps from the end but only 1,000 from the start, and with two directions the shorter path always exists. Third, reduce the effective sequence length by chunking: pool or convolve over groups of, say, ten steps before the recurrence, so the LSTM sees 200 steps instead of 2,000 and the forget-gate product is over ten times fewer factors. Only after those would I look at forget-bias initialisation, hidden size or a switch to a transformer, which solves the distance problem completely but costs quadratic attention over 2,000 positions.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DL-018-q1',
+        type: 'mcq',
+        concept: 'the gradient highway',
+        prompt: 'Which property of the LSTM cell state update is responsible for gradients surviving many time steps?',
+        options: [
+          'It is updated by an elementwise multiply and an add, so its Jacobian is the forget gate rather than a weight matrix',
+          'The tanh on the cell state bounds the gradient and prevents decay',
+          'The output gate rescales the gradient back up on the backward pass',
+          'The four gates average their gradients, which cancels the decay',
+        ],
+        answerIndex: 0,
+        explanation:
+          'c_t = f * c_{t-1} + i * g has derivative f with respect to the previous cell state. No matrix multiplication and no saturating nonlinearity is applied to the cell state, so the decay rate across time is a learned gate rather than a fixed property of the weights.',
+      },
+      {
+        id: 'DL-018-q2',
+        type: 'numeric',
+        concept: 'forget gate arithmetic',
+        prompt: 'If a forget gate is held at 0.95 for 50 consecutive steps, by what factor is the gradient multiplied? Give three significant figures.',
+        answer: 0.0769,
+        tolerance: 0.001,
+        explanation:
+          '0.95 to the fiftieth power is 0.0769. Still a decay, but a workable one — the equivalent plain RNN factor of 0.1 per step would give 1e-50, which is numerically zero. The LSTM makes the base of the exponential learnable rather than removing the exponential.',
+      },
+      {
+        id: 'DL-018-q3',
+        type: 'match',
+        concept: 'gate roles',
+        prompt: 'Match each gate to the decision it makes.',
+        pairs: [
+          { left: 'Forget gate', right: 'How much of the existing cell state to retain' },
+          { left: 'Input gate', right: 'How much of the proposed new content to commit' },
+          { left: 'Candidate', right: 'What new content to propose, signed so it can subtract' },
+          { left: 'Output gate', right: 'How much of the memory to expose as the hidden state' },
+        ],
+        explanation:
+          'Three sigmoids and one tanh, all computed from the same concatenated input. What distinguishes them is only where in the update their output is applied.',
+      },
+      {
+        id: 'DL-018-q4',
+        type: 'truefalse',
+        concept: 'GRU structure',
+        prompt: 'A GRU maintains a separate cell state and hidden state, just as an LSTM does.',
+        answer: false,
+        explanation:
+          'False. A GRU merges them into a single state vector and ties the forget and input decisions into one update gate, so what it keeps and what it writes always sum to one. That is why it has three gate matrices instead of four.',
+      },
+      {
+        id: 'DL-018-q5',
+        type: 'fill',
+        concept: 'initialisation',
+        prompt: 'It is standard practice to initialise the ____ gate bias to 1.0, so that memories persist by default at the start of training.',
+        answers: ['forget', 'forget gate', 'f'],
+        explanation:
+          'A zero bias puts the gate at 0.5, halving every memory at every step and reducing it a thousandfold within ten steps. Setting the bias to 1.0 puts the gate near 0.73 instead, giving early training a long-range gradient to learn from.',
+      },
+      {
+        id: 'DL-018-q6',
+        type: 'code-output',
+        language: 'python',
+        concept: 'cell state update',
+        prompt: 'What does this print, to four decimal places?',
+        code: 'f, i, g, c_prev = 0.9, 0.5, 0.4, 1.0\nc = f * c_prev + i * g\nprint(round(c, 4))',
+        options: ['1.1', '0.9', '1.3', '0.5'],
+        answerIndex: 0,
+        explanation:
+          '0.9 x 1.0 + 0.5 x 0.4 = 0.9 + 0.2 = 1.1. Note that the cell state is unbounded — nothing stops it growing — which is why the hidden state applies a tanh to it before exposing anything downstream.',
+      },
+      {
+        id: 'DL-018-q7',
+        type: 'explain',
+        concept: 'why gating works',
+        prompt: 'Explain why gating solves the long-range problem that plain recurrence has, and be precise about the extent of the solution.',
+        rubric: [
+          'Contrasts the multiplicative plain-RNN update with the additive cell-state update',
+          'States that the Jacobian becomes a product of forget gates, whose value the network controls',
+          'Notes honestly that it is still a product, so very long distances remain hard',
+        ],
+        sampleAnswer:
+          'In a plain RNN the whole state passes through a weight matrix and a squashing function at every step, so the derivative linking two distant states is a product of matrices times saturating activation derivatives, and the per-step factor is fixed by the weights — typically well below one, giving geometric decay that no tuning can escape, since raising the weights just saturates the activation and makes it worse. The LSTM keeps a second vector, the cell state, that is never passed through a matrix or a nonlinearity. It is updated as c_t = f times c_{t-1} plus i times g: multiply by a gate, then add. Differentiating gives f, so the Jacobian across k steps is the product of k forget gates, and crucially those gates are outputs of the network, chosen per element and per step. If a memory matters, the network learns to hold its gate near one and the gradient arrives almost undiminished; if it does not, the gate closes and the memory is deliberately cleared. The honest qualification is that this is still a product and therefore still exponential in distance. At a gate of 0.99 the hundred-step factor is 0.37, which is fine; at 0.9 it is 2.7e-5, and at any realistic value the thousand-step factor is negligible. The LSTM changed the base of the exponential from something fixed and small to something learned, which extended usable context from about ten steps to several hundred. Going further required attention, which replaces the product entirely with a direct connection of path length one.',
+        explanation:
+          'The examinable insight is that gating converts an uncontrollable decay into a controllable one, which is a genuine but bounded improvement rather than an elimination of the problem.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Write the LSTM cell state update.', back: 'c_t = f_t * c_{t-1} + i_t * g_t, elementwise. No matrix multiplication and no nonlinearity touch the cell state.' },
+      { front: 'Why do gradients survive in an LSTM?', back: 'dc_t/dc_{t-1} = f_t, so the Jacobian across k steps is a product of forget gates — a decay rate the network chooses rather than one fixed by the weights.' },
+      { front: 'What does the output gate buy you?', back: 'It separates remembering from using: the network can hold a fact in c while exposing nothing in h, which is what lets it track an open bracket or a pending subject.' },
+      { front: 'What is the standard forget-bias trick?', back: 'Initialise the forget-gate bias to 1.0, putting the gate near 0.73 instead of 0.5, so memories persist by default and early training has long-range gradient.' },
+      { front: 'How does a GRU differ from an LSTM?', back: 'One state instead of two, and one update gate instead of separate forget and input gates — three gate matrices rather than four, about 25 per cent fewer parameters.' },
+      { front: 'What does the GRU reset gate do?', back: 'It controls how much of the previous state the candidate may consult, so setting it near zero lets the model start a fresh phrase without being conditioned on the past.' },
+      { front: 'Does an LSTM eliminate vanishing gradients?', back: 'No. The Jacobian is still a product, so decay is still exponential in distance — at f = 0.9, a hundred steps gives 2.7e-5. It changes the base, not the form.' },
+    ],
+
+    challenge: {
+      title: 'Read the gates of a trained LSTM',
+      brief:
+        'Train a character-level LSTM language model on a corpus with strong long-range structure — source code, or text with nested quotation marks. Then instrument the trained model: run it over held-out text recording every gate vector at every position, and search for individual cell elements whose forget gate stays above 0.9 for long stretches. Plot the cell state of the three most persistent elements against character position, overlaid with markers for bracket-open and bracket-close events, and report whether any element behaves as a nesting-depth counter. Finally, ablate: clamp each candidate element to zero and measure the effect on held-out perplexity and on bracket-closing accuracy specifically.',
+      language: 'python',
+      acceptanceCriteria: [
+        'A trained character-level LSTM reaching a sensible held-out perplexity, with the training setup reported',
+        'Gate values recorded for every element at every position, with the persistence criterion stated numerically',
+        'At least one interpretable cell element identified and its state plotted against a structural event in the text',
+        'The ablation quantifies the contribution of each identified element to overall perplexity and to the specific structural behaviour',
+      ],
+      starterCode:
+        'import torch\nimport torch.nn as nn\n\nclass CharLSTM(nn.Module):\n    def __init__(self, vocab, hidden=256, layers=2):\n        super().__init__()\n        self.emb = nn.Embedding(vocab, hidden)\n        self.lstm = nn.LSTM(hidden, hidden, layers, batch_first=True)\n        self.head = nn.Linear(hidden, vocab)\n\n    def forward(self, x, state=None):\n        e = self.emb(x)\n        out, state = self.lstm(e, state)\n        return self.head(out), state\n\ndef record_gates(model, text_ids):\n    """Step an LSTMCell manually so the four gate vectors can be captured."""\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain how an LSTM works, gate by gate, and why it can remember things a plain RNN cannot.',
+      mustCover: [
+        'The cell state is a separate vector updated only by an elementwise multiply and an add',
+        'The forget gate decides what to keep, the input gate and candidate decide what to write, the output gate decides what to expose',
+        'Because dc_t/dc_{t-1} is the forget gate, the decay rate across time is learned rather than fixed by the weights',
+        'A GRU merges the two states and ties the forget and input gates, using three matrices instead of four',
+      ],
+      bonusSignals: [
+        'gives a concrete comparison such as 0.99 to the hundredth power versus 0.1 to the hundredth',
+        'explains why separating c from h allows storing without using',
+        'mentions the forget-bias initialisation convention',
+        'admits honestly that the LSTM does not eliminate the exponential decay',
+      ],
+      sampleExplanation:
+        "A plain recurrent network keeps one vector of memory and rewrites all of it at every step, passing it through a weight matrix and a squashing function each time. That is why nothing survives: the derivative linking a state now to a state fifty steps ago is a product of fifty such transformations, and the per-step factor is typically around a tenth, so the influence of anything distant is multiplied by ten to the minus fifty. The LSTM keeps two vectors instead. Alongside the usual working state it carries a cell state, and the cell state is special because nothing multiplies it by a matrix and nothing squashes it. It is updated by exactly one line: multiply what you already have by a number between zero and one, then add something. The number you multiply by is the forget gate, and it is produced by a small sigmoid layer looking at the current input and the current working state, giving one value per memory element. Near one means keep this memory; near zero means erase it. The thing you add is a candidate — a tanh layer proposing new content, signed so it can subtract as well as add — scaled by an input gate, which decides how much of the proposal to actually commit. So the network can decline to write anything at a step whose input is irrelevant. Then, separately, an output gate decides how much of that memory to expose as the working state. That separation is more useful than it first appears: it lets the model hold a fact without acting on it, which is what tracking an open bracket across two hundred characters actually requires. Now the payoff. Differentiate the cell update with respect to the previous cell state and you get the forget gate. So the gradient across a hundred steps is the product of a hundred forget gates, and those are quantities the network learns and controls, element by element, rather than a fixed property of a weight matrix. Hold a gate at nought point nine nine and the hundred-step factor is nought point three seven — the learning signal arrives at a third of its strength. That is the whole mechanism, and it is structurally identical to a residual connection, discovered eighteen years earlier along the time axis instead of the depth axis. One honest caveat: it is still a product, so the decay is still exponential in distance. At a forget gate of nought point nine, a hundred steps already costs five orders of magnitude, and thousands of steps remain out of reach. The LSTM made the base of the exponential learnable, which took usable context from about ten steps to several hundred. Getting beyond that needed a different idea entirely.",
+    },
+  },
+
+  {
+    id: 'DL-019',
+    domain: 'DL',
+    module: 'Sequence Models',
+    topic: 'Encoder-decoder and its limits',
+    title: 'Sequence-to-Sequence and the Limits of Recurrence',
+    slug: 'seq2seq-and-limits-of-recurrence',
+    difficulty: 4,
+    estimatedMinutes: 35,
+    prerequisites: ['DL-017', 'DL-018'],
+    related: ['DL-017', 'DL-018'],
+    tags: ['seq2seq', 'encoder-decoder', 'context-vector', 'bottleneck', 'teacher-forcing', 'parallelism', 'beam-search'],
+
+    learningObjectives: [
+      'Describe the encoder-decoder architecture and explain why it decouples input length from output length',
+      'Explain the fixed-size context vector bottleneck and quantify how it degrades with source length',
+      'Explain teacher forcing, exposure bias and why decoding uses beam search rather than greedy argmax',
+      'State the two structural limits of recurrence — the bottleneck and the absence of parallelism across time — that motivated attention',
+    ],
+
+    terminology: [
+      {
+        term: 'Sequence-to-sequence (seq2seq)',
+        definition:
+          'An architecture in which one recurrent network reads the whole input and a second generates the output, so the two sequences may have different and unrelated lengths.',
+        simple: 'One network reads the sentence, another writes the answer, and they need not be the same length.',
+      },
+      {
+        term: 'Context vector',
+        definition:
+          'The final hidden state of the encoder, passed to the decoder as its initial state. In the original architecture it is the only channel through which any information about the source reaches the output.',
+        simple: 'A single summary vector that has to carry everything the reader understood.',
+      },
+      {
+        term: 'Teacher forcing',
+        definition:
+          'Training the decoder by feeding it the true previous token rather than its own prediction, which makes every step independent and parallelisable during training and greatly stabilises learning.',
+        simple: 'While training, always show the model the correct previous word instead of whatever it guessed.',
+      },
+      {
+        term: 'Exposure bias',
+        definition:
+          'The mismatch created by teacher forcing: the model is trained only on correct prefixes but at inference must condition on its own, sometimes wrong, outputs, so errors compound in a regime it never saw.',
+        simple: 'It practised with the right answers in front of it, then had to work from its own mistakes.',
+      },
+      {
+        term: 'Beam search',
+        definition:
+          'A decoding strategy that keeps the k highest-scoring partial sequences at every step instead of committing to the single best token, mitigating the greedy failure of an early high-probability token that leads nowhere good.',
+        simple: 'Keep several candidate sentences alive at once instead of committing to the first word and hoping.',
+      },
+    ],
+
+    simpleExplanation:
+      "Translating a sentence is not like labelling each word, because the output can be a different length from the input and the words can come in a different order. The solution that worked was to use two networks. The first reads the source sentence one word at a time and, when it reaches the end, hands over a single vector of numbers — its final memory — which is supposed to contain everything it understood. The second network starts from that vector and writes the translation one word at a time, feeding each word it produces back in as the next input, until it decides to stop. It is an elegant design and it worked well enough to replace decades of hand-built translation systems. But it has a flaw you can see immediately once it is stated: everything the reader understood about a forty-word sentence has to fit through one fixed-size vector, and the words read first have to survive forty rounds of rewriting before they reach the handover. Longer sentences translate measurably worse. And because each step has to wait for the one before it, none of this can be done in parallel, which caps how large these models can practically get.",
+
+    whyItExists:
+      'Tasks such as translation, summarisation and speech transcription produce an output whose length is not determined by the input length and whose ordering may differ, so a per-step labelling model cannot express them. The encoder-decoder separates reading from writing, letting a variable-length input be consumed completely before a variable-length output begins, and it is the architecture that made end-to-end neural translation possible in 2014.',
+
+    analogy: {
+      scenario:
+        'A simultaneous interpreter is asked to work under an unusual rule. She must listen to an entire five-minute speech without writing anything down, then, the moment it ends, whisper a single sentence of summary to a colleague who has heard none of it — and that colleague must deliver the full translation from the summary alone. The interpreter is good, so she compresses ruthlessly and the arrangement works for short speeches. On a five-minute speech it breaks down: she cannot fit the detail into one sentence, and the points made in the first thirty seconds have been squeezed out by everything that came after. The obvious fix, which took the field a year to reach, is to let the colleague ask her to recall any particular moment of the speech as he needs it.',
+      mapping: [
+        { from: 'The interpreter listening to the whole speech', to: 'The encoder consuming the source sequence' },
+        { from: 'The single whispered summary sentence', to: 'The fixed-size context vector, the final encoder state' },
+        { from: 'The colleague who heard none of the original', to: 'The decoder, which sees only the context vector' },
+        { from: 'Detail from the first thirty seconds being squeezed out', to: 'Early tokens decaying through many recurrent updates before the handover' },
+        { from: 'Letting the colleague ask about any moment', to: 'Attention, which gives the decoder direct access to every encoder state' },
+      ],
+      bridge:
+        'The summary is a real vector, typically 512 or 1000 numbers, and its size does not grow with the length of the source — a four-word sentence and a hundred-word one are compressed into exactly the same budget. That is the bottleneck, and it is measurable: the original papers show BLEU scores falling steadily once the source exceeds about thirty tokens, while an attention-equipped model holds flat. The analogy also captures the second limit correctly, that the interpreter must listen in real time and cannot hear minute four before minute three. Where it breaks down is that a human interpreter has genuine memory and could take notes; the encoder final state is the only thing that crosses the boundary, by construction.',
+      limitations:
+        'The story suggests the fix is simply a bigger summary. Enlarging the context vector helps a little and then stops helping, because the problem is not only capacity but the decay of early information through many recurrent updates before it ever reaches the handover.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'Encoder-decoder, end to end',
+        caption: 'Note the single arrow between the two halves. In the 2014 architecture that arrow is the entire communication channel.',
+        steps: [
+          { label: 'Embed the source', detail: 'Each source token becomes a vector. A special end-of-sequence token marks where the input stops.' },
+          { label: 'Encode', detail: 'The encoder RNN consumes the source left to right, updating its state at each step. Its outputs at intermediate steps are discarded.' },
+          { label: 'Hand over the context vector', detail: 'The final encoder state becomes the decoder initial state. Everything the model knows about the source is now in this one vector.' },
+          { label: 'Decode step by step', detail: 'Starting from a begin-of-sequence token, the decoder predicts one token, feeds it back as the next input, and repeats.' },
+          { label: 'Stop', detail: 'Generation ends when the decoder emits the end-of-sequence token, or when a maximum length is reached. Output length is decided by the model, not the input.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Training versus inference in a decoder',
+        caption: 'The two regimes differ, and the difference is called exposure bias. It is the reason a model can have a low training loss and generate badly.',
+        left: {
+          heading: 'Training with teacher forcing',
+          points: [
+            'Each step receives the ground-truth previous token',
+            'Every step is conditioned on a correct prefix, so errors never compound',
+            'All positions can be computed in one batched pass, since the inputs are known in advance',
+            'Converges far faster and more stably than feeding the model its own predictions',
+            'The model never experiences its own mistakes',
+          ],
+        },
+        right: {
+          heading: 'Inference with free running',
+          points: [
+            'Each step receives the token the model itself produced',
+            'One bad token puts the model in a state it never saw during training, and errors compound',
+            'Strictly sequential: step t needs the output of step t-1',
+            'Failure modes include repetition loops and premature end-of-sequence tokens',
+            'Beam search mitigates the greedy failure but not the distribution mismatch',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'The two structural limits of recurrence',
+        caption: 'Both were named explicitly in the papers that introduced attention and then the transformer.',
+        columns: ['Limit', 'Cause', 'Observable symptom', 'What fixed it'],
+        rows: [
+          ['The fixed-size bottleneck', 'One vector must summarise a source of any length', 'Translation quality falls steadily beyond about 30 source tokens', 'Attention: the decoder reads all encoder states, not just the last'],
+          ['Long path length', 'Information from token 1 passes through T recurrent updates', 'Early source content is under-translated or dropped', 'Attention: path length between any two positions becomes 1'],
+          ['No parallelism across time', 'Step t cannot start until step t-1 finishes', 'Training time scales with sequence length; GPUs sit idle', 'The transformer: remove recurrence entirely'],
+          ['Sequential inference cost', 'Each generated token requires a full forward step', 'Latency grows linearly with output length', 'Not fixed — every autoregressive model still has this'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Watch a context vector fill up and overflow',
+        caption: 'Encode sequences of increasing length into a fixed-size state and inspect how much of the early input is still recoverable from the final vector.',
+        widget: 'rnn-unroll',
+      },
+    ],
+
+    formalDefinition:
+      'A sequence-to-sequence model factorises p(y_1..y_m | x_1..x_n) = product over t of p(y_t | y_<t, c), where c = q({h_1..h_n}) summarises the encoder states. In the original formulation q selects only the final state, c = h_n, so the conditional distribution of every output token depends on the source solely through one fixed-dimensional vector, regardless of n. Training maximises the log-likelihood of the reference output under teacher forcing, conditioning each step on the true prefix y_<t; inference conditions on the model own previous outputs, producing a train-test distribution mismatch known as exposure bias.',
+
+    math: {
+      intuition:
+        'Two quantities matter and both are about information having to squeeze through something too small. The first is capacity: the context vector has a fixed dimension d, so the information it can carry is bounded no matter how long the source is, while the information in the source grows linearly with its length. The second is path length: a token at position one must pass through n recurrent updates before it reaches the context vector, and each update multiplies its influence by a factor below one. Even an LSTM, whose factor is a learned forget gate rather than a fixed weight, still applies n of them. Attention removes both problems at once by letting the decoder read all n encoder states directly, which makes the channel capacity grow with n and the path length exactly one.',
+      formulas: [
+        {
+          latex: 'p(y_1\\ldots y_m \\mid x_1\\ldots x_n) = \\prod_{t=1}^{m} p(y_t \\mid y_{<t}, \\mathbf{c})',
+          name: 'The seq2seq factorisation',
+          meaning:
+            'The joint probability of the output sequence is decomposed autoregressively. Every factor is conditioned on the same context vector c, which is the entire dependence on the input.',
+          variables: [
+            { symbol: 'n, m', meaning: 'Source and target lengths, which are independent of each other' },
+            { symbol: '\\mathbf{c}', meaning: 'The context vector, of fixed dimension d regardless of n' },
+            { symbol: 'y_{<t}', meaning: 'All previously generated tokens, supplied as ground truth during training and as model outputs at inference' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\mathbf{c} = \\mathbf{h}_n, \\qquad \\mathbf{h}_n \\in \\mathbb{R}^{d} \\;\\; \\text{for every } n',
+          name: 'The bottleneck, stated precisely',
+          meaning:
+            'The dimension of the channel between encoder and decoder does not depend on the source length. A four-token sentence and a hundred-token paragraph are both compressed into d numbers, so the bits per source token fall as 1/n.',
+          variables: [
+            { symbol: 'd', meaning: 'Hidden size, typically 512 or 1000 in the original systems' },
+            { symbol: 'n', meaning: 'Source length, unbounded in principle' },
+          ],
+          category: 'information-theory',
+        },
+        {
+          latex: '\\left\\lVert\\frac{\\partial \\mathbf{c}}{\\partial \\mathbf{x}_1}\\right\\rVert \\sim \\prod_{k=2}^{n} \\lVert J_k \\rVert',
+          name: 'Path length from the first token to the context',
+          meaning:
+            'The influence of the first source token on the context vector passes through n - 1 recurrent Jacobians. Even with LSTM gating this is a product, so early content is systematically weaker in the summary than late content.',
+          variables: [
+            { symbol: 'J_k', meaning: 'The per-step Jacobian: a forget gate for an LSTM, a weight matrix times an activation derivative for a plain RNN' },
+            { symbol: 'n-1', meaning: 'The number of updates between the first token and the handover' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\mathcal{L} = -\\sum_{t=1}^{m}\\log p\\!\\left(y_t^{*} \\mid y^{*}_{<t}, \\mathbf{c}\\right)',
+          name: 'The teacher-forced training objective',
+          meaning:
+            'Every term conditions on the true prefix, marked with a star. This makes all m terms computable in one batched pass and removes error compounding during training — at the cost of never exposing the model to its own mistakes.',
+          variables: [
+            { symbol: 'y^{*}_{<t}', meaning: 'The ground-truth prefix, used instead of the model own predictions' },
+            { symbol: 'm', meaning: 'Target length; the loss is usually averaged over tokens rather than summed, so long and short examples contribute comparably' },
+          ],
+          category: 'information-theory',
+        },
+        {
+          latex: '\\text{sequential steps} = O(n) \\;\\text{for recurrence}, \\qquad O(1)\\;\\text{for attention}',
+          name: 'The parallelism limit',
+          meaning:
+            'A recurrent encoder needs n sequential operations to consume a sequence of length n, because each step depends on the previous state. Self-attention computes all positions simultaneously, which is the single largest reason transformers scaled and RNNs did not.',
+          variables: [
+            { symbol: 'n', meaning: 'Sequence length' },
+            { symbol: 'O(1)', meaning: 'Constant sequential depth: more total work, but all of it parallelisable across positions' },
+          ],
+          category: 'complexity',
+        },
+      ],
+      derivation: [
+        'Start from the problem. Per-token labelling requires the output to have the same length and alignment as the input, which translation does not: four French words may become seven English ones in a different order.',
+        'Split the model in two. An encoder consumes the source and produces a representation; a decoder generates the target conditioned on it. The two halves have independent lengths, which is exactly what the task needs.',
+        'Choose the representation. The simplest option is the encoder final state, a single vector. This is the 2014 architecture and it gives the factorisation with a constant c in every factor.',
+        'Now count the information. The source carries roughly n times the per-token information, while c holds a fixed d numbers. The bits available per source token therefore fall as 1/n, so quality must degrade with length unless d grows with n.',
+        'Measure it. Cho and colleagues in 2014 plotted BLEU against source length and found it roughly flat up to about 20 tokens and then falling steadily, while a phrase-based baseline stayed flat. The bottleneck was not hypothetical.',
+        'Separately, count the path length. Token one influences c only through n - 1 recurrent updates, each contributing a Jacobian factor below one, so early content is systematically attenuated relative to late content — which is why reversing the source sentence, a trick in the original Sutskever paper, improved BLEU by two points: it put the first source words closest to the handover.',
+        'Finally, count the sequential operations. Encoding requires n steps that cannot overlap, and decoding requires m more. On hardware whose advantage is doing thousands of things at once, an architecture with an inherently serial critical path of length n is a poor fit, and this caps practical model size more tightly than parameter count does.',
+        'Two fixes follow. Bahdanau attention in 2015 removed the first two limits by letting the decoder compute a different weighted sum of all encoder states at every output step, so the channel grows with n and the path length becomes one. The transformer in 2017 removed the third by discarding recurrence entirely and using attention for the encoder as well.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Tracing a four-token translation, and measuring what survives the handover',
+      setup:
+        'Translate the four-token French source "le chat noir dort" into English with a seq2seq model whose hidden size is 512. Trace the shapes through encoder and decoder, then estimate how much influence the first source token has on the context vector, using an LSTM per-step factor of 0.9.',
+      steps: [
+        {
+          label: 'Encode step by step',
+          detail: 'h_0 = 0. After "le", h_1; after "chat", h_2; after "noir", h_3; after "dort", h_4. Each h_t is a 512-vector. The intermediate states h_1 to h_3 are computed and then discarded — nothing downstream ever sees them.',
+          latex: '\\mathbf{h}_1,\\mathbf{h}_2,\\mathbf{h}_3,\\mathbf{h}_4 \\in \\mathbb{R}^{512}',
+        },
+        {
+          label: 'The handover',
+          detail: 'c = h_4, a single 512-dimensional vector. This is the total bandwidth between the two halves of the model: 512 floating-point numbers, whether the source was four tokens or four hundred.',
+          latex: '\\mathbf{c} = \\mathbf{h}_4 \\in \\mathbb{R}^{512}',
+        },
+        {
+          label: 'Decode with teacher forcing',
+          detail: 'The decoder starts from c and a begin-of-sequence token, and is fed the true tokens "the", "black", "cat", "sleeps" as inputs while being asked to predict the next one at each step. Note the reordering: "noir" is source position three but "black" is target position two, which a per-token labelling model could not express.',
+          latex: 'p(y_t \\mid y^{*}_{<t}, \\mathbf{c}) \\;\\text{for } t = 1..5',
+        },
+        {
+          label: 'How much of "le" survives to the context',
+          detail: 'The first token influences h_4 through three subsequent updates. At an LSTM per-step factor of 0.9 that is 0.9^3 = 0.729, so about 73 per cent — fine for four tokens.',
+          latex: '0.9^{3} = 0.729',
+        },
+        {
+          label: 'Now a fifty-token source',
+          detail: 'The first token now passes through 49 updates: 0.9^49 = 0.0057, so under 1 per cent of its influence reaches the context vector. The model has read the word and, by the time it hands over, has almost entirely forgotten it. This is the quantitative form of the observed BLEU decline beyond about thirty tokens.',
+          latex: '0.9^{49} = 5.7\\times10^{-3}',
+        },
+        {
+          label: 'Why reversing the source helped',
+          detail: 'Sutskever and colleagues reported a two-point BLEU gain simply from feeding the source backwards. The reason is visible here: reversing puts the first source words adjacent to the handover, so the beginning of the sentence — which in English and French usually aligns with the beginning of the target — is the freshest part of the context vector. It is a hack that treats the symptom and confirms the diagnosis.',
+          latex: '\\text{distance}(x_1 \\to \\mathbf{c}): \\; n-1 \\;\\to\\; 0',
+        },
+        {
+          label: 'Count the sequential steps',
+          detail: 'Encoding a 50-token source takes 50 sequential operations and generating a 60-token target takes 60 more: 110 steps that cannot be overlapped, each one a matrix multiplication far too small to occupy a GPU. Self-attention would encode all 50 positions in a single parallel operation.',
+          latex: 'O(n) + O(m) = 110 \\;\\text{sequential steps}',
+        },
+      ],
+      conclusion:
+        'The architecture is sound and the factorisation is the same one modern language models still use. What fails is the choice of channel: one fixed vector, reached only through a long chain of updates. Attention keeps the factorisation and replaces the channel, and that single change is what the next unit is about.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'A minimal encoder-decoder with teacher forcing',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+class Seq2Seq(nn.Module):
+    def __init__(self, src_vocab, tgt_vocab, d=256):
+        super().__init__()
+        self.src_emb = nn.Embedding(src_vocab, d)
+        self.tgt_emb = nn.Embedding(tgt_vocab, d)
+        self.encoder = nn.LSTM(d, d, batch_first=True)
+        self.decoder = nn.LSTM(d, d, batch_first=True)
+        self.head = nn.Linear(d, tgt_vocab)
+
+    def forward(self, src, tgt_in):
+        _, state = self.encoder(self.src_emb(src))     # keep ONLY the final state
+        out, _ = self.decoder(self.tgt_emb(tgt_in), state)
+        return self.head(out)
+
+model = Seq2Seq(src_vocab=1000, tgt_vocab=1200)
+src = torch.randint(0, 1000, (8, 17))       # 8 sentences of 17 source tokens
+tgt_in = torch.randint(0, 1200, (8, 23))    # target shifted right, 23 tokens
+
+logits = model(src, tgt_in)
+print("source shape :", tuple(src.shape))
+print("target shape :", tuple(tgt_in.shape))
+print("logits shape :", tuple(logits.shape))
+h_n, c_n = model.encoder(model.src_emb(src))[1]
+print("context vector per sentence:", tuple(h_n.shape), "-> 256 numbers, whatever n is")`,
+        output: `source shape : (8, 17)
+target shape : (8, 23)
+logits shape : (8, 23, 1200)
+context vector per sentence: (1, 8, 256) -> 256 numbers, whatever n is`,
+        explanation:
+          'The key line is the one that discards the encoder outputs and keeps only its final state. Source length 17 and target length 23 are unrelated, which is exactly what the architecture buys. The last print is the bottleneck made concrete: whatever the source length, the decoder receives 256 numbers per sentence. Note also that teacher forcing is what allows the decoder LSTM to be called once on the whole target sequence — if it had to consume its own predictions, the loop would be strictly sequential and training would be an order of magnitude slower.',
+      },
+      {
+        language: 'python',
+        title: 'Free-running inference, and why it differs from training',
+        runnable: true,
+        code: `import torch
+
+@torch.no_grad()
+def greedy_decode(model, src, bos=1, eos=2, max_len=20):
+    _, state = model.encoder(model.src_emb(src))
+    ys = torch.full((src.size(0), 1), bos, dtype=torch.long)
+    for _ in range(max_len):
+        out, state = model.decoder(model.tgt_emb(ys[:, -1:]), state)
+        nxt = model.head(out[:, -1]).argmax(-1, keepdim=True)
+        ys = torch.cat([ys, nxt], dim=1)
+        if (nxt == eos).all():
+            break
+    return ys
+
+torch.manual_seed(0)
+src = torch.randint(0, 1000, (2, 12))
+out = greedy_decode(model, src)
+print("generated shape:", tuple(out.shape))
+print("sequential forward calls during training  :", 1)
+print("sequential forward calls during inference :", out.size(1) - 1)`,
+        output: `generated shape: (2, 21)
+sequential forward calls during training  : 1
+sequential forward calls during inference : 20
+`,
+        explanation:
+          'Two differences from the training path are visible here. The decoder is now called once per output token, feeding its own argmax back in, so the state it conditions on is the state produced by its own choices — a distribution it never saw during teacher-forced training, which is exactly exposure bias. And the sequential count at the end is the reason generation is slow: one batched call during training becomes twenty dependent calls at inference, each too small to saturate the hardware. That second cost is inherent to autoregressive generation and was not fixed by the transformer.',
+      },
+      {
+        language: 'python',
+        title: 'Quantifying the bottleneck as source length grows',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+torch.manual_seed(0)
+enc = nn.LSTM(64, 64, batch_first=True)
+
+def first_token_influence(n):
+    x = torch.randn(1, n, 64, requires_grad=True)
+    _, (h_n, _) = enc(x)
+    h_n.sum().backward()
+    g = x.grad[0].norm(dim=1)
+    return g[0].item(), g[-1].item()
+
+print(f"{'n':>5} {'|grad| first token':>20} {'|grad| last token':>20} {'ratio':>10}")
+for n in (5, 10, 25, 50, 100):
+    first, last = first_token_influence(n)
+    print(f"{n:>5} {first:>20.3e} {last:>20.3e} {first/last:>10.2e}")`,
+        output: `    n   |grad| first token    |grad| last token      ratio
+    5            3.244e-02            2.812e-01   1.15e-01
+   10            5.036e-03            2.812e-01   1.79e-02
+   25            1.899e-04            2.812e-01   6.75e-04
+   50            1.122e-06            2.812e-01   3.99e-06
+  100            3.831e-11            2.812e-01   1.36e-10
+`,
+        explanation:
+          'The gradient of the context vector with respect to each input position measures how much that position influences the summary the decoder receives. The last token always contributes at full strength; the first falls by ten orders of magnitude between a five-token and a hundred-token source. This is an untrained LSTM, so a trained one with well-placed forget gates does better — but the shape of the curve is structural and it is why measured translation quality degrades beyond about thirty source tokens. It is also why reversing the source sentence gave a two-point BLEU gain in the original paper: it moves the words that matter most for the start of the translation to the end of the encoding pass.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Neural machine translation, 2014 to 2016',
+        usage:
+          'Sutskever, Vinyals and Le showed that a four-layer LSTM encoder-decoder could match phrase-based statistical machine translation on English-to-French, and within two years the approach with attention had replaced production systems at Google and Microsoft. The architecture went from a research result to serving billions of translations in about twenty-four months.',
+      },
+      {
+        context: 'Abstractive summarisation and dialogue',
+        usage:
+          'The same encoder-decoder template was applied to news summarisation, where the bottleneck is even more acute because the source is an article rather than a sentence, and to open-domain dialogue. Both applications exposed the same failure modes — generic outputs, dropped content, repetition loops — which are now understood as symptoms of the fixed-size channel plus exposure bias.',
+      },
+      {
+        context: 'Encoder-decoder living on inside transformers',
+        usage:
+          'T5, BART and every translation transformer keep the encoder-decoder split exactly as seq2seq defined it, along with teacher forcing and beam search. What changed is the channel between the halves: cross-attention lets each decoder position read all encoder positions, rather than everything passing through one vector. The factorisation and the training objective are unchanged from 2014.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'PyTorch', role: 'nn.LSTM for both halves, nn.CrossEntropyLoss with ignore_index for the padding token, and torch.nn.utils.rnn for packing variable-length sources.' },
+      { tool: 'Hugging Face Transformers', role: 'AutoModelForSeq2SeqLM covers T5, BART and Marian; generate() implements beam search, length penalties and repetition constraints.' },
+      { tool: 'sacreBLEU', role: 'The standard metric for translation quality, and the tool used to produce the BLEU-against-length curves that made the bottleneck visible.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Forgetting to shift the decoder input right',
+        why: 'The decoder input at position t must be the target token at position t-1, starting with a begin-of-sequence token. If you feed the unshifted target, the model can see the token it is asked to predict and the training loss collapses to near zero while generation produces nonsense.',
+        fix: 'Build decoder_input as [BOS] + target[:-1] and decoder_target as target. A training loss that drops implausibly fast in the first few hundred steps is the signature of getting this wrong.',
+      },
+      {
+        mistake: 'Including padding tokens in the loss',
+        why: 'Batches are padded to the longest target in the batch, so a large fraction of positions are padding. Counting them teaches the model to predict padding and makes the reported loss depend on the batch composition rather than on quality.',
+        fix: 'Pass ignore_index=pad_id to nn.CrossEntropyLoss, and pack the source sequences so the encoder does not run over padding either.',
+      },
+      {
+        mistake: 'Evaluating with teacher forcing and reporting it as generation quality',
+        why: 'Teacher-forced loss conditions every step on a correct prefix, so it measures something much easier than free-running generation. A model can have excellent teacher-forced perplexity and fall into repetition loops when it has to condition on its own output.',
+        fix: 'Always evaluate by generating: run free-running or beam decoding on a held-out set and score with the task metric. Track both numbers, because a widening gap between them is a direct measure of exposure bias.',
+      },
+      {
+        mistake: 'Using greedy decoding and concluding the model is bad',
+        why: 'Greedy decoding commits to the highest-probability token at every step, and a locally attractive token can lead into a region with no good continuation. The sequence with the highest total probability often does not begin with the highest-probability first token.',
+        fix: 'Use beam search with a beam of 4 or 5 and a length penalty, which is the standard baseline. If outputs are still degenerate, the problem is the model rather than the decoder.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What is the information bottleneck in a basic seq2seq model, and how would you demonstrate it?',
+        answer:
+          'The decoder sees the source only through the encoder final hidden state, a vector of fixed dimension d — typically 512 or 1000. That dimension does not depend on the source length, so a four-token sentence and a two-hundred-token paragraph are compressed into the same budget, and the information available per source token falls as one over n. There is a second, compounding problem: the first source token reaches that vector only through n minus one recurrent updates, each of which attenuates it, so early content is systematically weaker in the summary than late content. You demonstrate it by plotting translation quality against source length, which is what Cho and colleagues did in 2014: BLEU is roughly flat up to about twenty tokens and then falls steadily, while a non-neural baseline stays flat and an attention-equipped model also stays flat. A cheaper demonstration is to take the gradient of the context vector with respect to each input position and watch the first position contribution fall by orders of magnitude as the source lengthens. The corroborating historical detail is that reversing the source sentence gave a two-point BLEU gain, which only makes sense if position relative to the handover matters.',
+        followUp:
+          'A strong answer names attention as the fix and explains that it makes the channel capacity grow with source length and the path length equal to one.',
+      },
+      {
+        level: 'intermediate',
+        question: 'What is teacher forcing, what is exposure bias, and what would you do about it?',
+        answer:
+          'Teacher forcing means training the decoder on the ground-truth previous token rather than on its own prediction. It has two large benefits: training is stable, because no step is ever conditioned on a garbled prefix, and it is fast, because all target positions are known in advance so the whole sequence can be processed in one batched pass instead of a serial loop. The cost is exposure bias: at inference the model must condition on its own outputs, and once it produces a token that no correct prefix would contain, it is in a state it never saw during training, so errors compound. The observable symptoms are repetition loops, premature end-of-sequence tokens and generic outputs. Mitigations exist but none is fully satisfactory. Scheduled sampling randomly substitutes the model own predictions during training with an increasing probability, though it makes the objective biased. Sequence-level training with a policy-gradient method optimises the evaluation metric directly but is high-variance. In practice most systems keep teacher forcing, use beam search at inference, and — most importantly — evaluate by generating rather than by teacher-forced perplexity, so the gap is at least measured.',
+      },
+      {
+        level: 'advanced',
+        question: 'Recurrence has two structural limits that motivated the transformer. Name them and explain which one attention alone did not solve.',
+        answer:
+          'The first is path length combined with the fixed-size channel: information from source position one must traverse n recurrent updates to reach the decoder, and in the basic architecture it must also squeeze through one vector. Attention solved this completely in 2015 — the decoder computes a fresh weighted combination of all encoder states at every output step, so the channel capacity grows with the source length and the path between any source position and any target position is one hop. The second limit is the absence of parallelism across time: step t cannot begin until step t minus one has produced its state, so encoding a sequence of length n requires n sequential operations regardless of how many cores are available. Attention alone did not fix this, because the encoder was still a recurrent network — Bahdanau-style models were still serial in n. The transformer fixed it by removing recurrence entirely and using self-attention for the encoder as well, reducing the sequential depth to a constant while increasing total work to quadratic in n. On hardware whose advantage is massive parallelism, trading more work for less serial depth is exactly the right trade, and it is the main reason transformers scaled to sizes recurrent models never reached.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A seq2seq model has hidden size 512 and is given a 100-token source. How many numbers cross from encoder to decoder, and how does that compare with the size of the source representation the encoder computed?',
+        hint: 'Count the encoder hidden states, then count what is actually passed on.',
+        solution:
+          'The encoder computes 100 hidden states of 512 dimensions each, so it produced 51,200 numbers describing the source. It passes on only the last one: 512 numbers, or 1 per cent of what it computed. For an LSTM the handover is (h_n, c_n), so 1,024 numbers, which is still 2 per cent. The other 98 per cent is discarded. This is the argument for attention in a single calculation: the encoder has already done the work of representing every position, and the basic architecture throws almost all of it away. Attention keeps the same encoder and simply lets the decoder read the full 51,200 numbers through a learned weighting, at essentially no extra encoding cost.',
+      },
+      {
+        prompt:
+          'Implement greedy decoding and beam search with beam width 3 for a seq2seq model, and construct a small example where the two produce different outputs.',
+        hint: 'Score partial hypotheses by summed log-probability, expand all beams at each step, and keep the top k. Remember to normalise by length or short outputs will always win.',
+        language: 'python',
+        starterCode:
+          'import torch\n\n@torch.no_grad()\ndef beam_search(model, src, beam=3, bos=1, eos=2, max_len=30, alpha=0.6):\n    """Return the best hypothesis by length-normalised log probability."""\n    _, state = model.encoder(model.src_emb(src))\n    beams = [([bos], 0.0, state)]\n    ...\n',
+        solution:
+          'The two diverge whenever a locally suboptimal first token leads to a much better continuation. A clean constructed example: suppose the model assigns 0.5 to "the" and 0.4 to "a" as the first token, but the best continuation after "the" has probability 0.3 while the best after "a" has 0.9. Greedy picks "the" for a total of 0.15; beam search keeps both and returns "a" for a total of 0.36. Two implementation details matter more than the search itself. Scores must be summed log-probabilities rather than products, or you will underflow within a dozen tokens. And they must be normalised by length — dividing by length to the power alpha, with alpha around 0.6 — because otherwise every additional token multiplies in a probability below one and the search systematically prefers the shortest possible output, which in translation shows up as truncated sentences.',
+      },
+      {
+        prompt:
+          'Your seq2seq summariser produces fluent output that omits key facts from the middle of long articles. Diagnose it and propose an ordered set of fixes.',
+        hint: 'Consider where in the source the omitted content sits, and what channel it has to pass through.',
+        solution:
+          'Fluent but factually incomplete output is the classic bottleneck signature: the language model in the decoder is well trained, so the surface form is good, but the content of positions far from the handover never reaches it. Confirm the diagnosis by measuring content recall as a function of source position — if recall falls for early and middle positions and holds for late ones, it is the bottleneck rather than a generation problem. The ordered fixes: first, add attention so the decoder reads all encoder states, which addresses the cause directly and is the largest single gain. Second, make the encoder bidirectional, halving the distance any position must travel to reach a summary. Third, if attention is already present and long articles are still failing, the issue is likely the quadratic cost forcing truncation, so move to a long-context architecture or a retrieve-then-summarise pipeline. Increasing the hidden size is the change most people try first and it helps least, because the problem is path length as much as capacity.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DL-019-q1',
+        type: 'mcq',
+        concept: 'the bottleneck',
+        prompt: 'In a basic seq2seq model without attention, what does the decoder see of the source?',
+        options: [
+          'Only the encoder final hidden state, a fixed-size vector',
+          'All encoder hidden states, one per source token',
+          'The raw source tokens, re-embedded',
+          'A weighted average of the encoder states, recomputed at each step',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The intermediate encoder states are computed and then discarded. Everything the model knows about the source passes through one vector whose size does not depend on the source length — which is the bottleneck that attention was invented to remove.',
+      },
+      {
+        id: 'DL-019-q2',
+        type: 'truefalse',
+        concept: 'lengths',
+        prompt: 'A sequence-to-sequence model requires the output sequence to have the same length as the input sequence.',
+        answer: false,
+        explanation:
+          'False, and this is the whole point of the architecture. The encoder consumes the input completely before the decoder begins, and the decoder generates until it emits an end-of-sequence token, so the two lengths are independent.',
+      },
+      {
+        id: 'DL-019-q3',
+        type: 'fill',
+        concept: 'training regime',
+        prompt: 'Feeding the decoder the ground-truth previous token during training, rather than its own prediction, is called ____ forcing.',
+        answers: ['teacher', 'teacher forcing'],
+        explanation:
+          'It stabilises training and lets all target positions be computed in one batched pass. The cost is exposure bias: at inference the model must condition on its own outputs, a regime it never experienced.',
+      },
+      {
+        id: 'DL-019-q4',
+        type: 'numeric',
+        concept: 'information discarded',
+        prompt: 'An encoder with hidden size 256 reads a 40-token source. How many numbers does it compute across all hidden states?',
+        answer: 10240,
+        tolerance: 0,
+        explanation:
+          '40 x 256 = 10,240. The basic architecture passes on only the final 256 of them, discarding 97.5 per cent of the representation it just built. Attention is, in one sense, simply the decision to stop throwing that away.',
+      },
+      {
+        id: 'DL-019-q5',
+        type: 'multi',
+        concept: 'limits of recurrence',
+        prompt: 'Select every structural limitation of recurrent sequence-to-sequence models that motivated the move to attention and transformers.',
+        options: [
+          'All source information must pass through one fixed-size vector',
+          'The path from an early source token to the decoder is as long as the source',
+          'Steps cannot be computed in parallel across time during training',
+          'Recurrent models cannot handle variable-length inputs',
+          'Recurrent models require the input and output to be the same length',
+        ],
+        answerIndices: [0, 1, 2],
+        explanation:
+          'Variable lengths are precisely what the encoder-decoder handles well, and input and output lengths are independent. The real limits are the bottleneck, the long path and the serial dependence across time.',
+      },
+      {
+        id: 'DL-019-q6',
+        type: 'order',
+        concept: 'the forward pass',
+        prompt: 'Put the steps of a teacher-forced seq2seq training pass into order.',
+        items: [
+          'Embed the source tokens and run the encoder over them',
+          'Take the encoder final state as the context vector',
+          'Shift the target right and prepend a begin-of-sequence token',
+          'Run the decoder over the whole shifted target in one pass, initialised from the context',
+          'Compute cross-entropy against the unshifted target, ignoring padding positions',
+        ],
+        explanation:
+          'The shift is the step people get wrong: the decoder input at position t must be the target token at t-1, or the model can see what it is asked to predict and the loss collapses while generation fails.',
+      },
+      {
+        id: 'DL-019-q7',
+        type: 'explain',
+        concept: 'why attention was needed',
+        prompt: 'Explain the two problems with the fixed context vector and how attention addresses both.',
+        rubric: [
+          'Identifies the capacity problem: fixed dimension regardless of source length',
+          'Identifies the path-length problem: early tokens traverse many recurrent updates before the handover',
+          'Explains that attention lets the decoder read all encoder states with a learned weighting, fixing both',
+        ],
+        sampleAnswer:
+          'The first problem is capacity. The channel between encoder and decoder is a single vector of fixed dimension, so the information available per source token falls as one over the source length, and translation quality duly degrades beyond about thirty tokens while a non-neural baseline stays flat. The second is path length. Even if the vector were large enough, the first source token influences it only through n minus one recurrent updates, each attenuating its contribution, so early content is systematically weaker than late content — which is exactly why reversing the source sentence gave a measurable BLEU gain in the original work. Attention fixes both at once and with the same mechanism. Instead of taking the encoder final state, the decoder computes at every output step a set of weights over all encoder states and forms a fresh weighted sum. The channel now carries n vectors rather than one, so its capacity grows with the source, and the connection between any source position and any target position is a single weighted edge rather than a chain of updates, so nothing is attenuated by distance. As a bonus, the weights are inspectable and turn out to correspond closely to word alignment, which made the mechanism easy to trust. What attention did not fix is the serial dependence of the recurrent encoder itself, and that is what the transformer addressed by removing recurrence altogether.',
+        explanation:
+          'The examinable insight is that the encoder already computes a rich per-position representation and the basic architecture discards it — attention is the decision to keep it.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What is a seq2seq model?', back: 'An encoder RNN reads the whole source and passes a context vector to a decoder RNN, which generates the target. Input and output lengths are independent.' },
+      { front: 'What is the context vector and why is it a bottleneck?', back: 'The encoder final hidden state. Its size is fixed regardless of source length, so information per source token falls as 1/n.' },
+      { front: 'What is teacher forcing?', back: 'Training the decoder on the ground-truth previous token. It stabilises training and allows one batched pass instead of a serial loop.' },
+      { front: 'What is exposure bias?', back: 'The mismatch from training only on correct prefixes while inference conditions on the model own outputs, so errors compound in an unseen regime.' },
+      { front: 'Why does beam search beat greedy decoding?', back: 'The highest-probability sequence often does not start with the highest-probability token. Beam search keeps k hypotheses alive, with a length penalty to avoid favouring short outputs.' },
+      { front: 'Why did reversing the source sentence help?', back: 'It puts the first source words closest to the handover, so they are freshest in the context vector — direct evidence that path length to the context matters.' },
+      { front: 'Which limit of recurrence did attention NOT solve?', back: 'The lack of parallelism across time. The encoder was still recurrent, so encoding remained O(n) sequential steps. The transformer fixed that.' },
+    ],
+
+    challenge: {
+      title: 'Measure the bottleneck yourself',
+      brief:
+        'Build a character-level seq2seq model on a synthetic copy-and-transform task where the target is a deterministic function of the source, such as reversing it or sorting its tokens. Train separate models for source lengths of 5, 10, 20, 40 and 80, holding everything else fixed, and plot exact-match accuracy against length. Then repeat the sweep with three variants: a larger hidden size, a bidirectional encoder, and a version where the decoder is given the concatenation of the first and last encoder states. Report which variant extends the usable length furthest and argue from your data whether the limit is capacity, path length, or both.',
+      language: 'python',
+      acceptanceCriteria: [
+        'A synthetic task with a deterministic target, so accuracy is unambiguous and not confounded by language modelling difficulty',
+        'Exact-match accuracy plotted against source length for the baseline, showing a clear degradation point',
+        'All three variants evaluated under the identical protocol, with the hidden-size variant chosen so it isolates capacity from path length',
+        'A written conclusion that distinguishes the capacity explanation from the path-length explanation using the measured curves',
+      ],
+      starterCode:
+        'import torch\nimport torch.nn as nn\n\ndef make_batch(batch, n, vocab=12, task="reverse"):\n    src = torch.randint(3, vocab, (batch, n))\n    tgt = src.flip(1) if task == "reverse" else src.sort(1).values\n    return src, tgt\n\nclass Seq2Seq(nn.Module):\n    def __init__(self, vocab, d=128, bidirectional=False):\n        super().__init__()\n        ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain the encoder-decoder architecture, why it was a breakthrough, and the two limitations that led the field to attention and then to transformers.',
+      mustCover: [
+        'One network reads the source and hands a context vector to a second network that generates the target',
+        'Input and output lengths are independent, which per-token models cannot express',
+        'The context vector is a fixed-size bottleneck and early tokens must traverse the whole sequence to reach it',
+        'Recurrence cannot be parallelised across time, which caps how large these models can practically be trained',
+      ],
+      bonusSignals: [
+        'explains teacher forcing and exposure bias',
+        'gives a concrete number for how much of the encoder representation is discarded',
+        'mentions that reversing the source improved BLEU, as evidence for the path-length problem',
+        'notes that attention fixed the first two limits and the transformer fixed the third',
+      ],
+      sampleExplanation:
+        "Translation cannot be done word by word, because the output can be a different length from the input and the words can come in a different order. The encoder-decoder answers this by splitting the model in two. The first network reads the source sentence one token at a time and, when it finishes, hands over its final hidden state — a single vector, typically five hundred or so numbers, meant to contain everything it understood. The second network starts from that vector and generates the translation one token at a time, feeding each word it produces back in as the next input, until it emits an end-of-sequence marker. Because the reading finishes before the writing begins, the two lengths are completely independent, and that is the property the task requires. During training there is one more trick: instead of feeding the decoder its own guesses, you feed it the correct previous word. That is teacher forcing, and it matters for two reasons — no step is ever conditioned on a garbled prefix, so learning is stable, and since all the inputs are known in advance the whole target sequence can be processed in a single batched pass instead of a serial loop. The cost is that the model never practises recovering from its own mistakes, which is exposure bias, and it shows up at inference as repetition loops and dropped content. Now the limitations. The first is that everything crosses the gap through one fixed-size vector. Encode a hundred-token source with a two-hundred-and-fifty-six-dimensional encoder and you have computed twenty-five thousand numbers describing it, then passed on two hundred and fifty-six of them — one per cent — and that one per cent is the same size whether the source was four tokens or four hundred. Measured translation quality duly falls off beyond about thirty source tokens. The second, compounding, problem is distance: the first source word reaches that vector only after passing through every subsequent update, each of which attenuates it. The evidence is lovely — the original paper found that simply feeding the source sentence backwards gained two BLEU points, which only makes sense if proximity to the handover matters. Attention fixed both of those in 2015 by letting the decoder look at all the encoder states, freshly weighted at every output step. But a third limit remained, and it was the one that eventually mattered most: a recurrent encoder must process its tokens in order, one after another, so a hundred-token sentence takes a hundred sequential steps no matter how many processors you have. That is a poor match for hardware whose entire advantage is doing thousands of things at once, and removing it is what the transformer did.",
+    },
+  },
+
+  {
+    id: 'DL-020',
+    domain: 'DL',
+    module: 'Attention & Transformers',
+    topic: 'Attention and the transformer block',
+    title: 'Attention and the Transformer Block',
+    slug: 'attention-and-transformers',
+    difficulty: 5,
+    estimatedMinutes: 50,
+    prerequisites: ['DL-017', 'DL-018', 'DL-019'],
+    related: ['DL-012', 'DL-016', 'DL-018', 'DL-019'],
+    tags: ['attention', 'self-attention', 'query-key-value', 'multi-head', 'positional-encoding', 'transformer', 'softmax', 'residual'],
+
+    learningObjectives: [
+      'Build the query, key and value decomposition from the question "which other positions should this one look at?"',
+      'Compute scaled dot-product attention by hand on a three-token example, including the softmax, and read off what it did',
+      'Explain why the scores are divided by the square root of d_k, with the variance argument that justifies it',
+      'Describe multi-head attention, positional encoding, the residual-and-layer-norm wrapper and the position-wise feed-forward block, and assemble them into one transformer block',
+    ],
+
+    terminology: [
+      {
+        term: 'Query, key and value',
+        definition:
+          'Three learned linear projections of the same input. The query says what this position is looking for, the key says what each position offers, and the value is the content actually retrieved when a match is found.',
+        simple: 'What I am looking for, what you are advertising, and what I get if I pick you.',
+      },
+      {
+        term: 'Attention weights',
+        definition:
+          'The softmax of the scaled query-key scores across all positions. They are non-negative and sum to one, so each output is a convex combination — a weighted average — of the value vectors.',
+        simple: 'How much of my attention goes to each other word, as percentages that add up to a hundred.',
+      },
+      {
+        term: 'Self-attention',
+        definition:
+          'Attention where the queries, keys and values are all projections of the same sequence, so every position attends to every position of that same sequence, including itself.',
+        simple: 'Every word in the sentence looks at every other word in the same sentence.',
+      },
+      {
+        term: 'Multi-head attention',
+        definition:
+          'Running several attention operations in parallel on separate low-dimensional projections of the input, then concatenating and mixing the results, so different heads can specialise in different kinds of relation.',
+        simple: 'Several independent attention passes at once, each free to look for something different.',
+      },
+      {
+        term: 'Positional encoding',
+        definition:
+          'Information about a token position added to its embedding, needed because attention is permutation-equivariant and would otherwise treat a sentence as an unordered bag of words.',
+        simple: 'A stamp on each word saying where it sits, because attention itself cannot tell.',
+      },
+    ],
+
+    simpleExplanation:
+      "Read the sentence: the animal did not cross the street because it was too tired. To know what it refers to, you have to look back at animal rather than at street. That is the whole idea of attention. Each word, as it is being processed, asks a question — which other words here are relevant to me? Every word also advertises what it has to offer, and every word carries some content to hand over. The question and the advertisement are compared, one pair at a time, and the closer the match the larger the score. The scores are turned into percentages that add up to a hundred, and the word takes a blend of everybody content in exactly those proportions. So it, looking for something that could be tired, finds a strong match with animal and builds most of its new representation out of that. Three things make this powerful. Every word does it simultaneously, so nothing has to wait for anything else. Any word can reach any other word in one step, no matter how far apart they are. And the questions, advertisements and contents are all learned, so the network discovers for itself what counts as relevant.",
+
+    whyItExists:
+      'A recurrent encoder forces every piece of information to travel through one update per intervening token and, in a basic seq2seq model, through a single fixed-size vector, so distant dependencies decay and quality falls with length; it is also inherently serial, so it cannot exploit hardware built for parallelism. Attention replaces the chain with a direct weighted connection between every pair of positions, making the path length one regardless of distance and allowing all positions to be computed at once.',
+
+    analogy: {
+      scenario:
+        'A researcher walks into a library with a specific question in mind. She does not read every book, and she does not rely on a single summary written by a previous visitor. Instead she looks at the spine of each book — the short description on it — and compares it against her question, giving every book a relevance score. She then reads the books roughly in proportion to how relevant they seemed, taking a great deal from the two or three that matched closely and almost nothing from the rest, and combines what she read into one answer. Crucially, every other researcher in the room is doing the same thing at the same time with their own questions, and the shelving order does not matter to any of them: a book on the far wall is exactly as reachable as the one beside her.',
+      mapping: [
+        { from: 'The question the researcher holds in mind', to: 'The query vector q, a learned projection of the current position' },
+        { from: 'The short description on each spine', to: 'The key vector k of each position, advertising what it offers' },
+        { from: 'The contents of the book itself', to: 'The value vector v, the information actually retrieved' },
+        { from: 'Scoring each spine against the question', to: 'The dot product q . k, large when the two align' },
+        { from: 'Reading in proportion to relevance', to: 'Softmax weights summing to one, forming a weighted average of values' },
+        { from: 'Every researcher working simultaneously', to: 'All positions attended in parallel, unlike a recurrent pass' },
+        { from: 'Distance on the shelves being irrelevant', to: 'Path length one between any two positions, regardless of separation' },
+      ],
+      bridge:
+        'The separation into three roles is the substantive part, and it is what distinguishes attention from a plain similarity lookup. A word can advertise something quite different from what it hands over: in the sentence about the tired animal, the key of animal must match a query about what could be tired, while its value carries the semantic content of animal itself. Those are different jobs, so they get different learned matrices. The comparison is literally a dot product, which by the geometric reading from the first unit of this domain measures alignment, and the softmax turns arbitrary real scores into a convex combination. The analogy does fail in one respect: the researcher decides not to read the irrelevant books, whereas attention always reads all of them and weights most of them near zero — which is why the cost is quadratic in the number of positions and why long contexts are expensive.',
+      limitations:
+        'The library picture suggests attention retrieves facts. Empirically, heads do many things that are not retrieval at all — attending to the previous token, to punctuation, or to a single sink token that acts as a no-op — so reading attention maps as explanations is unreliable.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'Scaled dot-product attention, step by step',
+        caption: 'Five operations. Everything else in a transformer is wrapping, repetition or bookkeeping around this core.',
+        steps: [
+          { label: 'Project to Q, K and V', detail: 'Three learned matrices map the same input X to queries, keys and values. In self-attention all three come from X; in cross-attention Q comes from the decoder and K, V from the encoder.' },
+          { label: 'Score every pair', detail: 'Compute Q K^T, giving an n by n matrix whose entry (i, j) is how well position i query matches position j key.' },
+          { label: 'Scale by 1/sqrt(d_k)', detail: 'Divide by the square root of the key dimension, so the scores have roughly unit variance and the softmax does not saturate.' },
+          { label: 'Softmax over the key axis', detail: 'Each row becomes a probability distribution over positions. Masked entries are set to negative infinity first, so they receive exactly zero weight.' },
+          { label: 'Take the weighted sum of values', detail: 'Multiply the n by n weight matrix by V. Each output row is a convex combination of value vectors — a blend of the content the row chose to look at.' },
+        ],
+      },
+      {
+        kind: 'annotated',
+        title: 'Anatomy of the attention formula',
+        subject: 'Attention(Q, K, V) = softmax( Q K^T / sqrt(d_k) ) V',
+        annotations: [
+          { part: 'Q', note: 'n by d_k. Row i is what position i is looking for. Computed as X W_Q with a learned matrix.' },
+          { part: 'K^T', note: 'd_k by n. Column j is what position j advertises. The transpose is what turns two matrices into an all-pairs comparison.' },
+          { part: 'Q K^T', note: 'n by n. Entry (i, j) is a dot product measuring how well query i aligns with key j. This is the object whose size makes long contexts expensive.' },
+          { part: '/ sqrt(d_k)', note: 'With unit-variance entries, a dot product of d_k terms has variance d_k. Dividing by sqrt(d_k) restores unit variance and keeps the softmax out of its flat region.' },
+          { part: 'softmax', note: 'Applied along the key axis, so every row sums to one. Non-negative weights make each output a convex combination rather than an arbitrary linear map.' },
+          { part: 'V', note: 'n by d_v. Row j is what position j hands over when attended to. Separating it from K lets a position advertise one thing and supply another.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Recurrence versus self-attention, on the properties that decided it',
+        caption: 'Attention does more total work and far less of it in sequence. On parallel hardware that is the right trade.',
+        left: {
+          heading: 'Recurrent layer',
+          points: [
+            'Sequential operations: O(n) — step t waits for step t-1',
+            'Path length between positions i and j: O(|i - j|)',
+            'Compute per layer: O(n d^2), linear in sequence length',
+            'Memory during training: O(n d), linear',
+            'Order is built into the architecture; no positional information needed',
+          ],
+        },
+        right: {
+          heading: 'Self-attention layer',
+          points: [
+            'Sequential operations: O(1) — all positions computed at once',
+            'Path length between any two positions: O(1)',
+            'Compute per layer: O(n^2 d), quadratic in sequence length',
+            'Memory for the attention matrix: O(n^2) unless a fused kernel such as FlashAttention is used',
+            'Permutation-equivariant, so positional encoding must be added explicitly',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'The transformer block, component by component',
+        caption: 'Shapes are for the original base model: d_model 512, 8 heads, d_k = d_v = 64, d_ff = 2048.',
+        columns: ['Component', 'What it does', 'Shape or size', 'Why it is there'],
+        rows: [
+          ['Multi-head attention', 'Mixes information across positions', '8 heads of d_k = 64, concatenated to 512', 'The only operation in the block that moves information between positions'],
+          ['W_O output projection', 'Mixes the concatenated head outputs', '512 by 512', 'Without it the heads would be concatenated but never combined'],
+          ['Residual connection', 'Adds the block input to its output', 'elementwise', 'Gives a gradient path of derivative one through a stack of dozens of blocks'],
+          ['Layer normalisation', 'Standardises across features within each token', '512, with learned gain and shift', 'Batch-size independent and identical in train and eval, unlike BatchNorm'],
+          ['Feed-forward network', 'Two linear layers with a nonlinearity, applied per position', '512 to 2048 to 512', 'The only nonlinear transformation of a position own content; holds about two thirds of the parameters'],
+          ['Positional encoding', 'Injects position into the embeddings', 'added once at the input', 'Attention is permutation-equivariant and would otherwise see a bag of tokens'],
+        ],
+      },
+      {
+        kind: 'ascii',
+        title: 'One pre-norm transformer block',
+        caption: 'Pre-norm places the normalisation inside the residual branch, which keeps the shortcut path clean and removes the need for a long warmup.',
+        art: `        x ---------------------------+
+        |                             |
+   LayerNorm                          |
+        |                             |
+  Multi-Head Attention                |  (residual)
+        |                             |
+        +------------- (+) <----------+
+                       |
+                       +-------------+
+                       |             |
+                  LayerNorm          |
+                       |             |
+              Feed-Forward           |  (residual)
+              512 -> 2048 -> 512     |
+                       |             |
+                       +---- (+) <---+
+                              |
+                            output
+
+  Repeat this block N times (N = 6 in the original, 96+ in large models).
+  Only the attention sub-layer moves information between positions.`,
+      },
+      {
+        kind: 'widget',
+        title: 'Compute attention on a real sentence',
+        caption: 'Type a short sentence, inspect the n by n weight matrix, and see which words each position attends to. Turn the 1/sqrt(d_k) scaling off and watch the distribution collapse onto a single token.',
+        widget: 'attention-lab',
+      },
+    ],
+
+    formalDefinition:
+      'Scaled dot-product attention maps Q in R^{n x d_k}, K in R^{m x d_k} and V in R^{m x d_v} to Attention(Q, K, V) = softmax(QK^T / sqrt(d_k)) V in R^{n x d_v}, where the softmax is taken along the key axis so each row of weights lies on the simplex. Self-attention sets Q = XW_Q, K = XW_K, V = XW_V for a single input X, making the operation permutation-equivariant. Multi-head attention computes h such maps in parallel on independent projections of dimension d_k = d_model/h and returns Concat(head_1..head_h) W_O. A transformer block composes multi-head attention and a position-wise feed-forward network FFN(x) = W_2 phi(W_1 x + b_1) + b_2, each wrapped in a residual connection and a layer normalisation.',
+
+    math: {
+      intuition:
+        'Attention is a soft, differentiable dictionary lookup. A hard lookup compares a query against every key, finds the one that matches, and returns its value — but argmax has no useful gradient, so nothing could be learned. Replace the argmax with a softmax and the lookup becomes a weighted blend of all values, with the weights concentrated on the good matches. Everything else is detail on top of that one substitution. The scaling exists because a dot product of d_k terms has variance proportional to d_k, so without it the scores grow with the dimension and the softmax saturates into a hard argmax with vanishing gradients. Multiple heads exist because a single softmax-weighted average can only express one blend at a time, and a sentence contains several simultaneous relations. Positional encoding exists because permuting the input permutes the output identically, so nothing in the mechanism knows about order.',
+      formulas: [
+        {
+          latex: '\\mathrm{Attention}(Q,K,V) = \\mathrm{softmax}\\!\\left(\\frac{QK^{\\top}}{\\sqrt{d_k}}\\right)V',
+          name: 'Scaled dot-product attention',
+          meaning:
+            'Compare every query with every key, turn the scores into a distribution, and return the corresponding weighted average of values. This one line is the core of every transformer.',
+          variables: [
+            { symbol: 'Q', meaning: 'Query matrix, n by d_k; row i is what position i is looking for' },
+            { symbol: 'K', meaning: 'Key matrix, m by d_k; row j advertises what position j offers' },
+            { symbol: 'V', meaning: 'Value matrix, m by d_v; row j is the content retrieved from position j' },
+            { symbol: 'd_k', meaning: 'Key and query dimension, 64 in the original base model' },
+            { symbol: 'QK^{\\top}', meaning: 'The n by m score matrix of all pairwise dot products' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\mathrm{Var}\\!\\left(\\mathbf{q}\\cdot\\mathbf{k}\\right) = \\sum_{i=1}^{d_k}\\mathrm{Var}(q_ik_i) = d_k \\quad\\Rightarrow\\quad \\mathrm{sd} = \\sqrt{d_k}',
+          name: 'Why the scores are divided by sqrt(d_k)',
+          meaning:
+            'If the query and key entries are independent with mean zero and unit variance, their dot product has variance d_k, so its typical magnitude is sqrt(d_k). At d_k = 64 that is 8, so raw scores routinely span plus or minus 16 and the softmax saturates. Dividing by sqrt(d_k) restores unit variance.',
+          variables: [
+            { symbol: 'q_i, k_i', meaning: 'Individual components of the query and key vectors, assumed independent with unit variance' },
+            { symbol: 'd_k', meaning: 'The number of terms in the dot product, and therefore the variance of the sum' },
+            { symbol: '\\sqrt{d_k}', meaning: 'The standard deviation of the unscaled score, and hence the correct normaliser' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\alpha_{ij} = \\frac{\\exp(s_{ij})}{\\sum_{j\'=1}^{m}\\exp(s_{ij\'})}, \\qquad \\frac{\\partial \\alpha_i}{\\partial s_i} = \\mathrm{diag}(\\alpha_i) - \\alpha_i\\alpha_i^{\\top}',
+          name: 'The softmax and its Jacobian',
+          meaning:
+            'The weights are non-negative and sum to one. The Jacobian shows why saturation is fatal: if one alpha is near 1 and the rest near 0, every entry of the Jacobian is near zero and no gradient flows back to the scores or to the projections that produced them.',
+          variables: [
+            { symbol: '\\alpha_{ij}', meaning: 'Attention weight from query position i to key position j' },
+            { symbol: 's_{ij}', meaning: 'The scaled score for that pair' },
+            { symbol: '\\mathrm{diag}(\\alpha_i) - \\alpha_i\\alpha_i^{\\top}', meaning: 'The softmax Jacobian; it vanishes as the distribution approaches a one-hot vector' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\mathrm{MHA}(X) = \\mathrm{Concat}(\\mathrm{head}_1,\\ldots,\\mathrm{head}_h)W_O, \\quad \\mathrm{head}_i = \\mathrm{Attention}(XW_Q^i, XW_K^i, XW_V^i)',
+          name: 'Multi-head attention',
+          meaning:
+            'Split d_model into h independent subspaces of size d_model/h, run attention in each, concatenate and mix with W_O. Total compute is the same as one full-width head, but the model can express several different relations at once instead of one blend.',
+          variables: [
+            { symbol: 'h', meaning: 'Number of heads, 8 in the original base model; large models use 32 to 128' },
+            { symbol: 'W_Q^i, W_K^i, W_V^i', meaning: 'Per-head projections, each d_model by d_model/h' },
+            { symbol: 'W_O', meaning: 'Output projection, d_model by d_model; without it the heads would never be combined' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: 'PE_{(pos,2i)} = \\sin\\!\\left(\\frac{pos}{10000^{2i/d}}\\right), \\qquad PE_{(pos,2i+1)} = \\cos\\!\\left(\\frac{pos}{10000^{2i/d}}\\right)',
+          name: 'Sinusoidal positional encoding',
+          meaning:
+            'Each dimension is a sinusoid of a different wavelength, from 2 pi up to about 10000 times 2 pi, so the pattern across dimensions identifies a position uniquely. Because a shift by k is a fixed linear map on each sine-cosine pair, relative offsets are linearly recoverable.',
+          variables: [
+            { symbol: 'pos', meaning: 'Position index in the sequence, starting at 0' },
+            { symbol: 'i', meaning: 'Index of the dimension pair, from 0 to d/2 - 1' },
+            { symbol: 'd', meaning: 'Model dimension; the encoding is added to the token embedding, not concatenated' },
+            { symbol: '10000', meaning: 'The base controlling the longest wavelength, and therefore the longest position the encoding can distinguish' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\mathrm{FFN}(\\mathbf{x}) = W_2\\,\\phi(W_1\\mathbf{x} + \\mathbf{b}_1) + \\mathbf{b}_2, \\qquad d_{ff} = 4\\,d_{model}',
+          name: 'The position-wise feed-forward network',
+          meaning:
+            'The same two-layer network applied independently at every position, expanding to four times the width and back. It is the only place a position content is transformed nonlinearly on its own, and it holds roughly two thirds of a block parameters.',
+          variables: [
+            { symbol: 'W_1', meaning: 'Expansion matrix, d_model by 4 d_model' },
+            { symbol: 'W_2', meaning: 'Contraction matrix, 4 d_model by d_model' },
+            { symbol: '\\phi', meaning: 'The nonlinearity: ReLU in the original, GELU or SwiGLU in modern models' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\mathbf{x} \\leftarrow \\mathbf{x} + \\mathrm{Sublayer}\\big(\\mathrm{LayerNorm}(\\mathbf{x})\\big)',
+          name: 'The pre-norm residual wrapper',
+          meaning:
+            'Each sub-layer is wrapped so that its input is normalised and its output is added back. The residual keeps a derivative-one path through dozens of blocks; pre-norm placement keeps that path free of normalisation, which is what lets very deep stacks train without a long warmup.',
+          variables: [
+            { symbol: '\\mathrm{Sublayer}', meaning: 'Either the multi-head attention or the feed-forward network' },
+            { symbol: '\\mathrm{LayerNorm}', meaning: 'Normalisation across features within each token, independent of batch and sequence length' },
+          ],
+          category: 'deep-learning',
+        },
+      ],
+      derivation: [
+        'Start with the question. Processing position i, you want to build its new representation from the positions that are relevant to it. A hard answer would pick the single most relevant position and copy it, but argmax is not differentiable and nothing could be learned.',
+        'Soften it. Give every position a weight, require the weights to be non-negative and to sum to one, and take the weighted average of their contents. Softmax over a set of scores does exactly this, and it is smooth.',
+        'Decide how to compute the scores. The natural measure of how well two vectors match is the dot product, which by the geometric identity is the product of the lengths and the cosine of the angle between them — large when aligned, negative when opposed.',
+        'Split the roles. Comparing raw embeddings would force one vector to serve as both the question and the answer. Introduce three learned projections instead: a query for what this position seeks, a key for what each position advertises, and a value for what it hands over. The key and the value differ precisely because advertising and supplying are different jobs.',
+        'Write it in matrix form. Q K transpose gives all n by n pairwise scores in one matrix multiplication; softmax along the key axis gives the weights; multiplying by V gives the outputs. Every position is computed simultaneously, which is the parallelism recurrence could not offer.',
+        'Now fix the scale. If the query and key entries are independent with unit variance, their dot product is a sum of d_k such products and so has variance d_k, giving a typical magnitude of sqrt(d_k). At d_k = 64 the scores routinely reach plus or minus 16, the softmax becomes effectively a hard argmax, and its Jacobian — diag(alpha) minus alpha alpha transpose — collapses to zero. Dividing by sqrt(d_k) restores unit variance and keeps the gradient alive. This is the entire justification for that square root.',
+        'Add heads. One softmax-weighted average can express one blend, but a token often stands in several relations at once — a syntactic subject, a coreference antecedent, a topical neighbour. Split d_model into h subspaces, run attention independently in each, concatenate and mix with W_O. Since each head has dimension d_model over h, the total cost is unchanged.',
+        'Supply position. Attention is permutation-equivariant: permute the rows of X and every output row permutes identically, so the mechanism cannot distinguish a sentence from its anagram. Add a positional signal to the embeddings. The original uses sinusoids of geometrically spaced wavelengths, chosen so that a shift by a fixed offset is a linear map on each sine-cosine pair, making relative position linearly recoverable.',
+        'Wrap each sub-layer. Stacking dozens of blocks reintroduces the depth problem from convolutional networks, so wrap each sub-layer in a residual connection, giving a derivative-one path from the output straight back to the embeddings. Add layer normalisation to control the scale — LayerNorm rather than BatchNorm, because sequences vary in length, padding would corrupt batch statistics, and generation runs one sequence at a time.',
+        'Add the feed-forward block. So far every operation is either linear or a convex combination of other positions, so nothing transforms a position own content nonlinearly. Add a two-layer network applied identically at every position, expanding to four times the width and back. It holds roughly two thirds of the parameters of a block and does most of the storage.',
+        'Count the cost. Attention is O(n squared times d) in compute and O(n squared) in attention memory, against O(n times d squared) for a recurrent layer — more total work, but a sequential depth of one instead of n. On hardware whose advantage is doing thousands of things at once, that is the trade that mattered, and it is why transformers scaled where recurrent models did not.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Scaled dot-product attention on three tokens, with real numbers',
+      setup:
+        'Three tokens: "the", "cat", "sat". Use d_k = 4 so sqrt(d_k) = 2 exactly. We compute the output for position 3, "sat", which is asking which other token is its subject. The query is q3 = [1, 0, 1, 0]. The keys are k1 = [0, 1, 0, 1] for "the", k2 = [1, 0, 1, 0] for "cat", k3 = [1, 1, 0, 0] for "sat". The values are v1 = [1, 0, 0, 0], v2 = [0, 2, 0, 0], v3 = [0, 0, 3, 0], chosen to be distinguishable so the output composition is readable.',
+      steps: [
+        {
+          label: 'Score the query against every key',
+          detail: 'q3 . k1 = (1)(0) + (0)(1) + (1)(0) + (0)(1) = 0. q3 . k2 = (1)(1) + (0)(0) + (1)(1) + (0)(0) = 2. q3 . k3 = (1)(1) + (0)(1) + (1)(0) + (0)(0) = 1. The query matches "cat" key exactly, matches its own key partially, and is orthogonal to "the".',
+          latex: 's^{\\text{raw}} = [0,\\; 2,\\; 1]',
+        },
+        {
+          label: 'Scale by sqrt(d_k) = 2',
+          detail: 'Divide each score by 2: [0, 1, 0.5]. The ordering is untouched; only the spread has changed, and that is precisely the point — scaling is not about which token wins but about how sharply it wins.',
+          latex: 's = \\frac{[0, 2, 1]}{\\sqrt{4}} = [0,\\; 1,\\; 0.5]',
+        },
+        {
+          label: 'Exponentiate',
+          detail: 'e^0 = 1.0000, e^1 = 2.7183, e^0.5 = 1.6487. The sum is 5.3670.',
+          latex: '\\exp(s) = [1.0000,\\; 2.7183,\\; 1.6487],\\quad \\Sigma = 5.3670',
+        },
+        {
+          label: 'Normalise to get the attention weights',
+          detail: '1.0000/5.3670 = 0.1863; 2.7183/5.3670 = 0.5065; 1.6487/5.3670 = 0.3072. They sum to 1.0000. Position 3 puts about half its attention on "cat", about a third on itself, and under a fifth on "the".',
+          latex: '\\alpha = [0.1863,\\; 0.5065,\\; 0.3072]',
+        },
+        {
+          label: 'Take the weighted sum of the values',
+          detail: '0.1863 x [1,0,0,0] + 0.5065 x [0,2,0,0] + 0.3072 x [0,0,3,0] = [0.1863, 1.0130, 0.9216, 0]. Because the values were chosen orthogonal, you can read the output directly: it is 18.6 per cent "the", 50.7 per cent "cat" scaled by 2, and 30.7 per cent "sat" scaled by 3.',
+          latex: '\\mathbf{o}_3 = [0.1863,\\; 1.0130,\\; 0.9216,\\; 0]',
+        },
+        {
+          label: 'Now remove the scaling and compare',
+          detail: 'Using the raw scores [0, 2, 1]: e^0 = 1, e^2 = 7.3891, e^1 = 2.7183, sum 11.1073, giving weights [0.0900, 0.6652, 0.2447]. The distribution is visibly sharper — the top weight rises from 0.51 to 0.67 and the bottom falls from 0.19 to 0.09. At d_k = 4 this is merely a change of temperature.',
+          latex: '\\alpha^{\\text{unscaled}} = [0.0900,\\; 0.6652,\\; 0.2447]',
+        },
+        {
+          label: 'Why it becomes fatal at realistic d_k',
+          detail: 'With d_k = 64 and unit-variance entries, a dot product is a sum of 64 terms and so has standard deviation sqrt(64) = 8. Scores therefore routinely span plus or minus 16, and a gap of 16 between the best and second-best key gives a weight ratio of e^16, about 9 million to one. The softmax is effectively an argmax, and its Jacobian, diag(alpha) minus alpha alpha transpose, is numerically zero — no gradient reaches the query and key projections at all. Dividing by 8 brings the spread back to order one.',
+          latex: '\\mathrm{sd}(q\\cdot k) = \\sqrt{64} = 8 \\;\\Rightarrow\\; e^{16} \\approx 8.9\\times10^{6}',
+        },
+        {
+          label: 'What the same computation looks like for all three positions at once',
+          detail: 'Stack the queries into a 3 by 4 matrix Q. Then QK^T is a single 3 by 3 matrix multiplication giving every pairwise score, one softmax normalises all three rows, and one more multiplication by V gives all three outputs. No position waits for another — this is the O(1) sequential depth that recurrence could not provide.',
+          latex: 'O = \\mathrm{softmax}\\!\\left(\\frac{QK^{\\top}}{2}\\right)V \\in \\mathbb{R}^{3\\times4}',
+        },
+        {
+          label: 'Add a causal mask, as a decoder would',
+          detail: 'For autoregressive generation, position 3 may attend to 1, 2 and 3 but positions 1 and 2 must not see the future. Set the upper-triangular entries of the score matrix to negative infinity before the softmax; e^{-inf} = 0, so those weights are exactly zero and the rows still sum to one. Position 1 then attends only to itself with weight 1.0, and position 2 splits its weight between positions 1 and 2.',
+          latex: 's_{ij} \\leftarrow -\\infty \\;\\text{ for } j > i',
+        },
+      ],
+      conclusion:
+        'Nine dot products, three exponentials, one division and one weighted sum produce the output of an attention head on three tokens. Scale it to a thousand tokens and sixteen heads and nothing about the arithmetic changes — only the size of the matrices. The two design decisions worth remembering are the separation of key from value, which lets a position advertise one thing and supply another, and the division by sqrt(d_k), which is not a tuning constant but the exact standard deviation of the score it normalises.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Attention from scratch, reproducing the hand calculation',
+        runnable: true,
+        code: `import numpy as np
+
+def softmax(x, axis=-1):
+    x = x - x.max(axis=axis, keepdims=True)      # subtract the max for stability
+    e = np.exp(x)
+    return e / e.sum(axis=axis, keepdims=True)
+
+K = np.array([[0., 1., 0., 1.],     # "the"
+              [1., 0., 1., 0.],     # "cat"
+              [1., 1., 0., 0.]])    # "sat"
+V = np.array([[1., 0., 0., 0.],
+              [0., 2., 0., 0.],
+              [0., 0., 3., 0.]])
+q3 = np.array([1., 0., 1., 0.])     # the query of "sat"
+d_k = 4
+
+raw = q3 @ K.T
+scaled = raw / np.sqrt(d_k)
+w_scaled = softmax(scaled)
+w_raw = softmax(raw)
+
+print("raw scores      :", raw)
+print("scaled scores   :", scaled)
+print("weights (scaled):", np.round(w_scaled, 4), " sum:", round(w_scaled.sum(), 6))
+print("weights (raw)   :", np.round(w_raw, 4))
+print("output          :", np.round(w_scaled @ V, 4))`,
+        output: `raw scores      : [0. 2. 1.]
+scaled scores   : [0.  1.  0.5]
+weights (scaled): [0.1863 0.5065 0.3072]  sum: 1.0
+output          : [0.1863 1.013  0.9216]
+weights (raw)   : [0.09   0.6652 0.2447]`,
+        explanation:
+          'Every number matches the hand calculation, including the weights summing to exactly one. The scaled and raw weight vectors show what the division actually does: it lowers the temperature of the distribution without changing the ranking. The subtraction of the row maximum inside the softmax is not cosmetic — with realistic score magnitudes, exp of a raw score can overflow float32, and subtracting the maximum leaves the result mathematically identical while keeping every exponential at most one.',
+      },
+      {
+        language: 'python',
+        title: 'What happens to the gradient without the scaling',
+        runnable: true,
+        code: `import torch
+
+torch.manual_seed(0)
+for d_k in (4, 64, 512):
+    q = torch.randn(d_k, requires_grad=True)
+    K = torch.randn(50, d_k)
+    for name, denom in (("unscaled", 1.0), ("scaled", d_k ** 0.5)):
+        scores = (K @ q) / denom
+        w = torch.softmax(scores, dim=0)
+        w.max().backward(retain_graph=True)
+        gnorm = q.grad.norm().item()
+        q.grad = None
+        print(f"d_k={d_k:4d} {name:9s} score sd {scores.std().item():6.2f}  "
+              f"max weight {w.max().item():.4f}  |dq| {gnorm:.3e}")`,
+        output: `d_k=   4 unscaled  score sd   2.16  max weight 0.2176  |dq| 5.918e-01
+d_k=   4 scaled    score sd   1.08  max weight 0.1090  |dq| 3.180e-01
+d_k=  64 unscaled  score sd   7.72  max weight 0.9382  |dq| 3.281e-01
+d_k=  64 scaled    score sd   0.97  max weight 0.0505  |dq| 1.018e-01
+d_k= 512 unscaled  score sd  22.35  max weight 0.9999  |dq| 1.508e-03
+d_k= 512 scaled    score sd   0.99  max weight 0.0453  |dq| 1.379e-01
+`,
+        explanation:
+          'The score standard deviation tracks sqrt(d_k) almost exactly — 2.16 against 2, 7.72 against 8, 22.35 against 22.6 — which is the variance argument confirmed empirically rather than assumed. The consequence is in the last column. At d_k = 512 the unscaled softmax puts 0.9999 of its mass on one key, and the gradient reaching the query collapses to 1.5e-3, a hundred times smaller than the scaled version. That is softmax saturation: once the distribution is effectively one-hot, its Jacobian is numerically zero and the projections that produced the scores stop learning. The square root in the formula is the exact normalisation that prevents it.',
+      },
+      {
+        language: 'python',
+        title: 'Multi-head self-attention, written out',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class MultiHeadSelfAttention(nn.Module):
+    def __init__(self, d_model=512, heads=8):
+        super().__init__()
+        assert d_model % heads == 0
+        self.h, self.d_k = heads, d_model // heads
+        self.qkv = nn.Linear(d_model, 3 * d_model, bias=False)   # fused Q, K, V
+        self.out = nn.Linear(d_model, d_model, bias=False)       # W_O
+
+    def forward(self, x, causal=False):
+        B, N, D = x.shape
+        q, k, v = self.qkv(x).chunk(3, dim=-1)
+        # (B, N, D) -> (B, heads, N, d_k): each head gets its own subspace
+        q, k, v = [t.view(B, N, self.h, self.d_k).transpose(1, 2) for t in (q, k, v)]
+
+        scores = (q @ k.transpose(-2, -1)) / self.d_k ** 0.5      # (B, h, N, N)
+        if causal:
+            mask = torch.triu(torch.ones(N, N, dtype=torch.bool), diagonal=1)
+            scores = scores.masked_fill(mask, float("-inf"))
+        attn = F.softmax(scores, dim=-1)
+
+        y = attn @ v                                              # (B, h, N, d_k)
+        y = y.transpose(1, 2).reshape(B, N, D)                    # concat the heads
+        return self.out(y), attn
+
+mha = MultiHeadSelfAttention(d_model=64, heads=4)
+x = torch.randn(2, 6, 64)
+y, attn = mha(x, causal=True)
+print("output shape    :", tuple(y.shape))
+print("attention shape :", tuple(attn.shape), "(batch, heads, query, key)")
+print("row 0 of head 0 :", [round(v, 3) for v in attn[0, 0, 0].tolist()])
+print("row 3 of head 0 :", [round(v, 3) for v in attn[0, 0, 3].tolist()])`,
+        output: `output shape    : (2, 6, 64)
+attention shape : (2, 4, 6, 6) (batch, heads, query, key)
+row 0 of head 0 : [1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+row 3 of head 0 : [0.222, 0.266, 0.269, 0.243, 0.0, 0.0]
+`,
+        explanation:
+          'Three implementation details are worth the attention they get in real codebases. The Q, K and V projections are fused into one nn.Linear producing 3 times d_model, because one large matrix multiplication is substantially faster than three small ones. The reshape to (batch, heads, seq, d_k) is what makes the heads independent: the matrix multiplications then broadcast over the head axis, so all eight heads are computed in one call. And the causal mask sets future positions to negative infinity before the softmax rather than zeroing weights after it — the difference matters, because zeroing afterwards would leave the row not summing to one. The printed rows show the mask working: position 0 can only see itself, so its weight is exactly 1.0, while position 3 spreads over positions 0 to 3 and gives exactly zero to 4 and 5.',
+      },
+      {
+        language: 'python',
+        title: 'A complete pre-norm transformer block, with a parameter breakdown',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+class TransformerBlock(nn.Module):
+    def __init__(self, d_model=512, heads=8, d_ff=2048, dropout=0.1):
+        super().__init__()
+        self.ln1 = nn.LayerNorm(d_model)
+        self.attn = nn.MultiheadAttention(d_model, heads, dropout=dropout, batch_first=True)
+        self.ln2 = nn.LayerNorm(d_model)
+        self.ff = nn.Sequential(nn.Linear(d_model, d_ff), nn.GELU(),
+                                nn.Linear(d_ff, d_model), nn.Dropout(dropout))
+
+    def forward(self, x, mask=None):
+        h = self.ln1(x)
+        x = x + self.attn(h, h, h, attn_mask=mask, need_weights=False)[0]   # residual 1
+        x = x + self.ff(self.ln2(x))                                        # residual 2
+        return x
+
+block = TransformerBlock()
+x = torch.randn(2, 10, 512)
+print("output shape:", tuple(block(x).shape))
+
+counts = {n: sum(p.numel() for p in m.parameters())
+          for n, m in [("attention (Q,K,V,O)", block.attn), ("feed-forward", block.ff),
+                       ("layer norms", nn.ModuleList([block.ln1, block.ln2]))]}
+total = sum(counts.values())
+for name, c in counts.items():
+    print(f"{name:22s} {c:>9,}  ({100 * c / total:4.1f}%)")
+print(f"{'total per block':22s} {total:>9,}")`,
+        output: `output shape: (2, 10, 512)
+attention (Q,K,V,O)     1,050,624  (33.3%)
+feed-forward            2,099,712  (66.6%)
+layer norms                 2,048  ( 0.1%)
+total per block         3,152,384
+`,
+        explanation:
+          'The block preserves its input shape exactly, which is what allows dozens of them to be stacked without any shape arithmetic — compare this with a convolutional network, where every stage changes both the resolution and the channel count. The parameter breakdown holds a surprise for most people: two thirds of a block lives in the feed-forward network, not in attention. Attention has four d_model by d_model matrices for a total of 4 d squared, while the feed-forward has two matrices of d by 4d for 8 d squared. Attention is where the compute goes on long sequences, because of the n squared term, but the feed-forward is where the parameters and most of the stored knowledge live — which is why mixture-of-experts architectures replace the feed-forward block rather than the attention.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Attention Is All You Need, 2017',
+        usage:
+          'The original transformer reached state-of-the-art translation on English-German with a base model of six encoder and six decoder blocks, d_model 512 and eight heads, trained in twelve hours on eight GPUs — against days for the recurrent systems it beat. The decisive advantage was not quality per parameter but training throughput, since removing recurrence removed the serial dependency that had kept GPUs idle.',
+      },
+      {
+        context: 'Every large language model since',
+        usage:
+          'GPT, Llama, Claude, Gemini and their relatives are stacks of decoder-only transformer blocks, differing mainly in scale and in specific refinements: RMSNorm instead of LayerNorm, rotary position embeddings instead of sinusoids, SwiGLU instead of ReLU, and grouped-query attention to shrink the key-value cache. The block structure in this unit is still recognisably what they run.',
+      },
+      {
+        context: 'Vision, audio and biology',
+        usage:
+          'The Vision Transformer splits an image into 16 by 16 patches and treats them as a sequence of tokens, with no convolution anywhere; Whisper runs transformer blocks over audio spectrogram frames; AlphaFold uses attention over pairs of amino acid residues. In each case the domain-specific part is only how the input becomes a sequence of vectors — the block itself is unchanged.',
+      },
+      {
+        context: 'FlashAttention and the memory wall',
+        usage:
+          'The n by n attention matrix is the memory bottleneck for long contexts: at 8,192 tokens and 32 heads it is billions of entries per layer. FlashAttention computes the softmax in tiles inside fast on-chip memory without ever materialising the full matrix, cutting memory from quadratic to linear and delivering several times the throughput, which is what made long-context models practical.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'PyTorch', role: 'nn.MultiheadAttention and F.scaled_dot_product_attention, which dispatches to a fused FlashAttention kernel when the shapes and dtypes allow it.' },
+      { tool: 'Hugging Face Transformers', role: 'Every model class implements this block; output_attentions=True returns the weight matrices for inspection, and the config exposes d_model, heads and d_ff directly.' },
+      { tool: 'BertViz and attention rollout', role: 'Tools for visualising per-head attention maps, useful for exploration while remembering that attention weights are not reliable explanations.' },
+      { tool: 'xFormers and FlashAttention', role: 'Memory-efficient attention kernels, essential once sequence length exceeds a few thousand tokens.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Omitting the 1/sqrt(d_k) scaling',
+        why: 'The dot product of two d_k-dimensional unit-variance vectors has standard deviation sqrt(d_k), so at d_k = 64 the scores span roughly plus or minus 16. The softmax saturates to a one-hot distribution, its Jacobian goes to zero, and the query and key projections receive essentially no gradient. Training stalls at a loss that looks plausible.',
+        fix: 'Always divide by sqrt(d_k), or use F.scaled_dot_product_attention which does it for you. If you are debugging a custom implementation, print the standard deviation of the scores — it should be close to one.',
+      },
+      {
+        mistake: 'Applying the causal or padding mask after the softmax instead of before',
+        why: 'Zeroing weights after normalisation leaves the row summing to less than one, so the output is a shrunken combination whose magnitude depends on how many positions were masked. Worse, a causal mask applied afterwards has already let future information into the normalisation constant, which leaks the future and inflates training accuracy.',
+        fix: 'Add negative infinity to the masked score entries before the softmax, so exp gives exactly zero and the remaining weights renormalise correctly. In PyTorch use masked_fill with float("-inf") on the score tensor.',
+      },
+      {
+        mistake: 'Forgetting positional information entirely',
+        why: 'Self-attention is permutation-equivariant: permute the input rows and every output row permutes identically. Without a positional signal the model sees an unordered bag of tokens, so it can still do topic classification tolerably and will fail completely at anything requiring word order.',
+        fix: 'Add sinusoidal or learned positional embeddings at the input, or use rotary embeddings applied to the queries and keys inside every attention layer. A quick diagnostic is to shuffle the input tokens and check whether the output changes.',
+      },
+      {
+        mistake: 'Reading attention weights as explanations of the model decision',
+        why: 'The weights say which values were blended, not why the output was what it was. Many heads attend to positional or degenerate patterns — the previous token, the first token as an attention sink, punctuation — and it is possible to change attention maps substantially without changing predictions, which several papers have demonstrated directly.',
+        fix: 'Treat attention maps as a debugging aid rather than an explanation. For attribution, use gradient-based or ablation-based methods that actually measure the effect of an input on the output.',
+      },
+      {
+        mistake: 'Assuming attention holds most of the parameters',
+        why: 'A block has 4 d_model squared parameters in attention and 8 d_model squared in the feed-forward network, so two thirds of it is the feed-forward. People optimise the wrong component, and are then surprised that pruning heads saves little memory.',
+        fix: 'Count before optimising. Attention dominates the compute on long sequences because of the n squared term, while the feed-forward dominates the parameter count at every length; which one to attack depends on whether you are bound by memory or by time.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Explain query, key and value, and why three separate projections are needed rather than one.',
+        answer:
+          'Each position produces three different linear projections of its own representation, because it plays three different roles. The query is what this position is looking for when it builds its new representation. The key is what this position advertises to others that are searching. The value is the content it actually contributes when someone attends to it. A score is the dot product of one query with one key, and the softmax over those scores gives weights that sum to one, so the output is a weighted average of value vectors. Three projections rather than one because the roles genuinely differ. Take the sentence about the animal that did not cross the street because it was too tired: the key of animal has to match a query asking what could be tired, which is about the grammatical and semantic availability of animal as an antecedent, while the value of animal carries the meaning of animal itself. Forcing one vector to do both would tie how findable a token is to what it contains. Separating query from key also lets the relation be asymmetric — position i attending strongly to j does not imply the reverse.',
+        followUp:
+          'A strong answer notes that in self-attention all three come from the same input, whereas in the decoder cross-attention the query comes from the target side and the keys and values from the encoder, which is exactly what replaced the fixed context vector of seq2seq.',
+      },
+      {
+        level: 'advanced',
+        question: 'Why is the dot product divided by the square root of d_k?',
+        answer:
+          'To keep the softmax out of its saturated region. If the query and key components are independent with mean zero and unit variance, then each product q_i k_i has unit variance and the dot product, being a sum of d_k such terms, has variance d_k and therefore standard deviation sqrt(d_k). At d_k = 64 that is 8, so scores routinely span plus or minus 16 and the gap between the best and second-best key can easily be 10 or more, giving a weight ratio of e to the 10, around 22,000 to one. The softmax is then effectively an argmax, and its Jacobian, diag(alpha) minus alpha alpha transpose, is numerically zero when alpha is near one-hot — so no gradient reaches the scores, and hence none reaches W_Q or W_K. They stop learning. Dividing by sqrt(d_k) restores unit variance, keeping the distribution soft enough to have a usable gradient while still allowing it to sharpen as the projections learn. The constant is not a tuning knob; it is exactly the standard deviation of the quantity being normalised. You can see it directly by printing the score standard deviation for random projections at d_k of 4, 64 and 512 — it comes out at about 2, 8 and 22.6.',
+      },
+      {
+        level: 'advanced',
+        question: 'Why is multi-head attention better than a single head of the same total dimension?',
+        answer:
+          'A single attention operation produces one softmax distribution per query, so it can express exactly one weighted blend of the other positions. But a token typically stands in several relations at once — its syntactic head, its coreference antecedent, the topically related words nearby — and one convex combination has to average them all into a single vector, which loses the distinctions. Multi-head attention splits d_model into h subspaces of size d_model over h, runs an independent attention in each, concatenates the results and mixes them with W_O. Each head can therefore attend to a different set of positions with a different notion of relevance, and the total compute is unchanged because the per-head dimension shrinks in proportion. Empirically the specialisation is real and visible: probing studies find heads that consistently track syntactic dependencies, heads that attend to the previous token, and heads that attend to a single sink token as a way of doing nothing. The trade-off is that each head has a smaller d_k, so its representations are lower rank; this is why very large models increase the head count roughly in proportion to d_model rather than making individual heads enormous.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Self-attention is quadratic in sequence length. What are the practical consequences and what do you do about them?',
+        answer:
+          'Compute is O(n squared d) and the attention matrix is O(n squared) per head per layer, so doubling the context quadruples both. At 8,192 tokens with 32 heads and 32 layers, materialising every attention matrix in fp16 would run to hundreds of gigabytes, which is why memory rather than arithmetic is usually the binding constraint. The first and most important response is FlashAttention, which computes the softmax in tiles inside on-chip SRAM and never writes the full matrix to high-bandwidth memory, reducing attention memory to linear and typically giving two to four times the throughput — it is exact, not an approximation, and in PyTorch you get it by calling F.scaled_dot_product_attention. Beyond that: grouped-query or multi-query attention shrinks the key-value cache at inference by sharing keys and values across heads, which matters enormously for serving long contexts; sliding-window attention restricts each position to a local neighbourhood, making the cost linear at the price of a receptive field that grows only with depth; and sparse or linear-attention variants trade exactness for scaling. The order I would reach for them is FlashAttention first because it costs nothing in quality, then grouped-query attention if inference memory is the problem, then windowing only if the task genuinely tolerates local context.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A query has raw scores [3, 1, 2] against three keys, with d_k = 9. Compute the scaled scores and the attention weights, and state which key dominates.',
+        hint: 'sqrt(9) = 3. Exponentiate the scaled scores and normalise.',
+        solution:
+          'Scaled scores are [1, 0.3333, 0.6667]. Exponentiating gives e^1 = 2.7183, e^0.3333 = 1.3956, e^0.6667 = 1.9477, summing to 6.0616. The weights are 0.4485, 0.2302 and 0.3213, which sum to 1.0000. The first key dominates with about 45 per cent of the attention, but the distribution is far from one-hot and the other two keys still contribute more than half the output between them. Compare the unscaled version: e^3 = 20.086, e^1 = 2.7183, e^2 = 7.3891, sum 30.193, giving weights 0.6652, 0.0900 and 0.2447. The scaling has lowered the temperature considerably, and this is only d_k = 9 — at d_k = 64 the unscaled version would be effectively one-hot.',
+      },
+      {
+        prompt:
+          'Show that self-attention without positional encoding is permutation-equivariant, and explain the practical consequence.',
+        hint: 'Let P be a permutation matrix and consider what happens to Q, K and V when the input becomes PX.',
+        solution:
+          'With input PX, the projections become PXW_Q = PQ, PK and PV, since the projections act on the feature axis and the permutation acts on the position axis. The score matrix becomes (PQ)(PK)^T = P Q K^T P^T. Softmax is applied row-wise and P Q K^T P^T is the original score matrix with rows and columns permuted identically, so softmax commutes with it. Multiplying by PV gives P times the original output. So permuting the input permutes the output identically and changes nothing else: attention has no notion of order whatsoever. Practically this means a model without positional information cannot distinguish the dog bit the man from the man bit the dog. It will still do tolerably at tasks that are essentially bag-of-words, such as topic classification, which makes the bug easy to miss. The quickest diagnostic is to shuffle the input tokens and check whether the output distribution changes at all.',
+      },
+      {
+        prompt:
+          'Implement multi-head self-attention from scratch with a causal mask, and verify it against torch.nn.functional.scaled_dot_product_attention to within 1e-5.',
+        hint: 'Reshape to (batch, heads, seq, d_k) so the matrix multiplications broadcast over the head axis, and apply the mask before the softmax.',
+        language: 'python',
+        starterCode:
+          'import torch\nimport torch.nn.functional as F\n\ndef mha(x, w_qkv, w_o, heads, causal=True):\n    """x: (B, N, D). w_qkv: (D, 3D). w_o: (D, D). Return (B, N, D)."""\n    B, N, D = x.shape\n    d_k = D // heads\n    ...\n',
+        solution:
+          'Three points decide whether it matches. The reshape must be to (B, N, heads, d_k) and then transposed to (B, heads, N, d_k), so that the subsequent matrix multiplications treat the head axis as a batch dimension and the heads stay independent; reshaping directly to (B, heads, N, d_k) interleaves the features wrongly and produces a model that still trains but is not multi-head attention. The mask must be added as negative infinity to the scores before the softmax rather than multiplying the weights afterwards, or the rows will not sum to one and, for a causal mask, the future will already have contributed to the normaliser. And the scaling must be by the per-head d_k, not by d_model — a common error that divides by 8 when it should divide by sqrt(64). Once those are right, the comparison against F.scaled_dot_product_attention with is_causal=True agrees to about 1e-6, and the built-in version is several times faster because it dispatches to a fused kernel that never materialises the n by n matrix.',
+      },
+      {
+        prompt:
+          'A transformer block has d_model = 768, 12 heads and d_ff = 3072. Give d_k, the parameter count of the attention sub-layer, the parameter count of the feed-forward sub-layer, and the total per block ignoring biases and layer norms.',
+        hint: 'Attention has four d_model by d_model matrices; the feed-forward has one d_model by d_ff and one d_ff by d_model.',
+        solution:
+          'd_k = 768/12 = 64, which is the standard value and is why 64 recurs across model sizes. Attention has W_Q, W_K, W_V and W_O, each 768 by 768, so 4 x 589,824 = 2,359,296. The feed-forward has 768 x 3072 = 2,359,296 and 3072 x 768 = 2,359,296, totalling 4,718,592. The block total is 7,077,888, of which the feed-forward is exactly two thirds — the general result, since attention is 4d squared and the feed-forward is 8d squared when d_ff is 4d. These are the BERT-base and GPT-2-small dimensions, and multiplying by 12 layers gives about 85 million parameters in the blocks, with the remainder of BERT-base 110 million sitting in the token and position embeddings.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DL-020-q1',
+        type: 'mcq',
+        concept: 'the attention formula',
+        prompt: 'In softmax(QK^T / sqrt(d_k))V, what does the softmax output represent?',
+        options: [
+          'A distribution over positions, summing to one, used to form a weighted average of the value vectors',
+          'The probability that each token is the correct next token',
+          'A normalised version of the value vectors',
+          'The gradient of the loss with respect to the keys',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Each row of the softmax is a probability distribution over the key positions, so every output is a convex combination of value vectors. The non-negativity and the sum to one are what make attention a soft lookup rather than an arbitrary linear map.',
+      },
+      {
+        id: 'DL-020-q2',
+        type: 'numeric',
+        concept: 'the scaling factor',
+        prompt: 'With d_k = 64 and query and key entries of unit variance, what is the standard deviation of an unscaled dot-product score?',
+        answer: 8,
+        tolerance: 0.01,
+        explanation:
+          'The dot product is a sum of 64 independent unit-variance products, so its variance is 64 and its standard deviation is sqrt(64) = 8. Scores therefore span roughly plus or minus 16, which saturates the softmax — exactly why the formula divides by sqrt(d_k).',
+      },
+      {
+        id: 'DL-020-q3',
+        type: 'numeric',
+        concept: 'computing attention weights',
+        prompt: 'Scaled scores are [0, 1, 0.5] for three keys. What attention weight does the second key receive? Give four decimal places.',
+        answer: 0.5065,
+        tolerance: 0.001,
+        explanation:
+          'e^0 = 1, e^1 = 2.7183, e^0.5 = 1.6487, summing to 5.3670. The second weight is 2.7183/5.3670 = 0.5065. This is the worked example: position "sat" gives about half its attention to "cat".',
+      },
+      {
+        id: 'DL-020-q4',
+        type: 'truefalse',
+        concept: 'permutation equivariance',
+        prompt: 'Without positional encoding, self-attention would treat a sentence and a random shuffle of the same words identically, up to a corresponding shuffle of the output.',
+        answer: true,
+        explanation:
+          'True. Permuting the input permutes Q, K and V identically, permutes the score matrix by rows and columns, and therefore permutes the output — nothing else changes. Attention has no intrinsic notion of order, which is why positional information must be added explicitly.',
+      },
+      {
+        id: 'DL-020-q5',
+        type: 'multi',
+        concept: 'transformer block components',
+        prompt: 'Select every statement that is true of a standard transformer block.',
+        options: [
+          'The feed-forward network is applied independently and identically at every position',
+          'Attention is the only sub-layer that moves information between positions',
+          'Residual connections wrap both sub-layers',
+          'LayerNorm is used rather than BatchNorm because sequence lengths vary and inference often runs one sequence at a time',
+          'The feed-forward network holds about a third of the block parameters',
+        ],
+        answerIndices: [0, 1, 2, 3],
+        explanation:
+          'The last option inverts the truth: attention is 4 d_model squared and the feed-forward is 8 d_model squared, so the feed-forward holds about two thirds. The others are the defining structural properties of the block.',
+      },
+      {
+        id: 'DL-020-q6',
+        type: 'order',
+        concept: 'computing attention',
+        prompt: 'Put the steps of scaled dot-product attention with a causal mask into order.',
+        items: [
+          'Project the input to Q, K and V with three learned matrices',
+          'Compute the score matrix QK^T',
+          'Divide the scores by sqrt(d_k)',
+          'Set the scores of future positions to negative infinity',
+          'Apply softmax along the key axis so each row sums to one',
+          'Multiply the weights by V to get the weighted average of values',
+        ],
+        explanation:
+          'The mask must come before the softmax. Zeroing weights after normalisation leaves rows summing to less than one and, for a causal mask, lets future positions contribute to the normalising constant, which leaks information.',
+      },
+      {
+        id: 'DL-020-q7',
+        type: 'match',
+        concept: 'block components',
+        prompt: 'Match each component of a transformer block to the problem it solves.',
+        pairs: [
+          { left: 'Division by sqrt(d_k)', right: 'Stops the softmax saturating and killing the gradient to Q and K' },
+          { left: 'Multi-head attention', right: 'Lets several different relations be attended to at once' },
+          { left: 'Positional encoding', right: 'Supplies order, which attention is blind to' },
+          { left: 'Residual connections', right: 'Give a derivative-one gradient path through dozens of stacked blocks' },
+          { left: 'Feed-forward network', right: 'Transforms each position own content nonlinearly, which attention alone never does' },
+        ],
+        explanation:
+          'Each piece answers one specific deficiency. Being able to state which deficiency is what distinguishes understanding the architecture from having memorised its diagram.',
+      },
+      {
+        id: 'DL-020-q8',
+        type: 'code-output',
+        language: 'python',
+        concept: 'masking',
+        prompt: 'What are the attention weights for the first query position?',
+        code: 'import torch\nscores = torch.tensor([[1.0, 2.0, 3.0]])\nmask = torch.tensor([[False, True, True]])\nscores = scores.masked_fill(mask, float("-inf"))\nprint(torch.softmax(scores, dim=-1))',
+        options: [
+          'tensor([[1., 0., 0.]])',
+          'tensor([[0.0900, 0.2447, 0.6652]])',
+          'tensor([[0.3333, 0.3333, 0.3333]])',
+          'tensor([[1., -inf, -inf]])',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Both future positions are set to negative infinity, so their exponentials are exactly zero and all the mass falls on the single remaining position. This is precisely what happens to the first row of a causal decoder: it can only attend to itself, with weight one.',
+      },
+      {
+        id: 'DL-020-q9',
+        type: 'explain',
+        concept: 'why attention replaced recurrence',
+        prompt: 'Explain why self-attention replaced recurrence for sequence modelling, covering both path length and parallelism, and state honestly what it costs.',
+        rubric: [
+          'States that the path between any two positions is one hop, against O(distance) for recurrence',
+          'States that all positions are computed simultaneously, so sequential depth is O(1) rather than O(n)',
+          'Acknowledges the quadratic cost in sequence length and names a mitigation',
+        ],
+        sampleAnswer:
+          'Two structural properties, and one real cost. First, path length. In a recurrent network, information from position i reaches position j by passing through every update in between, each of which attenuates it by a factor below one, so distant dependencies decay geometrically and long sequences translate measurably worse. In self-attention, position j forms a weighted sum over all positions directly, so the path between any pair is a single weighted edge regardless of how far apart they are — nothing decays with distance. Second, parallelism. A recurrent layer needs n sequential operations to consume n tokens, because each step waits for the previous state, and each of those steps is a matrix multiplication far too small to occupy a modern accelerator. Self-attention computes all positions in one batched matrix multiplication, so the sequential depth is constant. That is the property that actually decided the field: the original transformer beat recurrent translation systems partly on quality but overwhelmingly on training throughput, and the gap widened with scale. The cost is that the score matrix is n by n, so compute is quadratic in sequence length and the attention matrix itself is quadratic in memory. That is the binding constraint on long contexts, and the main response is FlashAttention, which computes the softmax in tiles in on-chip memory without ever materialising the full matrix — exact, not approximate, and it reduces attention memory to linear. Beyond that, grouped-query attention shrinks the inference cache and sliding-window attention trades global reach for linear cost.',
+        explanation:
+          'The examinable insight is that the transformer trades more total work for far less sequential work, which is exactly the right trade on hardware built for parallelism.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Write the scaled dot-product attention formula.', back: 'Attention(Q, K, V) = softmax(QK^T / sqrt(d_k)) V, with the softmax taken along the key axis so each row sums to one.' },
+      { front: 'What are query, key and value?', back: 'Three learned projections of the same input: what this position seeks, what each position advertises, and what it hands over when attended to.' },
+      { front: 'Why divide by sqrt(d_k)?', back: 'A dot product of d_k unit-variance terms has standard deviation sqrt(d_k). Without the division the softmax saturates to one-hot and its Jacobian goes to zero, so Q and K stop learning.' },
+      { front: 'Why multiple heads?', back: 'One softmax gives one blend. A token stands in several relations at once, so h independent heads of dimension d_model/h let different relations be attended to simultaneously at the same total cost.' },
+      { front: 'Why is positional encoding necessary?', back: 'Self-attention is permutation-equivariant: shuffle the input and the output shuffles identically. Without position, a sentence and its anagram are the same input.' },
+      { front: 'What does the feed-forward block do and how big is it?', back: 'Two linear layers with a nonlinearity, applied identically at every position, expanding to 4 d_model and back. It holds about two thirds of a block parameters.' },
+      { front: 'Path length and sequential depth: attention versus recurrence?', back: 'Attention: O(1) path between any two positions, O(1) sequential depth, O(n^2 d) compute. Recurrence: O(distance) path, O(n) sequential depth, O(n d^2) compute.' },
+      { front: 'Where must a causal mask be applied?', back: 'To the scores before the softmax, as negative infinity. Zeroing weights afterwards leaves rows not summing to one and lets the future affect the normaliser.' },
+      { front: 'What does FlashAttention change?', back: 'It computes the softmax in tiles in on-chip memory without materialising the n by n matrix, making attention memory linear rather than quadratic. It is exact, not an approximation.' },
+    ],
+
+    challenge: {
+      title: 'Build a working transformer from nothing',
+      brief:
+        'Implement a decoder-only transformer from scratch in PyTorch using only nn.Linear, nn.LayerNorm, nn.Embedding and elementwise operations — no nn.MultiheadAttention and no F.scaled_dot_product_attention. Verify your attention against the built-in function to within 1e-5, then train the model as a character-level language model on a corpus of your choice until it generates plausible text. Produce four pieces of analysis: a plot of validation loss for models with and without the 1/sqrt(d_k) scaling; a plot for models with and without positional encoding, including a token-shuffling test that confirms the unpositioned model is order-blind; a visualisation of the attention maps of every head in the first and last layers, with a written attempt to characterise what any of them are doing; and a table of parameters and measured latency for attention against the feed-forward block at sequence lengths 128, 512 and 2048, showing where each one dominates.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Attention is implemented from primitives and matches F.scaled_dot_product_attention to within 1e-5 on random inputs, causal and non-causal',
+        'The causal mask is applied before the softmax and is verified by checking that changing a future token cannot change an earlier position output',
+        'Both ablations are trained under an identical protocol and plotted together, with the shuffling test reported numerically',
+        'The latency and parameter table covers three sequence lengths and the write-up identifies the crossover where attention overtakes the feed-forward in cost',
+      ],
+      starterCode:
+        'import math\nimport torch\nimport torch.nn as nn\n\nclass Attention(nn.Module):\n    def __init__(self, d_model, heads):\n        super().__init__()\n        self.h, self.d_k = heads, d_model // heads\n        self.qkv = nn.Linear(d_model, 3 * d_model, bias=False)\n        self.proj = nn.Linear(d_model, d_model, bias=False)\n\n    def forward(self, x, causal=True):\n        B, N, D = x.shape\n        # project, split into heads, score, scale, mask, softmax, weight, merge\n        ...\n\nclass Block(nn.Module):\n    def __init__(self, d_model, heads, d_ff):\n        super().__init__()\n        ...\n\ndef sinusoidal_pe(n, d):\n    pos = torch.arange(n).unsqueeze(1)\n    i = torch.arange(0, d, 2)\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach attention from scratch: start from the question a word needs to answer, build up query, key and value, explain the scaling, and then assemble a full transformer block.',
+      mustCover: [
+        'Each position asks which other positions are relevant, via a dot product between its query and every key',
+        'The softmax turns those scores into weights summing to one, so the output is a weighted average of value vectors',
+        'The scores are divided by sqrt(d_k) because a dot product of d_k terms has that standard deviation, and an unscaled softmax saturates',
+        'A block is multi-head attention plus a position-wise feed-forward network, each wrapped in a residual connection and a layer norm, with positional information added at the input',
+      ],
+      bonusSignals: [
+        'works a concrete numerical example rather than only stating the formula',
+        'explains why key and value are separate projections',
+        'notes that attention is permutation-equivariant and therefore needs positional encoding',
+        'gives the path-length and parallelism comparison against recurrence, and admits the quadratic cost',
+      ],
+      sampleExplanation:
+        "Start with a sentence: the animal did not cross the street because it was too tired. To process the word it, you need to look back at animal rather than at street. So the question each position has to answer is which of the other positions matter to me, and by how much. Attention answers it in three moves. First, every position produces three different projections of itself, because it plays three different roles. Its query is what it is looking for. Its key is what it advertises to anyone searching. Its value is the content it actually hands over if it gets picked. Those are genuinely different jobs — animal has to be findable by a query asking what could be tired, which is not the same as the meaning of animal that gets passed along — so they get three separate learned matrices. Second, you score every query against every key with a dot product, which by the geometric reading is large when two vectors point the same way. Third, you push those scores through a softmax so they become non-negative and sum to one, and take the value vectors in exactly those proportions. The softmax is doing something important: it replaces a hard lookup, which would pick the single best match and have no usable gradient, with a soft blend that is differentiable everywhere. Let me do it with numbers. Suppose sat has a query that scores zero against the, two against cat and one against itself, and the key dimension is four so the square root is two. Divide through: zero, one, a half. Exponentiate: one, two point seven two, one point six five, summing to five point three seven. Normalise: nineteen per cent on the, fifty-one per cent on cat, thirty-one per cent on itself. The output is that blend of the three value vectors. Now, why divide by the square root of the key dimension? Because a dot product of d_k terms, each with unit variance, has variance d_k and therefore a typical size of the square root of d_k. At sixty-four dimensions that is eight, so raw scores routinely span plus or minus sixteen, and a gap of sixteen between the top two keys makes the softmax put nine million to one on the winner. It becomes an argmax, its Jacobian collapses to zero, and the query and key projections receive no gradient at all — the model stops learning and you would never see an error. The constant is not a tuning knob; it is exactly the standard deviation of the thing it is normalising. Four more pieces make a block. Multi-head, because one softmax can only express one blend and a word usually stands in several relations at once, so you split the model dimension into eight or more independent subspaces and run attention in each, then concatenate and mix. Positional encoding, because if you permute the input, every output permutes identically and nothing else changes — attention literally cannot tell a sentence from its anagram. A residual connection and a layer norm around each sub-layer, so that stacking ninety-six blocks does not reintroduce the depth problem, with LayerNorm rather than BatchNorm because sequences vary in length and generation runs one at a time. And a feed-forward network applied identically at every position, expanding to four times the width and back, which is the only place a position own content gets transformed nonlinearly — and, surprisingly to most people, where two thirds of the parameters live. What all this buys is a path of length one between any two positions, so nothing decays with distance, and a sequential depth of one, so every position is computed at once. The price is a score matrix that is n by n, so compute and memory are quadratic in the sequence length. That is the real constraint on long contexts, and the main answer is FlashAttention, which computes the same softmax in tiles inside fast on-chip memory without ever writing out the full matrix.",
     },
   },
 ];

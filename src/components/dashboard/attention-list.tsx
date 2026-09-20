@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { AlertTriangle, RotateCcw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/misc';
-import { pct, prettyDate } from '@/lib/format';
 
 export interface AttentionItem {
   id: string;
@@ -85,15 +84,4 @@ function Panel({
       )}
     </div>
   );
-}
-
-export function weakDetail(bestScore: number, attempts: number): string {
-  if (attempts === 0) return 'flagged difficult';
-  return `best ${pct(bestScore)} · ${attempts} attempt${attempts === 1 ? '' : 's'}`;
-}
-
-export function reviewDetail(nextReviewAt: string | null, today: string): string {
-  if (!nextReviewAt) return 'due';
-  if (nextReviewAt <= today) return 'due now';
-  return prettyDate(nextReviewAt);
 }

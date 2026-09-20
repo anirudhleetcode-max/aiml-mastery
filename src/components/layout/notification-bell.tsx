@@ -3,13 +3,13 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { Bell, Check } from 'lucide-react';
-import { useLearnerStore } from '@/lib/store/learner';
+import { EMPTY, useLearnerStore } from '@/lib/store/learner';
 import { relativeTime } from '@/lib/format';
 import { cn } from '@/lib/cn';
 
 export function NotificationBell() {
   const [open, setOpen] = React.useState(false);
-  const notifications = useLearnerStore((s) => s.state?.notifications ?? []);
+  const notifications = useLearnerStore((s) => s.state?.notifications ?? EMPTY);
   const emit = useLearnerStore((s) => s.emit);
   const patch = useLearnerStore((s) => s.patch);
   const ref = React.useRef<HTMLDivElement>(null);

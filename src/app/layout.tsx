@@ -18,6 +18,8 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'),
+  icons: { icon: '/icon.svg', apple: '/icon.svg' },
   title: {
     default: 'AI/ML Mastery — understand it, build it, teach it',
     template: '%s · AI/ML Mastery',
@@ -47,7 +49,12 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${mono.variable}`}>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      data-scroll-behavior="smooth"
+      className={`${inter.variable} ${mono.variable}`}
+    >
       <head>
         <ThemeScript />
       </head>

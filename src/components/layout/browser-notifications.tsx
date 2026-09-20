@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useLearnerStore } from '@/lib/store/learner';
+import { EMPTY, useLearnerStore } from '@/lib/store/learner';
 
 const SHOWN_KEY = 'aiml.notified.v1';
 
@@ -15,7 +15,7 @@ const SHOWN_KEY = 'aiml.notified.v1';
  * same one twice — which ids are already shown is remembered locally.
  */
 export function BrowserNotifications() {
-  const notifications = useLearnerStore((s) => s.state?.notifications ?? []);
+  const notifications = useLearnerStore((s) => s.state?.notifications ?? EMPTY);
   const prefs = useLearnerStore((s) => s.state?.notificationPrefs);
 
   React.useEffect(() => {

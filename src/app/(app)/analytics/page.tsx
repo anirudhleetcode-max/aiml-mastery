@@ -81,7 +81,7 @@ export default async function AnalyticsPage() {
       {/* --------------------------------------------------- Composition */}
       <div className="grid gap-4 lg:grid-cols-3">
         <CompositionDonut
-          title="Where the 214 units stand"
+          title={`Where the ${o.totals.total} units stand`}
           subtitle="Mastered, learning, due for review, untouched"
           slices={donut}
           total={o.totals.total}
@@ -122,7 +122,7 @@ export default async function AnalyticsPage() {
             valueLabel="Score"
             percent
             domainMax={1}
-            format={(v) => `${Math.round(v * 100)}%`}
+            format="score"
           />
         ) : (
           <ChartFrame title="Test scores over time" subtitle="Needs at least two graded tests" height={230}>
@@ -149,14 +149,14 @@ export default async function AnalyticsPage() {
           title="XP earned"
           subtitle="Last 60 days"
           valueLabel="XP"
-          format={(v) => formatXP(v)}
+          format="xp"
         />
         <TrendChart
           data={o.activitySeries.map((d) => ({ date: d.date, value: d.minutes }))}
           title="Study time"
           subtitle="Last 60 days, in minutes"
           valueLabel="Minutes"
-          format={(v) => `${v}m`}
+          format="minutes"
         />
       </div>
 
@@ -170,7 +170,7 @@ export default async function AnalyticsPage() {
           percent
           horizontal
           height={340}
-          format={(v) => pct(v)}
+          format="percent"
         />
         {domainScores.length > 0 ? (
           <BarsChart
@@ -181,7 +181,7 @@ export default async function AnalyticsPage() {
             percent
             horizontal
             height={340}
-            format={(v) => pct(v)}
+            format="percent"
           />
         ) : (
           <ChartFrame title="Average score by domain" subtitle="Nothing graded yet" height={340}>

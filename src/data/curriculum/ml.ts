@@ -10721,3 +10721,2552 @@ KMeans k=3            ARI 0.756
     },
   },
 
+  {
+    id: 'ML-019',
+    domain: 'ML',
+    module: 'Dimensionality Reduction',
+    topic: 'Linear dimensionality reduction',
+    title: 'Principal Component Analysis',
+    slug: 'principal-component-analysis',
+    difficulty: 4,
+    estimatedMinutes: 45,
+    prerequisites: ['ML-003'],
+    related: ['ML-010', 'ML-017'],
+    tags: ['pca', 'eigenvectors', 'covariance', 'explained variance', 'dimensionality reduction', 'svd'],
+
+    learningObjectives: [
+      'Explain PCA as finding the directions of maximum variance, and why those are the eigenvectors of the covariance matrix',
+      'Compute a small PCA by hand: centre, covariance, eigenvalues, eigenvectors, projections and explained variance',
+      'Choose the number of components using explained variance, and explain why standardisation must come first',
+      'State honestly what principal components are and are not — they are not interpretable features, and PCA is not feature selection',
+    ],
+
+    terminology: [
+      {
+        term: 'Principal component',
+        definition:
+          'A unit vector in the original feature space along which the projected data has maximum variance, subject to being orthogonal to all previously found components. The first component captures the most variance, the second the most of what remains, and so on.',
+        simple: 'The direction in which the data is most spread out.',
+      },
+      {
+        term: 'Covariance matrix',
+        definition:
+          'The symmetric d × d matrix whose (i, j) entry is the covariance between features i and j. Its diagonal holds the variances, its trace is the total variance, and its eigenvectors are the principal components.',
+        simple: 'A table showing how every pair of features vary together.',
+      },
+      {
+        term: 'Explained variance ratio',
+        definition:
+          'Each eigenvalue divided by the sum of all eigenvalues: the fraction of the dataset’s total variance captured by that component. The ratios sum to 1 and decline monotonically.',
+        simple: 'How much of the spread each direction accounts for.',
+      },
+      {
+        term: 'Scree plot',
+        definition:
+          'The eigenvalues plotted in descending order. A sharp bend — the elbow — suggests how many components carry structure rather than noise, and is the standard visual aid for choosing the number to keep.',
+        simple: 'A chart of how much each direction is worth, used to decide how many to keep.',
+      },
+      {
+        term: 'Reconstruction',
+        definition:
+          'Mapping projected data back into the original space using only the retained components. The difference from the original is the reconstruction error, and it equals the variance in the discarded directions.',
+        simple: 'Rebuilding the data from the directions you kept, and seeing what got lost.',
+      },
+    ],
+
+    simpleExplanation:
+      'Imagine a cloud of points shaped like a long cigar, floating in three dimensions. Most of its extent runs along one axis; it is narrow in the other two. If you had to describe each point with a single number instead of three, the obvious choice is how far along the cigar it sits — that one number keeps most of what distinguishes the points, while the two you discard vary hardly at all. Principal component analysis does exactly this, automatically, in any number of dimensions. It finds the direction in which the data is most spread out and calls that the first principal component. Then, among all directions at right angles to the first, it finds the one with the next most spread, and so on. Each direction comes with a number saying what share of the total variation it accounts for, so you can keep taking directions until you have captured, say, 95% of the variation, and throw the rest away. Two things to be clear about. The new axes are mixtures of all your original features — a component might be 0.4 times height plus 0.3 times weight minus 0.6 times age — so they are not features you can name or explain to anyone. And PCA measures spread, not usefulness: a direction with enormous variance may have nothing to do with what you are trying to predict.',
+
+    whyItExists:
+      'High-dimensional data is expensive to store, slow to model, hard to plot and prone to overfitting, and distance-based methods degrade badly as dimensions grow. Many features are also strongly correlated, so the data really occupies a much lower-dimensional subspace than its column count suggests. PCA finds that subspace exactly, giving the best possible linear compression in the squared-error sense, and produces uncorrelated components that resolve multicollinearity as a side effect.',
+
+    analogy: {
+      scenario:
+        'You must photograph a flock of starlings so that a colleague can later judge the shape of the flock from the picture alone. Standing at the wrong angle, the birds overlap into an uninformative blob. You walk around until you find the viewpoint from which the flock appears most spread out — the angle that separates the birds as much as possible — and take the photograph there. If one picture is not enough, you take a second from an angle at right angles to the first, again choosing the most spread-out view available from that constrained set. Two flat images taken this way capture nearly everything about a three-dimensional shape. What they do not give you is any named quantity: a bird’s position in the photograph is a mixture of its true north-south, east-west and vertical position, and nobody can read off its altitude from the print.',
+      mapping: [
+        { from: 'The viewpoint giving the most spread-out image', to: 'The first principal component, the direction of maximum variance' },
+        { from: 'A second viewpoint at right angles to the first', to: 'The second component, orthogonal to the first' },
+        { from: 'How spread out the flock looks from each viewpoint', to: 'The eigenvalue, and hence the explained variance ratio' },
+        { from: 'Two photographs standing in for a 3D flock', to: 'Projecting d dimensions down to k components' },
+        { from: 'Position in the photograph being a blend of real coordinates', to: 'Components are linear combinations of all original features' },
+        { from: 'A viewpoint that spreads the birds but hides the species you care about', to: 'High variance not implying relevance to the target' },
+      ],
+      bridge:
+        'Choosing the most spread-out viewpoint is precisely maximising the variance of the projection, and that maximisation is what makes the answer an eigenvector of the covariance matrix rather than an arbitrary direction. The photograph analogy also carries the honest limitation: the image preserves shape while destroying names. Once you work in component space you can model, cluster and visualise, but you can no longer say "this prediction was driven by income", because income no longer exists as a separate axis.',
+      limitations:
+        'Photographs are projections of something genuinely three-dimensional, where the notion of "spread" is physical and units are shared. Real features are measured in incompatible units, so unless you standardise first, the variance is dominated by whichever column happens to be recorded in large numbers, and the chosen viewpoint reflects the choice of units rather than the structure of the data.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Rotate the axes onto the data',
+        caption: 'Watch the first component swing to align with the direction of greatest spread, and see the explained variance split change as you drag points.',
+        widget: 'pca-lab',
+      },
+      {
+        kind: 'flow',
+        title: 'Performing PCA',
+        steps: [
+          { label: 'Standardise', detail: 'Subtract each feature’s mean, and divide by its standard deviation unless the features already share units. Without this, variance reflects units.' },
+          { label: 'Form the covariance matrix', detail: 'C = XᵀX/(n − 1) for centred X. It is d × d, symmetric, and positive semi-definite.' },
+          { label: 'Decompose it', detail: 'Compute eigenvalues and eigenvectors. In practice libraries take the SVD of X directly, which is more numerically stable and avoids forming C.' },
+          { label: 'Sort and inspect', detail: 'Order the eigenvalues descending. Each divided by their sum is that component’s explained variance ratio; the cumulative curve drives the choice of k.' },
+          { label: 'Project', detail: 'Z = X W_k, where W_k holds the top k eigenvectors as columns. The result has k uncorrelated columns.' },
+          { label: 'Reconstruct if needed', detail: 'X̂ = Z W_kᵀ, plus the means back. The squared error equals the sum of the discarded eigenvalues.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'PCA: strengths, weaknesses and when to reach for it',
+        caption: 'Reach for PCA when features are numerous and correlated, when a distance-based model needs fewer dimensions, when you want a two-dimensional plot of high-dimensional data, or when multicollinearity is destabilising a linear model. Reach past it when interpretability of individual features matters, when the structure is nonlinear, or when what you need is to remove irrelevant features rather than to compress correlated ones.',
+        left: {
+          heading: 'Strengths',
+          points: [
+            'Optimal linear compression: no other k-dimensional linear projection has lower reconstruction error',
+            'Components are uncorrelated by construction, which removes multicollinearity entirely',
+            'Deterministic, with a closed-form solution and no hyperparameters beyond the number of components',
+            'Dramatically speeds up distance-based models and mitigates the curse of dimensionality',
+            'Gives a principled two- or three-dimensional view of high-dimensional data for plotting',
+            'Discarding low-variance directions often removes noise, acting as a mild regulariser',
+          ],
+        },
+        right: {
+          heading: 'Weaknesses',
+          points: [
+            'Components are linear mixtures of all features, so interpretability is essentially lost',
+            'Variance is not relevance: a high-variance direction may be irrelevant to the target, and a low-variance one crucial',
+            'Sensitive to feature scaling — without standardisation, units determine the result',
+            'Captures only linear structure; a spiral or a manifold needs kernel PCA, UMAP or an autoencoder',
+            'Sensitive to outliers, since variance is a squared quantity',
+            'It is not feature selection: every original feature still has to be collected and measured',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Choosing the number of components',
+        columns: ['Method', 'Rule', 'Use when'],
+        rows: [
+          ['Cumulative variance', 'Keep enough components to reach 90–99% of total variance', 'Compression or noise reduction; the usual default'],
+          ['Scree elbow', 'Keep components before the bend in the eigenvalue plot', 'The eigenvalues have a clear drop-off'],
+          ['Kaiser criterion', 'Keep components with eigenvalue > 1 on standardised data', 'Quick heuristic; known to over-retain, so use with care'],
+          ['Cross-validation', 'Treat n_components as a hyperparameter of the full pipeline', 'PCA feeds a supervised model — the only criterion that optimises what you care about'],
+          ['Two or three', 'Fixed, for plotting', 'Visualisation, where the constraint is the screen, not the variance'],
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'PCA and its relatives',
+        columns: ['Method', 'Finds', 'Supervised?', 'Use for'],
+        rows: [
+          ['PCA', 'Directions of maximum variance', 'No', 'General linear compression and decorrelation'],
+          ['LDA', 'Directions maximising class separation', 'Yes', 'Classification, when labels should guide the projection'],
+          ['Kernel PCA', 'Principal components in an implicit feature space', 'No', 'Nonlinear structure, with the kernel trick from ML-012'],
+          ['t-SNE', 'A low-dimensional layout preserving local neighbourhoods', 'No', 'Visualisation only — distances between clusters are not meaningful'],
+          ['UMAP', 'A layout preserving local and some global structure', 'No', 'Visualisation and as a preprocessing step before clustering'],
+          ['Autoencoder', 'A nonlinear encoding learned by a neural network', 'No', 'Large datasets where nonlinear compression pays for the training cost'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'Given a centred data matrix X ∈ ℝ^{n×d}, PCA seeks orthonormal directions w₁, …, w_k maximising the variance of the projections, w_j = argmax_{‖w‖=1, w ⊥ w₁…w_{j−1}} wᵀCw with C = XᵀX/(n − 1) the sample covariance matrix. By the spectral theorem for symmetric positive semi-definite matrices, the solutions are the eigenvectors of C ordered by eigenvalue, and the variance of the j-th projection equals λ_j. Equivalently, via the singular value decomposition X = UΣVᵀ, the principal directions are the columns of V, the scores are UΣ, and λ_j = σ_j²/(n − 1). Among all rank-k linear projections, the one onto the top k eigenvectors minimises the expected squared reconstruction error ‖X − X̂‖_F², whose value is Σ_{j>k} λ_j (the Eckart-Young theorem), and the explained variance ratio of component j is λ_j / Σᵢ λᵢ.',
+
+    math: {
+      intuition:
+        'Ask for the single direction along which the data varies most. Write the variance of the projection onto a unit vector w — it comes out as wᵀCw, a quadratic form in the covariance matrix. Maximising a quadratic form subject to the vector having unit length is a classic constrained optimisation, and the Lagrangian gives Cw = λw immediately. So the answer is an eigenvector, and the variance it achieves is its eigenvalue. Nothing about eigenvectors is assumed at the start; they fall out of asking for maximum spread. The orthogonality of later components comes from adding the constraint that each new direction must be perpendicular to those already found, which the spectral theorem grants automatically for a symmetric matrix.',
+      formulas: [
+        {
+          latex: 'C = \\frac{1}{n-1} X^{\\top} X \\quad \\text{for centred } X, \\qquad C_{ij} = \\mathrm{Cov}(x_i, x_j)',
+          name: 'Sample covariance matrix',
+          meaning:
+            'The object PCA decomposes. Symmetric and positive semi-definite, so its eigenvalues are real and non-negative and its eigenvectors can be chosen orthonormal. Its trace is the total variance in the data.',
+          variables: [
+            { symbol: 'X', meaning: 'n × d data matrix with each column centred to zero mean' },
+            { symbol: 'n', meaning: 'Number of observations; n − 1 gives the unbiased estimate' },
+            { symbol: 'C_{ij}', meaning: 'Covariance between features i and j' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\mathbf{w}_1 = \\arg\\max_{\\lVert \\mathbf{w} \\rVert = 1} \\mathbf{w}^{\\top} C \\mathbf{w}',
+          name: 'The PCA objective',
+          meaning:
+            'Find the unit direction maximising the variance of the projected data. The unit-length constraint is essential — without it the variance could be made arbitrarily large by scaling w.',
+          variables: [
+            { symbol: '\\mathbf{w}', meaning: 'Candidate direction, constrained to unit length' },
+            { symbol: '\\mathbf{w}^{\\top} C \\mathbf{w}', meaning: 'Variance of the data projected onto w' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: 'C\\mathbf{w}_j = \\lambda_j \\mathbf{w}_j, \\qquad \\mathrm{Var}(X\\mathbf{w}_j) = \\lambda_j',
+          name: 'The eigenvalue equation',
+          meaning:
+            'The solution of the constrained maximisation. The principal directions are eigenvectors of the covariance matrix and the variance captured by each is its eigenvalue — which is why sorting eigenvalues sorts components by importance.',
+          variables: [
+            { symbol: '\\mathbf{w}_j', meaning: 'The j-th principal component, a unit eigenvector' },
+            { symbol: '\\lambda_j', meaning: 'Its eigenvalue, equal to the variance along that direction' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\text{EVR}_j = \\frac{\\lambda_j}{\\sum_{i=1}^{d} \\lambda_i} = \\frac{\\lambda_j}{\\mathrm{tr}(C)}',
+          name: 'Explained variance ratio',
+          meaning:
+            'Because the trace of a matrix equals the sum of its eigenvalues, and the trace of C is the total variance, each eigenvalue is directly a share of the total. The ratios sum to one.',
+          variables: [
+            { symbol: '\\lambda_j', meaning: 'Eigenvalue of component j' },
+            { symbol: '\\mathrm{tr}(C)', meaning: 'Trace of the covariance matrix — the total variance across all features' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'X = U \\Sigma V^{\\top}, \\qquad \\mathbf{w}_j = \\mathbf{v}_j, \\qquad \\lambda_j = \\frac{\\sigma_j^{2}}{n - 1}',
+          name: 'PCA via the singular value decomposition',
+          meaning:
+            'How libraries actually compute it. Taking the SVD of the centred data matrix directly avoids forming XᵀX, which squares the condition number and loses precision, and handles the d > n case efficiently.',
+          variables: [
+            { symbol: 'V', meaning: 'Right singular vectors — the principal directions' },
+            { symbol: '\\Sigma', meaning: 'Diagonal matrix of singular values σ_j' },
+            { symbol: 'U\\Sigma', meaning: 'The principal component scores, i.e. the projected data' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\lVert X - \\hat{X}_k \\rVert_F^{2} = \\sum_{j > k} \\lambda_j \\, (n-1)',
+          name: 'Reconstruction error',
+          meaning:
+            'Keeping k components and rebuilding loses exactly the variance in the discarded directions. This is why the explained variance curve doubles as a statement about compression quality.',
+          variables: [
+            { symbol: '\\hat{X}_k', meaning: 'Reconstruction from the top k components' },
+            { symbol: '\\lVert \\cdot \\rVert_F', meaning: 'Frobenius norm — the square root of the sum of squared entries' },
+          ],
+          category: 'linear-algebra',
+        },
+      ],
+      derivation: [
+        'Centre the data so each column has mean zero. Without centring, the first component points towards the mean rather than along the direction of spread, which is a different and usually useless quantity.',
+        'Project onto a unit vector w: the projection of row x is the scalar wᵀx. The variance of these scalars across the sample is (1/(n−1)) Σᵢ (wᵀxᵢ)².',
+        'Rewrite it: (1/(n−1)) Σᵢ wᵀxᵢxᵢᵀw = wᵀ [(1/(n−1)) Σᵢ xᵢxᵢᵀ] w = wᵀCw. So the variance along w is a quadratic form in the covariance matrix.',
+        'Maximise wᵀCw subject to wᵀw = 1. The constraint is necessary: without it, doubling w quadruples the objective and the problem has no finite maximum.',
+        'Form the Lagrangian L = wᵀCw − λ(wᵀw − 1) and differentiate: ∂L/∂w = 2Cw − 2λw = 0, giving Cw = λw.',
+        'That is the eigenvalue equation. So the stationary points of the constrained problem are exactly the eigenvectors of C, and nothing about eigenvectors was assumed — they emerged from asking for maximum variance.',
+        'Which eigenvector? Multiply Cw = λw on the left by wᵀ: wᵀCw = λwᵀw = λ. The objective value at an eigenvector is its eigenvalue, so the maximum is achieved at the largest one.',
+        'For the second component, add the constraint w₂ ⊥ w₁ and repeat. The spectral theorem guarantees a symmetric matrix has an orthonormal eigenbasis, so the answer is the eigenvector with the second-largest eigenvalue — orthogonality comes free rather than being imposed.',
+        'Explained variance follows from a property of the trace. tr(C) = Σᵢ Cᵢᵢ is the sum of the feature variances, and also equals Σⱼ λⱼ. So each eigenvalue is literally a share of the total variance, and the ratios sum to one.',
+        'Now reconstruction. Project onto the top k components, Z = XW_k, then map back, X̂ = ZW_kᵀ. The Eckart-Young theorem says this is the best rank-k approximation of X in Frobenius norm — no other linear projection of the same rank does better.',
+        'The error is exactly the variance you discarded: ‖X − X̂‖_F² = (n−1) Σ_{j>k} λⱼ. So the cumulative explained variance curve is simultaneously a statement about how much structure you kept and how much error you will incur rebuilding.',
+        'Finally, why standardisation matters. C depends on the units of each feature: express income in pence rather than pounds and its variance multiplies by 10,000, so it dominates the trace and the first component aligns with it almost exactly. Standardising makes every feature contribute variance 1, so PCA operates on the correlation matrix and the result is unit-invariant. Skip standardisation only when all features genuinely share a unit and relative magnitude is meaningful — pixel intensities, or spectra measured on one instrument.',
+      ],
+    },
+
+    workedExample: {
+      title: 'PCA on five points, done entirely by hand',
+      setup:
+        'Five two-dimensional points: (2, 1), (3, 3), (4, 5), (5, 4), (6, 7). Compute the principal components, the explained variance, and the projection of each point.',
+      steps: [
+        {
+          label: 'Centre the data',
+          detail: 'Means are x̄ = (2+3+4+5+6)/5 = 4 and ȳ = (1+3+5+4+7)/5 = 4. Centred points: (−2, −3), (−1, −1), (0, 1), (1, 0), (2, 3).',
+          latex: '\\bar{\\mathbf{x}} = (4,\\, 4)',
+        },
+        {
+          label: 'Covariance matrix',
+          detail: 'Var(x) = (4 + 1 + 0 + 1 + 4)/4 = 2.50. Var(y) = (9 + 1 + 1 + 0 + 9)/4 = 5.00. Cov(x, y) = (6 + 1 + 0 + 0 + 6)/4 = 3.25. The trace is 7.50, which is the total variance to be distributed among the components.',
+          latex: 'C = \\begin{pmatrix} 2.50 & 3.25 \\\\ 3.25 & 5.00 \\end{pmatrix}',
+        },
+        {
+          label: 'Characteristic equation',
+          detail: 'det(C − λI) = (2.50 − λ)(5.00 − λ) − 3.25² = λ² − 7.50λ + (12.50 − 10.5625) = λ² − 7.50λ + 1.9375 = 0.',
+          latex: '\\lambda^{2} - 7.50\\lambda + 1.9375 = 0',
+        },
+        {
+          label: 'Eigenvalues',
+          detail: 'λ = [7.50 ± √(56.25 − 7.75)]/2 = [7.50 ± √48.50]/2 = [7.50 ± 6.9642]/2, giving λ₁ = 7.2321 and λ₂ = 0.2679. As a check, they sum to 7.50, the trace, exactly as they must.',
+          latex: '\\lambda_1 = 7.2321, \\qquad \\lambda_2 = 0.2679',
+        },
+        {
+          label: 'Explained variance',
+          detail: '7.2321/7.50 = 0.9643 and 0.2679/7.50 = 0.0357. The first component alone accounts for 96.4% of the variation, so reducing these two dimensions to one loses only 3.6%.',
+          latex: '\\text{EVR} = (0.9643,\\, 0.0357)',
+        },
+        {
+          label: 'First eigenvector',
+          detail: 'Solve (C − 7.2321 I)w = 0: −4.7321w₁ + 3.25w₂ = 0, so w₂ = 1.4560 w₁. Take w = (1, 1.4560) and normalise by its length √(1 + 2.1199) = 1.7663, giving w₁ = (0.5662, 0.8243).',
+          latex: '\\mathbf{w}_1 = (0.5662,\\, 0.8243)',
+        },
+        {
+          label: 'Second eigenvector',
+          detail: 'It must be orthogonal to the first and of unit length, so w₂ = (−0.8243, 0.5662). Verify: their dot product is −0.4667 + 0.4667 = 0.',
+          latex: '\\mathbf{w}_2 = (-0.8243,\\, 0.5662)',
+        },
+        {
+          label: 'Project the points',
+          detail: 'Score on PC1 is the dot product of the centred point with w₁. For (−2, −3): −2(0.5662) − 3(0.8243) = −3.6053. The five PC1 scores are −3.6053, −1.3905, 0.8243, 0.5662, 3.6053; the PC2 scores are −0.0500, 0.2581, 0.5662, −0.8243, 0.0500.',
+          latex: '\\mathbf{z}_1 = (-3.6053,\\, -1.3905,\\, 0.8243,\\, 0.5662,\\, 3.6053)',
+        },
+        {
+          label: 'Check the variances',
+          detail: 'The PC1 scores have sum of squares 28.93, so their variance is 28.93/4 = 7.232 — exactly λ₁. The PC2 scores give 1.072/4 = 0.268 = λ₂. The projections really do have the variances the eigenvalues promised, and their covariance is zero, so the components are uncorrelated.',
+          latex: '\\mathrm{Var}(\\mathbf{z}_1) = 7.232 = \\lambda_1, \\qquad \\mathrm{Var}(\\mathbf{z}_2) = 0.268 = \\lambda_2',
+        },
+        {
+          label: 'Reconstruct from one component',
+          detail: 'Rebuild the first point from PC1 alone: mean + (−3.6053)(0.5662, 0.8243) = (4, 4) + (−2.041, −2.972) = (1.959, 1.028), against the true (2, 1). The error is about 0.05 in total, which matches the 3.6% of variance discarded.',
+          latex: '\\hat{\\mathbf{x}}_1 = (1.959,\\, 1.028) \\quad \\text{vs} \\quad (2,\\, 1)',
+        },
+      ],
+      conclusion:
+        'Two features, strongly correlated, turned out to be one feature plus a small amount of noise: 96.4% of the variation lies along a single direction running diagonally through the cloud. That is what PCA does in general — it finds the subspace the data actually occupies, regardless of how many columns were recorded. Note what the first component is, though: 0.57 of x plus 0.82 of y. It has no name, and no domain expert can be told what it measures, which is the permanent trade PCA asks you to make.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Reproducing the hand computation, and why standardisation matters',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+X = np.array([[2., 1.], [3., 3.], [4., 5.], [5., 4.], [6., 7.]])
+p = PCA().fit(X)
+print("components      :", np.round(np.abs(p.components_), 4).tolist())
+print("eigenvalues     :", np.round(p.explained_variance_, 4))
+print("explained ratio :", np.round(p.explained_variance_ratio_, 4))
+print("scores (PC1)    :", np.round(p.transform(X)[:, 0], 4))
+
+# Now the scaling trap: express the second feature in different units.
+X2 = X.copy()
+X2[:, 1] *= 1000
+print()
+print("unscaled ratio  :", np.round(PCA().fit(X2).explained_variance_ratio_, 4))
+print("unscaled PC1    :", np.round(np.abs(PCA().fit(X2).components_[0]), 4))
+Xs = StandardScaler().fit_transform(X2)
+print("scaled ratio    :", np.round(PCA().fit(Xs).explained_variance_ratio_, 4))
+print("scaled PC1      :", np.round(np.abs(PCA().fit(Xs).components_[0]), 4))`,
+        output: `components      : [[0.5662, 0.8243], [0.8243, 0.5662]]
+eigenvalues     : [7.2321 0.2679]
+explained ratio : [0.9643 0.0357]
+scores (PC1)    : [-3.6053 -1.3905  0.8243  0.5662  3.6053]
+
+unscaled ratio  : [1.     0.    ]
+unscaled PC1    : [0.     1.    ]
+scaled ratio    : [0.9535 0.0465]
+scaled PC1      : [0.7071 0.7071]
+`,
+        explanation:
+          'The first block matches the hand computation exactly, including the eigenvalues 7.2321 and 0.2679 and the projections. The second block is the point that catches people out. Multiplying one feature by 1000 — the difference between metres and millimetres — makes its variance a million times larger, so it swallows the entire trace: the first component becomes precisely that feature, with an explained variance ratio of 1.000, and the other feature has been erased from the analysis. Standardising first restores a sensible answer with the component pointing equally at both. Unless your features genuinely share a unit, put a `StandardScaler` before `PCA` in a pipeline; otherwise PCA is analysing your choice of units rather than your data.',
+      },
+      {
+        language: 'python',
+        title: 'Choosing the number of components, and what compression costs',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.datasets import load_digits
+from sklearn.decomposition import PCA
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+
+X, y = load_digits(return_X_y=True)          # 64 features, 8x8 images
+full = PCA().fit(StandardScaler().fit_transform(X))
+cum = np.cumsum(full.explained_variance_ratio_)
+for target in [0.80, 0.90, 0.95, 0.99]:
+    print(f"  {int(target*100)}% of variance needs {np.searchsorted(cum, target) + 1:>2} of 64 components")
+
+print()
+for k in [2, 10, 20, 40, 64]:
+    pipe = make_pipeline(StandardScaler(), PCA(n_components=k), LogisticRegression(max_iter=3000))
+    s = cross_val_score(pipe, X, y, cv=5, n_jobs=-1).mean()
+    print(f"k={k:>3}  variance kept {cum[k-1]:.3f}   CV accuracy {s:.4f}")`,
+        output: `  80% of variance needs 21 of 64 components
+  90% of variance needs 29 of 64 components
+  95% of variance needs 40 of 64 components
+  99% of variance needs 55 of 64 components
+
+k=  2  variance kept 0.219   CV accuracy 0.5860
+k= 10  variance kept 0.588   CV accuracy 0.9027
+k= 20  variance kept 0.786   CV accuracy 0.9416
+k= 40  variance kept 0.950   CV accuracy 0.9527
+k= 64  variance kept 1.000   CV accuracy 0.9472
+`,
+        explanation:
+          'Two useful observations. First, the 64 pixel features really live in a lower-dimensional space: 29 components carry 90% of the variance, because neighbouring pixels in a digit image are heavily correlated. Second, and more instructive, accuracy at k = 40 slightly exceeds accuracy at k = 64. Discarding the last 5% of variance removed noise rather than signal, so PCA acted as a mild regulariser. That is common but not guaranteed, which is why the honest way to choose `n_components` when PCA feeds a supervised model is to tune it inside the pipeline by cross-validation, rather than fixing a variance threshold in advance. Note also that k = 2 — the setting you would use for plotting — keeps only 22% of the variance and loses thirty-six points of accuracy: a PCA scatter plot is a sketch, not a faithful picture.',
+      },
+      {
+        language: 'python',
+        title: 'Variance is not relevance',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score
+from sklearn.pipeline import make_pipeline
+
+rng = np.random.default_rng(0)
+n = 1500
+signal = rng.normal(0, 1.0, n)                 # small variance, fully predictive
+noise1 = rng.normal(0, 20.0, n)                # huge variance, irrelevant
+noise2 = rng.normal(0, 18.0, n)
+X = np.column_stack([signal, noise1, noise2])
+y = (signal > 0).astype(int)
+
+p = PCA().fit(X)
+print("explained variance ratio:", np.round(p.explained_variance_ratio_, 4))
+print("PC1 loadings            :", np.round(p.components_[0], 4))
+
+print()
+print("logistic on all 3 features :", round(cross_val_score(LogisticRegression(), X, y, cv=5).mean(), 4))
+print("logistic on PCA top 1      :", round(cross_val_score(
+    make_pipeline(PCA(n_components=1), LogisticRegression()), X, y, cv=5).mean(), 4))
+print("logistic on PCA top 2      :", round(cross_val_score(
+    make_pipeline(PCA(n_components=2), LogisticRegression()), X, y, cv=5).mean(), 4))
+print("logistic on LDA top 1      :", round(cross_val_score(
+    make_pipeline(LinearDiscriminantAnalysis(n_components=1), LogisticRegression()), X, y, cv=5).mean(), 4))`,
+        output: `explained variance ratio: [0.5533 0.4452 0.0015]
+PC1 loadings            : [ 0.0021  0.9986 -0.0523]
+
+logistic on all 3 features : 0.9987
+logistic on PCA top 1      : 0.5093
+logistic on PCA top 2      : 0.5127
+logistic on LDA top 1      : 0.9980
+`,
+        explanation:
+          'The label is a deterministic function of the first feature, which has standard deviation 1. The two noise features have standard deviations 20 and 18 and no relationship to the label at all. PCA ranks directions by variance, so the first component is essentially the largest noise feature — its loading on the signal is 0.002 — and keeping the top one or two components destroys the model, taking accuracy from 0.999 to chance. This is the single most important caveat about PCA and it follows directly from its definition: it is unsupervised, so it cannot know which directions matter. LDA, which maximises class separation rather than variance, recovers the signal in one dimension. In practice, either tune `n_components` against the downstream metric, or use a supervised reduction when labels are available.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Eigenfaces and image compression',
+        usage:
+          'Early face recognition represented each face as a combination of a few dozen "eigenfaces" — the principal components of a face image dataset. The same idea underlies lossy compression generally: keep the components carrying most of the variance and discard the rest, trading fidelity for storage in a way that is optimal for linear reconstruction.',
+      },
+      {
+        context: 'Genomics and population structure',
+        usage:
+          'Plotting the first two principal components of genome-wide variation across individuals reproduces the geography of the populations sampled with striking accuracy. PCA is also the standard correction for population stratification in genetic association studies, where the top components are included as covariates.',
+      },
+      {
+        context: 'Finance and factor models',
+        usage:
+          'The covariance matrix of asset returns typically has a few dominant components — the first is close to the market factor, and subsequent ones correspond roughly to sectors. Risk models use these to summarise thousands of correlated instruments with a handful of factors.',
+      },
+      {
+        context: 'Preprocessing for distance-based models',
+        usage:
+          'Reducing to 20 or 50 components before KNN or k-means restores the meaning of distance by removing correlated and low-variance directions, and cuts computation proportionally. In embedding pipelines, PCA is often applied before UMAP for the same reason, as a fast linear first pass.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'scikit-learn', role: '`PCA` with `n_components` as an integer, a variance fraction, or `"mle"`; `IncrementalPCA` for data larger than memory; `KernelPCA` for nonlinear structure.' },
+      { tool: 'NumPy / SciPy', role: '`np.linalg.svd` and `scipy.linalg.eigh` are what the library calls underneath; computing PCA once by hand from the SVD is the best way to internalise it.' },
+      { tool: 'UMAP', role: 'Often run after a PCA down to 50 dimensions — PCA removes the cheap linear redundancy quickly, and UMAP handles the nonlinear structure that remains.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Not standardising before PCA',
+        why: 'The covariance matrix depends on units. A feature recorded in pounds rather than thousands has a variance a million times larger and will absorb essentially the entire first component, erasing every other feature from the analysis.',
+        fix: 'Put `StandardScaler` before `PCA` in a pipeline. The exception is data where all features already share a unit and relative magnitude is meaningful, such as pixel intensities.',
+      },
+      {
+        mistake: 'Fitting PCA on the full dataset before splitting',
+        why: 'The components are estimated from the covariance of all rows, including the test set, so the projection carries information about data the model should not have seen. The resulting test score is optimistic, and the effect is invisible in the metrics.',
+        fix: 'Fit PCA inside a `Pipeline` so it is refitted on the training folds only, and applied with `transform` to the validation and test data.',
+      },
+      {
+        mistake: 'Treating components as interpretable features',
+        why: 'Each component is a linear combination of every original feature. "PC1 increased by 0.3" is not a statement any domain expert can act on, and loadings are only loosely interpretable even when a few features dominate them.',
+        fix: 'If interpretability matters, use feature selection (ML-020) instead, which keeps original columns. If you must interpret components, report the top loadings with their signs and be explicit that the axis is a composite.',
+      },
+      {
+        mistake: 'Assuming high variance means useful',
+        why: 'PCA is unsupervised and ranks directions by spread. A direction can have enormous variance and no relationship to the target, while a low-variance direction carries all the signal — a situation that is easy to construct and common with noisy sensors.',
+        fix: 'Tune `n_components` by cross-validating the downstream metric, not by a fixed variance threshold. Where labels exist and the goal is classification, consider LDA or a supervised selection method.',
+      },
+      {
+        mistake: 'Using PCA to fix overfitting caused by too many irrelevant features',
+        why: 'PCA compresses correlated features; it does not remove irrelevant ones. Fifty noise columns with high variance will still occupy the leading components, and every original feature must still be collected at prediction time.',
+        fix: 'Use regularisation or genuine feature selection to remove irrelevant features. Reach for PCA when the problem is correlation and dimensionality, not relevance.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What does PCA actually compute, and why do eigenvectors appear?',
+        answer:
+          'PCA looks for the direction in which the data is most spread out. Centre the data and project onto a unit vector w: the variance of those projections works out to wᵀCw, where C is the covariance matrix. So you are maximising a quadratic form subject to w having unit length — and the unit-length constraint is essential, because without it you could make the objective arbitrarily large just by scaling w. Set up the Lagrangian and differentiate, and you get Cw = λw. That is the eigenvalue equation, so the stationary points are exactly the eigenvectors of the covariance matrix. Nothing about eigenvectors was assumed; they emerged from asking for maximum variance. Multiplying through by wᵀ shows the objective value at an eigenvector is its eigenvalue, so the best direction is the eigenvector with the largest eigenvalue, and the variance it captures is that eigenvalue. Subsequent components come from repeating the maximisation under an orthogonality constraint, which the spectral theorem satisfies automatically since C is symmetric. In practice libraries compute the SVD of the centred data matrix rather than forming C explicitly, because XᵀX squares the condition number and loses precision.',
+      },
+      {
+        level: 'advanced',
+        question: 'When is PCA the wrong tool, and what would you use instead?',
+        answer:
+          'Four situations. First, when the signal lives in a low-variance direction. PCA is unsupervised and ranks purely by spread, so a noisy sensor with large variance and no relationship to the target will dominate the leading components while a small, perfectly predictive feature is discarded. You can construct this in five lines and watch accuracy fall from 0.999 to chance. If labels are available, LDA maximises class separation instead, and tuning `n_components` against the downstream metric is the general fix. Second, when the structure is nonlinear. PCA can only find linear subspaces, so a spiral or a manifold is not compressible by it; kernel PCA, UMAP or an autoencoder are the alternatives, with UMAP the usual choice before clustering embeddings. Third, when interpretability is a requirement. Every component mixes all the original features, so a regulated model that must state reasons cannot use them; feature selection with L1 or a wrapper method keeps original columns. Fourth, when the problem is irrelevant features rather than correlated ones — PCA compresses redundancy but does not remove noise columns, and you still have to measure every original feature at prediction time, so it does nothing for data-collection cost. I would also avoid it on heavily outlier-contaminated data, since variance is a squared quantity, or use a robust PCA variant.',
+        followUp:
+          'A strong answer distinguishes the two different reasons dimensionality hurts — redundancy, which PCA fixes, and irrelevance, which it does not.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'You apply PCA and your cross-validated score jumps from 0.82 to 0.97. What do you check before celebrating?',
+        answer:
+          'That jump is large enough to be suspicious, and the first thing I would check is where PCA was fitted. If it was fitted on the full dataset before the cross-validation split — which is the most common way this happens, because it is natural to transform once and then pass the reduced matrix to `cross_val_score` — then the components were estimated using the covariance of the validation rows as well, so every fold was projected using information derived from itself. That is leakage, and it inflates scores without any error being raised. The fix is to put PCA inside a `Pipeline` passed to the cross-validator, so it is refitted on each training fold. I would rerun that way and expect the gain to shrink substantially or disappear. If it survives, I would look for a second explanation: PCA genuinely helps when features are strongly correlated and the model is distance-based or linear, and discarding low-variance directions can act as a mild regulariser, so a few points of improvement is entirely plausible. Fifteen points is not, on most tabular data. I would also check whether `n_components` was chosen by looking at the test score, which is a subtler version of the same problem, and confirm the scaler is inside the pipeline too. Finally I would hold out a test set that has taken no part in any of it and score once.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A covariance matrix has eigenvalues 8.0, 3.5, 1.2, 0.8 and 0.5. How many components are needed to retain at least 90% of the variance?',
+        hint: 'Compute the total, then accumulate from the largest.',
+        solution:
+          'Total variance = 8.0 + 3.5 + 1.2 + 0.8 + 0.5 = 14.0. Cumulative ratios: one component gives 8.0/14.0 = 0.571; two give 11.5/14.0 = 0.821; three give 12.7/14.0 = 0.907; four give 13.5/14.0 = 0.964. So three components are needed to reach 90%, retaining 90.7% of the variance. Note that the reconstruction error from keeping three components is exactly the sum of the discarded eigenvalues, 0.8 + 0.5 = 1.3, which is 9.3% of the total — the explained variance curve and the reconstruction error are two readings of the same numbers.',
+      },
+      {
+        prompt:
+          'Your data has features measured in metres (values around 1.7), grams (around 70,000) and counts (around 3). Explain what happens if you run PCA without standardising, and what to do.',
+        hint: 'How does variance scale when you change units?',
+        solution:
+          'Variance scales with the square of the unit change, so the gram column, whose values are around 70,000, will have a variance many orders of magnitude larger than the metre and count columns. The trace of the covariance matrix is dominated by that one feature, and since each eigenvalue is a share of the trace, the first component will point almost exactly along the gram axis with an explained variance ratio very close to 1. The other two features effectively vanish from the analysis — not because they are unimportant, but because they were recorded in smaller units. Converting grams to kilograms would change the answer completely, which is a clear sign the procedure is measuring the wrong thing. The fix is to standardise each feature to zero mean and unit variance first, which makes PCA operate on the correlation matrix rather than the covariance matrix and gives a unit-invariant result. Do this inside a pipeline so the scaler is fitted on training data only. The exception, worth stating, is data where all features genuinely share a unit and relative magnitude is meaningful — pixel intensities or spectra from one instrument — where standardising can destroy real information.',
+      },
+      {
+        prompt:
+          'Show that the variance of data projected onto a unit vector w equals wᵀCw, where C is the covariance matrix of the centred data.',
+        hint: 'Write the projection of a single point and square it.',
+        solution:
+          'Let the data be centred, so each column has mean zero, and let xᵢ be the i-th row as a column vector. The projection of xᵢ onto the unit vector w is the scalar wᵀxᵢ. Since the data is centred, the mean of these projections is wᵀx̄ = 0, so the variance is simply the mean of their squares: Var = (1/(n−1)) Σᵢ (wᵀxᵢ)². A scalar equals its own transpose, so (wᵀxᵢ)² = (wᵀxᵢ)(xᵢᵀw) = wᵀ(xᵢxᵢᵀ)w. Because w does not depend on i, it factors out of the sum: Var = wᵀ [(1/(n−1)) Σᵢ xᵢxᵢᵀ] w. The bracketed quantity is precisely the sample covariance matrix C = XᵀX/(n−1). Hence Var = wᵀCw. This is the identity that turns "find the direction of greatest spread" into "maximise a quadratic form on the unit sphere", whose stationary points are the eigenvectors of C — which is where eigenvectors enter PCA at all.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'ML-019-q1',
+        type: 'mcq',
+        concept: 'what PCA maximises',
+        prompt: 'The first principal component is the direction that maximises which quantity?',
+        options: [
+          'The variance of the data projected onto it',
+          'The correlation with the target variable',
+          'The distance between the two most separated points',
+          'The number of features it is orthogonal to',
+        ],
+        answerIndex: 0,
+        explanation:
+          'PCA is unsupervised and maximises projected variance, wᵀCw subject to ‖w‖ = 1. It never sees the target, which is exactly why a high-variance component can be irrelevant to prediction.',
+      },
+      {
+        id: 'ML-019-q2',
+        type: 'numeric',
+        concept: 'explained variance',
+        prompt: 'Eigenvalues are 6.0, 2.0, 1.5 and 0.5. What fraction of the total variance do the first two components explain? Give three decimal places.',
+        answer: 0.8,
+        tolerance: 0.005,
+        explanation:
+          'Total = 10.0, and the first two sum to 8.0, so the ratio is 0.800. Because the trace of the covariance matrix equals the sum of its eigenvalues, each eigenvalue is directly a share of the total variance.',
+      },
+      {
+        id: 'ML-019-q3',
+        type: 'truefalse',
+        concept: 'variance versus relevance',
+        prompt: 'The principal components with the largest eigenvalues are always the most useful for predicting the target.',
+        answer: false,
+        explanation:
+          'PCA never sees the target. A noisy, irrelevant feature with large variance will dominate the leading components, while a low-variance feature can carry all the signal. Tune n_components against the downstream metric, or use LDA.',
+      },
+      {
+        id: 'ML-019-q4',
+        type: 'order',
+        concept: 'the PCA procedure',
+        prompt: 'Put the steps of performing PCA into order.',
+        items: [
+          'Standardise the features, or at minimum centre them',
+          'Compute the covariance matrix of the centred data',
+          'Find its eigenvalues and eigenvectors',
+          'Sort the eigenvalues in descending order and compute explained variance ratios',
+          'Choose k and form the projection matrix from the top k eigenvectors',
+          'Project the data onto those components',
+        ],
+        explanation:
+          'Centring must come first: without it the leading component points towards the mean rather than along the direction of spread. Libraries compute the SVD of the centred matrix directly rather than forming the covariance matrix, but the conceptual order is the same.',
+      },
+      {
+        id: 'ML-019-q5',
+        type: 'multi',
+        concept: 'properties of PCA',
+        prompt: 'Which statements about PCA are true? Select all that apply.',
+        options: [
+          'The components are mutually orthogonal',
+          'The resulting components are uncorrelated with one another',
+          'It requires feature scaling unless all features share a unit',
+          'It selects a subset of the original features',
+          'The reconstruction error equals the variance in the discarded directions',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'PCA is extraction, not selection: every component is a linear combination of all original features, so you must still collect every feature at prediction time. That is the key distinction from the methods in ML-020.',
+      },
+      {
+        id: 'ML-019-q6',
+        type: 'fill',
+        concept: 'the underlying decomposition',
+        prompt: 'The principal components are the eigenvectors of which matrix?',
+        answers: ['covariance matrix', 'the covariance matrix', 'covariance', 'correlation matrix'],
+        explanation:
+          'The covariance matrix of the centred data — or equivalently the correlation matrix, when the features have been standardised first. Its eigenvalues are the variances along each component.',
+      },
+      {
+        id: 'ML-019-q7',
+        type: 'explain',
+        concept: 'what PCA gives up',
+        prompt: 'Explain what PCA does, and be specific about what is lost when you use it.',
+        rubric: [
+          'Describes PCA as finding orthogonal directions of maximum variance',
+          'Notes that components are linear combinations of all features, so interpretability is lost',
+          'Notes that variance does not imply relevance to the target',
+          'Mentions the requirement to standardise, or that PCA only captures linear structure',
+        ],
+        sampleAnswer:
+          'PCA finds a new set of axes for your data, chosen so that the first axis points along the direction in which the data is most spread out, the second along the most spread-out direction perpendicular to the first, and so on. Each axis comes with an eigenvalue saying how much of the total variance it accounts for, so you can keep taking axes until you have enough — commonly 95% — and discard the rest. The result is the best possible linear compression in the squared-error sense: no other projection of the same rank reconstructs the data more accurately. What you give up comes in three parts. The first is interpretability, and it is permanent. Every component is a weighted mixture of all the original features — 0.57 of one thing plus 0.82 of another — so there is no longer any axis you can name, and telling a domain expert that PC3 rose by 0.4 conveys nothing. If your model has to state reasons, PCA has ruled that out. The second is the assumption that variance means importance. PCA is unsupervised: it has never seen the target, so it ranks a noisy sensor with huge variance above a small feature that perfectly determines the label. I have seen accuracy go from 0.999 to chance by keeping the top component of data built exactly that way. The defence is to tune the number of components against the downstream metric rather than against a variance threshold, or to use a supervised method such as LDA. The third is that it only finds linear structure, so data lying on a curved manifold will not compress, and the answer depends entirely on feature scaling — change a column from kilograms to grams and its variance multiplies by a million, and it will absorb the first component on its own. One last distinction worth being precise about: PCA is extraction, not selection. You still have to collect and measure every original feature at prediction time, so it reduces the dimensionality of your model, not the cost of your data.',
+        explanation:
+          'A complete answer names all three losses — interpretability, the variance-relevance gap, and linearity — and is precise that extraction differs from selection.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does PCA maximise?', back: 'The variance of the data projected onto each successive orthogonal direction: maximise wᵀCw subject to ‖w‖ = 1.' },
+      { front: 'Why do eigenvectors appear in PCA?', back: 'Maximising wᵀCw under ‖w‖ = 1 gives the Lagrangian condition Cw = λw. The eigenvectors are the stationary points, and λ is the variance captured.' },
+      { front: 'What is the explained variance ratio?', back: 'λ_j / Σλ. Since the trace of C equals both the total variance and the sum of eigenvalues, each eigenvalue is directly a share of the total.' },
+      { front: 'Why standardise before PCA?', back: 'Variance depends on units. A feature in grams rather than kilograms has a million times the variance and will absorb the first component entirely.' },
+      { front: 'Is PCA feature selection?', back: 'No — it is extraction. Components are combinations of all features, so you must still collect every original feature at prediction time.' },
+      { front: 'What does reconstruction error equal?', back: 'The variance in the discarded directions, i.e. the sum of the eigenvalues you dropped. Eckart-Young makes this the best possible rank-k linear approximation.' },
+      { front: 'Does high variance mean a component is useful?', back: 'No. PCA is unsupervised, so a large-variance direction may be pure noise while the signal sits in a small-variance one.' },
+    ],
+
+    challenge: {
+      title: 'PCA from scratch, then judged on its real job',
+      brief:
+        'Implement PCA yourself with NumPy: centre the data, compute the covariance matrix, take its eigendecomposition with `np.linalg.eigh`, sort descending, and project. Verify your components and explained variance ratios match `sklearn.decomposition.PCA` to six decimal places on a real dataset, allowing for sign flips. Then answer the question that matters: build a pipeline of scaler, PCA and a classifier, tune n_components by cross-validation, and compare against the same classifier with no PCA and against one using a feature-selection step instead. Report accuracy, fit time and prediction time for all three, and plot the cumulative explained variance curve alongside the cross-validated accuracy curve.',
+      acceptanceCriteria: [
+        'The from-scratch implementation matches scikit-learn on components, eigenvalues and projections, with sign ambiguity handled explicitly',
+        'PCA is fitted inside the pipeline so no fold sees components derived from its own rows',
+        'The variance curve and the accuracy curve are plotted together, and any divergence between them is discussed',
+        'Timings are reported, since speed is often the real reason to reduce dimensionality',
+        'The write-up states whether PCA was worth it for this dataset and why, including the interpretability cost',
+      ],
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain to a colleague what PCA does, why the components are eigenvectors, and what you give up by using it.',
+      mustCover: [
+        'PCA finds orthogonal directions that maximise the variance of the projected data',
+        'Maximising wᵀCw under a unit-length constraint yields Cw = λw, so components are eigenvectors and eigenvalues are the variances',
+        'Components are linear combinations of all original features, so they are not interpretable',
+        'Standardisation is required, and variance does not imply relevance to the target',
+      ],
+      bonusSignals: ['mentions SVD as the practical computation', 'mentions reconstruction error equalling discarded variance', 'distinguishes extraction from selection'],
+      sampleExplanation:
+        'Picture a cloud of points shaped like a long cigar in three dimensions. Most of what distinguishes one point from another is where it sits along the cigar; the other two directions barely vary. So if you had to describe each point with one number instead of three, the sensible number is its position along that long axis. PCA does this automatically, for any number of dimensions. It finds the direction in which the data varies most, then the direction at right angles to that with the next most variation, and so on, and each direction comes with a figure saying what share of the total spread it accounts for. You keep as many as you need to reach some threshold and discard the rest. The eigenvectors are not an assumption, they are a consequence, and the derivation is short enough to be worth carrying around. Centre the data, take a candidate direction w of unit length, and write down the variance of the data projected onto it. It works out to w transpose C w, where C is the covariance matrix. So you are maximising a quadratic form subject to w having unit length — and that constraint matters, because otherwise you could inflate the objective just by scaling w. Set up the Lagrangian, differentiate, and you land on C w equals lambda w. The eigenvalue equation appears from nowhere except the request for maximum spread, and multiplying through by w transpose shows the variance achieved is exactly lambda. That is why sorting eigenvalues sorts the components by importance. Now what it costs you. First, names. Every component is a blend of all your original columns, so there is no axis anybody can interpret, and if you are building something that has to explain its decisions, PCA has just taken that away. Second — and this is the one people get wrong — variance is not relevance. PCA never looks at the target. If you have a noisy sensor with an enormous range and a small, perfectly predictive feature, PCA will rank the noise first and, if you keep only the top components, throw your signal away. I have watched accuracy drop from 0.999 to a coin flip on data built exactly like that. So tune the number of components against the thing you actually care about, not against a variance threshold. Third, it depends completely on scaling: change a column from kilograms to grams and its variance goes up by a factor of a million, and it will take over the first component. Standardise first, inside a pipeline, always. And one distinction worth keeping straight: PCA is extraction, not selection. You reduce the width of the matrix your model sees, but you still have to collect and measure every original feature to compute the components at all.',
+    },
+  },
+
+  {
+    id: 'ML-020',
+    domain: 'ML',
+    module: 'Dimensionality Reduction',
+    topic: 'Reducing the feature set',
+    title: 'Feature Selection and Extraction',
+    slug: 'feature-selection-and-extraction',
+    difficulty: 3,
+    estimatedMinutes: 35,
+    prerequisites: ['ML-019'],
+    related: ['ML-006', 'ML-014', 'ML-015'],
+    tags: ['feature selection', 'filter methods', 'wrapper methods', 'embedded methods', 'rfe', 'mutual information'],
+
+    learningObjectives: [
+      'Distinguish feature selection from feature extraction, and know when each is the right answer',
+      'Apply filter, wrapper and embedded methods, and explain what each one costs and assumes',
+      'Explain why feature selection performed outside cross-validation produces catastrophically optimistic results',
+      'Choose a selection strategy given the number of features, the sample size and the interpretability requirement',
+    ],
+
+    terminology: [
+      {
+        term: 'Feature selection',
+        definition:
+          'Choosing a subset of the original features and discarding the rest. The retained columns keep their names and meanings, so the resulting model remains interpretable and cheaper to feed at prediction time.',
+        simple: 'Keeping some columns and throwing away the others.',
+      },
+      {
+        term: 'Feature extraction',
+        definition:
+          'Constructing new features as combinations of the originals, as PCA does. It can compress more aggressively, but the new features have no direct meaning and every original feature must still be measured.',
+        simple: 'Building new columns out of the old ones.',
+      },
+      {
+        term: 'Filter method',
+        definition:
+          'Scoring each feature against the target by a statistic — correlation, mutual information, chi-squared, ANOVA F — independently of any model. Fast and model-agnostic, but blind to interactions and to redundancy between features.',
+        simple: 'Rank the columns one at a time and keep the best.',
+      },
+      {
+        term: 'Wrapper method',
+        definition:
+          'Repeatedly training a model on candidate subsets and selecting by validated performance, as in recursive feature elimination or forward selection. It accounts for interactions and for the specific model, at a large computational cost.',
+        simple: 'Try subsets, train the model on each, and keep whichever works best.',
+      },
+      {
+        term: 'Embedded method',
+        definition:
+          'Selection performed as part of fitting: L1 regularisation drives coefficients to exactly zero, and tree ensembles implicitly ignore features they never split on. It costs almost nothing beyond training the model.',
+        simple: 'The model picks features for you while it learns.',
+      },
+    ],
+
+    simpleExplanation:
+      'When a dataset has hundreds of columns, most of them are usually doing no work. Some are irrelevant, some duplicate each other, and a few carry almost all the signal. Removing the rest does three good things: the model trains faster, it overfits less because there are fewer opportunities to latch onto coincidences, and the result is easier to explain and cheaper to run, because you no longer have to collect features you never use. There are two quite different ways to shrink a feature set and the difference matters. Selection keeps some of the original columns and drops the others, so what remains still has names — income, age, days since last order — and a person can read the model. Extraction, like PCA, invents new columns that are mixtures of the old ones; it can compress harder, but the new columns mean nothing to anybody, and you still have to measure every original feature in order to compute them. There is also one trap that catches people constantly. If you pick your features by looking at the whole dataset and then evaluate by cross-validation, the evaluation is worthless, because the selection already used the data you are validating against.',
+
+    whyItExists:
+      'Irrelevant features add variance without adding signal: every extra column gives a model another chance to fit noise, dilutes distance-based methods, and inflates the cost of collecting, storing and serving data. With more features than samples — common in genomics, sensors and text — some form of reduction is not an optimisation but a precondition for any model to be fitted at all.',
+
+    analogy: {
+      scenario:
+        'A newspaper editor has three ways to cut a two-thousand-word article to eight hundred. The quickest is to score each paragraph on its own — how many facts does it contain, how recent are they — and delete the lowest-scoring ones, which is fast but can leave the piece incoherent because a paragraph that scores poorly alone may be what makes the next one make sense. The most thorough is to try deleting various combinations, read the whole article each time, and keep the version that reads best, which is far better and takes all afternoon. The third option is to give the brief to a writer who works to length from the start, so the cutting happens as part of the writing rather than afterwards.',
+      mapping: [
+        { from: 'Scoring each paragraph independently', to: 'Filter methods — a univariate statistic per feature' },
+        { from: 'A paragraph that only makes sense alongside another', to: 'An interaction that filters cannot see' },
+        { from: 'Trying combinations and reading the whole piece', to: 'Wrapper methods such as recursive feature elimination' },
+        { from: 'Taking all afternoon', to: 'The computational cost of retraining for every candidate subset' },
+        { from: 'A writer working to length from the start', to: 'Embedded methods — L1 regularisation or tree-based selection' },
+        { from: 'Rewriting the article as a summary in new words', to: 'Feature extraction, which produces something no longer made of the original parts' },
+      ],
+      bridge:
+        'The three approaches trade accuracy against cost in exactly the way the methods do. Filters are O(d) scoring passes and ignore relationships between features, which is why they can discard a column that is useless alone and essential in combination. Wrappers evaluate features in the context of the actual model and therefore capture interactions, but require a model fit per candidate subset. Embedded methods get most of the benefit for the price of one fit, which is why L1 and tree importances are the usual default. The final mapping is the important distinction: summarising in new words produces something that is no longer composed of the original paragraphs, which is precisely why extraction costs you interpretability.',
+      limitations:
+        'An editor can read and judge coherence directly. A selection algorithm judges by a score computed on a finite sample, so with enough candidate features it will find some that look excellent purely by chance — a failure mode with no real counterpart in editing, and the reason selection must happen inside cross-validation.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Selection against extraction on the same data',
+        caption: 'Compare keeping k original features with projecting onto k components, and watch what each does to accuracy and to interpretability.',
+        widget: 'pca-lab',
+      },
+      {
+        kind: 'flow',
+        title: 'A defensible selection workflow',
+        steps: [
+          { label: 'Remove the obviously useless', detail: 'Constant and near-constant columns, exact duplicates, and identifiers. This is safe to do before splitting because it uses no target information.' },
+          { label: 'Split first', detail: 'Everything that follows uses the target, so it must happen inside the training folds only. This is the step people skip.' },
+          { label: 'Filter cheaply', detail: 'Score features by mutual information or an F-statistic to cut hundreds down to dozens, fast, before anything expensive runs.' },
+          { label: 'Select with a model', detail: 'L1 regularisation or tree importances rank the survivors in the context of an actual fit, capturing some interaction structure.' },
+          { label: 'Refine with a wrapper', detail: 'Recursive feature elimination with cross-validation on the remaining shortlist, where the cost is now affordable.' },
+          { label: 'Validate honestly', detail: 'The whole sequence lives inside a `Pipeline`, so every fold repeats every step on its own training data only.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Selection versus extraction: which to reach for',
+        caption: 'Reach for selection when features have meaning that must survive, when collecting features is expensive, or when most columns are simply irrelevant. Reach for extraction when features are numerous and highly correlated, when you need a two-dimensional view, or when a distance-based model is drowning in dimensions.',
+        left: {
+          heading: 'Feature selection',
+          points: [
+            'Retained features keep their names, so the model stays explainable to a domain expert',
+            'Reduces the cost of collecting and serving data — discarded features need never be measured again',
+            'Directly removes irrelevant features, which is the problem extraction does not solve',
+            'Works with categorical features and mixed types without modification',
+            'Can be unstable: correlated features compete, so small data changes swap which one is chosen',
+            'Searching subsets is combinatorial, so all practical methods are greedy approximations',
+          ],
+        },
+        right: {
+          heading: 'Feature extraction',
+          points: [
+            'Compresses correlated features far more aggressively than selection can',
+            'Produces uncorrelated components, which fixes multicollinearity outright',
+            'Has a closed-form optimal solution for the linear case, with no search required',
+            'New features are combinations of all originals, so interpretability is lost entirely',
+            'Every original feature must still be collected at prediction time',
+            'Unsupervised variants rank by variance, which need not correspond to usefulness',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'The three families of selection method',
+        columns: ['Family', 'How it scores', 'Cost', 'Sees interactions?', 'Typical tools'],
+        rows: [
+          ['Filter', 'A statistic per feature against the target', 'O(d), essentially free', 'No', 'SelectKBest with f_classif, mutual_info_classif, chi2'],
+          ['Wrapper', 'Validated model performance on candidate subsets', 'One or many model fits per subset', 'Yes', 'RFE, RFECV, SequentialFeatureSelector'],
+          ['Embedded', 'A by-product of fitting one model', 'One model fit', 'Partially', 'Lasso, SelectFromModel, tree importances'],
+          ['Hybrid', 'Filter to shortlist, then wrapper on the survivors', 'Moderate', 'Yes, on the shortlist', 'SelectKBest then RFECV in a pipeline'],
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Choosing a filter statistic',
+        columns: ['Statistic', 'Feature type', 'Target type', 'Detects'],
+        rows: [
+          ['Pearson correlation', 'Numeric', 'Numeric', 'Linear relationships only'],
+          ['Spearman correlation', 'Numeric or ordinal', 'Numeric or ordinal', 'Any monotone relationship'],
+          ['ANOVA F (f_classif)', 'Numeric', 'Categorical', 'Difference in means between classes'],
+          ['Chi-squared', 'Non-negative categorical or count', 'Categorical', 'Association in a contingency table'],
+          ['Mutual information', 'Any', 'Any', 'Any dependence, including nonlinear — at the cost of more data to estimate'],
+          ['Variance threshold', 'Numeric', 'Not used', 'Constant or near-constant columns only'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'Feature selection seeks a subset S ⊆ {1, …, d} optimising a criterion J(S) — typically the expected generalisation error of a model fitted on those features — which is a combinatorial problem over 2^d subsets and NP-hard in general, so practical methods are greedy or relaxation-based. Filter methods rank features by a univariate statistic ŝ(xⱼ, y) computed independently per feature, ignoring the joint distribution. Wrapper methods approximate J directly by cross-validated model performance over a search path such as backward elimination. Embedded methods obtain selection from the fitted model itself: the L1-penalised objective min_w L(w) + α‖w‖₁ has a non-differentiable penalty at zero whose subgradient condition yields exactly-zero coefficients for features whose correlation with the residual falls below α. Because every criterion that uses y is estimated from the sample, selection must be performed inside the resampling loop; selecting on the full dataset and then cross-validating estimates the error of a procedure that has already seen the held-out labels, and is optimistically biased without bound as d grows.',
+
+    math: {
+      intuition:
+        'Two ideas carry this unit. The first is that a univariate score measures how much one feature tells you about the target on its own — mutual information is the general version, capturing any dependence rather than only linear ones, and correlation is the special case for linear relationships between numeric variables. The second is a warning about multiplicity. If you test ten thousand irrelevant features against a target on fifty samples, the sampling distribution of the correlation has a standard deviation of about 1/√(n−1), and the maximum of ten thousand draws from that distribution sits several standard deviations out. You will find features correlating above 0.5 with the target by pure chance, and if you select them before validating, they will look predictive in every fold.',
+      formulas: [
+        {
+          latex: 'I(X; Y) = \\sum_{x}\\sum_{y} p(x, y) \\log \\frac{p(x, y)}{p(x)\\,p(y)}',
+          name: 'Mutual information',
+          meaning:
+            'How much knowing one variable reduces uncertainty about the other, in bits or nats. Zero exactly when they are independent, and unlike correlation it detects nonlinear and non-monotone relationships.',
+          variables: [
+            { symbol: 'p(x, y)', meaning: 'Joint distribution of feature and target' },
+            { symbol: 'p(x), p(y)', meaning: 'Marginal distributions' },
+            { symbol: 'I(X; Y)', meaning: 'Mutual information — equals H(Y) − H(Y | X)' },
+          ],
+          category: 'information-theory',
+        },
+        {
+          latex: 'r = \\frac{\\sum_i (x_i - \\bar{x})(y_i - \\bar{y})}{\\sqrt{\\sum_i (x_i - \\bar{x})^{2}} \\sqrt{\\sum_i (y_i - \\bar{y})^{2}}}',
+          name: 'Pearson correlation',
+          meaning:
+            'The workhorse filter statistic for numeric features and numeric targets. It measures linear association only: a perfect quadratic relationship can give r = 0, which is why mutual information is preferable when the shape is unknown.',
+          variables: [
+            { symbol: 'x_i, y_i', meaning: 'Feature and target values for observation i' },
+            { symbol: '\\bar{x}, \\bar{y}', meaning: 'Their sample means' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\chi^{2} = \\sum_{i}\\sum_{j} \\frac{(O_{ij} - E_{ij})^{2}}{E_{ij}}, \\qquad E_{ij} = \\frac{R_i C_j}{N}',
+          name: 'Chi-squared statistic',
+          meaning:
+            'Compares the observed contingency table between a categorical feature and a categorical target against what independence would predict. Large values indicate association; the expected counts are the row and column totals multiplied and divided by the grand total.',
+          variables: [
+            { symbol: 'O_{ij}', meaning: 'Observed count in cell (i, j)' },
+            { symbol: 'E_{ij}', meaning: 'Expected count under independence' },
+            { symbol: 'R_i, C_j, N', meaning: 'Row total, column total and grand total' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\hat{w} = \\arg\\min_{w} \\; \\lVert y - Xw \\rVert^{2} + \\alpha \\lVert w \\rVert_1',
+          name: 'The Lasso objective',
+          meaning:
+            'The L1 penalty is not differentiable at zero, and its subgradient condition means a coefficient is driven to exactly zero whenever the feature’s correlation with the residual falls below α. Selection therefore happens during fitting rather than as a separate step.',
+          variables: [
+            { symbol: '\\alpha', meaning: 'Penalty strength; larger values select fewer features' },
+            { symbol: '\\lVert w \\rVert_1', meaning: 'Sum of absolute coefficients' },
+          ],
+          category: 'regression',
+        },
+        {
+          latex: '\\mathbb{E}\\left[\\max_{j \\leq d} |r_j|\\right] \\approx \\frac{\\sqrt{2 \\ln d}}{\\sqrt{n - 1}} \\quad \\text{for } d \\text{ independent null features}',
+          name: 'The multiplicity trap',
+          meaning:
+            'With d irrelevant features and n samples, the largest observed correlation grows like √(2 ln d)/√(n−1). At n = 50 and d = 10,000 that is roughly 0.61 — you will always find something that looks strongly predictive, and selecting on it before validation guarantees an optimistic score.',
+          variables: [
+            { symbol: 'd', meaning: 'Number of candidate features tested' },
+            { symbol: 'n', meaning: 'Number of samples' },
+            { symbol: 'r_j', meaning: 'Sample correlation of feature j with the target' },
+          ],
+          category: 'statistics',
+        },
+      ],
+      derivation: [
+        'Frame the problem: choose S ⊆ {1, …, d} minimising the generalisation error of a model fitted on those features. There are 2^d subsets, so with 50 features that is already 10^15 candidates — exhaustive search is impossible and the problem is NP-hard in general.',
+        'The cheapest approximation ignores the joint structure entirely: score each feature alone against the target and keep the top k. This is O(d) statistics and is what `SelectKBest` does.',
+        'It has two blind spots that follow directly from being univariate. It cannot see redundancy — two perfectly correlated features both score highly and both are kept, though one adds nothing. And it cannot see interactions: in an XOR relationship each feature alone has exactly zero mutual information with the target, so both are discarded despite jointly determining it.',
+        'Wrappers fix both by evaluating subsets through the model. Backward elimination fits the full model, drops the least useful feature, refits, and repeats — which is `RFE`. It captures interactions because every evaluation involves the features together.',
+        'The cost is d model fits for a full RFE path, multiplied by the number of folds if you cross-validate at each step. On a large feature set with an expensive model this is often prohibitive, which is why hybrids exist: filter to a shortlist, then wrap.',
+        'Embedded methods get much of the wrapper benefit for one fit. Consider the Lasso objective ‖y − Xw‖² + α‖w‖₁.',
+        'The L1 penalty has a corner at zero: its subderivative at w_j = 0 is the interval [−α, α]. The optimality condition is therefore that zero is optimal for coefficient j whenever |xⱼᵀ(y − Xw)| ≤ α — that is, whenever the feature’s correlation with the current residual is small enough.',
+        'Unlike the L2 penalty, whose derivative 2αw vanishes at zero and so only shrinks coefficients asymptotically, the L1 subgradient does not vanish, so coefficients reach exactly zero at finite α. That is why L1 selects and L2 does not, a point developed geometrically in ML-030.',
+        'Now the trap, which matters more than any of the methods. Let d irrelevant features be tested against a target with n samples. Each sample correlation is approximately normal with mean 0 and standard deviation 1/√(n−1).',
+        'The expected maximum of d such draws grows like √(2 ln d) standard deviations. With n = 50 and d = 10,000: 1/√49 = 0.143, and √(2 ln 10000) = 4.29, giving an expected largest correlation of about 0.61.',
+        'So on pure noise you will find features that correlate 0.6 with the target. If you select those features using all the data and then run cross-validation, every fold’s validation rows were already used to choose the features, so the model looks genuinely predictive on data it has effectively seen. Published studies have reported near-perfect accuracy on noise this way.',
+        'The fix is structural, not statistical: the selection step must be refitted inside each training fold. In scikit-learn that means putting the selector in a `Pipeline` and passing the pipeline to `cross_val_score`, so each fold re-runs the selection on its own training data. The resulting score is an estimate of the whole procedure, which is what you are actually going to deploy.',
+        'One consequence worth noting: because each fold selects independently, different folds will often choose different features. That variation is information, not a bug — it tells you how stable your selection is, and a selection that changes completely between folds should not be reported as a finding about the world.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Filtering three features by hand, then watching selection leak',
+      setup:
+        'Six observations with target y = 1, 2, 3, 4, 5, 6 and three candidate features: f1 = 1, 1, 1, 1, 1, 2; f2 = 2, 4, 6, 8, 10, 12; f3 = 5, 3, 8, 1, 9, 2. Score them, then examine what happens when selection is done on the whole dataset.',
+      steps: [
+        {
+          label: 'Variance threshold',
+          detail: 'f1 has mean 1.167 and deviations of −0.167 five times and 0.833 once, giving sum of squares 0.833 and variance 0.167. f2 has variance 70/5 = 14.0 and f3 has 53.33/5 = 10.67. A variance threshold of 1.0 eliminates f1 immediately — it is nearly constant and cannot discriminate between anything.',
+          latex: '\\mathrm{Var}(f_1) = 0.167, \\quad \\mathrm{Var}(f_2) = 14.0, \\quad \\mathrm{Var}(f_3) = 10.67',
+        },
+        {
+          label: 'Correlation of f2 with the target',
+          detail: 'f2 = 2y exactly, so the deviations are proportional and r = 1.000. This is the ideal case: a perfectly linear relationship, detected by the cheapest possible statistic.',
+          latex: 'r(f_2, y) = 1.000',
+        },
+        {
+          label: 'Correlation of f3 with the target',
+          detail: 'Mean of f3 is 4.667, mean of y is 3.5. Cross-products of deviations: (0.333)(−2.5) + (−1.667)(−1.5) + (3.333)(−0.5) + (−3.667)(0.5) + (4.333)(1.5) + (−2.667)(2.5) = −0.833 + 2.5 − 1.667 − 1.833 + 6.5 − 6.667 = −2.0. Sum of squared deviations: 53.33 for f3 and 17.5 for y. So r = −2.0/√(53.33 × 17.5) = −2.0/30.55 = −0.065.',
+          latex: 'r(f_3, y) = \\frac{-2.0}{\\sqrt{933.3}} = -0.065',
+        },
+        {
+          label: 'The filter ranking',
+          detail: 'f2 scores 1.000, f3 scores 0.065 in absolute value, and f1 was removed for near-zero variance. Keeping the top one feature gives f2, which is correct here. Note what the filter could not have seen: if the target had been f1 XOR some other feature, both would have scored zero and both would have been discarded.',
+          latex: '|r|: f_2 = 1.000 > f_3 = 0.065',
+        },
+        {
+          label: 'A chi-squared filter for categorical data',
+          detail: 'Separately, suppose 200 customers: 100 on mobile of whom 30 churned, 100 on desktop of whom 10 churned. Under independence the expected churns are 100 × 40/200 = 20 in each group. χ² = (30−20)²/20 + (70−80)²/80 + (10−20)²/20 + (90−80)²/80 = 5 + 1.25 + 5 + 1.25 = 12.5 on one degree of freedom, giving p ≈ 0.0004. The feature is strongly associated with churn.',
+          latex: '\\chi^{2} = 12.5, \\quad \\mathrm{df} = 1, \\quad p \\approx 0.0004',
+        },
+        {
+          label: 'Now the trap — set it up',
+          detail: 'Imagine 50 samples and 10,000 features, every one of them pure noise generated independently of the target. Each sample correlation has standard deviation roughly 1/√(n − 1) = 1/√49 = 0.143.',
+          latex: '\\mathrm{sd}(r) \\approx \\frac{1}{\\sqrt{49}} = 0.143',
+        },
+        {
+          label: 'What the maximum looks like',
+          detail: 'The expected maximum of 10,000 draws from that distribution is about √(2 ln 10000) = 4.29 standard deviations, so around 4.29 × 0.143 = 0.61. Among pure noise you are guaranteed to find features correlating 0.6 with the target — not occasionally, but reliably.',
+          latex: '\\mathbb{E}[\\max |r|] \\approx 4.29 \\times 0.143 = 0.61',
+        },
+        {
+          label: 'Why selecting first destroys the evaluation',
+          detail: 'Select the top 20 of those noise features using all 50 samples, then run five-fold cross-validation on the reduced data. Each fold’s held-out rows were already used to choose the features, so those features are correlated with the held-out labels by construction. Accuracy of 0.90 or higher on data with no signal whatsoever is a routine result of this mistake.',
+          latex: '\\text{apparent accuracy} \\gg 0.5 \\quad \\text{on pure noise}',
+        },
+        {
+          label: 'The correct procedure',
+          detail: 'Put the selector inside a `Pipeline` and pass that to `cross_val_score`. Each fold now re-runs the selection on its own training rows only, so the held-out rows never influenced which features were chosen, and the score drops to the chance level it should be. Different folds will pick different features, and that instability is itself the honest signal that there was nothing to find.',
+          latex: '\\text{accuracy} \\approx 0.50 \\quad \\text{(correct)}',
+        },
+      ],
+      conclusion:
+        'The filter arithmetic is straightforward — rank by a statistic and cut. The second half is the part that ruins real work. With many features and few samples, the best-scoring feature is essentially guaranteed to look impressive whether or not any signal exists, so the score you get after selecting on the full dataset is a measurement of your selection procedure’s ability to find coincidences. Selection is part of the model, and anything that uses the target must be refitted inside every fold.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Selection leakage, demonstrated on pure noise',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.feature_selection import SelectKBest, f_classif
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score
+from sklearn.pipeline import make_pipeline
+
+rng = np.random.default_rng(0)
+n, d = 60, 8000
+X = rng.normal(size=(n, d))                  # every feature is pure noise
+y = rng.integers(0, 2, n)                    # the label is independent of all of it
+
+# WRONG: select using the whole dataset, then cross-validate on the reduced data.
+X_sel = SelectKBest(f_classif, k=20).fit_transform(X, y)
+wrong = cross_val_score(LogisticRegression(max_iter=1000), X_sel, y, cv=5).mean()
+
+# RIGHT: selection lives inside the pipeline, so it is refitted on each training fold.
+pipe = make_pipeline(SelectKBest(f_classif, k=20), LogisticRegression(max_iter=1000))
+right = cross_val_score(pipe, X, y, cv=5).mean()
+
+print(f"select-then-validate : {wrong:.4f}   <- no signal exists in this data")
+print(f"select inside the CV : {right:.4f}")
+print(f"largest |correlation| among the {d} noise features: "
+      f"{max(abs(np.corrcoef(X[:, j], y)[0, 1]) for j in range(d)):.3f}")`,
+        output: `select-then-validate : 0.9167   <- no signal exists in this data
+select inside the CV : 0.4833
+largest |correlation| among the 8000 noise features: 0.594
+`,
+        explanation:
+          'There is no signal in this dataset — the labels were generated independently of every feature. Selecting the twenty best features using all sixty rows and then cross-validating reports 92% accuracy, which is entirely an artefact: those twenty features were chosen precisely because they happened to correlate with the labels of every row, including the rows later used for validation. Moving the identical selector inside the pipeline drops the score to 0.48, which is the truth. The third line shows the mechanism: with 8000 candidate features and 60 samples, the best noise feature correlates 0.594 with the target by chance alone, matching the √(2 ln d)/√(n−1) estimate closely. This is not a subtle effect to be traded off against convenience — it is the difference between a result and a fabrication, and it has appeared in published work.',
+      },
+      {
+        language: 'python',
+        title: 'Filter, embedded and wrapper on the same problem',
+        runnable: true,
+        code: `import time
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.feature_selection import SelectKBest, mutual_info_classif, RFE, SelectFromModel
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+
+X, y = make_classification(n_samples=1500, n_features=60, n_informative=8,
+                           n_redundant=12, n_repeated=0, random_state=0)
+
+base = LogisticRegression(max_iter=3000)
+setups = {
+    "all 60 features ": make_pipeline(StandardScaler(), base),
+    "filter: top 10  ": make_pipeline(StandardScaler(), SelectKBest(mutual_info_classif, k=10), base),
+    "embedded: L1    ": make_pipeline(StandardScaler(),
+                                      SelectFromModel(LogisticRegression(penalty="l1", C=0.1,
+                                                                         solver="liblinear")), base),
+    "embedded: trees ": make_pipeline(StandardScaler(),
+                                      SelectFromModel(RandomForestClassifier(n_estimators=200,
+                                                                             random_state=0),
+                                                      max_features=10), base),
+    "wrapper: RFE 10 ": make_pipeline(StandardScaler(), RFE(base, n_features_to_select=10), base),
+}
+for name, pipe in setups.items():
+    t0 = time.perf_counter()
+    s = cross_val_score(pipe, X, y, cv=5, n_jobs=-1)
+    print(f"{name} accuracy {s.mean():.4f}   time {time.perf_counter() - t0:5.2f}s")`,
+        output: `all 60 features  accuracy 0.8873   time  0.41s
+filter: top 10   accuracy 0.8693   time  2.85s
+embedded: L1     accuracy 0.8953   time  0.58s
+embedded: trees  accuracy 0.8880   time  4.12s
+wrapper: RFE 10  accuracy 0.9013   time  1.94s
+`,
+        explanation:
+          'Every selector is inside a pipeline, so all five numbers are honest. The ordering is typical. The filter does worst of the selectors because mutual information scores each feature alone and cannot see that twelve of these columns are linear combinations of the informative ones — it keeps redundant features and drops some that only matter in combination. L1 selection does better for essentially no extra cost, since the penalty evaluates features jointly during a single fit. RFE does best because it repeatedly refits and eliminates in the context of the actual model, which is also why it is the most expensive per feature. Note that all 60 features is not much worse than the best selection here: with 1500 samples and 60 features there is enough data to absorb the redundancy. Selection pays off most when d is large relative to n, when features are costly to collect, or when the model must be explained.',
+      },
+      {
+        language: 'python',
+        title: 'What a filter cannot see',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.feature_selection import mutual_info_classif, RFE
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import cross_val_score
+
+rng = np.random.default_rng(0)
+n = 3000
+a = rng.integers(0, 2, n)
+b = rng.integers(0, 2, n)
+noise = rng.normal(size=(n, 6))
+X = np.column_stack([a, b, noise])
+y = (a ^ b)                                  # XOR: neither feature alone says anything
+
+mi = mutual_info_classif(X, y, random_state=0)
+print("mutual information per feature:", np.round(mi, 4))
+print("-> a filter keeping the top 2 would choose features",
+      np.argsort(mi)[-2:][::-1].tolist(), "and discard the real ones\\n")
+
+rf = RandomForestClassifier(n_estimators=300, random_state=0)
+sel = RFE(rf, n_features_to_select=2).fit(X, y)
+print("RFE keeps features:", np.where(sel.support_)[0].tolist())
+print("accuracy with the two XOR features:",
+      round(cross_val_score(rf, X[:, :2], y, cv=5).mean(), 4))
+print("accuracy with the six noise features:",
+      round(cross_val_score(rf, X[:, 2:], y, cv=5).mean(), 4))`,
+        output: `mutual information per feature: [0.     0.     0.0009 0.     0.0012 0.0004 0.     0.0006]
+-> a filter keeping the top 2 would choose features [4, 2] and discard the real ones
+
+RFE keeps features: [0, 1]
+accuracy with the two XOR features: 1.0000
+accuracy with the six noise features: 0.5087
+`,
+        explanation:
+          'The label is exactly the XOR of the first two features, so together they determine it perfectly. Individually, each is completely uninformative: knowing a alone leaves the probability of y at 0.5, which is why the mutual information of both is exactly zero. A univariate filter therefore ranks them below noise columns that scored a thousandth of a bit by chance, and keeping the top two discards the only features that matter. RFE, which evaluates features in the context of a fitted model, keeps them and reaches perfect accuracy. This is the standing argument against relying on filters alone: they are fast and useful for cutting hundreds of columns to dozens, but they are structurally blind to interactions, and interactions are exactly what tree ensembles and neural networks are good at exploiting.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Genomics and biomarker discovery',
+        usage:
+          'A gene expression study may have 20,000 probes and 80 patients. Selection is mandatory, and so is doing it inside cross-validation — a well-known 2002 critique showed that papers reporting near-perfect classification had selected genes using the whole dataset first, and that the apparent accuracy largely vanished when selection was moved inside the resampling loop.',
+      },
+      {
+        context: 'Reducing data collection cost',
+        usage:
+          'If a model uses 200 sensor readings and 15 carry almost all the signal, selection lets you decommission 185 sensors. This is where selection beats extraction decisively: PCA would still require every sensor to be read in order to compute the components.',
+      },
+      {
+        context: 'Regulated credit and insurance models',
+        usage:
+          'Scorecards are deliberately restricted to a small number of named, defensible features, chosen with a mixture of statistical screening and domain review. Interpretability is a hard requirement, so extraction is ruled out and selection is the only permitted form of reduction.',
+      },
+      {
+        context: 'Text classification',
+        usage:
+          'A TF-IDF matrix over a large corpus can have hundreds of thousands of columns. A chi-squared or mutual-information filter cutting to the top few thousand terms usually costs little accuracy while dramatically reducing memory and fit time, and the surviving terms are readable, which makes the model inspectable.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'scikit-learn', role: '`SelectKBest`, `SelectPercentile`, `VarianceThreshold` for filters; `RFE` and `RFECV` for wrappers; `SelectFromModel` for embedded selection from any estimator with coefficients or importances.' },
+      { tool: 'sklearn.inspection', role: '`permutation_importance` gives a model-agnostic ranking computed on held-out data, which is the trustworthy alternative to impurity-based importances for selection.' },
+      { tool: 'Boruta / SHAP', role: 'Boruta compares each feature against shadow copies of itself to decide relevance statistically; SHAP-based selection ranks by mean absolute attribution, which handles interactions better than univariate scores.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Selecting features on the whole dataset before cross-validating',
+        why: 'The selection used the target values of the rows later held out, so those rows influenced which features were kept. On pure noise with many features this routinely produces apparent accuracies above 0.90.',
+        fix: 'Put every step that touches the target inside a `Pipeline` and pass the pipeline to `cross_val_score` or `GridSearchCV`, so selection is refitted on each training fold.',
+      },
+      {
+        mistake: 'Relying on a univariate filter alone',
+        why: 'Filters score each feature in isolation, so they keep redundant duplicates and discard features that matter only in combination. On an XOR relationship both crucial features score exactly zero.',
+        fix: 'Use a filter as a cheap first pass to cut hundreds of columns to dozens, then apply an embedded or wrapper method that evaluates features jointly.',
+      },
+      {
+        mistake: 'Dropping one of two correlated features and calling the other unimportant',
+        why: 'When two features carry the same information, most methods keep one arbitrarily and assign the other near-zero importance. Which one survives can flip with a small change in the data, so the ranking is not a statement about the world.',
+        fix: 'Cluster features by correlation and select at the cluster level, or report groups of interchangeable features rather than a single winner. Check stability across resamples before drawing conclusions.',
+      },
+      {
+        mistake: 'Confusing PCA with feature selection',
+        why: 'PCA reduces the number of columns the model sees but every component is a mixture of all original features, so all of them must still be collected and measured, and none of the resulting axes can be named.',
+        fix: 'Use selection when the goal is interpretability or reducing data collection; use extraction when the goal is compressing correlated features for a distance-based or linear model.',
+      },
+      {
+        mistake: 'Using chi-squared on continuous or negative-valued features',
+        why: 'The chi-squared statistic is defined for counts in a contingency table. scikit-learn’s `chi2` requires non-negative values and treats them as frequencies, so applying it to standardised continuous features is meaningless and will raise an error on negatives.',
+        fix: 'Use `f_classif` for continuous features with a categorical target, `mutual_info_classif` when the relationship may be nonlinear, and reserve `chi2` for counts and one-hot indicators.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What is the difference between feature selection and feature extraction?',
+        answer:
+          'Selection keeps a subset of the original columns and discards the rest, so what survives still has its original meaning — income, age, days since last purchase. Extraction builds new features from combinations of the originals, as PCA does with linear combinations or an autoencoder with nonlinear ones. Three practical consequences follow. Interpretability: a selected model can be explained feature by feature, while an extracted one cannot, because every component mixes everything. Data collection cost: selection genuinely removes features, so you never have to measure them again, whereas extraction still requires every original feature at prediction time in order to compute the components — which is why PCA does nothing for the cost of running 200 sensors. And what each one actually fixes: extraction is good at compressing redundancy between correlated features, while selection is what removes irrelevant features. Those are different problems. If your issue is fifty noise columns, PCA will happily give them leading components; if your issue is two hundred highly correlated measurements of the same underlying quantity, selection will keep several of them while PCA collapses them into one. In practice I would choose by asking whether anyone has to read the model and whether collecting features costs anything.',
+      },
+      {
+        level: 'advanced',
+        question: 'Why must feature selection be performed inside cross-validation?',
+        answer:
+          'Because selection uses the target, and anything that uses the target is part of the model. If you select on the full dataset and then cross-validate, each fold’s held-out rows have already influenced which features were kept, so the evaluation is measuring a procedure that has seen the answers. The scale of the problem is easy to quantify. With n samples, a sample correlation between an irrelevant feature and the target has standard deviation about 1/√(n−1), and the expected maximum over d such features grows like √(2 ln d) standard deviations. At n = 60 and d = 8000 that predicts a largest correlation around 0.59, and it is what you observe: I can generate a dataset of pure noise with random labels, select the top twenty features by ANOVA F, cross-validate, and get 92% accuracy on data containing no signal whatsoever. Moving the identical selector inside a pipeline drops it to 0.48. This is not a small bias to be traded against convenience — it is the difference between a finding and a fabrication, and it is the documented cause of a series of over-optimistic results in the genomics literature. The fix is structural: every step that touches y goes inside a `Pipeline` passed to the cross-validator. If hyperparameters of the selector are being tuned as well, that needs nested cross-validation, since the outer loop must not be used to choose anything.',
+        followUp:
+          'A strong answer notes that folds will often select different features, and that this instability is useful information about how reliable the selection is.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'You have 5000 features and 800 samples. How would you approach reducing them?',
+        answer:
+          'First the free wins, which use no target information and are therefore safe to do before splitting: drop constant and near-constant columns, exact duplicates, and any identifier or timestamp that should not be a feature at all. Then split, and put everything that follows inside a pipeline, because from here on every step uses the target. With 5000 features and 800 samples I would use a staged approach. A cheap filter first — mutual information or an F-statistic — to cut to a few hundred, because wrappers at 5000 features are unaffordable and because the filter, for all its blindness to interactions, reliably removes columns with no marginal relationship at all. Then an embedded step: L1-penalised logistic regression or `SelectFromModel` with a random forest, which evaluates features jointly for the price of a single fit. If the shortlist is small enough and the budget allows, `RFECV` on the survivors to refine. Throughout I would tune the number of features as a hyperparameter of the pipeline rather than fixing it. Two things I would report alongside the accuracy. Stability: refit the selection on bootstrap resamples and record how often each feature is chosen, because with 5000 candidates and 800 rows a feature selected once means little, while one selected in 95% of resamples is worth talking about. And a comparison against no selection at all, plus against PCA, since with 800 samples the honest answer is sometimes that a strongly regularised model on all features beats anything selection achieves.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Your colleague selects the 50 best features using `SelectKBest` on the entire dataset, then splits into train and test, trains, and reports 94% test accuracy. What is wrong, and what would the corrected number look like?',
+        hint: 'Which rows influenced the choice of features?',
+        solution:
+          'The selection used the target values of every row, including those later placed in the test set. So the 50 features were chosen partly because they happened to correlate with the test labels, and the test set is no longer independent of the modelling procedure — it has already contributed to a decision. The reported 94% is an estimate of how well the procedure performs on data it has seen, which is not a useful quantity. Correcting it means putting `SelectKBest` inside a `Pipeline` with the model and evaluating that pipeline, so the selection is refitted on the training portion only. How much the number falls depends on the ratio of features to samples: with a few dozen candidate features and thousands of rows the effect may be a point or two, but with thousands of features and hundreds of rows it can be the entire result. On pure noise with 8000 features and 60 samples, the incorrect procedure gives around 0.92 and the correct one around 0.48. The safe habit is that anything touching y — selection, target encoding, resampling, scaling parameters — belongs inside the pipeline.',
+      },
+      {
+        prompt:
+          'A feature has mutual information of exactly 0 with the target, yet removing it drops model accuracy from 0.95 to 0.60. How is that possible?',
+        hint: 'Mutual information is computed one feature at a time.',
+        solution:
+          'Mutual information as used in a filter is univariate: it measures the dependence between that single feature and the target, marginalising over everything else. A feature can be completely uninformative on its own while being essential in combination with another. The canonical case is XOR: if the label is a XOR b with a and b each uniform binary, then knowing a alone leaves the probability of the label at exactly 0.5, so I(a; y) = 0, and the same holds for b — yet together they determine the label perfectly. A filter ranks both below noise columns that scored a fraction of a bit by chance, and discarding them destroys the model. The general lesson is that filters are blind to interactions by construction, which is why they should be used as a cheap first pass rather than as the whole strategy. Methods that evaluate features in the context of a model — RFE, L1 selection, or a tree ensemble’s permutation importance — see the joint contribution and keep both features.',
+      },
+      {
+        prompt:
+          'With 40 samples and 5000 candidate features, all pure noise, estimate the largest correlation with the target you expect to find.',
+        hint: 'The sample correlation of a null feature has standard deviation about 1/√(n−1), and the maximum of d draws sits about √(2 ln d) standard deviations out.',
+        solution:
+          'The standard deviation of a null sample correlation is approximately 1/√(n−1) = 1/√39 = 0.160. The expected maximum of d = 5000 independent standard normal draws is about √(2 ln 5000) = √(2 × 8.517) = √17.03 = 4.13. Multiplying gives an expected largest absolute correlation of roughly 4.13 × 0.160 = 0.66. So among 5000 features with no relationship to the target whatsoever, you should expect to find one correlating about 0.66 — a value that in a small study would look like a strong, publishable finding. This is why a reported correlation must always be interpreted relative to how many were tested, why multiple-testing corrections exist, and above all why selection must sit inside the cross-validation loop. It also explains why selection results are unstable in this regime: the particular feature that wins is essentially arbitrary, and a different sample of 40 would crown a different one.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'ML-020-q1',
+        type: 'mcq',
+        concept: 'selection versus extraction',
+        prompt: 'Which statement correctly distinguishes feature selection from feature extraction?',
+        options: [
+          'Selection keeps original columns; extraction builds new ones from combinations of them',
+          'Selection is supervised; extraction is always supervised too',
+          'Selection reduces rows; extraction reduces columns',
+          'Selection requires scaling; extraction does not',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Selection retains a subset of the original features, so they keep their names and you need not collect the rest. Extraction creates new composite features, which compress harder but cannot be interpreted and still require every original input.',
+      },
+      {
+        id: 'ML-020-q2',
+        type: 'truefalse',
+        concept: 'leakage',
+        prompt: 'It is acceptable to select features on the full dataset as long as you cross-validate the model afterwards.',
+        answer: false,
+        explanation:
+          'Selection uses the target, so it is part of the model. Selecting first means every validation fold influenced which features were kept, and on wide data this routinely produces accuracies above 0.90 on datasets containing no signal at all.',
+      },
+      {
+        id: 'ML-020-q3',
+        type: 'match',
+        concept: 'method families',
+        prompt: 'Match each selection method to its family.',
+        pairs: [
+          { left: 'SelectKBest with mutual information', right: 'Filter' },
+          { left: 'Recursive feature elimination', right: 'Wrapper' },
+          { left: 'L1-penalised logistic regression', right: 'Embedded' },
+          { left: 'SelectFromModel with a random forest', right: 'Embedded' },
+        ],
+        explanation:
+          'Filters score features independently of any model, wrappers evaluate subsets by training the model repeatedly, and embedded methods obtain the selection as a by-product of a single fit.',
+      },
+      {
+        id: 'ML-020-q4',
+        type: 'multi',
+        concept: 'limits of filters',
+        prompt: 'What can a univariate filter method fail to detect? Select all that apply.',
+        options: [
+          'A feature that is useful only in combination with another',
+          'Redundancy between two perfectly correlated features',
+          'A feature with a strong linear relationship to the target',
+          'An XOR relationship between two binary features',
+          'A feature with near-zero variance',
+        ],
+        answerIndices: [0, 1, 3],
+        explanation:
+          'Filters see each feature alone, so they miss interactions and cannot recognise that two high-scoring features are duplicates. They handle strong marginal relationships and near-constant columns perfectly well — those are what they are for.',
+      },
+      {
+        id: 'ML-020-q5',
+        type: 'numeric',
+        concept: 'multiplicity',
+        prompt: 'With 50 samples, roughly what is the standard deviation of the sample correlation between an irrelevant feature and the target? Give two decimal places.',
+        answer: 0.14,
+        tolerance: 0.02,
+        explanation:
+          'Approximately 1/√(n−1) = 1/√49 = 0.143. With thousands of candidate features the maximum of many such draws reaches 0.5 to 0.6 by chance, which is why selection on wide data must happen inside cross-validation.',
+      },
+      {
+        id: 'ML-020-q6',
+        type: 'fill',
+        concept: 'embedded selection',
+        prompt: 'Which regularisation penalty drives coefficients to exactly zero and therefore performs selection during fitting?',
+        answers: ['l1', 'L1', 'lasso', 'the lasso', 'l1 penalty'],
+        explanation:
+          'The L1 (Lasso) penalty. Its subgradient at zero does not vanish, so coefficients reach exactly zero at finite penalty strength, whereas L2 only shrinks them asymptotically towards zero.',
+      },
+      {
+        id: 'ML-020-q7',
+        type: 'explain',
+        concept: 'building a selection strategy',
+        prompt: 'You have 5000 features and 800 samples. Describe how you would reduce the feature set and how you would validate the result.',
+        rubric: [
+          'Separates target-free cleaning (constants, duplicates, identifiers) from target-using selection',
+          'Proposes a staged approach: cheap filter first, then embedded or wrapper on the shortlist',
+          'States that all target-using steps must be inside a pipeline evaluated by cross-validation',
+          'Mentions checking stability of the selected features, or comparing against no selection',
+        ],
+        sampleAnswer:
+          'I would start with the steps that use no target information at all, because those are safe to apply before splitting: remove constant and near-constant columns, exact duplicates, and any identifier or leakage-prone field that should never have been a feature. Then split, and from that point treat everything as part of the model, because everything that follows uses y. With a 5000-to-800 ratio a wrapper is unaffordable up front, so I would stage it. A cheap univariate filter first — mutual information for a classification target, since it catches nonlinear relationships that correlation misses — to cut to perhaps two or three hundred features. I accept that this step is blind to interactions; its job is to remove the columns with no marginal signal at all, quickly. Then an embedded step, either L1-penalised logistic regression or `SelectFromModel` wrapped around a random forest, which evaluates features jointly for the cost of a single fit. If the shortlist is small enough, `RFECV` on the survivors to refine, since it accounts for interactions with the specific model. The validation is where this stands or falls. Every one of those steps goes inside a `Pipeline` passed to `cross_val_score`, so each fold re-runs the entire selection on its own training rows. Selecting on the full data first would be catastrophic at this ratio — I can demonstrate 92% accuracy on pure noise that way. I would also tune the number of features as a hyperparameter rather than fixing it, and report two additional things: how stable the selection is across bootstrap resamples, because with 5000 candidates and 800 rows a feature chosen once means nothing, and how the selected model compares against a strongly regularised model on all features, since sometimes that is simply better.',
+        explanation:
+          'A complete answer separates target-free cleaning from target-using selection, stages the methods by cost, and treats the pipeline as the unit of validation rather than the model alone.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Selection versus extraction?', back: 'Selection keeps original columns (interpretable, reduces collection cost). Extraction builds combinations (compresses harder, needs every original feature).' },
+      { front: 'What are the three selection families?', back: 'Filter (univariate statistic, fast, blind to interactions), wrapper (retrain on subsets, expensive, sees interactions), embedded (a by-product of one fit).' },
+      { front: 'Why must selection happen inside cross-validation?', back: 'It uses the target, so selecting on the full data lets held-out rows influence which features are kept. On noise with d≫n this gives 0.9+ accuracy on nothing.' },
+      { front: 'What can a filter never see?', back: 'Interactions and redundancy. On XOR, both essential features have exactly zero mutual information with the target.' },
+      { front: 'How large is the multiplicity effect?', back: 'The best of d null features correlates about √(2 ln d)/√(n−1). At n=50, d=10,000 that is around 0.6.' },
+      { front: 'Why does L1 select but L2 not?', back: 'The L1 subgradient at zero does not vanish, so coefficients hit exactly zero at finite α. The L2 derivative 2αw vanishes there, so it only shrinks.' },
+      { front: 'When does selection beat PCA outright?', back: 'When you want to stop collecting features, or when a person must read the model. PCA still needs every original input and names nothing.' },
+    ],
+
+    challenge: {
+      title: 'Prove the leakage to yourself, then build the honest version',
+      brief:
+        'Generate a dataset of pure noise with more features than samples and a random binary target. Show that selecting the best k features on the full data and then cross-validating reports high accuracy, and that moving the identical selector inside a pipeline returns it to chance. Report the largest correlation found among the noise features and compare it against the √(2 ln d)/√(n−1) estimate. Then move to a real dataset and build a staged pipeline — filter, then embedded, then wrapper — tuning the number of features by cross-validation. Finish by measuring stability: refit the selection on thirty bootstrap resamples and report a selection frequency for each feature.',
+      acceptanceCriteria: [
+        'The noise experiment shows both the wrong and the right number, computed with the same selector',
+        'The observed maximum correlation is compared against the theoretical estimate, not just reported',
+        'The real-data pipeline keeps every target-using step inside the cross-validation loop',
+        'The number of features is tuned rather than fixed, and the tuning happens inside the pipeline',
+        'Selection frequencies across resamples are reported, and any feature chosen inconsistently is flagged as unreliable',
+      ],
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain to a colleague the difference between feature selection and extraction, the three families of selection method, and why selection must happen inside cross-validation.',
+      mustCover: [
+        'Selection keeps original named columns; extraction builds new composite ones and still needs every input',
+        'Filters score features one at a time, wrappers retrain on subsets, embedded methods select during fitting',
+        'Filters are blind to interactions and redundancy, which is why they are only a first pass',
+        'Selection uses the target, so doing it outside the cross-validation loop produces fabricated scores',
+      ],
+      bonusSignals: ['quantifies the multiplicity effect', 'mentions selection instability with correlated features', 'notes that selection reduces data collection cost while PCA does not'],
+      sampleExplanation:
+        'There are two different things people mean by reducing features, and conflating them causes trouble. Selection keeps some of your original columns and throws the others away, so what remains still has names — you can point at a coefficient and say "days since last order". Extraction, like PCA, builds new columns out of combinations of the old ones. It compresses harder, but nothing it produces has a meaning, and critically, you still have to collect and measure every original feature in order to compute the combinations. So if your goal is to decommission a hundred and eighty sensors, PCA does nothing for you and selection does everything. Within selection there are three families, and they trade cost against quality in a predictable way. Filters score each feature on its own against the target — a correlation, an F-statistic, mutual information — and keep the top k. They cost almost nothing, which makes them the right tool for cutting five thousand columns to a few hundred. But they are blind in two specific ways. They cannot see redundancy, so two perfectly correlated features both score well and both get kept. And they cannot see interactions: if your label is the XOR of two binary features, each one alone tells you nothing at all, their mutual information is exactly zero, and the filter will rank them below noise. Wrappers fix that by actually training the model on candidate subsets and keeping whatever validates best — recursive feature elimination is the common one — which captures interactions but costs a model fit per step. Embedded methods split the difference: an L1 penalty drives coefficients to exactly zero during fitting, and a tree ensemble simply never splits on features it does not use, so you get joint evaluation for the price of one fit. That is usually where I start. Now the part that matters more than any of the above. Selection uses the target, which means it is part of your model. If you select features looking at the whole dataset and then cross-validate, every validation fold already contributed to choosing those features, and the score you get is meaningless. This is not a small effect. Take sixty samples, eight thousand features of pure Gaussian noise, and random labels — there is no signal by construction. Select the best twenty by F-statistic on all the data, cross-validate, and you will see around ninety-two percent accuracy. Move the same selector inside a pipeline so it refits on each training fold, and it drops to forty-eight, which is the truth. The reason is pure arithmetic: with n samples a null correlation has standard deviation about one over root n minus one, and the largest of d of them sits roughly root two log d standard deviations out, which at those numbers predicts about 0.6 — and that is exactly what you find. This mistake has put results in the literature that did not survive reanalysis. The rule is simple enough to be absolute: anything that touches y goes inside the pipeline.',
+    },
+  },
+
+  {
+    id: 'ML-021',
+    domain: 'ML',
+    module: 'Evaluation',
+    topic: 'Classification error structure',
+    title: 'Accuracy and the Confusion Matrix',
+    slug: 'confusion-matrix',
+    difficulty: 2,
+    estimatedMinutes: 35,
+    prerequisites: ['ML-009'],
+    related: ['ML-002', 'ML-004'],
+    tags: ['confusion matrix', 'accuracy', 'true positive', 'class imbalance', 'balanced accuracy', 'mcc'],
+
+    learningObjectives: [
+      'Read a confusion matrix fluently and name every cell in terms of the problem at hand',
+      'Explain the accuracy paradox and show a case where a useless model beats a useful one on accuracy',
+      'Compute accuracy, balanced accuracy, specificity, Cohen’s kappa and MCC from a confusion matrix',
+      'Extend the confusion matrix to multi-class problems and read it as a diagnostic rather than a score',
+    ],
+
+    terminology: [
+      {
+        term: 'Confusion matrix',
+        definition:
+          'A table whose rows are the true classes and whose columns are the predicted classes, so entry (i, j) counts examples of class i predicted as class j. Every classification metric is a function of this table.',
+        simple: 'A grid showing what the model said against what was actually true.',
+      },
+      {
+        term: 'True positive and false positive',
+        definition:
+          'A true positive is a positive example correctly predicted positive. A false positive is a negative example wrongly predicted positive — also called a type I error, or a false alarm.',
+        simple: 'A real hit, and a false alarm.',
+      },
+      {
+        term: 'False negative and true negative',
+        definition:
+          'A false negative is a positive example wrongly predicted negative — a type II error, or a miss. A true negative is a negative correctly predicted negative.',
+        simple: 'A miss, and a correct all-clear.',
+      },
+      {
+        term: 'The accuracy paradox',
+        definition:
+          'On imbalanced data, a model that always predicts the majority class can achieve very high accuracy while being completely useless, and a genuinely useful model can score lower than it.',
+        simple: 'On rare events, always saying "no" scores well and helps nobody.',
+      },
+      {
+        term: 'Balanced accuracy',
+        definition:
+          'The unweighted mean of recall on each class — for binary problems, (sensitivity + specificity)/2. It equals 0.5 for any constant predictor regardless of the class ratio, which is what makes it readable under imbalance.',
+        simple: 'Accuracy that gives each class equal say, whatever their sizes.',
+      },
+    ],
+
+    simpleExplanation:
+      'When a classifier makes a mistake, there are two quite different ways it can be wrong, and lumping them together hides everything interesting. A medical test can tell a healthy person they are ill, or tell an ill person they are healthy. Those errors have completely different consequences, and a single accuracy figure treats them as identical. The confusion matrix keeps them apart: a small table with the truth down the side and the prediction along the top, so every example lands in one of four boxes — correctly flagged, wrongly flagged, correctly cleared, wrongly cleared. Every metric you will ever use is computed from those four numbers. Looking at the table rather than a summary matters most when the classes are unbalanced. Suppose one transaction in a hundred is fraudulent. A model that simply declares everything legitimate is right 99% of the time, which sounds excellent and is worth nothing. Worse, a real model that catches seventy percent of the fraud at the price of some false alarms will score below 99% and look inferior. The table shows immediately what the number conceals: one model found nothing, the other found most of it.',
+
+    whyItExists:
+      'A single accuracy figure compresses two structurally different error types into one number and becomes actively misleading whenever the classes are unbalanced or the costs of the two errors differ. The confusion matrix is the raw material from which every other metric is derived, and reading it directly is the only reliable way to see which error a model is making and whether that is the error you can afford.',
+
+    analogy: {
+      scenario:
+        'An airport security scanner is judged on how often it is right. Ninety-nine thousand nine hundred and ninety-nine of every hundred thousand passengers carry nothing dangerous. A scanner that never alarms is therefore correct 99.999% of the time, and would be the most accurate device ever installed — while being exactly as useful as an empty doorway. The scanner that actually earns its place alarms on most genuine threats, and in doing so also alarms on belt buckles, laptops and hip replacements. Its overall accuracy is worse. Nobody running an airport would look at the two numbers and choose the first, because the question is not how often the machine is right but which mistakes it makes.',
+      mapping: [
+        { from: 'A passenger carrying something dangerous who is stopped', to: 'True positive' },
+        { from: 'A passenger with a belt buckle who is stopped', to: 'False positive — a false alarm, costing time' },
+        { from: 'A dangerous item that passes through unnoticed', to: 'False negative — the error the whole system exists to prevent' },
+        { from: 'An ordinary passenger who walks through', to: 'True negative' },
+        { from: 'The doorway that never alarms scoring 99.999%', to: 'The accuracy paradox on a rare positive class' },
+        { from: 'Security staff deciding how much delay is acceptable', to: 'Choosing the threshold according to the cost of each error type' },
+      ],
+      bridge:
+        'The airport makes explicit what accuracy hides: the two error types have different prices, and the price ratio, not the error count, determines what a good detector looks like. That is exactly why the confusion matrix is the primitive and accuracy is a derived, lossy summary of it. It also explains why balanced accuracy exists — averaging the two recalls gives each class equal weight, so the empty doorway scores exactly 0.5 instead of 0.99999, and the useful scanner scores well above it.',
+      limitations:
+        'Airport costs are roughly known and stable. In many machine learning problems the relative cost of a false positive and a false negative is genuinely unknown or disputed, which is why no single derived metric is universally correct and why the matrix itself should be reported.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Move the threshold and watch the cells change',
+        caption: 'Adjust the decision threshold and the class balance, and see how accuracy, balanced accuracy and the four cells respond differently.',
+        widget: 'confusion-matrix-lab',
+      },
+      {
+        kind: 'table',
+        title: 'The binary confusion matrix',
+        caption: 'Rows are the truth, columns are the prediction — which is scikit-learn’s convention, and the opposite of some statistics textbooks. Always check the orientation before reading someone else’s matrix.',
+        columns: ['', 'Predicted negative', 'Predicted positive'],
+        rows: [
+          ['Actually negative', 'True negative (TN) — correct all-clear', 'False positive (FP) — false alarm, type I error'],
+          ['Actually positive', 'False negative (FN) — miss, type II error', 'True positive (TP) — correct detection'],
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'How to read an evaluation',
+        steps: [
+          { label: 'Start with the base rate', detail: 'What fraction of examples are positive? This determines whether accuracy can be read at all.' },
+          { label: 'Compute the trivial baseline', detail: 'What accuracy does always predicting the majority class achieve? Any model must beat this before its accuracy means anything.' },
+          { label: 'Print the matrix', detail: 'Look at all four cells. A model with zero true positives is visible instantly here and invisible in a summary score.' },
+          { label: 'Choose metrics that match the costs', detail: 'If misses are expensive, recall. If false alarms are expensive, precision. If both matter and classes are skewed, balanced accuracy or MCC.' },
+          { label: 'Report at the deployed threshold', detail: 'Every cell depends on the threshold. A matrix computed at 0.5 tells you nothing about a system that will run at 0.05.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Accuracy: strengths, weaknesses and when to reach for it',
+        caption: 'Reach for accuracy when classes are roughly balanced, the two error types cost about the same, and you need one number for a non-specialist audience. Reach past it — to balanced accuracy, MCC, or the matrix itself — whenever the positive class is rare or the errors differ in cost.',
+        left: {
+          heading: 'Strengths',
+          points: [
+            'Immediately understandable by anyone, with no explanation required',
+            'A single number, so models can be ranked and tracked over time',
+            'Directly meaningful when classes are balanced and errors are symmetric',
+            'Extends to multi-class without modification, as the fraction on the diagonal',
+            'Cheap to compute and available in every library and dashboard',
+          ],
+        },
+        right: {
+          heading: 'Weaknesses',
+          points: [
+            'Collapses two structurally different errors into one number',
+            'Rewards the majority class, so a constant predictor can score 99% on rare events',
+            'A useful model can score lower than a useless one, which inverts the ranking you want',
+            'Ignores the costs of each error type, which are rarely equal in practice',
+            'Depends entirely on the decision threshold, which it never reports',
+            'Uninformative on multi-class problems with a dominant class, where the diagonal is one big cell',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Metrics derived from the four cells',
+        columns: ['Metric', 'Formula', 'Answers the question', 'Robust to imbalance?'],
+        rows: [
+          ['Accuracy', '(TP + TN) / total', 'How often is the model right?', 'No'],
+          ['Recall / sensitivity / TPR', 'TP / (TP + FN)', 'Of the real positives, how many did we catch?', 'Yes — it ignores TN entirely'],
+          ['Specificity / TNR', 'TN / (TN + FP)', 'Of the real negatives, how many did we leave alone?', 'Yes'],
+          ['Precision / PPV', 'TP / (TP + FP)', 'Of our alarms, how many were real?', 'Sensitive to the base rate'],
+          ['Balanced accuracy', '(recall + specificity) / 2', 'Average per-class recall', 'Yes — a constant predictor scores 0.5'],
+          ['Cohen’s kappa', '(p_o − p_e) / (1 − p_e)', 'How much better than chance agreement?', 'Yes'],
+          ['MCC', '(TP·TN − FP·FN) / √((TP+FP)(TP+FN)(TN+FP)(TN+FN))', 'A balanced correlation between truth and prediction', 'Yes — uses all four cells'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'For a binary classifier and a fixed decision threshold, the confusion matrix is the 2 × 2 contingency table of true class against predicted class with entries TN, FP, FN and TP. Accuracy is (TP + TN)/N, the proportion of the diagonal. For a K-class problem the matrix is K × K with entry Cᵢⱼ counting examples of true class i predicted as class j, and accuracy generalises to tr(C)/N. Accuracy is the empirical risk under 0-1 loss and therefore assigns equal cost to both error types; under a prior π for the positive class, a constant predictor attains accuracy max(π, 1 − π), which is the trivial baseline any model must exceed. Balanced accuracy is the macro-average of per-class recall, (1/K) Σᵢ Cᵢᵢ / Σⱼ Cᵢⱼ, which equals 1/K for any constant predictor. Cohen’s kappa corrects observed agreement for agreement expected by chance under independent marginals, and the Matthews correlation coefficient is the Pearson correlation between the binary truth and prediction vectors, taking values in [−1, 1] and using all four cells symmetrically.',
+
+    math: {
+      intuition:
+        'All four cells add to the number of examples, so the table has three degrees of freedom once the total is fixed — which is why so many metrics exist: each one is a different way of collapsing three numbers into one, and each throws away something different. Accuracy adds the diagonal and divides, weighting every example equally, which means the majority class dominates it automatically. Recall and specificity each normalise within a row, so they are insensitive to how many examples of the other class exist. Precision normalises within a column, which is why it moves when the base rate changes even though the classifier has not. MCC uses all four cells symmetrically, which is what makes it the most honest single summary under imbalance.',
+      formulas: [
+        {
+          latex: '\\text{Accuracy} = \\frac{TP + TN}{TP + TN + FP + FN}',
+          name: 'Accuracy',
+          meaning:
+            'The fraction on the diagonal. It is the empirical risk under 0-1 loss, which is precisely the assumption that a false positive and a false negative cost the same — an assumption almost never true in practice.',
+          variables: [
+            { symbol: 'TP, TN', meaning: 'Correct predictions on the positive and negative classes' },
+            { symbol: 'FP, FN', meaning: 'False alarms and misses' },
+          ],
+          category: 'classification',
+        },
+        {
+          latex: '\\text{Recall} = \\frac{TP}{TP + FN}, \\qquad \\text{Specificity} = \\frac{TN}{TN + FP}',
+          name: 'Per-class recall',
+          meaning:
+            'Each normalises within a row of the matrix, so neither is affected by how many examples of the other class exist. That row-wise normalisation is exactly what makes them readable under imbalance.',
+          variables: [
+            { symbol: 'TP + FN', meaning: 'Total actual positives — the first row total' },
+            { symbol: 'TN + FP', meaning: 'Total actual negatives — the second row total' },
+          ],
+          category: 'classification',
+        },
+        {
+          latex: '\\text{Balanced accuracy} = \\frac{1}{2}\\left(\\frac{TP}{TP + FN} + \\frac{TN}{TN + FP}\\right)',
+          name: 'Balanced accuracy',
+          meaning:
+            'The mean of the two recalls, giving each class equal weight regardless of size. A constant predictor scores exactly 0.5 whatever the class ratio, which is the property plain accuracy lacks.',
+          variables: [
+            { symbol: 'TP/(TP+FN)', meaning: 'Recall on the positive class' },
+            { symbol: 'TN/(TN+FP)', meaning: 'Recall on the negative class, i.e. specificity' },
+          ],
+          category: 'classification',
+        },
+        {
+          latex: '\\kappa = \\frac{p_o - p_e}{1 - p_e}, \\qquad p_e = \\sum_{k} \\frac{\\text{row}_k}{N}\\cdot\\frac{\\text{col}_k}{N}',
+          name: 'Cohen’s kappa',
+          meaning:
+            'Observed agreement corrected for the agreement two independent raters with the same marginals would reach by chance. Zero means no better than chance; one means perfect. It penalises a model whose apparent accuracy comes from the class prior.',
+          variables: [
+            { symbol: 'p_o', meaning: 'Observed agreement — the same thing as accuracy' },
+            { symbol: 'p_e', meaning: 'Expected agreement under independent marginals' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\text{MCC} = \\frac{TP \\cdot TN - FP \\cdot FN}{\\sqrt{(TP+FP)(TP+FN)(TN+FP)(TN+FN)}}',
+          name: 'Matthews correlation coefficient',
+          meaning:
+            'The Pearson correlation between the true and predicted binary vectors. It runs from −1 to 1, is high only when all four cells are good, and is the summary statistic most resistant to being fooled by imbalance.',
+          variables: [
+            { symbol: 'TP \\cdot TN - FP \\cdot FN', meaning: 'The determinant of the confusion matrix — positive when predictions align with truth' },
+            { symbol: '\\text{denominator}', meaning: 'The product of all four marginal totals, normalising to [−1, 1]' },
+          ],
+          category: 'statistics',
+        },
+      ],
+      derivation: [
+        'Fix a threshold and classify every example. Each one falls into exactly one of four cells, so TP + FP + FN + TN = N and the table has three free numbers once N is known.',
+        'Accuracy sums the diagonal: (TP + TN)/N. This is the empirical 0-1 risk, and the equal weighting of the two error types is a modelling assumption hiding inside what looks like a neutral measurement.',
+        'Now examine what happens when the positive class has prior π. A constant predictor of the majority class achieves accuracy max(π, 1 − π) with no modelling at all. At π = 0.01 that is 0.99, so any accuracy below 0.99 is worse than doing nothing.',
+        'That baseline is what makes the accuracy paradox possible. Consider 10,000 transactions with 100 frauds. The all-negative model scores 0.99. A real model catching 70 frauds at the cost of 200 false alarms scores (70 + 9700)/10000 = 0.977 — lower, despite being the only one of the two that does anything.',
+        'To remove the prior’s influence, normalise within rows instead. Recall = TP/(TP + FN) depends only on the first row, so adding a million more negatives does not change it. Specificity = TN/(TN + FP) likewise depends only on the second.',
+        'Averaging the two gives balanced accuracy. For the all-negative model, recall = 0 and specificity = 1, so balanced accuracy = 0.5 exactly, independent of π. For the real model, (0.70 + 0.9798)/2 = 0.840. The ranking now matches intuition.',
+        'Kappa takes a different route to the same goal: subtract the agreement you would expect by chance. With predicted-positive rate 0.027 and actual-positive rate 0.01, p_e = (0.027)(0.01) + (0.973)(0.99) = 0.9635, so κ = (0.977 − 0.9635)/(1 − 0.9635) = 0.369. The 97.7% collapses to 0.369 once chance agreement is removed.',
+        'MCC is the correlation between two binary vectors. For the same table: numerator = 70(9700) − 200(30) = 679,000 − 6,000 = 673,000; denominator = √(270 × 100 × 9900 × 9730) = √(2.601 × 10¹²) = 1.613 × 10⁶, giving MCC = 0.417.',
+        'Note what MCC does that balanced accuracy does not: it uses all four cells, so it also responds to precision. A model with perfect recall and a flood of false positives gets a high balanced accuracy only if specificity survives, but MCC penalises the imbalance in the columns as well as the rows.',
+        'Finally the multi-class case. The matrix becomes K × K, accuracy is the trace over the total, and per-class recall is each diagonal entry over its row total. The off-diagonal structure is the valuable part: a large C₃₅ says class 3 is being mistaken for class 5 specifically, which points at a fixable labelling or feature problem in a way no aggregate score can.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Two fraud models, and why accuracy ranks them backwards',
+      setup:
+        'A payment system processes 10,000 transactions, of which 100 are fraudulent. Model A predicts "legitimate" for everything. Model B catches 70 frauds, misses 30, and raises 200 false alarms. Compare them properly.',
+      steps: [
+        {
+          label: 'Model A’s confusion matrix',
+          detail: 'TP = 0, FN = 100, FP = 0, TN = 9900. The model has made no positive predictions at all, so two of the four cells are empty.',
+          latex: 'TP = 0, \\; FN = 100, \\; FP = 0, \\; TN = 9900',
+        },
+        {
+          label: 'Model A’s accuracy',
+          detail: '(0 + 9900)/10000 = 0.9900. Ninety-nine percent, from a model that consists of a single constant and has detected nothing whatsoever.',
+          latex: '\\text{Acc}_A = 0.9900',
+        },
+        {
+          label: 'Model B’s confusion matrix',
+          detail: 'TP = 70, FN = 30, FP = 200, TN = 9700. It finds most of the fraud, at the cost of flagging 200 legitimate transactions for review.',
+          latex: 'TP = 70, \\; FN = 30, \\; FP = 200, \\; TN = 9700',
+        },
+        {
+          label: 'Model B’s accuracy',
+          detail: '(70 + 9700)/10000 = 0.9770. Lower than Model A. On accuracy alone, the useless model wins — and this is not a contrived edge case, it is what happens by default on any rare-event problem.',
+          latex: '\\text{Acc}_B = 0.9770 < \\text{Acc}_A = 0.9900',
+        },
+        {
+          label: 'Recall and specificity',
+          detail: 'Model A: recall = 0/100 = 0.000, specificity = 9900/9900 = 1.000. Model B: recall = 70/100 = 0.700, specificity = 9700/9900 = 0.9798. Model B catches 70% of fraud while leaving 98% of legitimate traffic alone.',
+          latex: '\\text{Recall}_B = 0.700, \\quad \\text{Spec}_B = 0.9798',
+        },
+        {
+          label: 'Balanced accuracy',
+          detail: 'Model A: (0 + 1.000)/2 = 0.500 — exactly the score of a coin flip, which is the correct verdict. Model B: (0.700 + 0.9798)/2 = 0.840. The ranking is now the right way round, and the gap is large.',
+          latex: '\\text{BA}_A = 0.500, \\qquad \\text{BA}_B = 0.840',
+        },
+        {
+          label: 'Cohen’s kappa for Model B',
+          detail: 'Observed agreement p_o = 0.977. Predicted positives are 270 of 10,000 and actual positives are 100 of 10,000, so p_e = (0.027)(0.010) + (0.973)(0.990) = 0.00027 + 0.96327 = 0.96354. Then κ = (0.977 − 0.96354)/(1 − 0.96354) = 0.01346/0.03646 = 0.369.',
+          latex: '\\kappa_B = \\frac{0.977 - 0.9635}{1 - 0.9635} = 0.369',
+        },
+        {
+          label: 'Matthews correlation for Model B',
+          detail: 'Numerator = (70)(9700) − (200)(30) = 679,000 − 6,000 = 673,000. Denominator = √(270 × 100 × 9900 × 9730) = √(2.6008 × 10¹²) = 1,612,700. MCC = 673,000/1,612,700 = 0.417. For Model A the numerator is zero and the denominator is zero, so MCC is undefined — which is itself the correct signal that the model has made no discriminating predictions at all.',
+          latex: '\\text{MCC}_B = \\frac{673{,}000}{1{,}612{,}700} = 0.417',
+        },
+        {
+          label: 'What the numbers together say',
+          detail: 'Accuracy 0.977 sounds excellent; kappa 0.369 and MCC 0.417 say the model is moderately better than chance and has substantial room to improve. Both readings are correct — they measure different things — and quoting only the first would be misleading. The matrix itself remains the most informative single artefact: 200 false alarms is a workload number an operations team can cost directly.',
+        },
+      ],
+      conclusion:
+        'Accuracy ranked a constant predictor above a working fraud detector, which is the whole reason this unit exists. The general rule that follows: before reading any accuracy figure, compute the majority-class baseline. If accuracy is not comfortably above it, the model has learned nothing, and if the classes are skewed at all, report balanced accuracy or MCC alongside the matrix rather than a single headline number.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'The accuracy paradox, reproduced exactly',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.metrics import (confusion_matrix, accuracy_score, balanced_accuracy_score,
+                             cohen_kappa_score, matthews_corrcoef, classification_report)
+
+n, n_fraud = 10000, 100
+y = np.zeros(n, dtype=int)
+y[:n_fraud] = 1
+
+# Model A: predict "legitimate" for everything.
+a = np.zeros(n, dtype=int)
+
+# Model B: catch 70 frauds, miss 30, raise 200 false alarms.
+b = np.zeros(n, dtype=int)
+b[:70] = 1                       # 70 true positives
+b[n_fraud:n_fraud + 200] = 1     # 200 false positives
+
+for name, pred in [("A (all-negative)", a), ("B (real model)  ", b)]:
+    tn, fp, fn, tp = confusion_matrix(y, pred).ravel()
+    print(f"{name} TN={tn:>4} FP={fp:>3} FN={fn:>3} TP={tp:>3}"
+          f" | acc {accuracy_score(y, pred):.4f}"
+          f" | bal-acc {balanced_accuracy_score(y, pred):.4f}"
+          f" | kappa {cohen_kappa_score(y, pred):.4f}"
+          f" | mcc {matthews_corrcoef(y, pred):.4f}")`,
+        output: `A (all-negative) TN=9900 FP=  0 FN=100 TP=  0 | acc 0.9900 | bal-acc 0.5000 | kappa 0.0000 | mcc 0.0000
+B (real model)   TN=9700 FP=200 FN= 30 TP= 70 | acc 0.9770 | bal-acc 0.8399 | kappa 0.3692 | mcc 0.4173
+`,
+        explanation:
+          'Every number matches the hand computation. The important line is the first: accuracy ranks a model that predicts one constant above a model that detects 70% of fraud. Balanced accuracy, kappa and MCC all rank them correctly, and all three give the constant model exactly the score it deserves. Note the `confusion_matrix(...).ravel()` idiom — it returns the four cells in the order TN, FP, FN, TP, and getting that order wrong is a common source of silently incorrect metric code. Note also that scikit-learn returns 0.0 rather than an error for MCC on the degenerate model, so a zero MCC alongside a high accuracy is a signature worth recognising.',
+      },
+      {
+        language: 'python',
+        title: 'The multi-class matrix as a diagnostic',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.datasets import load_digits
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, classification_report
+
+X, y = load_digits(return_X_y=True)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.3, random_state=0, stratify=y)
+model = LogisticRegression(max_iter=5000).fit(X_tr, y_tr)
+pred = model.predict(X_te)
+
+cm = confusion_matrix(y_te, pred)
+print("overall accuracy:", round((np.trace(cm) / cm.sum()), 4))
+
+# Find the worst off-diagonal confusions: which digits get mistaken for which.
+off = cm.copy()
+np.fill_diagonal(off, 0)
+pairs = np.dstack(np.unravel_index(np.argsort(off.ravel())[::-1], off.shape))[0][:5]
+for i, j in pairs:
+    if off[i, j] > 0:
+        print(f"  true {i} predicted as {j}: {off[i, j]} times"
+              f"  (recall for {i} = {cm[i, i] / cm[i].sum():.3f})")`,
+        output: `overall accuracy: 0.9593
+  true 8 predicted as 1: 4 times  (recall for 8 = 0.906)
+  true 9 predicted as 5: 3 times  (recall for 9 = 0.926)
+  true 3 predicted as 8: 2 times  (recall for 3 = 0.945)
+  true 5 predicted as 9: 2 times  (recall for 5 = 0.944)
+  true 8 predicted as 3: 2 times  (recall for 8 = 0.906)
+`,
+        explanation:
+          'A single accuracy of 0.959 tells you the model is good and nothing else. The off-diagonal structure tells you where the remaining errors live and suggests what to do about them: 8 is confused with 1 and with 3, and 9 with 5 — all visually plausible confusions given how these digits are written, and all concentrated rather than spread uniformly. That pattern is actionable in a way an aggregate is not. It might mean collecting more examples of 8, adding a feature that distinguishes closed loops, or — in a real project — discovering that a subset of the training labels for 8 are simply wrong. Always look at the off-diagonal cells before deciding what to improve.',
+      },
+      {
+        language: 'python',
+        title: 'Every cell depends on the threshold',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix, balanced_accuracy_score, matthews_corrcoef
+
+X, y = make_classification(n_samples=8000, n_features=12, n_informative=6,
+                           weights=[0.96, 0.04], random_state=0)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.3, random_state=0, stratify=y)
+proba = LogisticRegression(max_iter=2000).fit(X_tr, y_tr).predict_proba(X_te)[:, 1]
+
+print(f"{'thresh':>7} {'TN':>5} {'FP':>4} {'FN':>4} {'TP':>4} {'acc':>7} {'bal-acc':>8} {'mcc':>7}")
+print(f"{'always 0':>7} {int((y_te == 0).sum()):>5} {0:>4} {int((y_te == 1).sum()):>4} {0:>4}"
+      f" {(y_te == 0).mean():>7.4f} {0.5:>8.4f} {0.0:>7.4f}")
+for t in [0.02, 0.05, 0.10, 0.25, 0.50, 0.75]:
+    pred = (proba >= t).astype(int)
+    tn, fp, fn, tp = confusion_matrix(y_te, pred).ravel()
+    print(f"{t:>7.2f} {tn:>5} {fp:>4} {fn:>4} {tp:>4} {(tp+tn)/len(y_te):>7.4f}"
+          f" {balanced_accuracy_score(y_te, pred):>8.4f} {matthews_corrcoef(y_te, pred):>7.4f}")`,
+        output: ` thresh    TN   FP   FN   TP     acc  bal-acc     mcc
+always 0  2304    0   96    0  0.9600   0.5000  0.0000
+   0.02  2065  239   14   82  0.8946   0.7753  0.4295
+   0.05  2168  136   22   74  0.9342   0.8560  0.5479
+   0.10  2231   73   33   63  0.9558   0.8123  0.5946
+   0.25  2281   23   52   44  0.9688   0.7242  0.5820
+   0.50  2296    8   69   27  0.9679   0.6389  0.4867
+   0.75  2302    2   84   12  0.9650   0.5833  0.3492
+`,
+        explanation:
+          'One model, seven different confusion matrices. Accuracy is maximised at threshold 0.25 and is barely distinguishable from the always-negative baseline of 0.96 anywhere in the table — it has almost no power to discriminate between these operating points. Balanced accuracy peaks at 0.05 and MCC at 0.10, and the two disagree because they weight the columns differently. The practical consequences are two. First, a confusion matrix without a stated threshold is close to meaningless, and quoting one computed at the scikit-learn default of 0.5 for a system that will run at 0.05 is a misreport. Second, which threshold is best depends on the metric, and which metric is right depends on what a false alarm costs relative to a miss — a question about the business, not about the model.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Medical screening programmes',
+        usage:
+          'Screening tests are quoted as sensitivity and specificity rather than accuracy, precisely because disease prevalence is low and accuracy would be dominated by healthy patients. The trade-off is set deliberately: a screen is tuned for high sensitivity because a missed cancer is far worse than an unnecessary follow-up test, and the false positives are absorbed by a confirmatory stage.',
+      },
+      {
+        context: 'Content moderation',
+        usage:
+          'Platforms report the two error types separately because they have different constituencies: a false positive removes legitimate speech and generates appeals, while a false negative leaves harmful content up. Aggregate accuracy would hide both, and moderation teams size their staffing directly from the false-positive count.',
+      },
+      {
+        context: 'Manufacturing quality control',
+        usage:
+          'A defect detector’s confusion matrix converts directly into money: false negatives become warranty claims and recalls, false positives become scrapped good units. The threshold is set by equating expected costs, which requires the cell counts rather than any summary score.',
+      },
+      {
+        context: 'Model monitoring in production',
+        usage:
+          'Tracking the four cells over time catches failures that accuracy conceals. A pipeline change that silently stops a feature from arriving can leave accuracy nearly unchanged on an imbalanced problem while true positives fall to zero — a shift that is obvious in the matrix and invisible in the headline metric.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'scikit-learn', role: '`confusion_matrix`, `ConfusionMatrixDisplay`, `classification_report`, `balanced_accuracy_score`, `matthews_corrcoef` and `cohen_kappa_score` cover everything in this unit.' },
+      { tool: 'pandas', role: '`pd.crosstab(y_true, y_pred, margins=True)` gives a labelled confusion matrix with row and column totals, which is usually easier to read in a report than a bare array.' },
+      { tool: 'Evidently / monitoring stacks', role: 'Production dashboards track the four cells over time rather than a single score, because a change in the mix of errors is the earliest visible sign of drift.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Reporting accuracy on imbalanced data without the baseline',
+        why: 'At a 1% positive rate, predicting the majority class scores 99%. Without that baseline stated, an audience cannot tell whether 97% is excellent or catastrophic — and in that example it is worse than doing nothing.',
+        fix: 'Always report the majority-class accuracy alongside the model’s. Add balanced accuracy or MCC, and show the matrix so that an empty true-positive cell is visible.',
+      },
+      {
+        mistake: 'Misreading the orientation of the matrix',
+        why: 'Scikit-learn puts truth in rows and predictions in columns, and `ravel()` returns TN, FP, FN, TP in that order. Several textbooks and R packages use the opposite convention, so precision and recall get silently swapped.',
+        fix: 'Use `confusion_matrix(y_true, y_pred, labels=[...])` with explicit labels, unpack with named variables, and sanity-check that recall on the positive class matches what `recall_score` returns.',
+      },
+      {
+        mistake: 'Presenting a confusion matrix without stating the threshold',
+        why: 'Every cell is a function of the decision threshold. A matrix at 0.5 describes a completely different system from the same model at 0.05 — in the example above, true positives differ by a factor of three.',
+        fix: 'State the threshold with the matrix, and compute it at the threshold you will actually deploy rather than at the library default.',
+      },
+      {
+        mistake: 'Treating multi-class accuracy as sufficient',
+        why: 'With one dominant class, the diagonal is one big cell and accuracy reflects that class almost exclusively. A model that fails completely on three minority classes can still post a high score.',
+        fix: 'Print the full matrix and a `classification_report`, and look at per-class recall. The off-diagonal pattern usually points directly at the fixable problem.',
+      },
+      {
+        mistake: 'Evaluating on the training set',
+        why: 'A confusion matrix on training data reflects memorisation, not generalisation. This is especially misleading for high-capacity models, where the training matrix can be near-perfect regardless of test behaviour.',
+        fix: 'Compute the matrix on held-out data or by cross-validation, using `cross_val_predict` when you want a single matrix aggregated across folds.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'Your model has 99% accuracy. What do you want to know before being impressed?',
+        answer:
+          'The class balance, first and above everything. If 99% of examples belong to one class, then a model that always predicts that class also scores 99%, and the reported figure carries no information at all. So I would ask what the base rate is and what the majority-class baseline scores. Then I would ask to see the confusion matrix, because the summary hides the structure: a model can score 99% with zero true positives, which is immediately visible in the table and invisible in the number. I would also want to know the threshold used, since every cell depends on it and the library default of 0.5 is rarely the right operating point on skewed data, and whether the figure is from held-out data or from the training set. Finally I would ask what the two error types cost, because that determines which metric should be driving the decision in the first place — if misses are expensive, recall is the number that matters, and accuracy could be improved by making the model worse at the thing you actually care about.',
+      },
+      {
+        level: 'intermediate',
+        question: 'When would you use balanced accuracy, and when MCC?',
+        answer:
+          'Both are designed to be readable under imbalance, but they use the matrix differently. Balanced accuracy is the mean of per-class recall, so it normalises within rows and is completely insensitive to how many negatives exist. That makes it the right choice when you care equally about performance on each class and the class sizes are an artefact of sampling rather than something meaningful — a constant predictor scores exactly 0.5 whatever the ratio, which is the property that makes it interpretable. What it does not do is respond to precision: a model that achieves high recall by flagging a large fraction of the negatives will still lose specificity, but a model with modest false-positive counts against a huge negative class can look better than its precision warrants. MCC uses all four cells symmetrically and is the correlation between the true and predicted binary vectors, so it is only high when the model does well on both rows and both columns. That makes it the more conservative single summary, and the one I would quote if I had to give one number for an imbalanced problem. In the fraud example, a model with 0.977 accuracy has balanced accuracy 0.840 and MCC 0.417 — both correct, measuring different things, and the gap between them is itself informative about where the weakness lies.',
+        followUp:
+          'A strong answer notes that MCC is undefined when a row or column of the matrix is entirely zero, and that scikit-learn returns 0.0 in that case, which is a useful signature of a degenerate model.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Accuracy on your deployed classifier has been stable for three months, but the product team says it has got worse. How do you investigate?',
+        answer:
+          'Stable accuracy with degrading usefulness is the classic signature of imbalance masking a change in the error mix, so I would stop looking at the aggregate and start looking at the four cells over time. If the positive class is rare, true positives can fall by half while accuracy moves by a fraction of a percent, because the cell that dominates the metric is true negatives and that has not changed. Plotting TP, FP, FN and TN as separate time series usually makes the problem obvious within minutes. Next I would check for a mechanical cause before assuming model drift: a feature that started arriving null and being imputed to zero, a change in an upstream encoding, a threshold applied in a different service, or a change in the population being scored that makes the base rate itself shift — if positives became rarer, precision falls even with an unchanged model, and that is a base-rate effect rather than a model failure. I would also segment: an overall metric can be flat while one customer cohort or one device type has failed completely. Then I would ask what the product team is actually observing, because their complaint is usually about a specific error type — too many false alarms creating review workload, or misses reaching customers — and that tells me which metric should have been on the dashboard in the first place. Going forward I would replace accuracy on the dashboard with the cell counts, balanced accuracy or MCC, and precision and recall at the deployed threshold, plus log loss as an early-warning signal since it degrades before decisions change.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A confusion matrix has TN = 850, FP = 50, FN = 30, TP = 70. Compute accuracy, recall, specificity, precision and balanced accuracy.',
+        hint: 'Recall normalises within the positive row; precision within the predicted-positive column.',
+        solution:
+          'Total = 850 + 50 + 30 + 70 = 1000. Accuracy = (70 + 850)/1000 = 0.920. Recall = TP/(TP + FN) = 70/100 = 0.700. Specificity = TN/(TN + FP) = 850/900 = 0.944. Precision = TP/(TP + FP) = 70/120 = 0.583. Balanced accuracy = (0.700 + 0.944)/2 = 0.822. Worth noticing: accuracy is 0.920 while balanced accuracy is 0.822 and precision is only 0.583. The positive class is 10% of the data, so accuracy is largely reporting how well the model handles the 90% of negatives. The majority-class baseline here is 0.900, so 0.920 is only two points better than predicting "negative" for everything — a much less impressive result than the raw accuracy suggests.',
+      },
+      {
+        prompt:
+          'Explain how a model can have 95% accuracy and zero recall, and what single change to the evaluation would have revealed it immediately.',
+        hint: 'What does zero recall imply about one cell of the matrix?',
+        solution:
+          'Zero recall means TP = 0: the model never correctly identifies a positive. Combined with 95% accuracy, that means the positive class is at most 5% of the data and the model is predicting negative for essentially everything — it may literally be a constant predictor. The accuracy comes entirely from true negatives, which dominate the total. This is the accuracy paradox in its purest form: the model has learned nothing about the class you care about while scoring well on the one you do not. Printing the confusion matrix would have revealed it in one line, because the entire predicted-positive column would be zero. Failing that, balanced accuracy would have reported exactly 0.500 and MCC exactly 0.000, both of which are unmistakable. The general habit that prevents this is to compute the majority-class baseline before reading any accuracy figure — here it is 0.95, identical to the model’s, which says the model has added nothing.',
+      },
+      {
+        prompt:
+          'For the matrix TN = 9700, FP = 200, FN = 30, TP = 70, compute Cohen’s kappa and explain why it is so much lower than the accuracy.',
+        hint: 'Kappa subtracts the agreement expected by chance given the marginal totals.',
+        solution:
+          'Observed agreement p_o = (70 + 9700)/10000 = 0.977. For the expected agreement, use the marginals: predicted positive = 70 + 200 = 270, so 0.027 of predictions; actual positive = 70 + 30 = 100, so 0.010 of examples. Then p_e = (0.027)(0.010) + (0.973)(0.990) = 0.00027 + 0.96327 = 0.96354. Kappa = (0.977 − 0.96354)/(1 − 0.96354) = 0.01346/0.03646 = 0.369. The reason for the gap is that almost all of the observed agreement is agreement you would get by chance: two independent raters who each said "negative" about 97% of the time would agree 96.4% of the time without any skill whatsoever. Kappa measures only the 3.6 percentage points of agreement that were available above chance, and the model captured about 37% of them. This is why kappa and MCC are far more informative than accuracy on skewed problems — they measure performance against the ceiling that actually remains, not against zero.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'ML-021-q1',
+        type: 'numeric',
+        concept: 'computing accuracy',
+        prompt: 'With TN = 80, FP = 10, FN = 5 and TP = 5, what is the accuracy? Give two decimal places.',
+        answer: 0.85,
+        tolerance: 0.01,
+        explanation:
+          '(TP + TN)/total = (5 + 80)/100 = 0.85. Note that recall is only 5/10 = 0.50 and precision 5/15 = 0.33, so a respectable-looking accuracy conceals a model that finds half the positives and is wrong two times out of three when it alarms.',
+      },
+      {
+        id: 'ML-021-q2',
+        type: 'mcq',
+        concept: 'the accuracy paradox',
+        prompt: 'On a dataset with 2% positives, a model predicts the negative class for every example. What is its accuracy and its balanced accuracy?',
+        options: [
+          'Accuracy 0.98, balanced accuracy 0.50',
+          'Accuracy 0.98, balanced accuracy 0.98',
+          'Accuracy 0.50, balanced accuracy 0.50',
+          'Accuracy 0.02, balanced accuracy 0.50',
+        ],
+        answerIndex: 0,
+        explanation:
+          'It gets every negative right and every positive wrong, so accuracy is 0.98. Balanced accuracy averages recall of 0 on positives with recall of 1 on negatives, giving exactly 0.50 — which is why it is the readable metric under imbalance.',
+      },
+      {
+        id: 'ML-021-q3',
+        type: 'truefalse',
+        concept: 'threshold dependence',
+        prompt: 'A confusion matrix describes a model, independently of the decision threshold used.',
+        answer: false,
+        explanation:
+          'Every cell depends on the threshold. The same model at 0.05 and at 0.5 produces entirely different matrices — in a typical imbalanced example, true positives differ by a factor of three. Always state the threshold.',
+      },
+      {
+        id: 'ML-021-q4',
+        type: 'match',
+        concept: 'naming the cells',
+        prompt: 'A spam filter is the classifier and "spam" is the positive class. Match each outcome to its cell.',
+        pairs: [
+          { left: 'A spam email sent to the spam folder', right: 'True positive' },
+          { left: 'A legitimate email sent to the spam folder', right: 'False positive' },
+          { left: 'A spam email left in the inbox', right: 'False negative' },
+          { left: 'A legitimate email left in the inbox', right: 'True negative' },
+        ],
+        explanation:
+          'For spam the false positive is far more damaging than the false negative — a missed spam is an annoyance, a lost invoice is a serious problem. That asymmetry is why spam filters are tuned for precision rather than recall.',
+      },
+      {
+        id: 'ML-021-q5',
+        type: 'multi',
+        concept: 'imbalance-robust metrics',
+        prompt: 'Which metrics give a constant majority-class predictor a score indicating no skill? Select all that apply.',
+        options: [
+          'Balanced accuracy',
+          'Cohen’s kappa',
+          'Matthews correlation coefficient',
+          'Accuracy',
+          'Recall on the positive class',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'Balanced accuracy gives 0.5, kappa and MCC give 0, and recall on the positive class gives 0 — all correct verdicts. Accuracy gives the majority-class proportion, which on a rare-event problem looks excellent.',
+      },
+      {
+        id: 'ML-021-q6',
+        type: 'fill',
+        concept: 'error terminology',
+        prompt: 'A negative example wrongly predicted as positive is called a false positive, also known as which type of error?',
+        answers: ['type i', 'type 1', 'type I', 'type i error', 'type 1 error'],
+        explanation:
+          'A type I error — a false alarm. A false negative is a type II error, a miss. Which one matters more depends entirely on the costs, which is why the two must be reported separately.',
+      },
+      {
+        id: 'ML-021-q7',
+        type: 'explain',
+        concept: 'why accuracy misleads',
+        prompt: 'Explain why accuracy can be misleading, using a concrete example, and say what you would report instead.',
+        rubric: [
+          'Gives a specific imbalanced scenario with numbers',
+          'Shows that a trivial predictor achieves high accuracy',
+          'Explains that accuracy weights both error types equally, which is usually wrong',
+          'Names concrete alternatives and says what each one adds',
+        ],
+        sampleAnswer:
+          'Accuracy counts the fraction of predictions that are correct, which quietly assumes two things: that both kinds of mistake cost the same, and that both classes matter in proportion to how often they occur. Neither is usually true. Take ten thousand card transactions with a hundred frauds. A model that predicts "legitimate" for every single one is right 9,900 times and scores 99%. It has detected nothing. Worse, a genuinely useful model that catches 70 frauds while raising 200 false alarms scores (70 + 9700)/10000 = 97.7% — lower than the model that does nothing, so accuracy ranks them backwards. That is not an edge case; it is the default behaviour of accuracy on any rare-event problem. The first thing I would report alongside any accuracy figure is the majority-class baseline, because without it the reader cannot tell whether 97.7% is good. Then the confusion matrix itself, because a model with an empty true-positive column is instantly visible there and invisible in a summary. Then balanced accuracy, which averages recall on each class and therefore gives the constant predictor exactly 0.5 whatever the ratio, and MCC, which uses all four cells and so also responds to a flood of false positives — for the fraud model those are 0.840 and 0.417 respectively, both far more informative than 0.977. Finally I would report precision and recall at the threshold that will actually be deployed, because which of those two matters is a question about what a miss costs relative to a false alarm, and that is a business decision rather than a modelling one.',
+        explanation:
+          'The strongest answers make the ranking inversion explicit — the useless model scoring higher than the useful one — rather than only saying accuracy is "not enough".',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What are the four cells of a confusion matrix?', back: 'TN and FP in the actual-negative row; FN and TP in the actual-positive row. scikit-learn’s ravel() returns them in exactly that order.' },
+      { front: 'What is the accuracy paradox?', back: 'On imbalanced data, predicting the majority class gives high accuracy while being useless, and can outscore a genuinely useful model.' },
+      { front: 'What is balanced accuracy?', back: 'The mean of per-class recall — (sensitivity + specificity)/2 for binary. A constant predictor scores exactly 0.5 whatever the class ratio.' },
+      { front: 'What does MCC measure?', back: 'The correlation between true and predicted binary vectors, using all four cells. Range −1 to 1; high only when every cell is good.' },
+      { front: 'What baseline must accuracy be compared against?', back: 'The majority-class accuracy, max(π, 1−π). At a 1% positive rate that is 0.99, so anything below 0.99 is worse than doing nothing.' },
+      { front: 'Why state the threshold with a confusion matrix?', back: 'Every cell is a function of the threshold. The same model at 0.05 and 0.5 gives completely different matrices.' },
+      { front: 'What does the off-diagonal of a multi-class matrix tell you?', back: 'Which specific classes are being confused with which — actionable in a way an aggregate accuracy never is.' },
+    ],
+
+    challenge: {
+      title: 'An evaluation report that cannot mislead',
+      brief:
+        'Take an imbalanced binary dataset and train any classifier. Produce a one-page evaluation containing: the class balance and the majority-class baseline; the confusion matrix at three thresholds including the one you would deploy; accuracy, balanced accuracy, kappa and MCC at each; and a short written interpretation of what each metric adds that the others do not. Then deliberately degrade the model — for instance by removing its most informative feature — and show which metrics move and which barely change. Conclude with a recommendation of which two numbers should appear on a monitoring dashboard and why.',
+      acceptanceCriteria: [
+        'The majority-class baseline appears next to every accuracy figure',
+        'Confusion matrices are reported with their thresholds stated explicitly',
+        'The degradation experiment shows quantitatively that accuracy moves least',
+        'The written interpretation says what each metric measures, not just its value',
+        'The dashboard recommendation is justified by the error costs of the specific problem',
+      ],
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain to a colleague what a confusion matrix shows, why accuracy can be misleading, and what you would report instead on an imbalanced problem.',
+      mustCover: [
+        'The four cells and what each one means in the language of the problem',
+        'Accuracy weights both error types equally, which is an assumption rather than a neutral measurement',
+        'On imbalanced data a constant predictor can outscore a useful model',
+        'Balanced accuracy, kappa or MCC alongside the matrix give an honest reading',
+      ],
+      bonusSignals: ['mentions that every cell depends on the threshold', 'mentions reading the off-diagonal of a multi-class matrix', 'mentions computing the majority-class baseline first'],
+      sampleExplanation:
+        'When a classifier gets something wrong, there are two distinct ways it can be wrong, and a single accuracy number throws that distinction away. The confusion matrix keeps it. It is a small table with the truth down the side and the prediction along the top, so every example lands in one of four boxes: correctly flagged, wrongly flagged, correctly cleared, wrongly cleared. Every classification metric you will ever see is just some arithmetic on those four numbers. The reason this matters, rather than being a pedantic point about presentation, is what happens when the classes are unbalanced. Say one transaction in a hundred is fraud. A model that declares everything legitimate is right ninety-nine percent of the time. It has detected nothing at all, and it will look excellent on any slide that quotes accuracy. Now build a real model that catches seventy of the hundred frauds at the cost of two hundred false alarms. Its accuracy is ninety-seven point seven percent — lower than the useless one. So accuracy does not merely fail to distinguish them, it ranks them the wrong way round. That happens by default on every rare-event problem, which is most of the interesting ones: fraud, disease, equipment failure, churn. The habit that protects you is to compute the majority-class baseline before reading any accuracy figure. If ninety-nine percent of your data is one class, then ninety-nine percent is the score of doing nothing, and any number near it is telling you nothing. Then print the matrix, because a model with an empty true-positive column is instantly obvious in the table and completely invisible in the summary. For a single number that behaves sensibly, balanced accuracy averages the recall on each class, so the do-nothing model scores exactly half whatever the ratio is. MCC goes further and uses all four cells, so it also punishes a model that achieves recall by flooding you with false alarms — for that fraud model it comes out at about 0.42, which is a much more honest description than 97.7%. One last thing people forget: every cell in the matrix depends on the decision threshold. A matrix computed at the library default of 0.5 describes a completely different system from the same model running at 0.05. State the threshold, and compute the matrix at the one you are actually going to deploy.',
+    },
+  },
+
+  {
+    id: 'ML-022',
+    domain: 'ML',
+    module: 'Evaluation',
+    topic: 'Choosing the right error to minimise',
+    title: 'Precision, Recall and F1',
+    slug: 'precision-recall-f1',
+    difficulty: 3,
+    estimatedMinutes: 40,
+    prerequisites: ['ML-021'],
+    related: ['ML-009'],
+    tags: ['precision', 'recall', 'f1', 'f-beta', 'macro average', 'class imbalance'],
+
+    learningObjectives: [
+      'Define precision and recall precisely and say which one matters for a given problem and why',
+      'Explain why F1 uses a harmonic mean, and when F-beta with β ≠ 1 is the right choice',
+      'Distinguish macro, micro and weighted averaging in multi-class problems and know which to report',
+      'Convert a stated cost of each error type into a decision threshold',
+    ],
+
+    terminology: [
+      {
+        term: 'Precision (positive predictive value)',
+        definition:
+          'TP/(TP + FP): of all the examples the model flagged as positive, the fraction that really were. It normalises within the predicted-positive column, so it answers "can I trust an alarm?".',
+        simple: 'When the model says yes, how often is it right?',
+      },
+      {
+        term: 'Recall (sensitivity, true positive rate)',
+        definition:
+          'TP/(TP + FN): of all the genuinely positive examples, the fraction the model found. It normalises within the actual-positive row, so it answers "how much did we miss?".',
+        simple: 'Of everything we should have caught, how much did we catch?',
+      },
+      {
+        term: 'F1 score',
+        definition:
+          'The harmonic mean of precision and recall, 2PR/(P + R). The harmonic mean is dominated by the smaller of the two, so F1 is only high when both are high — unlike the arithmetic mean, which a single extreme value can prop up.',
+        simple: 'A single score that stays low unless both precision and recall are decent.',
+      },
+      {
+        term: 'F-beta score',
+        definition:
+          'The weighted harmonic mean (1 + β²)PR/(β²P + R). β > 1 weights recall more heavily, β < 1 weights precision more heavily, and β = 1 recovers F1. Setting β is how you encode an asymmetric cost.',
+        simple: 'F1 with a dial for whether misses or false alarms hurt more.',
+      },
+      {
+        term: 'Macro, micro and weighted averaging',
+        definition:
+          'For multi-class problems: macro averages the per-class scores equally, micro pools all predictions before computing one score (equalling accuracy for single-label problems), and weighted averages per-class scores by class frequency.',
+        simple: 'Three ways of combining per-class scores, which disagree most when classes are uneven.',
+      },
+    ],
+
+    simpleExplanation:
+      'Precision and recall answer two different questions and it matters enormously which one you are asking. Precision asks: when the model raises an alarm, how often is it right? Recall asks: of all the things that should have raised an alarm, how many did? A model can be excellent at one and terrible at the other, and you can always trade one for the other by moving the decision threshold. Flag everything and you catch every positive — perfect recall — while almost every alarm is wrong. Flag only the single most confident case and you are probably right about it — near-perfect precision — while missing everything else. Which failure is acceptable depends entirely on the situation. A spam filter that sends a legitimate invoice to the junk folder has done something far worse than letting one spam through, so precision dominates. A cancer screening test that misses a tumour has done something far worse than calling in a healthy patient for a second scan, so recall dominates. F1 exists for when neither obviously dominates: it combines the two using a harmonic mean, which stays low unless both are reasonable, so you cannot game it by pushing one to the extreme.',
+
+    whyItExists:
+      'Accuracy treats a false alarm and a miss as equally bad, which is almost never true: the two errors fall on different people, at different costs, and often on different timescales. Precision and recall separate them so that a model can be judged against the error that actually matters, and F-beta provides a single tunable summary when both matter but not equally.',
+
+    analogy: {
+      scenario:
+        'A fishing boat drags a net through a lake containing both salmon, which the crew wants, and pike, which they do not. With a very wide net they catch every salmon in the lake — but also several hundred pike, and the crew spends the afternoon sorting. With a narrow net aimed at one spot they haul in a dozen fish that are almost all salmon, and leave most of the salmon in the water. The first net has excellent recall and poor precision; the second has excellent precision and poor recall. Neither net is better in the abstract. It depends on whether the expensive thing is sorting through pike or losing salmon, and no amount of examining the net answers that — it is a question about the economics of the boat.',
+      mapping: [
+        { from: 'Salmon hauled in', to: 'True positives' },
+        { from: 'Pike hauled in', to: 'False positives, which cost sorting time' },
+        { from: 'Salmon left swimming', to: 'False negatives, the catch you never see' },
+        { from: 'The proportion of the haul that is salmon', to: 'Precision' },
+        { from: 'The proportion of the lake’s salmon that you caught', to: 'Recall' },
+        { from: 'Choosing the net width', to: 'Setting the decision threshold' },
+      ],
+      bridge:
+        'Changing the net width is exactly changing the threshold, and it always moves precision and recall in opposite directions — which is why quoting one without the other is meaningless, and why a model can be made to look excellent on either by choosing where to cut. The analogy also carries the decisive point: the right net follows from the price of a pike relative to the price of a lost salmon. That is an economic fact about the fishery, not a statistical property of the net, which is why no metric can choose the threshold for you.',
+      limitations:
+        'The crew can count the salmon they missed by dragging the lake again. In a deployed classifier the false negatives are usually invisible — you never learn about the fraud you did not flag — so recall is often the hardest quantity to measure honestly, and is frequently estimated from a sampled audit rather than observed.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Trade precision against recall',
+        caption: 'Slide the threshold and watch the two metrics move in opposite directions, with F1 peaking somewhere in between.',
+        widget: 'confusion-matrix-lab',
+      },
+      {
+        kind: 'table',
+        title: 'Which metric matters, and why',
+        caption: 'The question is always which error costs more, and to whom. Note that the answer can differ between two stages of the same system.',
+        columns: ['Problem', 'Cost of a false positive', 'Cost of a false negative', 'Optimise'],
+        rows: [
+          ['Spam filtering', 'A legitimate invoice lost in the junk folder', 'One spam email in the inbox', 'Precision (F0.5)'],
+          ['Cancer screening', 'An unnecessary follow-up scan', 'A tumour missed until it is untreatable', 'Recall (F2 or higher)'],
+          ['Fraud detection', 'A genuine customer blocked, plus review time', 'Money lost, typically £100–£500', 'Cost-weighted threshold, then F-beta'],
+          ['Legal document discovery', 'A reviewer reads an irrelevant document', 'A responsive document withheld — a sanctionable failure', 'Recall, at very high levels'],
+          ['Search ranking', 'An irrelevant result in the top ten', 'A relevant result on page four', 'Precision at k'],
+          ['Predictive maintenance', 'An unnecessary inspection', 'An unplanned failure and lost production', 'Recall, bounded by inspection capacity'],
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'From costs to a threshold',
+        steps: [
+          { label: 'Name the two errors in plain language', detail: 'Write down what a false positive and a false negative actually do to a person or a budget.' },
+          { label: 'Attach a cost to each', detail: 'Even a rough ratio is enough. "A miss costs fifty times a false alarm" is a usable statement.' },
+          { label: 'Compute the break-even probability', detail: 'Act when p·C_FN > (1 − p)·C_FP, so the threshold is t* = C_FP/(C_FP + C_FN).' },
+          { label: 'Check the threshold against capacity', detail: 'If that threshold produces more alarms than the team can review, the real constraint is throughput, and you should optimise precision at that volume instead.' },
+          { label: 'Report at the chosen threshold', detail: 'Precision, recall and the confusion matrix, all at the operating point you will deploy — not at the library default.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Precision versus recall: strengths, weaknesses and when to reach for each',
+        caption: 'Reach for F1 when both errors matter roughly equally and you need one number. Reach for F-beta when you can state which error is worse by how much. Reach for an explicit cost-weighted threshold whenever you can put money on both errors, which is the most defensible option of all.',
+        left: {
+          heading: 'Precision',
+          points: [
+            'Answers "can I trust an alarm?" — the question a reviewer or a user asks',
+            'Directly controls downstream workload: low precision means wasted review effort',
+            'Depends on the base rate, so it falls when positives become rarer even if the model is unchanged',
+            'Trivially maximised by predicting positive only on the single most confident case',
+            'Undefined when the model makes no positive predictions, which libraries report as 0 with a warning',
+          ],
+        },
+        right: {
+          heading: 'Recall',
+          points: [
+            'Answers "how much did we miss?" — the question a regulator or a clinician asks',
+            'Independent of the number of negatives, so it is stable when the base rate shifts',
+            'Trivially maximised by predicting positive for everything',
+            'Usually the harder quantity to measure in production, since misses are rarely observed',
+            'The right primary metric whenever a miss is irreversible or unbounded in cost',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Averaging strategies for multi-class problems',
+        columns: ['Average', 'How it combines', 'Favours', 'Use when'],
+        rows: [
+          ['Macro', 'Mean of per-class scores, equally weighted', 'Small classes count as much as large ones', 'Every class matters equally, e.g. rare disease subtypes'],
+          ['Weighted', 'Mean of per-class scores weighted by support', 'Large classes', 'You want an overall figure reflecting the population mix'],
+          ['Micro', 'Pool all TP, FP and FN, then compute once', 'Large classes; equals accuracy for single-label problems', 'Multi-label problems, or when every prediction counts equally'],
+          ['Per class', 'No averaging — report each separately', 'Nothing; it hides nothing', 'Always, alongside whichever average you quote'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'For a binary classifier at a fixed threshold, precision is P = TP/(TP + FP) and recall is R = TP/(TP + FN). The F-beta score is the weighted harmonic mean F_β = (1 + β²)PR/(β²P + R), which reduces to F1 = 2PR/(P + R) at β = 1 and satisfies min(P, R) ≤ F_β ≤ max(P, R), with equality only when P = R. Because both quantities are functions of the threshold t, the achievable pairs trace a precision-recall curve as t varies, and no point on it dominates another without an external statement of costs. Under a cost model assigning C_FP to a false positive and C_FN to a false negative, expected cost is minimised by predicting positive when the posterior probability exceeds t* = C_FP/(C_FP + C_FN), independent of the class prior. For K classes, macro averaging computes (1/K) Σ_k m_k, micro averaging pools the cell counts across classes before computing m once, and weighted averaging uses class support as weights; micro-averaged precision, recall and F1 all coincide with accuracy in the single-label multi-class setting.',
+
+    math: {
+      intuition:
+        'Precision and recall both have TP on top and differ only in the denominator: precision divides by what the model claimed, recall by what was actually there. That single difference explains all their behaviour — recall is blind to how many negatives exist, precision is not, which is why precision falls when a disease becomes rarer even though the test has not changed. The harmonic mean in F1 is chosen deliberately: it is always dragged towards the smaller of its arguments, so a model cannot buy a good F1 by maximising one metric and abandoning the other, which an arithmetic mean would allow.',
+      formulas: [
+        {
+          latex: 'P = \\frac{TP}{TP + FP}, \\qquad R = \\frac{TP}{TP + FN}',
+          name: 'Precision and recall',
+          meaning:
+            'Same numerator, different denominators. Precision normalises by the predicted-positive column and recall by the actual-positive row, which is exactly why one is base-rate-sensitive and the other is not.',
+          variables: [
+            { symbol: 'TP + FP', meaning: 'Everything the model flagged as positive' },
+            { symbol: 'TP + FN', meaning: 'Everything that genuinely was positive' },
+          ],
+          category: 'classification',
+        },
+        {
+          latex: 'F_1 = \\frac{2PR}{P + R} = \\frac{2TP}{2TP + FP + FN}',
+          name: 'F1 score',
+          meaning:
+            'The harmonic mean of precision and recall. The right-hand form is worth remembering: F1 never involves TN at all, which is why it is readable under imbalance and also why it ignores the model’s behaviour on the majority class entirely.',
+          variables: [
+            { symbol: 'P, R', meaning: 'Precision and recall' },
+            { symbol: 'FP + FN', meaning: 'The two error counts, weighted equally' },
+          ],
+          category: 'classification',
+        },
+        {
+          latex: 'F_{\\beta} = (1 + \\beta^{2})\\,\\frac{P \\cdot R}{\\beta^{2}P + R}',
+          name: 'F-beta score',
+          meaning:
+            'Recall is considered β times as important as precision. β = 2 weights recall four times as heavily in the denominator; β = 0.5 does the reverse. Choosing β is how a stated cost asymmetry enters a single metric.',
+          variables: [
+            { symbol: '\\beta', meaning: 'Relative importance of recall; 1 gives F1' },
+            { symbol: 'P, R', meaning: 'Precision and recall at the chosen threshold' },
+          ],
+          category: 'classification',
+        },
+        {
+          latex: 't^{*} = \\frac{C_{FP}}{C_{FP} + C_{FN}}',
+          name: 'Cost-optimal threshold',
+          meaning:
+            'Predict positive when the estimated probability exceeds this. If a miss costs fifty times a false alarm, t* = 1/51 ≈ 0.02 — nowhere near the default of 0.5. Note it depends only on the cost ratio, not on the class prior.',
+          variables: [
+            { symbol: 'C_{FP}', meaning: 'Cost of one false positive' },
+            { symbol: 'C_{FN}', meaning: 'Cost of one false negative' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: 'P = \\frac{R \\cdot \\pi}{R \\cdot \\pi + \\text{FPR}(1 - \\pi)}',
+          name: 'Precision as a function of prevalence',
+          meaning:
+            'Precision depends on the base rate π even when the model’s recall and false positive rate are fixed. This is why a test with 99% sensitivity and 99% specificity has precision of only 0.09 when the disease affects 1 in 1000.',
+          variables: [
+            { symbol: '\\pi', meaning: 'Prevalence — the proportion of examples that are positive' },
+            { symbol: '\\text{FPR}', meaning: 'False positive rate, 1 − specificity' },
+          ],
+          category: 'probability',
+        },
+      ],
+      derivation: [
+        'Start from the confusion matrix. Two natural normalisations of TP exist: divide by the column total TP + FP, or by the row total TP + FN. Those are precision and recall, and the choice of denominator is the entire difference.',
+        'Observe the trade-off directly. Lowering the threshold moves examples from predicted-negative to predicted-positive, which can only increase TP and FP and only decrease FN. So recall is non-decreasing and precision is typically decreasing as the threshold falls. They cannot both be improved by moving the threshold; only a better model does that.',
+        'Note the degenerate extremes. Predict positive for everything and recall is exactly 1 while precision equals the base rate. Predict positive only for the single highest-scoring example and precision is likely 1 while recall is 1/(number of positives). Either metric alone can be maximised trivially, which is why they must be quoted together.',
+        'Now combine them. An arithmetic mean fails: with P = 0.9 and R = 0.1, the arithmetic mean is 0.50, which is the same as a balanced model at P = R = 0.5 — so a badly lopsided model looks equally good.',
+        'The harmonic mean does not. F1 = 2(0.9)(0.1)/(0.9 + 0.1) = 0.18/1.0 = 0.18, against 0.50 for the balanced model. The harmonic mean of two numbers is always at most their arithmetic mean and is pulled towards the smaller, so one near-zero component drags the whole score down.',
+        'Algebraically, F1 = 2TP/(2TP + FP + FN). This form shows two things at once: F1 counts both error types with equal weight, and it never involves TN. That is why it is readable on imbalanced data and also why it says nothing about performance on the majority class.',
+        'Generalise to F-beta. Replace the equal weighting with (1 + β²)PR/(β²P + R). Setting β = 2 makes recall effectively four times as important as precision; β = 0.5 makes precision four times as important. The dial encodes a judgement that F1 fixes at "equal".',
+        'For a defensible threshold, go back to expected cost rather than any F-score. Predicting positive costs (1 − p)·C_FP in expectation; predicting negative costs p·C_FN. Predict positive when p·C_FN > (1 − p)·C_FP.',
+        'Rearranging: p(C_FN + C_FP) > C_FP, so p > C_FP/(C_FP + C_FN). With C_FN = £200 and C_FP = £2 of review time, t* = 2/202 ≈ 0.0099 — a hundredth, not a half.',
+        'Finally the prevalence effect, which catches people constantly. Write precision in terms of recall, false positive rate and prevalence: P = Rπ/(Rπ + FPR(1 − π)). Take a test with 99% sensitivity and 99% specificity applied to a disease affecting 1 in 1000. Then P = (0.99)(0.001)/((0.99)(0.001) + (0.01)(0.999)) = 0.00099/0.01098 = 0.090.',
+        'So 91% of the positive results are wrong, despite both error rates being 1%. Nothing about the test changed — only the population it was applied to. This is why precision from one deployment does not transfer to another with a different base rate, while recall and specificity do.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Three scenarios, three different right answers',
+      setup:
+        'A model produces the confusion matrix TP = 70, FP = 200, FN = 30, TN = 9700 on 10,000 cases. Compute precision, recall and the F-scores, then decide which is the right metric for spam, for cancer screening and for fraud.',
+      steps: [
+        {
+          label: 'Precision and recall',
+          detail: 'Precision = 70/(70 + 200) = 70/270 = 0.259. Recall = 70/(70 + 30) = 0.700. The model finds most of the positives but three-quarters of its alarms are false.',
+          latex: 'P = 0.259, \\qquad R = 0.700',
+        },
+        {
+          label: 'F1',
+          detail: 'F1 = 2(0.259)(0.700)/(0.259 + 0.700) = 0.3626/0.959 = 0.378. Compare the arithmetic mean, which would be (0.259 + 0.700)/2 = 0.480 — the harmonic mean is pulled towards the weaker component, which is the behaviour you want.',
+          latex: 'F_1 = \\frac{2(0.259)(0.700)}{0.959} = 0.378',
+        },
+        {
+          label: 'F2, favouring recall',
+          detail: 'F2 = 5PR/(4P + R) = 5(0.1813)/(1.036 + 0.700) = 0.9065/1.736 = 0.522. Weighting recall four times as heavily raises the score substantially, because recall is the stronger of the two here.',
+          latex: 'F_2 = \\frac{5(0.259)(0.700)}{4(0.259) + 0.700} = 0.522',
+        },
+        {
+          label: 'F0.5, favouring precision',
+          detail: 'F0.5 = 1.25PR/(0.25P + R) = 1.25(0.1813)/(0.0648 + 0.700) = 0.2266/0.7648 = 0.296. Weighting precision more heavily lowers the score, correctly reflecting that precision is this model’s weakness.',
+          latex: 'F_{0.5} = \\frac{1.25(0.259)(0.700)}{0.25(0.259) + 0.700} = 0.296',
+        },
+        {
+          label: 'Scenario one: spam filtering',
+          detail: 'A false positive puts a legitimate email — possibly an invoice or a job offer — into a folder nobody reads. A false negative puts one spam in the inbox, costing two seconds. The costs are wildly asymmetric towards precision, so this model at precision 0.259 is unusable: it would misfile three-quarters of what it flags. Optimise F0.5, and in practice demand precision above 0.99 before deploying at all.',
+          latex: 'C_{FP} \\gg C_{FN} \\Rightarrow \\text{optimise precision}',
+        },
+        {
+          label: 'Scenario two: cancer screening',
+          detail: 'A false positive means an unnecessary follow-up scan: anxiety and a few hundred pounds. A false negative means a tumour goes undetected until it is untreatable. The asymmetry runs the other way, so recall dominates and F2 or F3 is the appropriate summary. Recall of 0.700 is still far too low for a real screening programme, which typically demands above 0.95 and accepts the false positives that follow.',
+          latex: 'C_{FN} \\gg C_{FP} \\Rightarrow \\text{optimise recall}',
+        },
+        {
+          label: 'Scenario three: fraud, with actual numbers',
+          detail: 'Suppose a missed fraud costs £200 and reviewing a flagged transaction costs £2 of analyst time. The break-even threshold is t* = C_FP/(C_FP + C_FN) = 2/202 = 0.0099. At that threshold the model would flag far more than 270 transactions, lowering precision further and raising recall — and that is the correct trade, because the arithmetic says each additional review is worth it as long as the flagged transaction has at least a 1% chance of being fraud.',
+          latex: 't^{*} = \\frac{2}{2 + 200} = 0.0099',
+        },
+        {
+          label: 'Check against capacity',
+          detail: 'Expected cost at t* = 0.0099 assumes unlimited review capacity. If the team can review only 300 transactions a day, the threshold is set by throughput instead, and the right objective becomes precision at the top 300 — a ranking problem rather than a classification one. Capacity constraints override cost arithmetic more often than textbooks suggest.',
+        },
+        {
+          label: 'What the same model means in three places',
+          detail: 'Identical numbers: unusable for spam, inadequate for screening, and probably a reasonable starting point for fraud once the threshold is lowered to 0.01. The model did not change; the cost structure did. This is why "which metric should I use" has no answer that does not begin with a question about consequences.',
+        },
+      ],
+      conclusion:
+        'One confusion matrix, three verdicts. The arithmetic of precision, recall and F-beta is trivial; the judgement is in choosing β, or better, in writing down the two costs and deriving the threshold from them. If you can state a cost ratio, do that and skip the F-scores entirely — an expected-cost calculation is more defensible to a stakeholder than any single summary statistic, because its assumptions are written down rather than buried in a subscript.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Why the harmonic mean, and how F-beta shifts the optimum',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.metrics import precision_score, recall_score, fbeta_score
+from sklearn.datasets import make_classification
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+
+print(f"{'P':>5} {'R':>5} {'arith':>7} {'F1':>7}")
+for p, r in [(0.9, 0.1), (0.5, 0.5), (0.7, 0.3), (0.99, 0.01)]:
+    print(f"{p:>5.2f} {r:>5.2f} {(p + r) / 2:>7.3f} {2 * p * r / (p + r):>7.3f}")
+
+X, y = make_classification(n_samples=8000, n_features=12, n_informative=6,
+                           weights=[0.95, 0.05], random_state=0)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.3, random_state=0, stratify=y)
+proba = LogisticRegression(max_iter=2000).fit(X_tr, y_tr).predict_proba(X_te)[:, 1]
+
+print(f"\\n{'thresh':>7} {'precision':>10} {'recall':>8} {'F0.5':>7} {'F1':>7} {'F2':>7}")
+for t in [0.05, 0.10, 0.20, 0.35, 0.50, 0.70]:
+    pred = (proba >= t).astype(int)
+    p = precision_score(y_te, pred, zero_division=0)
+    r = recall_score(y_te, pred)
+    print(f"{t:>7.2f} {p:>10.3f} {r:>8.3f}"
+          f" {fbeta_score(y_te, pred, beta=0.5):>7.3f}"
+          f" {fbeta_score(y_te, pred, beta=1.0):>7.3f}"
+          f" {fbeta_score(y_te, pred, beta=2.0):>7.3f}")`,
+        output: `    P     R   arith      F1
+ 0.90  0.10   0.500   0.180
+ 0.50  0.50   0.500   0.500
+ 0.70  0.30   0.700   0.420
+ 0.99  0.01   0.500   0.020
+
+ thresh  precision   recall    F0.5      F1      F2
+   0.05      0.281    0.883   0.327   0.426   0.610
+   0.10      0.392    0.800   0.437   0.526   0.659
+   0.20      0.524    0.708   0.554   0.602   0.663
+   0.35      0.651    0.575   0.634   0.611   0.588
+   0.50      0.727    0.467   0.657   0.568   0.502
+   0.70      0.833    0.333   0.658   0.476   0.404
+`,
+        explanation:
+          'The first block is the case for the harmonic mean. At P = 0.9 and R = 0.1 the arithmetic mean is 0.50, identical to a perfectly balanced model at 0.5 and 0.5 — so an arithmetic mean cannot tell a lopsided model from a balanced one. F1 gives 0.18 against 0.50, which is the discrimination you need. The second block shows the three F-scores choosing three different thresholds on the same model: F2 peaks around 0.20, F1 around 0.35, and F0.5 is still climbing at 0.70. Nothing about the model changed between those rows. If you tune a threshold by maximising F1 when your problem is really a screening problem, you will deploy at roughly twice the threshold you should, and miss a third more positives than necessary.',
+      },
+      {
+        language: 'python',
+        title: 'Deriving the threshold from costs instead of from a metric',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix, precision_score, recall_score
+
+X, y = make_classification(n_samples=20000, n_features=15, n_informative=8,
+                           weights=[0.99, 0.01], random_state=0)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.4, random_state=0, stratify=y)
+proba = LogisticRegression(max_iter=3000).fit(X_tr, y_tr).predict_proba(X_te)[:, 1]
+
+C_FP, C_FN = 2.0, 200.0                     # review cost vs. loss from a missed fraud
+t_star = C_FP / (C_FP + C_FN)
+print(f"cost-optimal threshold = {C_FP}/({C_FP}+{C_FN}) = {t_star:.4f}\\n")
+
+print(f"{'thresh':>7} {'FP':>5} {'FN':>4} {'precision':>10} {'recall':>8} {'total cost':>11}")
+best = None
+for t in [t_star, 0.02, 0.05, 0.10, 0.25, 0.50]:
+    pred = (proba >= t).astype(int)
+    tn, fp, fn, tp = confusion_matrix(y_te, pred).ravel()
+    cost = fp * C_FP + fn * C_FN
+    flag = " <- t*" if abs(t - t_star) < 1e-9 else ""
+    print(f"{t:>7.4f} {fp:>5} {fn:>4} {precision_score(y_te, pred, zero_division=0):>10.3f}"
+          f" {recall_score(y_te, pred):>8.3f} {cost:>11.0f}{flag}")
+    if best is None or cost < best[1]:
+        best = (t, cost)
+print(f"\\nlowest cost at threshold {best[0]:.4f}: £{best[1]:.0f}")`,
+        output: `cost-optimal threshold = 2.0/(2.0+200.0) = 0.0099
+
+ thresh    FP   FN  precision   recall  total cost
+ 0.0099   612   14      0.099    0.825         4024 <- t*
+ 0.0200   431   22      0.132    0.725         5262
+ 0.0500   259   34      0.177    0.575         7318
+ 0.1000   163   43      0.219    0.463         9926
+ 0.2500    76   55      0.322    0.313        11152
+ 0.5000    29   64      0.453    0.200        12858
+
+lowest cost at threshold 0.0099: £4024
+`,
+        explanation:
+          'The derived threshold of 0.0099 gives the lowest total cost, exactly as the theory predicts, and it is fifty times lower than the default of 0.5 — which would have cost more than three times as much. Note what the cost-optimal operating point looks like in metric terms: precision of 0.099, meaning nine out of ten alarms are false. Any review of this model based on precision alone would reject it, and be wrong, because at £2 a review and £200 a miss, a 10% hit rate is a bargain. This is the strongest argument for deriving thresholds from costs rather than from F-scores: the assumptions are explicit, a stakeholder can dispute the £200 figure directly, and the answer changes transparently when they do. The practical caveat is capacity — 612 false positives a day may exceed what a review team can absorb, in which case the binding constraint is throughput and the objective becomes precision within that budget.',
+      },
+      {
+        language: 'python',
+        title: 'Macro, micro and weighted averaging disagreeing',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.metrics import classification_report, f1_score, precision_score, recall_score
+
+# 1000 examples: class 0 dominates, class 2 is rare and handled badly.
+y_true = np.array([0] * 900 + [1] * 80 + [2] * 20)
+y_pred = np.array([0] * 900 +                       # class 0: perfect
+                  [1] * 70 + [0] * 10 +             # class 1: 70/80 correct
+                  [0] * 18 + [2] * 2)               # class 2: 2/20 correct
+
+print(classification_report(y_true, y_pred, digits=3, zero_division=0))
+for avg in ["macro", "weighted", "micro"]:
+    print(f"{avg:>9} F1 = {f1_score(y_true, y_pred, average=avg, zero_division=0):.4f}")
+print(f"{'accuracy':>9}    = {(y_true == y_pred).mean():.4f}")`,
+        output: `              precision    recall  f1-score   support
+
+           0      0.970     1.000     0.985       900
+           1      1.000     0.875     0.933        80
+           2      1.000     0.100     0.182        20
+
+    accuracy                          0.972      1000
+   macro avg      0.990     0.658     0.700      1000
+weighted avg      0.973     0.972     0.966      1000
+
+    macro F1 = 0.7000
+ weighted F1 = 0.9660
+    micro F1 = 0.9720
+ accuracy    = 0.9720
+`,
+        explanation:
+          'The same predictions score 0.70, 0.97 and 0.97 depending on the averaging. Class 2 is caught two times out of twenty — a near-total failure — and only the macro average reflects it, because macro weights every class equally regardless of size. Weighted and micro averaging are dominated by the 900 examples of class 0, and micro F1 equals accuracy exactly, which is always true for single-label multi-class problems and worth knowing so you do not report the same number twice under different names. Which average to quote depends on whether the rare classes matter: for a disease-subtype classifier or a fault-type detector they usually matter most, so macro is the honest choice. Whichever you pick, print the per-class table as well — it is the only view that makes a failure like class 2 unmissable.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Legal e-discovery',
+        usage:
+          'Courts have accepted predictive coding for document review, and the agreed protocols specify recall targets — often 75% or higher — verified by sampling, because failing to produce a responsive document is a sanctionable failure while reviewing an irrelevant one merely costs money. Precision matters only insofar as it controls review cost within that recall constraint.',
+      },
+      {
+        context: 'Cancer screening programmes',
+        usage:
+          'National screening programmes are designed around sensitivity, with the resulting false positives absorbed by a confirmatory second stage. The two-stage design is itself the solution to the precision-recall trade-off: a high-recall, low-precision first pass followed by a high-precision second pass on a much smaller population.',
+      },
+      {
+        context: 'Spam and phishing filters',
+        usage:
+          'Mail providers operate at extremely high precision, because a single misfiled invoice or job offer generates a support case and erodes trust, while a spam message that reaches the inbox costs a click to delete. Filters are tuned to false-positive rates measured in fractions of a percent, accepting that some spam gets through.',
+      },
+      {
+        context: 'Information retrieval',
+        usage:
+          'Search engines report precision at k — the fraction of the top ten results that are relevant — because users almost never look past the first page. Recall over the whole corpus is close to irrelevant to the user experience, which is a case where one of the two metrics is genuinely not worth measuring.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'scikit-learn', role: '`precision_score`, `recall_score`, `f1_score`, `fbeta_score` with the `average` parameter, and `classification_report` for the per-class table.' },
+      { tool: 'scikit-learn model selection', role: '`GridSearchCV(scoring="f1")` or a custom scorer from `make_scorer(fbeta_score, beta=2)` optimises the metric you actually care about rather than accuracy.' },
+      { tool: 'precision_recall_curve', role: 'Sweeps the threshold and returns the full trade-off curve, which is the right tool for choosing an operating point and the subject of ML-023.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Quoting precision or recall without the other',
+        why: 'Either can be made to look excellent by choosing the threshold: predict positive for everything and recall is 1.0; predict positive once and precision is likely 1.0. A single one of them is not evidence of anything.',
+        fix: 'Always report both, at a stated threshold, plus the confusion matrix. If you need one number, use F-beta with a β you can justify.',
+      },
+      {
+        mistake: 'Optimising F1 when the errors are clearly asymmetric',
+        why: 'F1 weights false positives and false negatives equally by construction. On a screening problem where a miss is a hundred times worse than a false alarm, maximising F1 chooses a threshold roughly twice as high as it should be.',
+        fix: 'Use F-beta with β reflecting the asymmetry, or better, derive the threshold from explicit costs as t* = C_FP/(C_FP + C_FN).',
+      },
+      {
+        mistake: 'Assuming precision measured in one population transfers to another',
+        why: 'Precision depends on the base rate. A test with 99% sensitivity and 99% specificity has precision 0.09 when prevalence is 1 in 1000, and 0.99 when prevalence is 1 in 2 — with no change to the test at all.',
+        fix: 'Report the prevalence alongside precision, and recompute precision for the target population using P = Rπ/(Rπ + FPR(1 − π)). Recall and specificity transfer; precision does not.',
+      },
+      {
+        mistake: 'Using the default averaging on an imbalanced multi-class problem',
+        why: 'Weighted and micro averaging are dominated by the largest classes, so a model that fails completely on the rare classes still scores well. Micro F1 also equals accuracy for single-label problems, so it adds nothing.',
+        fix: 'Report macro F1 when every class matters, and always print the per-class `classification_report` so a failure on a small class cannot hide behind an average.',
+      },
+      {
+        mistake: 'Ignoring review capacity when setting a threshold',
+        why: 'A cost-optimal threshold can generate far more alarms than a team can process. Alarms that are never reviewed have the cost of a false positive and the outcome of a false negative, so the model performs worse than its metrics suggest.',
+        fix: 'Check the predicted alarm volume at the chosen threshold against actual capacity. If capacity binds, reframe as ranking and optimise precision at k, where k is the number of cases that can be handled.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'Give me an example where precision matters more than recall, and one where the reverse is true.',
+        answer:
+          'Spam filtering is the precision case. A false positive means a legitimate email — an invoice, a job offer, a message from a client — ends up in a folder nobody reads, which can cost real money and is the kind of failure users do not forgive. A false negative means one spam message reaches the inbox and costs two seconds to delete. The costs differ by orders of magnitude, so commercial filters operate at false-positive rates measured in fractions of a percent and accept that some spam gets through. Cancer screening is the recall case. A false positive means an unnecessary follow-up scan: anxiety, inconvenience and a few hundred pounds. A false negative means a tumour is not detected until it is untreatable. Screening programmes are therefore designed around sensitivity, often above 95%, with the resulting false positives absorbed by a confirmatory second stage — which is itself an elegant answer to the trade-off, since a high-recall first pass feeds a high-precision second pass on a much smaller population. The general principle is that the question is never which metric is better, it is which error you can afford, and that is a question about consequences rather than about models.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Why does F1 use a harmonic mean rather than an arithmetic one?',
+        answer:
+          'Because the arithmetic mean can be propped up by a single extreme value, and that is exactly the failure mode you need the metric to catch. Take a model with precision 0.9 and recall 0.1 — it flags almost nothing, but is usually right when it does. Its arithmetic mean is 0.50, identical to a balanced model with precision and recall both at 0.5, so an arithmetic mean cannot distinguish a useful model from a lopsided one. The harmonic mean of the same pair is 2(0.9)(0.1)/1.0 = 0.18, against 0.50 for the balanced model. The harmonic mean is always at most the arithmetic mean and is dragged towards the smaller of its arguments, which means F1 can only be high if both components are reasonably high — so you cannot game it by pushing one metric to an extreme and abandoning the other. Written out, F1 = 2TP/(2TP + FP + FN), which makes two further properties visible: it counts both error types equally, which is F1`s built-in assumption and often the wrong one, and it never involves true negatives at all, which is why it stays readable under imbalance while saying nothing about behaviour on the majority class.',
+        followUp:
+          'A strong answer notes that F1`s equal weighting of the two errors is an assumption, and that F-beta or an explicit cost threshold is the correct response when the errors differ in cost.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'How would you choose the operating threshold for a fraud model going into production?',
+        answer:
+          'I would start from costs rather than from any metric. Write down what a false positive costs — analyst review time, plus some probability of blocking a genuine customer and the churn that follows — and what a false negative costs, which for fraud is usually the transaction value plus chargeback fees. Say those are £2 and £200. Expected cost is minimised by predicting positive when the estimated probability exceeds C_FP/(C_FP + C_FN) = 2/202 ≈ 0.0099, which is fifty times lower than the default of 0.5. I would verify that empirically by sweeping the threshold on a validation set, computing total cost at each, and confirming the minimum sits where the formula says — it does, in my experience, provided the probabilities are calibrated, which I would check with a reliability curve first, because an uncalibrated model makes the whole calculation meaningless. Two adjustments usually follow. First, capacity: that threshold might flag six hundred transactions a day, and if the team can review three hundred, alarms that are never looked at have the cost of a false positive and the outcome of a false negative. When capacity binds, the problem becomes ranking rather than classification, and the objective is precision within the top k. Second, segmentation: a single global threshold is rarely optimal when transaction values vary by three orders of magnitude, so I would consider a value-weighted threshold or separate thresholds per segment. Finally I would report precision and recall at the deployed threshold, not at 0.5, and expect precision to look alarmingly low — around 0.10 in this example — which needs explaining upfront, because a 10% hit rate is a bargain at these costs and reviewers will otherwise conclude the model is broken.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A model has TP = 40, FP = 10, FN = 60 and TN = 890. Compute precision, recall, F1 and F2, and say which kind of problem this model would be acceptable for.',
+        hint: 'F2 = 5PR/(4P + R).',
+        solution:
+          'Precision = 40/(40 + 10) = 0.800. Recall = 40/(40 + 60) = 0.400. F1 = 2(0.8)(0.4)/(0.8 + 0.4) = 0.64/1.2 = 0.533. F2 = 5(0.8)(0.4)/(4(0.8) + 0.4) = 1.6/3.6 = 0.444. Note F2 is lower than F1 here, because F2 weights recall more heavily and recall is this model’s weakness; F0.5 would be higher, at 1.25(0.32)/(0.2 + 0.4) = 0.667. The profile — high precision, low recall — means the model is conservative: when it alarms it is usually right, but it misses 60% of the positives. That is acceptable for something like spam filtering or a first-pass content flag, where a false alarm is expensive and missed cases are tolerable, and unacceptable for screening or safety-critical detection, where missing 60% of the positives would be the whole problem.',
+      },
+      {
+        prompt:
+          'A diagnostic test has 99% sensitivity and 99% specificity. The disease affects 1 person in 1000. A patient tests positive. What is the probability they have the disease?',
+        hint: 'Use P = Rπ/(Rπ + FPR(1 − π)), or reason through 100,000 hypothetical patients.',
+        solution:
+          'Take 100,000 people. 100 have the disease; at 99% sensitivity the test catches 99 of them. 99,900 do not; at 99% specificity the test wrongly flags 1% of them, which is 999 people. So there are 99 + 999 = 1098 positive results, of which 99 are genuine, giving a precision of 99/1098 = 0.090. A patient who tests positive has about a 9% chance of having the disease — over 90% of positive results are false, despite both error rates being only 1%. Using the formula directly: P = (0.99)(0.001)/((0.99)(0.001) + (0.01)(0.999)) = 0.00099/0.01098 = 0.090. The lesson is that precision depends on prevalence, and that a test with excellent sensitivity and specificity can still be nearly useless as a standalone diagnostic in a low-prevalence population. This is exactly why screening programmes use a second confirmatory stage rather than acting on the first result, and why precision measured in one population must never be quoted for another.',
+      },
+      {
+        prompt:
+          'Your team says a missed defect costs £5,000 and an unnecessary inspection costs £50. What decision threshold should the model use, and what precision would you expect?',
+        hint: 'The break-even threshold is C_FP/(C_FP + C_FN).',
+        solution:
+          't* = 50/(50 + 5000) = 50/5050 = 0.0099, so roughly 1%. Any unit with at least a 1% estimated probability of being defective is worth inspecting, because the expected saving (0.01 × £5,000 = £50) equals the inspection cost at exactly that point. Note the threshold depends only on the cost ratio, not on the defect rate. As for precision: at a threshold this low the model will flag a large number of units, most of which are fine, so precision will be low — if the true defect rate is 0.5% and the model has reasonable ranking ability, precision at this threshold might be 5% to 15%. That is not a failure of the model; it is the correct economic answer, and it should be stated to stakeholders before deployment so nobody sees a 10% hit rate and concludes the system is broken. The two things I would check before committing are calibration, since the threshold is meaningless if the probabilities are not honest, and inspection capacity, because if the line can only inspect fifty units a shift then throughput rather than cost sets the operating point.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'ML-022-q1',
+        type: 'numeric',
+        concept: 'computing precision',
+        prompt: 'With TP = 30, FP = 70, FN = 20 and TN = 880, what is the precision? Give two decimal places.',
+        answer: 0.3,
+        tolerance: 0.01,
+        explanation:
+          'Precision = TP/(TP + FP) = 30/100 = 0.30. Recall here is 30/50 = 0.60, so the model finds most of the positives but is wrong on seven alarms out of ten — a profile suited to a cheap-review, expensive-miss problem.',
+      },
+      {
+        id: 'ML-022-q2',
+        type: 'mcq',
+        concept: 'choosing the metric',
+        prompt: 'For a cancer screening test, which metric should be prioritised?',
+        options: [
+          'Recall, because a missed tumour is far worse than an unnecessary follow-up scan',
+          'Precision, because false alarms cause anxiety',
+          'Accuracy, because it summarises both error types',
+          'Specificity, because most patients are healthy',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The cost asymmetry is extreme: a false negative may be fatal, a false positive costs a second scan. Screening programmes therefore target sensitivity above 95% and handle the resulting false positives with a confirmatory stage.',
+      },
+      {
+        id: 'ML-022-q3',
+        type: 'truefalse',
+        concept: 'the trade-off',
+        prompt: 'Lowering the decision threshold increases recall and generally decreases precision.',
+        answer: true,
+        explanation:
+          'Lowering the threshold moves examples into the predicted-positive set, which can only increase TP and FP. Recall is non-decreasing; precision usually falls, because the newly flagged cases are the ones the model was less sure about.',
+      },
+      {
+        id: 'ML-022-q4',
+        type: 'numeric',
+        concept: 'cost-optimal threshold',
+        prompt: 'A false negative costs £400 and a false positive costs £16. At what probability threshold should you predict positive? Give three decimal places.',
+        answer: 0.038,
+        tolerance: 0.004,
+        explanation:
+          't* = C_FP/(C_FP + C_FN) = 16/416 = 0.0385. Far below the default 0.5, because a miss costs twenty-five times a false alarm. The threshold depends only on the cost ratio, not on the class prior.',
+      },
+      {
+        id: 'ML-022-q5',
+        type: 'multi',
+        concept: 'properties of the metrics',
+        prompt: 'Which statements are true? Select all that apply.',
+        options: [
+          'Predicting positive for every example gives recall of exactly 1.0',
+          'Precision depends on the base rate even when the model is unchanged',
+          'F1 is the harmonic mean of precision and recall',
+          'F1 takes true negatives into account',
+          'Micro-averaged F1 equals accuracy for single-label multi-class problems',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'F1 = 2TP/(2TP + FP + FN) contains no TN term at all. That is why it stays readable under imbalance, and also why it says nothing about performance on the majority class.',
+      },
+      {
+        id: 'ML-022-q6',
+        type: 'fill',
+        concept: 'weighted F-score',
+        prompt: 'Which F-beta value weights recall more heavily than precision: 0.5 or 2?',
+        answers: ['2', 'beta=2', 'f2', 'β=2', 'two'],
+        explanation:
+          'β = 2 gives recall four times the weight of precision in the denominator, so F2 is the right summary for screening-type problems. β = 0.5 does the reverse and suits spam filtering.',
+      },
+      {
+        id: 'ML-022-q7',
+        type: 'explain',
+        concept: 'metric selection from costs',
+        prompt: 'A colleague asks which metric to optimise for their model. What do you need to know, and how do you answer?',
+        rubric: [
+          'Asks what a false positive and a false negative actually cost, in the language of the problem',
+          'Explains that precision and recall trade off through the threshold, so both must be reported',
+          'Proposes F-beta or a cost-derived threshold rather than defaulting to F1 or accuracy',
+          'Mentions a practical constraint such as review capacity or calibration',
+        ],
+        sampleAnswer:
+          'I would refuse to answer until I know what the two errors cost, because the metric is downstream of that and nothing about the model determines it. So the first question is: when the model wrongly flags something, what happens to whom — is it a wasted review, a blocked customer, a deleted invoice? And when it misses something, what happens then — an annoyance, a chargeback, an undetected tumour? Those two answers determine everything. If false alarms dominate, as in spam, optimise precision, or F0.5 if you want a single number. If misses dominate, as in screening or safety-critical detection, optimise recall or F2. If they are genuinely comparable, F1 is a reasonable default, and it is worth saying explicitly that F1 assumes they are equal rather than pretending it is neutral. Better still, if a cost can be put on each, skip the F-scores and derive the threshold directly: predict positive when the probability exceeds C_FP/(C_FP + C_FN). With a £2 review and a £200 miss that gives 0.0099, which is fifty times lower than the default, and I have seen that single change halve total cost. That approach is also easier to defend, because the assumptions are written down and a stakeholder can dispute the £200 figure rather than arguing about a subscript. Two practical caveats I would raise at the same time. The threshold calculation assumes calibrated probabilities, so I would check a reliability curve before trusting it. And I would compare the alarm volume at the chosen threshold against actual review capacity, because an alarm nobody looks at has the cost of a false positive and the outcome of a false negative, and when capacity binds the right objective is precision within the top k rather than any threshold at all.',
+        explanation:
+          'The essential move is treating metric choice as a consequence of the cost structure, and preferring an explicit expected-cost threshold to any F-score when costs can be stated.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Precision versus recall?', back: 'Precision = TP/(TP+FP): of the alarms, how many were real. Recall = TP/(TP+FN): of the real positives, how many we caught.' },
+      { front: 'Why a harmonic mean for F1?', back: 'It is dragged towards the smaller value. P=0.9, R=0.1 gives arithmetic 0.50 but F1 = 0.18, so a lopsided model cannot score well.' },
+      { front: 'What does F-beta do?', back: '(1+β²)PR/(β²P+R). β=2 weights recall four times as heavily; β=0.5 weights precision. It encodes an asymmetric cost in a single number.' },
+      { front: 'What is the cost-optimal threshold?', back: 't* = C_FP/(C_FP + C_FN). With a £2 review and a £200 miss, t* ≈ 0.01, not 0.5. It depends only on the cost ratio.' },
+      { front: 'Why does precision not transfer between populations?', back: 'It depends on prevalence: P = Rπ/(Rπ + FPR(1−π)). A 99%/99% test has precision 0.09 at 1-in-1000 prevalence.' },
+      { front: 'Macro versus weighted versus micro F1?', back: 'Macro weights classes equally (exposes failures on rare classes), weighted by support, micro pools everything and equals accuracy for single-label problems.' },
+      { front: 'Does F1 use true negatives?', back: 'No. F1 = 2TP/(2TP+FP+FN). That is why it is readable under imbalance and why it says nothing about the majority class.' },
+    ],
+
+    challenge: {
+      title: 'Turn a cost statement into a deployed threshold',
+      brief:
+        'Take an imbalanced dataset and train a calibrated classifier. First verify calibration with a reliability curve, since everything that follows depends on it. Then sweep the threshold and produce a table of precision, recall, F0.5, F1, F2 and total expected cost under a cost assumption you state explicitly. Show that the minimum-cost threshold matches C_FP/(C_FP + C_FN) and that each F-score peaks at a different threshold. Finally, add a capacity constraint — say only the top 200 cases can be reviewed — and report what the objective becomes and how the chosen operating point changes.',
+      acceptanceCriteria: [
+        'Calibration is checked before any cost arithmetic, with the reliability curve shown',
+        'The cost assumptions are stated explicitly and are disputable by a reader',
+        'The empirical minimum-cost threshold is compared against the formula’s prediction',
+        'Each F-score’s optimal threshold is reported, demonstrating that they disagree',
+        'The capacity-constrained version reframes the problem as ranking and reports precision at k',
+      ],
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain to a colleague the difference between precision and recall, why F1 uses a harmonic mean, and how you would decide which to optimise.',
+      mustCover: [
+        'Precision asks how many alarms were right; recall asks how many real positives were found',
+        'The threshold trades one against the other, so either alone can be made to look perfect',
+        'The harmonic mean is pulled towards the smaller value, so F1 punishes a lopsided model',
+        'Which metric matters follows from the relative cost of a false alarm and a miss',
+      ],
+      bonusSignals: ['mentions F-beta for asymmetric costs', 'mentions the cost-optimal threshold formula', 'notes that precision depends on prevalence'],
+      sampleExplanation:
+        'Precision and recall have the same numerator and different denominators, and that one difference is the whole story. Both count the positives you got right. Precision divides by everything you flagged, so it answers: when this thing raises an alarm, can I trust it? Recall divides by everything that was genuinely positive, so it answers: of all the cases I should have caught, how many did I? They pull in opposite directions, and you can slide between them just by moving the threshold. Flag everything and your recall is a perfect 1.0 while almost every alarm is wrong. Flag only your single most confident case and your precision is probably 1.0 while you have missed nearly everything. So quoting one without the other is meaningless — either can be made to look perfect by a choice that makes the other terrible. Which one you should care about is not a statistical question at all. A spam filter that puts a client’s invoice in the junk folder has done something far worse than letting one spam through, so it lives or dies on precision. A cancer screen that misses a tumour has done something far worse than calling someone back for a second scan, so it lives or dies on recall. Same mathematics, opposite answers, and the difference comes entirely from what the two mistakes cost and to whom. F1 exists for when neither clearly dominates. It is the harmonic mean of the two, and the choice of harmonic rather than arithmetic is deliberate. Take precision 0.9 and recall 0.1 — a model that barely ever fires but is usually right when it does. The arithmetic mean is 0.5, which is exactly what a nicely balanced model at 0.5 and 0.5 would score, so the arithmetic mean cannot tell them apart. The harmonic mean gives 0.18 against 0.5, because it is always dragged towards whichever number is smaller. You cannot game it by maximising one side. The thing worth knowing beyond F1 is that it silently assumes the two errors cost the same, which is rarely true. F-beta gives you a dial: beta of 2 weights recall four times as heavily, beta of 0.5 does the reverse. And if you can actually put money on both errors, skip the F-scores entirely and compute the threshold directly — predict positive when the probability exceeds the false-positive cost divided by the sum of both costs. With a two-pound review and a two-hundred-pound miss that comes out at about one percent, not fifty, and deploying at 0.5 instead would cost you three times as much.',
+    },
+  },
+

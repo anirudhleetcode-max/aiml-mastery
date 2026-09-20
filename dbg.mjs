@@ -1,0 +1,17 @@
+import { chromium } from '@playwright/test';
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+const p = await b.newPage();
+p.on('console', m => console.log('CONSOLE', m.type(), m.text().slice(0,200)));
+p.on('pageerror', e => console.log('PAGEERROR', e.message.split('\n')[0]));
+p.on('requestfailed', r => console.log('REQFAIL', r.url(), r.failure()?.errorText));
+p.on('response', r => { if (r.url().includes('/api/')) console.log('API', r.status(), r.url()); });
+await p.goto('http://127.0.0.1:3200/login', { waitUntil: 'networkidle' });
+await p.waitForFunction(() => { const x=[...document.querySelectorAll('button')].find(e=>e.textContent?.includes('Sign in')); return x && !x.disabled; }, null, {timeout:30000});
+await p.getByLabel('Email').fill('demo@aimlmastery.app');
+await p.getByLabel('Password', { exact: true }).fill('demolearner2026');
+await p.getByRole('button', { name: 'Sign in' }).click();
+await p.waitForTimeout(6000);
+console.log('URL:', p.url());
+const alert = await p.getByRole('alert').textContent().catch(()=>null);
+console.log('ALERT:', alert);
+await b.close();

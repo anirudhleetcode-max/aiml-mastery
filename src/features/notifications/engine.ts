@@ -191,24 +191,27 @@ export async function refreshNotifications(userId: string, state: FullState, o: 
     (a, b) => priority.indexOf(a.kind) - priority.indexOf(b.kind),
   );
 
+  // Upsert rather than create-and-catch. The unique constraint is the dedupe
+  // mechanism, but letting it *throw* on every page load buried real errors in
+  // a stream of expected ones — an update that changes nothing is silent.
   let created = 0;
   for (const c of ordered.slice(0, 3)) {
-    try {
-      await prisma.notification.create({
-        data: {
-          id: `ntf_${c.dedupeKey}`.slice(0, 80),
-          userId,
-          kind: c.kind,
-          title: c.title,
-          body: c.body,
-          href: c.href ?? null,
-          dedupeKey: c.dedupeKey,
-        },
-      });
-      created += 1;
-    } catch {
-      // Unique-constraint violation: already sent today. That is the point.
-    }
+    const result = await prisma.notification.upsert({
+      where: { userId_dedupeKey: { userId, dedupeKey: c.dedupeKey } },
+      update: {},
+      create: {
+        id: `ntf_${c.dedupeKey}`.slice(0, 80),
+        userId,
+        kind: c.kind,
+        title: c.title,
+        body: c.body,
+        href: c.href ?? null,
+        dedupeKey: c.dedupeKey,
+      },
+      select: { createdAt: true },
+    });
+    // Newly created rows have a timestamp from this moment.
+    if (Date.now() - result.createdAt.getTime() < 5_000) created += 1;
   }
   return created;
 }

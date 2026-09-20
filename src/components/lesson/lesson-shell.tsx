@@ -79,9 +79,17 @@ export function LessonShell({
     };
   }, [meta.unitId]);
 
+  const firstRender = React.useRef(true);
+
   React.useEffect(() => {
     setFurthest((f) => Math.max(f, index));
-    contentRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    // Only scroll when the learner changes section. Doing it on mount pushed
+    // the lesson's own title and breadcrumbs off the top of the screen.
+    if (firstRender.current) {
+      firstRender.current = false;
+    } else {
+      contentRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
     // Keep the URL shareable without a navigation.
     const section = sections[index];
     if (section && typeof window !== 'undefined') {

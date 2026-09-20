@@ -270,6 +270,16 @@ export function installSyncListeners() {
   };
 }
 
+/**
+ * A stable empty array for selectors.
+ *
+ * `s.state?.notifications ?? []` allocates a new array on every render, which
+ * makes useSyncExternalStore's snapshot comparison fail every time — React
+ * reports "The result of getSnapshot should be cached to avoid an infinite
+ * loop" and re-renders in a loop. One shared constant fixes it.
+ */
+export const EMPTY: never[] = [];
+
 export const selectUnit = (unitId: string) => (s: LearnerStore) => s.state?.units[unitId];
 export const selectXP = (s: LearnerStore) => s.state?.xp ?? 0;
 export const selectPendingCount = (s: LearnerStore) => s.queue.length;

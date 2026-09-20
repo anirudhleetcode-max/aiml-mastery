@@ -14,6 +14,13 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
   const [error, setError] = React.useState<string | null>(null);
   const [showPassword, setShowPassword] = React.useState(false);
 
+  // Until this component has hydrated, a submit would be handled natively by
+  // the browser. With the default GET method that puts the password in the
+  // URL and in history, so the form declares method="post" *and* the button
+  // stays disabled until the JavaScript handler is actually attached.
+  const [ready, setReady] = React.useState(false);
+  React.useEffect(() => setReady(true), []);
+
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setPending(true);
@@ -59,7 +66,13 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
           : 'Your streak, your schedule and your mistake notebook are waiting.'}
       </p>
 
-      <form onSubmit={onSubmit} className="mt-8 space-y-4" noValidate>
+      <form
+        onSubmit={onSubmit}
+        method="post"
+        action={`/api/auth/${mode}`}
+        className="mt-8 space-y-4"
+        noValidate
+      >
         {isSignup && (
           <Field label="Your name" htmlFor="name">
             <Input id="name" name="name" autoComplete="name" required maxLength={80} placeholder="Anirudh" />
@@ -112,9 +125,16 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
           </div>
         )}
 
-        <Button type="submit" size="lg" className="w-full" loading={pending}>
+        <Button type="submit" size="lg" className="w-full" loading={pending || !ready} disabled={!ready}>
           {isSignup ? 'Start my journey' : 'Sign in'}
         </Button>
+
+        <noscript>
+          <p className="rounded-lg border border-warning/25 bg-warning/[0.06] p-3 text-[12.5px] leading-relaxed text-warning">
+            This form needs JavaScript. It is disabled rather than left working, because without it your password
+            would be sent in a way that is not safe.
+          </p>
+        </noscript>
       </form>
 
       <p className="mt-6 text-center text-[13px] text-subtle">

@@ -9,7 +9,8 @@ import { DeadlineTracker } from '@/components/dashboard/deadline-tracker';
 import { TodayCard } from '@/components/dashboard/today-card';
 import { DomainProgress } from '@/components/dashboard/domain-progress';
 import { CompletionBanner } from '@/components/dashboard/completion-banner';
-import { AttentionList, reviewDetail, weakDetail } from '@/components/dashboard/attention-list';
+import { AttentionList } from '@/components/dashboard/attention-list';
+import { reviewDetail, weakDetail } from '@/components/dashboard/attention-detail';
 import { CompositionDonut, TrendChart } from '@/components/charts/charts';
 import { ActivityHeatmap } from '@/components/charts/heatmap';
 import { ChartFrame } from '@/components/charts/primitives';
@@ -152,7 +153,7 @@ export default async function DashboardPage() {
       <div className="grid gap-4 lg:grid-cols-3">
         <CompositionDonut
           title="Mastery composition"
-          subtitle="Where all 214 units currently stand"
+          subtitle={`Where all ${o.totals.total} units currently stand`}
           slices={donut}
           total={o.totals.total}
           centreLabel="mastered"
@@ -169,7 +170,7 @@ export default async function DashboardPage() {
           title="XP earned"
           subtitle="Last 60 days"
           valueLabel="XP"
-          format={(v) => formatXP(v)}
+          format="xp"
         />
       </div>
 
@@ -195,7 +196,7 @@ export default async function DashboardPage() {
             valueLabel="Score"
             percent
             domainMax={1}
-            format={(v) => `${Math.round(v * 100)}%`}
+            format="score"
           />
         ) : (
           <ChartFrame title="Test scores" subtitle="Nothing graded yet" height={190}>
