@@ -118,7 +118,11 @@ const healthBody = await health.json().catch(() => null);
 expect(
   health.status === 200 && healthBody?.database === 'ok',
   'the deployment can reach its database',
-  healthBody?.database ? `reported "${healthBody.database}"` : `got ${health.status}`,
+  healthBody?.database
+    ? `reported "${healthBody.database}"${
+        healthBody.detail ? ` (${healthBody.detail.kind}${healthBody.detail.code ? ` ${healthBody.detail.code}` : ''})` : ''
+      }`
+    : `got ${health.status}`,
 );
 
 const email = `smoke-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com`;

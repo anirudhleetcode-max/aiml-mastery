@@ -95,6 +95,16 @@ jobs:
       # serves every page that does not touch the database, and then fails
       # every read and write at runtime. A managed host cannot keep a SQLite
       # file anyway, which is why this is a constant and not an input.
+      # Names only. `vercel env ls` prints the variable names, their targets
+      # and when they were added — never their values — which is exactly what
+      # is needed to tell "the variable is missing" apart from "the variable is
+      # wrong" without putting a secret anywhere near a log.
+      - name: List the production environment variable names
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: vercel env ls ${{ inputs.environment }} --token=${{ secrets.VERCEL_TOKEN }}
+
       - name: Build
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -120,6 +130,18 @@ jobs:
           [ -n "$target" ] || target="${{ steps.deploy.outputs.url }}"
           echo "Smoke-testing $target"
           node scripts/smoke-production.mjs "$target"
+
+      # Only on failure, and only then. The runtime's own log is the one place
+      # the real driver error exists — the application deliberately does not
+      # return it — and it is not reachable from the environment this is
+      # developed in.
+      - name: Runtime logs for the failed deployment
+        if: failure()
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          vercel inspect "${{ steps.deploy.outputs.url }}" --logs --token=${{ secrets.VERCEL_TOKEN }} 2>&1 | tail -80 || true
 
       - name: Summary
         if: always()
