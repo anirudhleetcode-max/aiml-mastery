@@ -8979,7 +8979,7 @@ print(sum(a), max(b))`,
 eng ['ada', 'bob']
 ops ['cy']
 eng ['dee']
-3 3`,
+6 3`,
         explanation:
           '`count` shows that infinite streams are ordinary objects as long as something downstream stops them. `chain` avoids building a concatenated copy. `accumulate` gives running totals in one pass. The `groupby` output is the one to burn into memory: `eng` appears twice because `groupby` only ever groups *adjacent* equal keys, so the standard usage is `groupby(sorted(rows, key=k), key=k)`. `tee` buys you a second pass, but it must buffer everything consumed by the faster branch, so it silently reintroduces the memory cost you used a generator to avoid.',
       },
@@ -10074,7 +10074,7 @@ def timer(label):
         print(f"{label}: {time.perf_counter() - start:.3f}s")
 
 with timer("load"):
-    sum(range(1_000_00))`,
+    sum(range(100_000))`,
         output: `1 first line
 2 line 2
 3 line 3
@@ -10143,8 +10143,8 @@ with open("utf8.txt", encoding="ascii", errors="replace") as f:
 
 print("bytes on disk:", open("utf8.txt", "rb").read()[:8])`,
         output: `UnicodeDecodeError: ordinal not in range(128) at byte 2
-mojibake: naÃ¯ve cafÃ
-replaced: na??ve caf?
+mojibake: naÃ¯ve cafÃ©
+replaced: na��ve caf��
 bytes on disk: b'na\\xc3\\xafve c'`,
         explanation:
           'Case 1 is the good outcome: a clear exception naming the byte position, so you know the encoding assumption was wrong. Case 2 is the dangerous one and the reason `latin-1` is a trap — it maps every one of the 256 possible bytes to a character, so it can never raise, and you get `cafÃ©` in your database with no error anywhere in the logs. Case 3 shows `errors="replace"` as a deliberate last resort for input you cannot fix at source; it loses information, so it belongs behind a logged warning, not as a default. The rule that prevents nearly all of this: always pass `encoding="utf-8"` explicitly, because the default depends on the machine’s locale and your laptop is not your production container.',

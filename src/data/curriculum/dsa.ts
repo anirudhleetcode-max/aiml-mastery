@@ -6053,4 +6053,4657 @@ for u, v in edges:
 
     masteryRequirements: { understoodScore: 0.7, proficientScore: 0.85, practiceRequired: 2, teachRequired: true },
   },
+  {
+    id: 'DSA-013',
+    domain: 'DSA',
+    module: 'Graphs',
+    topic: 'Level-order traversal and unweighted shortest paths',
+    title: 'Breadth-First Search',
+    slug: 'breadth-first-search',
+    difficulty: 3,
+    estimatedMinutes: 40,
+    prerequisites: ['DSA-006', 'DSA-012'],
+    related: ['DSA-008', 'DSA-009', 'DSA-011'],
+    tags: ['bfs', 'graph', 'queue', 'shortest-path', 'traversal', 'levels'],
+
+    learningObjectives: [
+      'Run breadth-first search by hand on a small graph, maintaining the queue, the visited set, the distance map and the parent map at every step',
+      'Explain why BFS finds the shortest path in an unweighted graph, and why that guarantee collapses the moment edges carry weights',
+      'Reconstruct an actual shortest path from the parent map rather than only reporting its length',
+      'Write BFS over an implicit graph — a grid, a word ladder, a state space — where the adjacency list is computed on demand rather than stored',
+      'State the O(V + E) time and O(V) space costs and justify each term from the code',
+    ],
+
+    terminology: [
+      {
+        term: 'Frontier',
+        definition:
+          'The set of vertices at the current distance from the source — everything BFS is about to expand. Implemented as the contents of the queue, which at any moment holds vertices from at most two adjacent levels.',
+        simple: 'The ring of places you have just reached and are about to look beyond.',
+      },
+      {
+        term: 'Discovered versus expanded',
+        definition:
+          'A vertex is discovered when it is first seen and pushed onto the queue; it is expanded when it is popped and its neighbours are examined. BFS marks vertices on discovery, not on expansion.',
+        simple: 'Spotting a place from a distance is not the same as walking to it and looking around.',
+      },
+      {
+        term: 'Parent (predecessor) map',
+        definition:
+          'A dictionary recording, for each discovered vertex, the vertex from which it was first reached. Following it backwards from a target to the source yields an actual shortest path.',
+        simple: 'A trail of breadcrumbs saying "I got here from there".',
+      },
+      {
+        term: 'BFS tree',
+        definition:
+          'The subgraph formed by the edges that discovered new vertices. It is a spanning tree of the reachable component in which the depth of every vertex equals its true distance from the source.',
+        simple: 'The skeleton of first-arrival routes, with the start at the top.',
+      },
+      {
+        term: 'Implicit graph',
+        definition:
+          'A graph whose vertices and edges are generated on demand by a successor function rather than stored in memory — a maze grid, the legal moves of a puzzle, the one-letter neighbours of a word.',
+        simple: 'A map you make up as you walk instead of carrying one.',
+      },
+    ],
+
+    simpleExplanation:
+      'Imagine dropping a pebble into a still pond. The ripple reaches everything one step away first, then everything two steps away, then three — and it never reaches something five steps away before something three steps away. Breadth-first search is that ripple made into an algorithm. You start at one vertex, look at all of its neighbours, then all of their neighbours, and so on, expanding outwards one complete ring at a time. The only machinery you need is a queue, which hands vertices back in the order they arrived, and a set recording which vertices you have already seen so the ripple does not wash back over itself. Because the rings come out in order of distance, the first time BFS touches a vertex it has arrived by the shortest possible route — so you get shortest paths for free, without ever comparing routes. That single guarantee is why BFS answers questions like "how many introductions away is this person?" and "what is the smallest number of moves that solves this puzzle?" while a depth-first wander, which plunges down one path until it is stuck, answers neither.',
+
+    whyItExists:
+      'Every question of the form "what is the fewest steps from here to there?" needs a traversal that discovers vertices in order of distance. Wandering a graph at random, or plunging down one branch at a time, finds a path but almost never the shortest one, and comparing all paths explicitly is exponential. BFS gives the minimum hop count in O(V + E) with nothing more exotic than a queue.',
+
+    analogy: {
+      scenario:
+        'You are new in a city and want to know how many introductions it takes to reach the mayor. You ask everyone you know directly — that is one introduction. None of them is the mayor, so you ask each of them for everyone they know, and you note the names down in the order they are offered. Those are two introductions away. You work through that whole list before you start on anyone three away, and you keep a notebook of every name already heard so you never chase the same person twice. The moment the mayor\'s name appears, you stop: the number of rings you have been through is exactly the answer, and by asking "who told me about you?" back along the chain you recover the actual sequence of introductions.',
+      mapping: [
+        { from: 'A person', to: 'A vertex' },
+        { from: '"Knows directly"', to: 'An edge' },
+        { from: 'The list of names waiting to be asked, in arrival order', to: 'The FIFO queue' },
+        { from: 'The notebook of names already heard', to: 'The visited set, written on discovery' },
+        { from: 'Finishing all two-away people before starting three-away', to: 'Level-by-level expansion, which is what gives the shortest-path guarantee' },
+        { from: '"Who told me about you?"', to: 'The parent map, followed backwards to reconstruct the path' },
+      ],
+      bridge:
+        'The notebook is the part beginners drop, and it is the part that matters: without it the same person is queued by every mutual acquaintance, the queue grows exponentially and the search never terminates on a graph with a cycle. Writing the name down at the moment you first hear it — not when you get round to asking them — is what bounds the queue to O(V) and keeps every vertex enqueued exactly once. The strict ring-by-ring discipline is the other half: it is what makes the first arrival the shortest arrival.',
+      limitations:
+        'The story treats every introduction as equally costly, which is exactly the assumption BFS makes. If some introductions took a week and others ten minutes, fewest-hops would no longer mean fastest, and you would need Dijkstra\'s algorithm with a priority queue instead of a plain queue. The analogy also hides memory cost: the frontier of a social graph three hops out can be millions of people, and BFS holds an entire frontier at once.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'BFS expanding ring by ring',
+        caption: 'Step through the queue one pop at a time and watch the frontier move outwards from the source.',
+        widget: 'graph-traversal',
+        props: { mode: 'bfs', start: 'A' },
+      },
+      {
+        kind: 'ascii',
+        title: 'The six-node graph, coloured by BFS distance from A',
+        caption: 'Distances: A = 0; B and D = 1; C and E = 2; F = 3. The BFS tree edges are A-B, A-D, B-C, B-E, C-F.',
+        art: `   level 0     level 1     level 2     level 3
+
+      A ------- B ------- C ------- F
+      |         |
+      |         |
+      D ------- E
+   (level 1) (level 2)
+
+   edges: A-B, A-D, B-C, B-E, C-F, D-E
+   D-E is a cross edge: both endpoints are already discovered`,
+      },
+      {
+        kind: 'flow',
+        title: 'The BFS loop',
+        caption: 'Five lines of state, one loop. Everything else is bookkeeping.',
+        steps: [
+          { label: 'Seed', detail: 'Put the source in the queue, set dist[source] = 0 and mark it visited. A multi-source BFS seeds several vertices at distance 0 instead.' },
+          { label: 'Pop the front', detail: 'Take the oldest vertex u off the queue. FIFO order is what guarantees vertices come out in non-decreasing distance.' },
+          { label: 'Enumerate neighbours', detail: 'For each v adjacent to u, ask only one question: has v been discovered already?' },
+          { label: 'Discover and record', detail: 'If not, set dist[v] = dist[u] + 1, parent[v] = u, mark v visited immediately, and push it. Marking here, not on pop, is the whole correctness argument for the queue bound.' },
+          { label: 'Repeat until empty', detail: 'When the queue drains, every vertex reachable from the source has its final distance and every unreachable vertex is simply absent from the map.' },
+          { label: 'Reconstruct', detail: 'Walk parent[] backwards from the target to the source and reverse the list to get an actual shortest path, not just its length.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'BFS versus a weighted shortest path',
+        caption: 'BFS is Dijkstra\'s algorithm for the special case where every edge costs one.',
+        left: {
+          heading: 'BFS — unweighted',
+          points: [
+            'Plain FIFO queue; each vertex enters and leaves once',
+            'O(V + E), no comparisons between competing routes',
+            'First arrival is final: a vertex is never re-discovered at a smaller distance',
+            'Correct only when every edge has the same cost',
+          ],
+        },
+        right: {
+          heading: 'Dijkstra — non-negative weights',
+          points: [
+            'Priority queue keyed by tentative distance (see heaps)',
+            'O((V + E) log V) with a binary heap',
+            'A vertex may be reached cheaply later, so distances are relaxed as you go',
+            'Requires non-negative weights; negative edges need Bellman-Ford',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Which traversal answers which question',
+        caption: 'The queue-versus-stack choice is the whole difference, and it changes what the traversal can promise.',
+        columns: ['Question', 'Use', 'Why'],
+        rows: [
+          ['Fewest hops from A to B', 'BFS', 'Discovers vertices in non-decreasing distance order, so the first arrival is optimal'],
+          ['All vertices within k hops', 'BFS', 'Stop expanding once dist exceeds k; the frontier is exactly the k-th ring'],
+          ['Does a path exist at all?', 'Either', 'Both reach every vertex in the component; DFS uses less memory on wide graphs'],
+          ['Is the graph bipartite?', 'BFS', 'Two-colour by level parity; any edge inside a level proves an odd cycle'],
+          ['Topological order of a DAG', 'DFS or Kahn', 'Needs finishing times or in-degree counts, not distances'],
+          ['Shortest path with edge weights', 'Neither', 'Use Dijkstra with a priority queue; BFS would return the wrong route'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'Breadth-first search from a source s in a graph G = (V, E) computes, for every vertex v reachable from s, the distance d(v) — the minimum number of edges on any s-to-v path — and a predecessor pi(v) such that the predecessor edges form a breadth-first tree rooted at s. It maintains a FIFO queue of discovered-but-not-yet-expanded vertices; the algorithm repeatedly dequeues a vertex u and, for each neighbour v not yet discovered, sets d(v) = d(u) + 1 and pi(v) = u before enqueueing v. Using an adjacency list it runs in O(|V| + |E|) time and O(|V|) auxiliary space, and it is exactly Dijkstra\'s algorithm specialised to unit edge weights.',
+
+    math: {
+      intuition:
+        'Two facts do all the work. First, the queue never holds vertices from more than two consecutive levels, so distances come out in non-decreasing order — a vertex at distance k + 1 can only be discovered from one at distance k, and every distance-k vertex is already queued ahead of it. Second, each vertex is discovered once and expanded once, and expanding it costs work proportional to its degree, so the total is the sum of all degrees, which the handshaking lemma pins at 2|E|.',
+      formulas: [
+        {
+          latex: 'd(v) = \\min\\{\\, |P| : P \\text{ is a path from } s \\text{ to } v \\,\\}',
+          name: 'Unweighted shortest distance',
+          meaning: 'What BFS computes: the least number of edges on any route from the source to v, or infinity if v is unreachable.',
+          category: 'complexity',
+          variables: [
+            { symbol: 's', meaning: 'The source vertex BFS starts from' },
+            { symbol: 'v', meaning: 'Any other vertex' },
+            { symbol: '|P|', meaning: 'The number of edges on path P' },
+          ],
+        },
+        {
+          latex: 'd(v) = d(u) + 1 \\quad \\text{for the edge } (u, v) \\text{ that first discovers } v',
+          name: 'The BFS update rule',
+          meaning: 'Every vertex takes its distance from the vertex that reached it first, which is why the predecessor edges form a tree of shortest paths.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'u', meaning: 'The vertex being expanded, already holding its final distance' },
+            { symbol: 'v', meaning: 'A neighbour being discovered for the first time' },
+          ],
+        },
+        {
+          latex: 'T(V, E) = O\\big(|V| + |E|\\big), \\qquad S(V) = O(|V|)',
+          name: 'Cost of BFS on an adjacency list',
+          meaning: 'Each vertex is enqueued and dequeued once, contributing |V|; each edge is examined once per endpoint, contributing 2|E| = O(|E|).',
+          category: 'complexity',
+          variables: [
+            { symbol: 'T', meaning: 'Time, counted in basic operations' },
+            { symbol: 'S', meaning: 'Auxiliary space: the queue, the visited set, the distance and parent maps' },
+          ],
+        },
+        {
+          latex: '|\\text{frontier}| \\le b^{d} \\quad \\text{with branching factor } b',
+          name: 'Frontier growth',
+          meaning: 'The practical memory limit of BFS: on a graph where each vertex has b neighbours, the ring at depth d holds up to b^d vertices, which is why BFS on a deep state space exhausts memory long before it exhausts time.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'b', meaning: 'Branching factor, the typical out-degree' },
+            { symbol: 'd', meaning: 'Depth of the current ring' },
+          ],
+        },
+      ],
+      derivation: [
+        'Claim: when BFS dequeues vertices, their d values are non-decreasing. The queue starts with s alone at distance 0.',
+        'Inductive step: suppose every vertex dequeued so far had distance k or k + 1, with all distance-k vertices ahead of all distance-(k + 1) ones. Expanding a distance-k vertex appends only distance-(k + 1) vertices to the back.',
+        'So the queue always holds a block of distance-k vertices followed by a block of distance-(k + 1) vertices, and FIFO order preserves that invariant.',
+        'Correctness follows: if v were reachable in fewer than d(v) edges, there would be a path s = u_0, ..., u_m = v with m < d(v); its second-to-last vertex u_(m-1) has distance at most m - 1, would be expanded before any distance-d(v) vertex, and would have discovered v then — a contradiction.',
+        'Cost: the discovered check makes every vertex enter the queue at most once, so the pop loop runs at most |V| times.',
+        'Each pop enumerates deg(u) neighbours, and summing deg(u) over all vertices gives 2|E| in an undirected graph, |E| in a directed one.',
+        'Total time is therefore O(|V| + |E|). Space is O(|V|) for the maps plus O(|V|) worst-case queue, since the frontier can be nearly the whole graph.',
+      ],
+    },
+
+    workedExample: {
+      title: 'BFS by hand on the six-node graph, from A',
+      setup:
+        'The graph from the previous unit: vertices A to F, undirected edges A-B, A-D, B-C, B-E, C-F, D-E. Adjacency lists in alphabetical order are A: [B, D], B: [A, C, E], C: [B, F], D: [A, E], E: [B, D], F: [C]. Start at A. Track four things at every step — the queue (front on the left), the visited set, dist and parent.',
+      steps: [
+        {
+          label: 'Initialise',
+          detail: 'queue = [A]; visited = {A}; dist = {A: 0}; parent = {A: none}. Nothing else is known yet, and no other vertex has a distance — absent means "undiscovered", which is also how unreachable vertices will end up.',
+        },
+        {
+          label: 'Pop A (distance 0)',
+          detail: 'Neighbours B and D are both undiscovered. Set dist[B] = 1, parent[B] = A, dist[D] = 1, parent[D] = A, mark both visited and enqueue them. queue = [B, D]. Level 1 is now fully known even though we have not looked at either vertex.',
+        },
+        {
+          label: 'Pop B (distance 1)',
+          detail: 'Neighbours are A, C, E. A is already visited, so it is skipped — this is the check that stops the ripple washing backwards. C and E are new: dist = 2 for both, parent[C] = parent[E] = B. queue = [D, C, E].',
+        },
+        {
+          label: 'Pop D (distance 1)',
+          detail: 'Neighbours are A (visited) and E. E was discovered one step ago from B and is already marked, so nothing happens. This is the moment that matters: the edge D-E is a cross edge, and because E was marked on discovery rather than on expansion, it is not enqueued a second time. queue = [C, E].',
+        },
+        {
+          label: 'Pop C (distance 2)',
+          detail: 'Neighbours are B (visited) and F (new). dist[F] = 3, parent[F] = C, enqueue. queue = [E, F]. Notice the queue now holds one distance-2 vertex followed by one distance-3 vertex — never more than two adjacent levels, exactly as the invariant promises.',
+        },
+        {
+          label: 'Pop E (distance 2)',
+          detail: 'Neighbours B and D are both visited. Nothing is discovered. queue = [F].',
+        },
+        {
+          label: 'Pop F (distance 3)',
+          detail: 'Its only neighbour C is visited. queue = []. The loop ends.',
+        },
+        {
+          label: 'Read off the answers',
+          detail: 'Visit order: A, B, D, C, E, F. Distances: A = 0, B = 1, D = 1, C = 2, E = 2, F = 3. Levels: {A}, {B, D}, {C, E}, {F}. Every vertex appears, so the graph is connected.',
+          latex: 'd(A){=}0,\\; d(B){=}d(D){=}1,\\; d(C){=}d(E){=}2,\\; d(F){=}3',
+        },
+        {
+          label: 'Reconstruct the path to F',
+          detail: 'parent[F] = C, parent[C] = B, parent[B] = A, parent[A] = none. Reversed, that is A -> B -> C -> F, three edges, matching dist[F] = 3. There is no shorter route: F touches only C, C touches only B and F, and B is two from A.',
+        },
+        {
+          label: 'Count the work',
+          detail: '6 pops and 12 neighbour inspections (each undirected edge is looked at from both ends), so 18 basic operations for V = 6, E = 6 — precisely the O(V + E) = O(6 + 6) the formula predicts, not V^2 = 36.',
+          latex: 'T = |V| + 2|E| = 6 + 12 = 18',
+        },
+        {
+          label: 'What changes with a different tie-break',
+          detail: 'If A\'s list were [D, B] instead, the visit order would be A, D, B, E, C, F and parent[E] would be D rather than B. Distances would be identical. BFS pins down the distances uniquely; the particular shortest path it returns depends on neighbour order, which is worth saying out loud when a test asserts on one exact path.',
+        },
+      ],
+      conclusion:
+        'Time is O(V + E) = 18 operations here: every vertex is enqueued exactly once because discovery marks it immediately, and every edge is inspected exactly twice, once from each endpoint. Space is O(V) — the queue peaked at three entries, and the visited, dist and parent maps hold one entry per vertex. The essential discipline is marking on enqueue: had we marked on dequeue instead, E would have been pushed by both B and D, and on a dense graph that duplication multiplies the queue by the average degree. The parent map costs nothing extra and upgrades the answer from "F is three hops away" to "here is the route", which is almost always what the caller actually wanted.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'BFS with distances, parents and path reconstruction',
+        runnable: true,
+        code: `from collections import deque
+
+adj = {"A": ["B", "D"], "B": ["A", "C", "E"], "C": ["B", "F"],
+       "D": ["A", "E"], "E": ["B", "D"], "F": ["C"]}
+
+def bfs(adj, start):
+    dist = {start: 0}
+    parent = {start: None}
+    order = []
+    q = deque([start])
+    while q:
+        u = q.popleft()
+        order.append(u)
+        for v in adj[u]:
+            if v not in dist:              # mark on ENQUEUE, not on dequeue
+                dist[v] = dist[u] + 1
+                parent[v] = u
+                q.append(v)
+    return order, dist, parent
+
+order, dist, parent = bfs(adj, "A")
+print("visit order:", order)
+print("distances:  ", dist)
+
+def path_to(parent, target):
+    path = []
+    while target is not None:
+        path.append(target)
+        target = parent[target]
+    return path[::-1]
+
+print("shortest A->F:", path_to(parent, "F"), "length", dist["F"])`,
+        output: `visit order: ['A', 'B', 'D', 'C', 'E', 'F']
+distances:   {'A': 0, 'B': 1, 'D': 1, 'C': 2, 'E': 2, 'F': 3}
+shortest A->F: ['A', 'B', 'C', 'F'] length 3`,
+        explanation:
+          'The dist dictionary doubles as the visited set, which removes a whole class of bug where the two disagree. Use collections.deque and not a list: list.pop(0) is O(n) because every remaining element shifts left, so a list-based queue silently turns an O(V + E) traversal into O(V^2 + E). The parent map is three extra lines and turns a distance into a route; note that path_to relies on parent[start] being None as the stopping sentinel, so a start vertex mapped to itself would loop forever.',
+      },
+      {
+        language: 'python',
+        title: 'Level-by-level BFS, when you want the rings themselves',
+        runnable: true,
+        code: `from collections import deque
+
+adj = {"A": ["B", "D"], "B": ["A", "C", "E"], "C": ["B", "F"],
+       "D": ["A", "E"], "E": ["B", "D"], "F": ["C"]}
+
+def bfs_levels(adj, start):
+    seen = {start}
+    frontier = [start]
+    depth = 0
+    while frontier:
+        yield depth, frontier
+        nxt = []
+        for u in frontier:
+            for v in adj[u]:
+                if v not in seen:
+                    seen.add(v)
+                    nxt.append(v)
+        frontier = nxt
+        depth += 1
+
+for d, layer in bfs_levels(adj, "A"):
+    print(f"level {d}: {sorted(layer)}")`,
+        output: `level 0: ['A']
+level 1: ['B', 'D']
+level 2: ['C', 'E']
+level 3: ['F']`,
+        explanation:
+          'Swapping the queue for two lists — the current frontier and the one being built — makes the level structure explicit, which is what you want for "friends of friends", "all nodes within k hops" or level-order printing of a tree. It is the same algorithm with the same O(V + E) cost; the only difference is that the level boundary is structural instead of being inferred from a distance map. Stopping early when depth reaches k gives a bounded-radius neighbourhood, which is exactly how a graph neural network samples the receptive field of a node.',
+      },
+      {
+        language: 'python',
+        title: 'BFS on an implicit graph: fewest moves through a maze',
+        runnable: true,
+        code: `from collections import deque
+
+grid = ["....#",
+        ".##.#",
+        "....."]
+R, C = len(grid), len(grid[0])
+start, goal = (0, 0), (2, 4)
+
+dist = {start: 0}
+q = deque([start])
+while q:
+    r, c = q.popleft()
+    if (r, c) == goal:
+        break
+    for dr, dc in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        nr, nc = r + dr, c + dc
+        if 0 <= nr < R and 0 <= nc < C and grid[nr][nc] != "#" and (nr, nc) not in dist:
+            dist[(nr, nc)] = dist[(r, c)] + 1
+            q.append((nr, nc))
+
+print("fewest moves:", dist.get(goal))
+print("cells discovered:", len(dist), "of", R * C)`,
+        output: `fewest moves: 6
+cells discovered: 11 of 15`,
+        explanation:
+          'There is no adjacency list here at all: the neighbours of a cell are computed from the four offsets, and the graph exists only as the successor rule plus the wall test. This is the shape of most real BFS code — puzzle solvers, word ladders, flood fill, reachability in a state machine — and it is why "build the graph first" is usually the wrong instinct. The bounds check must come before the grid lookup, since Python happily indexes grid[-1] and wraps to the last row, producing a wrong answer rather than an exception.',
+      },
+      {
+        language: 'python',
+        title: 'Multi-source BFS: distance to the nearest of several starts',
+        runnable: true,
+        code: `from collections import deque
+
+grid = ["..#..",
+        ".##..",
+        "....."]
+R, C = len(grid), len(grid[0])
+sources = [(0, 0), (2, 4)]           # two first-aid points
+dist = {s: 0 for s in sources}
+q = deque(sources)                    # seed the queue with ALL sources at once
+
+while q:
+    r, c = q.popleft()
+    for dr, dc in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        nr, nc = r + dr, c + dc
+        if 0 <= nr < R and 0 <= nc < C and grid[nr][nc] != "#" and (nr, nc) not in dist:
+            dist[(nr, nc)] = dist[(r, c)] + 1
+            q.append((nr, nc))
+
+for r in range(R):
+    print(" ".join("#" if grid[r][c] == "#" else str(dist[(r, c)]) for c in range(C)))
+print("furthest free cell is", max(dist.values()), "steps from help")`,
+        output: `0 1 # 3 2
+1 # # 2 1
+2 3 2 1 0
+furthest free cell is 3 steps from help`,
+        explanation:
+          'Seeding the queue with every source at distance zero computes the distance to the nearest source for all cells in a single O(V + E) pass, instead of running one BFS per source and taking the minimum, which would cost O(k(V + E)) for k sources. The trick works because the invariant is about the queue holding non-decreasing distances, not about there being one root; conceptually you have added a virtual super-source joined to every real source by a zero-cost edge. This is the standard solution to "rotting oranges", "walls and gates" and nearest-facility queries on a grid.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Degrees of separation in a social or professional network',
+        usage:
+          'LinkedIn\'s "2nd degree" badge is a bounded BFS from you, expanded two rings and stopped. The frontier is the reason it is bounded: at an average degree of a few hundred, ring three is already hundreds of millions of profiles, so the product limits the radius rather than the runtime.',
+      },
+      {
+        context: 'Knowledge-graph retrieval for grounded question answering',
+        usage:
+          'Given the entities mentioned in a question, a retrieval step runs BFS one or two hops out over a knowledge graph to gather neighbouring facts, which are then serialised into a language model\'s context. The hop limit is both a relevance decision and a token-budget decision.',
+      },
+      {
+        context: 'Crawlers and dependency resolution',
+        usage:
+          'A web crawler is BFS over an implicit graph of links, which is what keeps it near the seed pages rather than plunging down one site forever. Package managers use the same shape to find the shallowest version of a transitive dependency.',
+      },
+      {
+        context: 'Mini-batch sampling for graph neural networks',
+        usage:
+          'PyTorch Geometric\'s NeighborLoader takes a batch of target nodes and expands a fixed number of BFS rings with a capped fan-out per ring. That is exactly bounded multi-source BFS, and the cap exists because an unbounded frontier would swallow the whole graph in three layers.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'collections.deque', role: 'The queue behind every BFS in Python: O(1) append and popleft, unlike a list whose pop(0) is O(n).' },
+      { tool: 'networkx', role: 'nx.shortest_path, nx.bfs_layers and nx.descendants_at_distance are BFS with the bookkeeping already written; useful as a reference implementation to test your own against.' },
+      { tool: 'PyTorch Geometric', role: 'NeighborLoader performs bounded multi-hop BFS sampling to build mini-batches, because full-neighbourhood expansion is intractable past two layers.' },
+      { tool: 'scipy.sparse.csgraph', role: 'breadth_first_order and shortest_path run BFS in compiled code over CSR matrices, for graphs too large for a Python-level loop.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Marking vertices visited when they are dequeued instead of when they are enqueued',
+        why: 'A vertex reachable from several frontier vertices gets pushed once per discoverer. The queue can grow to O(E) instead of O(V), and on a dense graph the duplicate pops dominate the runtime — the algorithm is still correct, just needlessly slow and memory-hungry.',
+        fix: 'Add to the visited set (or write dist[v]) in the same breath as q.append(v). Using the dist dictionary as the visited set makes the mistake structurally impossible.',
+      },
+      {
+        mistake: 'Using a plain list as the queue and calling pop(0)',
+        why: 'list.pop(0) shifts every remaining element left, costing O(n). With a frontier of n vertices the traversal degrades from O(V + E) to O(V^2 + E), which is invisible on a ten-node test and fatal at a million.',
+        fix: 'Use collections.deque and popleft(). If you genuinely need a list, pop from the end — but then you have written DFS, not BFS, and your shortest-path guarantee is gone.',
+      },
+      {
+        mistake: 'Using BFS on a weighted graph',
+        why: 'BFS counts edges, not cost. A two-hop route over two expensive edges beats a three-hop route over three cheap ones in BFS\'s eyes, so it confidently returns a path that is not the cheapest.',
+        fix: 'Use Dijkstra with a heap for non-negative weights, or Bellman-Ford if weights can be negative. The one exception is 0-1 weights, where a double-ended queue — push 0-edges to the front, 1-edges to the back — keeps the O(V + E) cost.',
+      },
+      {
+        mistake: 'Recording the distance but not the parent, then needing the route',
+        why: 'Recovering a path after the fact means re-running the search or walking distances backwards, and the second is subtly wrong on graphs where several neighbours share a distance unless you check adjacency too.',
+        fix: 'Populate parent[v] = u at the same moment as dist[v] = dist[u] + 1. It costs one dictionary write and one pointer per vertex.',
+      },
+      {
+        mistake: 'Running BFS from one vertex and concluding the graph is disconnected, or vice versa',
+        why: 'A single BFS only ever sees one connected component, so "some vertices have no distance" means unreachable from this source — not that the graph is broken.',
+        fix: 'Loop over all vertices and start a fresh BFS from each unvisited one if you need every component; the total cost is still O(V + E).',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Why does BFS find the shortest path in an unweighted graph, and what exactly breaks when edges have weights?',
+        answer:
+          'Because the FIFO queue makes vertices come out in non-decreasing distance order. The invariant is that the queue only ever holds vertices from two consecutive levels, k and k + 1: expanding a level-k vertex can only append level-(k + 1) vertices to the back, so every level-k vertex is dequeued before any level-(k + 1) one. That means the first time a vertex is discovered it has been reached by a minimum-edge path, and re-discovery can never improve it, which is why the visited check can be an unconditional skip. With weights that argument collapses: dequeue order now reflects hop count rather than cost, so a vertex may first be discovered over a cheap-looking two-hop route that is actually expensive, and BFS has no mechanism to revise it. The fix is to order by accumulated cost instead of arrival — a priority queue — which is Dijkstra at O((V + E) log V). The special case worth knowing is 0-1 weights, where a deque with front-pushes for zero-cost edges restores O(V + E).',
+        followUp:
+          'A strong answer volunteers that BFS is Dijkstra with unit weights, and can state the two-level queue invariant rather than just asserting that "BFS goes level by level".',
+      },
+      {
+        level: 'intermediate',
+        question: 'You need the shortest route between two specific vertices in a graph with 50 million nodes. Plain BFS is too slow. What do you do?',
+        answer:
+          'Run BFS from both ends at once — bidirectional search. Alternate expanding the frontier from the source and from the target, and stop when the two visited sets intersect; the answer is the distance from each side to the meeting vertex, summed. The win is exponential in the branching factor: a one-sided search to depth d explores about b^d vertices, while two searches to depth d/2 explore about 2 * b^(d/2), which for b = 100 and d = 6 is a million times smaller. The requirements are that you can enumerate predecessors as well as successors, which is free in an undirected graph and needs a reverse index in a directed one, and that you expand the smaller frontier each round. The subtlety candidates miss is the stopping condition: you cannot stop at the first common vertex found mid-expansion on odd-length paths without checking every meeting point at the current radius, or you can return a path one edge too long. If weights were involved I would use bidirectional Dijkstra or A* with an admissible heuristic instead.',
+        followUp:
+          'Mentioning that landmark-based or contraction-hierarchy preprocessing beats both for repeated road-network queries shows awareness of the production answer.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Where does BFS show up in a machine-learning system, as opposed to in a coding puzzle?',
+        answer:
+          'Three places I see it regularly. First, neighbourhood sampling for graph neural networks: a layer aggregates from one-hop neighbours, so an L-layer model needs the L-ring around each target node, and libraries implement that as bounded BFS with a fan-out cap per ring because the true receptive field grows like b^L. Second, retrieval over a knowledge graph for grounded generation: from the entities a question mentions, expand one or two hops to collect candidate facts, then rank them; the radius is chosen against the context budget, not against correctness. Third, dependency and lineage analysis in pipelines — which downstream feature tables and models are affected if this upstream source changes is a reachability query over a DAG, and BFS gives it by shortest hop, which is a useful proxy for blast radius. In all three the operative constraint is the frontier, not the time bound: memory is what forces a hop limit, a fan-out cap or sampling.',
+        followUp:
+          'Connecting exponential neighbourhood expansion to why GraphSAGE samples a fixed number of neighbours per layer shows the candidate has actually trained a GNN.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Write a function that returns every vertex within exactly k hops of a source, and explain why you cannot simply filter a full BFS by distance in a graph with a billion edges.',
+        hint: 'The level-by-level form gives you the ring for free; the point is where you stop.',
+        solution:
+          'from collections import deque\n\ndef within_k(adj, start, k):\n    seen = {start}\n    frontier = [start]\n    rings = [[start]]\n    for _ in range(k):\n        nxt = []\n        for u in frontier:\n            for v in adj.get(u, ()):\n                if v not in seen:\n                    seen.add(v)\n                    nxt.append(v)\n        if not nxt:\n            break\n        rings.append(nxt)\n        frontier = nxt\n    return rings[-1] if len(rings) > k else []\n\nThe loop runs exactly k times, so the cost is proportional to the number of vertices and edges inside the k-ball, not to the whole graph: O(V_k + E_k). Filtering a full BFS would first traverse all billion edges and then discard almost everything, which is the same answer at enormously greater cost — and on a graph that does not fit in memory it is not merely slower, it is impossible. Returning rings[-1] rather than seen distinguishes "exactly k" from "at most k"; the guard handles a graph whose component is shallower than k, where the honest answer is an empty ring rather than the last non-empty one.',
+      },
+      {
+        prompt: 'Determine whether an undirected graph is bipartite — whether its vertices can be split into two groups with every edge crossing between them — using BFS. State the complexity.',
+        hint: 'Colour each vertex by the parity of its BFS level and look for an edge that fails.',
+        solution:
+          'from collections import deque\n\ndef is_bipartite(adj):\n    colour = {}\n    for src in adj:\n        if src in colour:\n            continue\n        colour[src] = 0\n        q = deque([src])\n        while q:\n            u = q.popleft()\n            for v in adj[u]:\n                if v not in colour:\n                    colour[v] = 1 - colour[u]\n                    q.append(v)\n                elif colour[v] == colour[u]:\n                    return False        # an edge inside a level: odd cycle\n    return True\n\nThe argument is that BFS assigns each vertex a level, and colouring by level parity satisfies every tree edge automatically. The only edges that can break bipartiteness are the ones joining two vertices of the same level, and such an edge closes a cycle of odd length, which is precisely the obstruction. Cost is one traversal, O(V + E) time and O(V) space. The outer loop over sources is not optional: a disconnected graph can have one bipartite component and one that is not, and starting from a single vertex would miss it. In practice this is how you check whether a user-item interaction graph really is bipartite before feeding it to an algorithm that assumes so.',
+      },
+      {
+        prompt: 'A word ladder transforms "cold" into "warm" by changing one letter at a time, with every intermediate word in a given dictionary. Describe a BFS solution and give its complexity in terms of the word length L and the dictionary size N.',
+        hint: 'The vertices are words; you never need to build the edge list explicitly.',
+        solution:
+          'Treat each dictionary word as a vertex, with an edge between words differing in exactly one letter, and run BFS from the start word until the target is dequeued; the distance is the ladder length. Never materialise the edges by comparing every pair, which is O(N^2 L). Instead, generate neighbours on demand: for each of the L positions try all 26 letters and keep the candidates present in a set of the dictionary, which costs O(26L) per word with O(L) hashing, so the whole traversal is O(N * L * 26) — linear in the dictionary.\n\nAn alternative that is faster when L is large is to precompute buckets keyed by wildcard patterns, so "cold" indexes into "*old", "c*ld", "co*d" and "col*", and neighbours are the union of its buckets. That is O(N L) preprocessing and makes neighbour lookup a few dictionary hits. Either way, remove each word from the dictionary as it is discovered so it cannot be queued twice, and use BFS rather than DFS because the question asks for the shortest ladder — DFS would find some ladder, usually a long one.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DSA-013-q1',
+        type: 'mcq',
+        concept: 'data structure choice',
+        prompt: 'What happens if you replace the queue in BFS with a stack, changing nothing else?',
+        options: [
+          'You get depth-first search, and the shortest-path guarantee disappears',
+          'Nothing changes; both visit the same vertices in the same order',
+          'The traversal becomes O(V^2)',
+          'It stops terminating on graphs with cycles',
+        ],
+        answerIndex: 0,
+        explanation:
+          'LIFO order expands the most recently discovered vertex, so the search plunges down one branch instead of expanding rings. It still visits every reachable vertex in O(V + E), but the first arrival at a vertex is no longer along a minimum-edge path.',
+      },
+      {
+        id: 'DSA-013-q2',
+        type: 'numeric',
+        concept: 'shortest distance',
+        prompt: 'In the graph with edges A-B, A-D, B-C, B-E, C-F, D-E, how many edges are on the shortest path from A to F?',
+        answer: 3,
+        explanation:
+          'BFS gives A = 0; B and D = 1; C and E = 2; F = 3. The route is A -> B -> C -> F, and no shorter one exists because F touches only C, which is itself two hops from A.',
+      },
+      {
+        id: 'DSA-013-q3',
+        type: 'order',
+        concept: 'the BFS loop',
+        prompt: 'Put the steps of one iteration of BFS into the correct order.',
+        items: [
+          'Dequeue the front vertex u',
+          'Iterate over the neighbours of u',
+          'Check whether the neighbour v has already been discovered',
+          'Record dist[v] = dist[u] + 1 and parent[v] = u',
+          'Mark v as discovered and enqueue it',
+        ],
+        explanation:
+          'The order matters in one specific place: marking and enqueueing must happen together, at discovery. Deferring the mark until v is dequeued lets several frontier vertices push the same v.',
+      },
+      {
+        id: 'DSA-013-q4',
+        type: 'truefalse',
+        concept: 'weighted graphs',
+        prompt: 'BFS returns the cheapest route in a graph whose edges carry travel times.',
+        answer: false,
+        explanation:
+          'BFS minimises the number of edges, not their total weight, so it will happily prefer two slow edges over three fast ones. Weighted shortest paths need Dijkstra with a priority queue, or Bellman-Ford if weights may be negative.',
+      },
+      {
+        id: 'DSA-013-q5',
+        type: 'debug',
+        language: 'python',
+        concept: 'queue implementation',
+        prompt: 'This BFS gives the right answers but runs far slower than O(V + E) on large graphs. Why?',
+        code: `q = [start]
+while q:
+    u = q.pop(0)
+    for v in adj[u]:
+        if v not in seen:
+            seen.add(v); q.append(v)`,
+        options: [
+          'list.pop(0) is O(n) because every remaining element shifts left; use collections.deque and popleft()',
+          '`seen` should be a list rather than a set',
+          'The neighbours must be sorted before they are appended',
+          'The distance map is missing, which changes the complexity',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Removing from the front of a Python list re-indexes the whole list, so each pop costs O(n) and the traversal degrades to O(V^2 + E). deque.popleft() is O(1) because a deque is a doubly linked list of blocks.',
+      },
+      {
+        id: 'DSA-013-q6',
+        type: 'explain',
+        concept: 'correctness of BFS',
+        prompt: 'Explain why the first time BFS reaches a vertex, it has reached it by a shortest path.',
+        rubric: [
+          'States the queue invariant: only two consecutive levels are ever in the queue, so dequeue order is non-decreasing in distance',
+          'Argues that a shorter path would have a predecessor at a smaller distance, which would have been expanded first and discovered the vertex earlier',
+          'Notes that this is why re-discovery can be skipped outright, and that the guarantee is specific to unit edge weights',
+        ],
+        sampleAnswer:
+          'BFS processes vertices in non-decreasing order of distance from the source, because a vertex at distance k only ever appends vertices at distance k + 1 to the back of the queue, so the queue holds a block of level-k vertices followed by a block of level-(k + 1) vertices and nothing else. Now suppose some vertex v were first discovered at distance d but actually had a path of length m < d. That path\'s second-to-last vertex sits at distance at most m - 1, which is smaller than d - 1, so it would have been dequeued before the vertex that actually discovered v, and when it was expanded it would have discovered v then — giving v a distance of at most m, contradicting the assumption. Hence first arrival is shortest arrival, and that is exactly why the algorithm can skip an already-seen vertex without comparing anything. The argument leans entirely on every edge costing the same; with weights, dequeue order stops tracking cost and you need a priority queue.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Which data structure makes a traversal breadth-first?', back: 'A FIFO queue (collections.deque). It expands the oldest discovered vertex, so the search moves outwards one complete ring at a time.' },
+      { front: 'Time and space complexity of BFS on an adjacency list?', back: 'O(V + E) time — each vertex enqueued once, each edge inspected once per endpoint — and O(V) space for the queue, visited set, distance map and parent map.' },
+      { front: 'When must a vertex be marked as visited?', back: 'At discovery, in the same step as the enqueue. Marking on dequeue lets several frontier vertices push the same vertex, inflating the queue to O(E).' },
+      { front: 'What does BFS guarantee that DFS does not?', back: 'That the first time it reaches a vertex is by a path with the fewest edges — shortest paths in an unweighted graph, plus the level structure.' },
+      { front: 'How do you recover the actual shortest path, not just its length?', back: 'Store parent[v] = u when v is discovered from u, then walk parent backwards from the target to the source and reverse the list.' },
+      { front: 'What is multi-source BFS?', back: 'Seeding the queue with several vertices all at distance 0, which computes the distance to the nearest source for every vertex in one O(V + E) pass.' },
+    ],
+
+    challenge: {
+      title: 'Shortest chain of shared authors',
+      brief:
+        'Given a list of papers, each with a list of authors, build the co-authorship graph — two researchers are adjacent if they appear on a paper together — and write a function that returns the shortest chain of collaborators connecting two named researchers, or None if no chain exists. Report both the chain and its length, and make it work on a file of a hundred thousand papers without materialising the edge list twice.',
+      acceptanceCriteria: [
+        'Builds an adjacency structure in O(sum of squared author-list lengths) and documents why a paper with k authors contributes k(k-1)/2 edges',
+        'Uses collections.deque and marks vertices on enqueue, not on dequeue',
+        'Returns the actual chain via a parent map, with the endpoints included, and None for unreachable pairs',
+        'Handles the trivial case where the two names are the same, and the case where a name is absent from the graph, without raising',
+        'Includes a test asserting the chain length equals the BFS distance and that every consecutive pair in the chain really is adjacent',
+      ],
+      starterCode: 'from collections import defaultdict, deque\n\ndef build_coauthor_graph(papers):\n    """papers: list[list[str]] of author names. Returns dict[str, set[str]]."""\n    adj = defaultdict(set)\n    ...\n\ndef shortest_chain(adj, a, b):\n    """Return the shortest list of names from a to b inclusive, or None."""\n    ...\n',
+      language: 'python',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone how breadth-first search works, why it finds shortest paths, and when it is the wrong tool.',
+      mustCover: [
+        'BFS uses a FIFO queue and expands the graph one complete ring of equal distance at a time',
+        'Vertices must be marked visited at discovery, when they are enqueued, or the queue fills with duplicates',
+        'First arrival is shortest arrival, which is what makes BFS a shortest-path algorithm on unweighted graphs',
+        'The cost is O(V + E) time and O(V) space, with the frontier being the real memory constraint',
+        'With edge weights the guarantee fails and you need Dijkstra with a priority queue instead',
+      ],
+      bonusSignals: [
+        'reconstructs the path from a parent map rather than only reporting a distance',
+        'mentions multi-source BFS or bidirectional search',
+        'notes that BFS is Dijkstra specialised to unit weights',
+        'explains that the frontier can grow like b^d, which is what forces hop limits in practice',
+      ],
+      sampleExplanation:
+        'Breadth-first search explores a network the way a ripple crosses a pond. You begin at one point and look at everything one step away, then everything two steps away, and so on, finishing each ring completely before starting the next. The machinery is a queue, which hands things back in the order they arrived, plus a set of everything already seen so you never revisit. The moment you first write something into that set, you also record how far away it is and which neighbour you came from. Those two notes are the whole payoff: because the rings come out in order, the first time you touch a place you have arrived by the fewest possible steps, so there is no need to compare routes at all — and following the "who found me" notes backwards reconstructs the route itself. The cost is one visit per node and one look per connection, which is as cheap as reading the network. Two cautions matter. Mark a node as seen the instant you queue it, not when you get round to it, otherwise several neighbours will queue the same node and the queue balloons. And if the connections have costs rather than all being equal — travel times, prices — the guarantee evaporates, because now fewest steps is not cheapest, and you need a priority queue that orders by accumulated cost instead.',
+    },
+
+    masteryRequirements: { understoodScore: 0.7, proficientScore: 0.85, practiceRequired: 2, teachRequired: true },
+  },
+  {
+    id: 'DSA-014',
+    domain: 'DSA',
+    module: 'Graphs',
+    topic: 'Depth-first traversal, cycles and ordering',
+    title: 'Depth-First Search',
+    slug: 'depth-first-search',
+    difficulty: 3,
+    estimatedMinutes: 40,
+    prerequisites: ['DSA-012', 'DSA-013'],
+    related: ['DSA-006', 'DSA-009', 'DSA-013'],
+    tags: ['dfs', 'graph', 'stack', 'recursion', 'cycle-detection', 'topological-sort', 'components'],
+
+    learningObjectives: [
+      'Run depth-first search by hand, recording both the preorder (when a vertex is entered) and the postorder (when it is finished), and say why the second is the more useful of the two',
+      'Write DFS both recursively and iteratively with an explicit stack, and explain exactly why the iterative version must push neighbours in reverse to match the recursion',
+      'Detect a cycle in an undirected graph using the parent check, and in a directed graph using three colours, and explain why the undirected rule is wrong for directed graphs',
+      'Produce a topological order of a DAG as the reverse of DFS finishing times, and justify why that works',
+      'Count connected components, and state the O(V + E) time and O(V) space costs including the recursion stack',
+    ],
+
+    terminology: [
+      {
+        term: 'Preorder and postorder',
+        definition:
+          'Preorder is the sequence of vertices in the order they are first entered; postorder is the order in which their recursive calls finish, after all descendants are done. Most of DFS\'s power lives in the postorder.',
+        simple: 'When you walked in, versus when you finally walked back out.',
+      },
+      {
+        term: 'Back edge',
+        definition:
+          'An edge from the vertex currently being explored to one of its own ancestors in the DFS tree — a vertex that has been entered but not yet finished. A back edge is precisely a cycle.',
+        simple: 'A door that leads back into a room you are still standing in.',
+      },
+      {
+        term: 'White / grey / black colouring',
+        definition:
+          'Undiscovered, on the current recursion stack, and fully finished. Meeting a grey vertex means a cycle; meeting a black one means a vertex already fully explored and is harmless.',
+        simple: 'Not visited yet, being visited right now, done with.',
+      },
+      {
+        term: 'Topological order',
+        definition:
+          'A linear ordering of a DAG\'s vertices in which every edge points forwards. It exists if and only if the graph has no cycle, and the reverse of DFS postorder is always one.',
+        simple: 'A to-do list where nothing appears before something it depends on.',
+      },
+      {
+        term: 'Connected component',
+        definition:
+          'A maximal set of vertices mutually reachable by paths. One traversal explores exactly one component, so counting components means looping over all vertices and starting a fresh traversal from each unvisited one.',
+        simple: 'An island of things joined to each other but to nothing else.',
+      },
+    ],
+
+    simpleExplanation:
+      'Depth-first search is how most people actually explore a maze: pick a corridor, follow it as far as it goes, and only when you hit a dead end do you back up to the last junction and try a different turn. That single habit — go deep first, retreat only when stuck — gives an algorithm with a completely different character from breadth-first search, which spreads out evenly in all directions. Because retreating happens exactly when a subtree is finished, DFS naturally knows two things about every vertex: when it went in, and when it came out. The going-in order tells you little, but the coming-out order is enormously useful. If you meet a door leading back into a room you are still inside, you have found a loop. If you list rooms in the order you finally leave them and then reverse that list, you get a valid order for tasks that depend on each other. And the code is often three lines, because the call stack already is the stack you would otherwise have to write by hand. The price is that DFS makes no promise about distance: the first route it finds to a place is frequently a ridiculous scenic detour.',
+
+    whyItExists:
+      'Some graph questions are not about distance at all: does this dependency graph contain a cycle, in what order can these build steps run, which records belong to the same cluster, is this edge critical to connectivity? Those are all statements about the structure of exploration — about ancestry and finishing order — and depth-first search is the traversal that exposes them, at the same O(V + E) cost as BFS but with O(depth) frontier memory instead of O(width).',
+
+    analogy: {
+      scenario:
+        'You are exploring a cave system with a ball of string. You tie one end at the entrance and walk down the first passage you find, unspooling as you go. At each junction you take the first unexplored branch. When a passage dead-ends, or opens into a chamber you have already chalked, you reel the string back to the last junction and take the next branch there. Two things fall out of this without any extra effort. If you ever find a passage that opens into a chamber your own string is currently running through, you have proved the cave has a loop. And if you write down each chamber\'s name at the moment you finally reel out of it for good, you have a list in which every chamber appears only after everything reachable beyond it.',
+      mapping: [
+        { from: 'The unspooled string', to: 'The recursion stack — the path of grey, currently-open vertices from the root to where you are' },
+        { from: 'Chalking a chamber on first entry', to: 'Marking a vertex discovered, giving the preorder' },
+        { from: 'Reeling back out of a chamber for good', to: 'Finishing a vertex, giving the postorder' },
+        { from: 'A passage into a chamber your own string runs through', to: 'A back edge, which is exactly a cycle' },
+        { from: 'A passage into a chamber already chalked and left behind', to: 'A forward or cross edge, which is harmless and proves nothing' },
+        { from: 'Reversing the list of exit times', to: 'Topological order of a DAG' },
+      ],
+      bridge:
+        'The distinction between "a chamber your string currently runs through" and "a chamber you finished with earlier" is the entire cycle-detection algorithm, and it is why a single visited set is not enough for directed graphs: you need three states, not two. Grey means on the stack — an ancestor — and only an edge to grey is a cycle. Black means explored and exited, and an edge to black in a directed graph is perfectly legal, which is the case a two-state implementation gets wrong by reporting a cycle that is not there.',
+      limitations:
+        'A real caver can see several passages at once and choose sensibly; DFS is blind and takes the first branch in whatever order the adjacency list happens to be in, which is why its answers about routes are arbitrary. The string is also a finite resource: in code it is the call stack, and a path of ten thousand vertices in CPython raises RecursionError long before memory runs out.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'DFS plunging and backtracking',
+        caption: 'Run DFS and BFS on the same graph from the same source and compare the visit orders side by side.',
+        widget: 'graph-traversal',
+        props: { mode: 'dfs', start: 'A', compareWith: 'bfs' },
+      },
+      {
+        kind: 'ascii',
+        title: 'The same six-node graph, seen by DFS from A',
+        caption: 'Preorder A, B, C, F, E, D. Postorder F, C, D, E, B, A. The edge D-A is a back edge: it closes the cycle A-B-E-D-A.',
+        art: `   DFS tree (solid) and the one back edge (dotted)
+
+        A
+        |
+        B
+       / \\
+      C   E
+      |   |
+      F   D ....... back to A  (cycle A-B-E-D-A)
+
+   graph edges: A-B, A-D, B-C, B-E, C-F, D-E
+   BFS from A:  A B D C E F   (D is 1 hop away)
+   DFS from A:  A B C F E D   (D is visited last, via a 3-edge detour)`,
+      },
+      {
+        kind: 'compare',
+        title: 'BFS and DFS on the same graph, side by side',
+        caption: 'Identical asymptotics, opposite personalities. The only code difference is queue versus stack.',
+        left: {
+          heading: 'BFS — queue, breadth',
+          points: [
+            'Visit order from A: A, B, D, C, E, F',
+            'Finds D at distance 1, its true shortest distance',
+            'Memory is the frontier width, up to O(V)',
+            'Answers: shortest hops, levels, bipartiteness, nearest source',
+          ],
+        },
+        right: {
+          heading: 'DFS — stack, depth',
+          points: [
+            'Visit order from A: A, B, C, F, E, D',
+            'Reaches D last, along a three-edge detour A-B-E-D',
+            'Memory is the current path depth, O(depth) — far smaller on wide graphs',
+            'Answers: cycles, topological order, components, bridges and articulation points, strongly connected components',
+          ],
+        },
+      },
+      {
+        kind: 'flow',
+        title: 'DFS with three colours',
+        caption: 'The colouring is what makes cycle detection correct in a directed graph.',
+        steps: [
+          { label: 'Enter u: paint it grey', detail: 'Grey means "on the current recursion stack". Append u to the preorder list.' },
+          { label: 'Look at each neighbour v', detail: 'Three cases, and only three. The whole algorithm is deciding between them.' },
+          { label: 'v is white', detail: 'Undiscovered: recurse into it. This edge becomes a tree edge of the DFS forest.' },
+          { label: 'v is grey', detail: 'v is an ancestor still open on the stack, so the edge u -> v is a back edge and the graph has a cycle. In an undirected graph, exclude the immediate parent, because u-v and v-u are the same edge.' },
+          { label: 'v is black', detail: 'Already finished. Ignore it: in a directed graph this is a forward or cross edge and proves nothing about cycles.' },
+          { label: 'Leave u: paint it black', detail: 'All descendants are done. Append u to the postorder list. Reversed postorder is a topological order when the graph is acyclic.' },
+        ],
+        branching: true,
+      },
+      {
+        kind: 'table',
+        title: 'What each edge classification tells you',
+        caption: 'Classification is relative to the DFS tree being built, and is the basis of most advanced graph algorithms.',
+        columns: ['Edge type', 'Target colour when seen', 'Meaning', 'Used for'],
+        rows: [
+          ['Tree edge', 'White', 'The edge that first discovers the target', 'Building the DFS forest, counting components'],
+          ['Back edge', 'Grey', 'Points to an ancestor still on the stack', 'Cycle detection; its absence proves a DAG'],
+          ['Forward edge', 'Black, a descendant', 'Points to an already-finished descendant', 'Only meaningful in directed graphs; harmless'],
+          ['Cross edge', 'Black, not a descendant', 'Points into a finished sibling subtree', 'Appears in directed graphs and between components'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'Depth-first search explores a graph by recursively visiting an undiscovered neighbour of the current vertex before considering the current vertex\'s remaining neighbours, backtracking when no undiscovered neighbour remains. It assigns each vertex a discovery time and a finishing time, and the intervals [discovery, finishing] of two vertices are either disjoint or nested — the parenthesis theorem — so that v is a descendant of u in the DFS forest exactly when v\'s interval is nested inside u\'s. An edge (u, v) encountered while v is still open (grey) is a back edge, and a directed graph is acyclic if and only if a DFS of it produces no back edge; in that case the reverse order of finishing times is a topological order. DFS runs in O(|V| + |E|) time with an adjacency list and uses O(|V|) space in the worst case, dominated by the recursion stack whose depth is the length of the longest path explored.',
+
+    math: {
+      intuition:
+        'DFS costs exactly what BFS costs — each vertex is opened once and each edge is examined once from each endpoint — but it spends its memory differently. BFS holds a whole level, which on a wide graph is enormous; DFS holds one root-to-current path, which on a wide, shallow graph is tiny and on a long, thin graph is the whole graph. The subtler mathematical content is the parenthesis theorem, which says the open and close times nest like brackets, and that is what licenses reading ancestry, cycles and topological order straight off the finishing times.',
+      formulas: [
+        {
+          latex: 'T(V, E) = O\\big(|V| + |E|\\big), \\qquad S = O(\\text{longest path}) \\le O(|V|)',
+          name: 'Cost of DFS',
+          meaning: 'Same time bound as BFS; space is the depth of the recursion, not the width of a frontier.',
+          category: 'complexity',
+          variables: [
+            { symbol: '|V|', meaning: 'Vertices, each opened and closed exactly once' },
+            { symbol: '|E|', meaning: 'Edges, each inspected once per endpoint' },
+          ],
+        },
+        {
+          latex: 'u \\text{ is an ancestor of } v \\iff d(u) < d(v) < f(v) < f(u)',
+          name: 'Parenthesis theorem',
+          meaning: 'Discovery and finishing times nest like well-formed brackets, so ancestry is a pure interval containment test — the basis for classifying edges.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'd(u)', meaning: 'Discovery time: when u is painted grey' },
+            { symbol: 'f(u)', meaning: 'Finishing time: when u is painted black' },
+          ],
+        },
+        {
+          latex: 'G \\text{ is a DAG} \\iff \\text{DFS}(G) \\text{ produces no back edge}',
+          name: 'Acyclicity test',
+          meaning: 'One traversal decides acyclicity; a back edge u -> v exhibits the cycle explicitly as the tree path from v down to u plus that edge.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'G', meaning: 'A directed graph' },
+          ],
+        },
+        {
+          latex: '(u, v) \\in E \\implies f(u) > f(v) \\quad \\text{in a DAG}',
+          name: 'Why reverse postorder is topological',
+          meaning: 'Every edge in a DAG goes from a later-finishing vertex to an earlier-finishing one, so sorting by decreasing finishing time puts every vertex before its successors.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'f(u)', meaning: 'Finishing time of the source of the edge' },
+            { symbol: 'f(v)', meaning: 'Finishing time of the target' },
+          ],
+        },
+      ],
+      derivation: [
+        'Take any edge (u, v) in a DAG and consider the colour of v when the edge is examined, while u is grey.',
+        'If v is white, DFS recurses into v, so v finishes before u returns: f(v) < f(u).',
+        'If v is black, v finished before the edge was even looked at, so again f(v) < f(u).',
+        'If v were grey, it would be an ancestor of u still on the stack, and the edge u -> v would close a cycle — impossible in a DAG.',
+        'So for every edge f(u) > f(v), without exception.',
+        'Listing vertices in decreasing finishing time therefore places the source of every edge before its target, which is the definition of a topological order.',
+        'Since postorder appends vertices in increasing finishing time, reversing the postorder list is exactly that ordering, obtained in one O(V + E) traversal with no sorting step.',
+      ],
+    },
+
+    workedExample: {
+      title: 'DFS by hand on the same six-node graph, and the contrast with BFS',
+      setup:
+        'The identical graph and adjacency order as the BFS unit: A: [B, D], B: [A, C, E], C: [B, F], D: [A, E], E: [B, D], F: [C]. Start at A, take neighbours in the listed order, and record a preorder, a postorder and the recursion stack at each step. The point of reusing the graph is that every difference in the output is caused by the queue becoming a stack, and nothing else.',
+      steps: [
+        {
+          label: 'Enter A',
+          detail: 'stack = [A]; preorder = [A]. A\'s neighbours are B then D. Take B first.',
+        },
+        {
+          label: 'Enter B from A',
+          detail: 'stack = [A, B]; preorder = [A, B]. B\'s neighbours are A, C, E. A is grey — it is B\'s parent, and in an undirected graph the edge back to your parent is the same edge you arrived on, so it is skipped rather than reported as a cycle. Next is C.',
+        },
+        {
+          label: 'Enter C from B',
+          detail: 'stack = [A, B, C]; preorder = [A, B, C]. Neighbours are B (grey, the parent — skip) and F.',
+        },
+        {
+          label: 'Enter F from C',
+          detail: 'stack = [A, B, C, F]; preorder = [A, B, C, F]. F\'s only neighbour is C, its parent. Nothing left: F is a dead end.',
+        },
+        {
+          label: 'Finish F, finish C',
+          detail: 'F goes black; postorder = [F]. Control returns to C, whose neighbour list is exhausted, so C goes black; postorder = [F, C]. stack = [A, B]. This retreat is the backtracking that gives the algorithm its shape.',
+        },
+        {
+          label: 'Enter E from B',
+          detail: 'Back in B, the next unexplored neighbour is E. stack = [A, B, E]; preorder = [A, B, C, F, E]. E\'s neighbours are B (parent, skip) and D.',
+        },
+        {
+          label: 'Enter D from E — and find the cycle',
+          detail: 'stack = [A, B, E, D]; preorder = [A, B, C, F, E, D]. D\'s neighbours are A and E. E is the parent, skipped. A is grey and is not D\'s parent, so the edge D-A is a back edge, and it exhibits the cycle explicitly: read the stack from A down to D and add the edge, giving A-B-E-D-A.',
+        },
+        {
+          label: 'Unwind',
+          detail: 'D has nothing left, so it goes black; postorder = [F, C, D]. E finishes; postorder = [F, C, D, E]. B finishes; postorder = [F, C, D, E, B]. Back at A, the remaining neighbour D is already black, so it is ignored, and A finishes.',
+        },
+        {
+          label: 'Read off the result',
+          detail: 'Preorder: A, B, C, F, E, D. Postorder: F, C, D, E, B, A. One traversal, six vertices, every vertex reached — so the graph is connected — and one back edge, so it has a cycle.',
+        },
+        {
+          label: 'Contrast with BFS directly',
+          detail: 'BFS from A gave A, B, D, C, E, F with D at distance 1. DFS reaches D last, by the three-edge route A-B-E-D, and would report that route if you asked it for a path. Identical graph, identical start, identical O(V + E) cost — the queue-to-stack swap is the only change, and it costs the shortest-path guarantee entirely.',
+          latex: '\\text{BFS: } A,B,D,C,E,F \\quad\\text{vs}\\quad \\text{DFS: } A,B,C,F,E,D',
+        },
+        {
+          label: 'Peak memory',
+          detail: 'The DFS stack peaked at four entries (A, B, E, D); the BFS queue peaked at three. On this tiny graph that is noise, but the asymptotics differ in kind: DFS is bounded by the longest path and BFS by the widest level, which is why BFS drowns on a high-branching state space and DFS drowns on a long chain.',
+        },
+        {
+          label: 'Now make it a DAG and sort it',
+          detail: 'On the directed pipeline ingest -> clean -> {features, validate} -> train -> evaluate, DFS from ingest finishes evaluate, train, features, then validate, clean and ingest. Reversing that postorder gives ingest, clean, validate, features, train, evaluate — a valid execution order, produced by one traversal with no sorting step anywhere.',
+        },
+      ],
+      conclusion:
+        'DFS costs O(V + E) time — six vertex opens plus twelve directed neighbour inspections, exactly as for BFS — and O(depth) space, four stack frames here against a worst case of O(V) on a path graph. What it buys for that identical price is structural information BFS does not produce: the back edge D-A proves a cycle and names it, the postorder reversed gives a topological order on a DAG, and an outer loop over unvisited vertices counts connected components. What it gives up is distance. D is one hop from A and DFS reports a three-hop route, so any question phrased as "fewest" or "nearest" belongs to BFS, and any question phrased as "is there a cycle", "in what order", or "which cluster" belongs to DFS.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Recursive and iterative DFS, and why the iterative version reverses',
+        runnable: true,
+        code: `adj = {"A": ["B", "D"], "B": ["A", "C", "E"], "C": ["B", "F"],
+       "D": ["A", "E"], "E": ["B", "D"], "F": ["C"]}
+
+def dfs(adj, start):
+    seen, pre, post = set(), [], []
+    def visit(u):
+        seen.add(u)
+        pre.append(u)
+        for v in adj[u]:
+            if v not in seen:
+                visit(v)
+        post.append(u)          # everything below u is finished
+    visit(start)
+    return pre, post
+
+pre, post = dfs(adj, "A")
+print("preorder :", pre)
+print("postorder:", post)
+
+def dfs_iterative(adj, start):
+    seen, order, stack = set(), [], [start]
+    while stack:
+        u = stack.pop()
+        if u in seen:           # a vertex can be stacked twice before it is popped
+            continue
+        seen.add(u)
+        order.append(u)
+        for v in reversed(adj[u]):     # reversed => same order as the recursion
+            if v not in seen:
+                stack.append(v)
+    return order
+
+print("iterative:", dfs_iterative(adj, "A"))`,
+        output: `preorder : ['A', 'B', 'C', 'F', 'E', 'D']
+postorder: ['F', 'C', 'D', 'E', 'B', 'A']
+iterative: ['A', 'B', 'C', 'F', 'E', 'D']`,
+        explanation:
+          'Two details separate a working iterative DFS from a broken one. First, neighbours are pushed in reverse, because a stack returns the last pushed item first and the recursion takes the first neighbour first; without reversed() the traversal is still a valid DFS but visits a different order, which breaks any test asserting on the sequence. Second, the seen check must be repeated after popping, not only before pushing: the same vertex can be pushed by two different neighbours before either pop happens, so the pre-push filter is an optimisation and the post-pop filter is the correctness guard. The recursive version needs neither because the call stack cannot contain a duplicate of a vertex already marked.',
+      },
+      {
+        language: 'python',
+        title: 'Counting connected components',
+        runnable: true,
+        code: `adj = {"A": ["B", "D"], "B": ["A", "C", "E"], "C": ["B", "F"],
+       "D": ["A", "E"], "E": ["B", "D"], "F": ["C"],
+       "G": ["H"], "H": ["G"]}          # a second, disconnected island
+
+def components(adj):
+    seen, comps = set(), []
+    for s in adj:                        # the outer loop is not optional
+        if s in seen:
+            continue
+        stack, comp = [s], []
+        seen.add(s)
+        while stack:
+            u = stack.pop()
+            comp.append(u)
+            for v in adj[u]:
+                if v not in seen:
+                    seen.add(v)
+                    stack.append(v)
+        comps.append(sorted(comp))
+    return comps
+
+print(components(adj))
+print("component count:", len(components(adj)))`,
+        output: `[['A', 'B', 'C', 'D', 'E', 'F'], ['G', 'H']]
+component count: 2`,
+        explanation:
+          'The outer loop over every vertex is what turns a single traversal into a component count: one DFS only ever reaches one component, so starting from an arbitrary vertex and stopping answers a different question. The total cost is still O(V + E), not O(V) traversals of O(V + E) each, because the shared seen set means each vertex and edge is touched exactly once across all the inner traversals combined. This is the algorithm behind "number of islands", friend-circle counting, and deduplicating records that match transitively — A matches B, B matches C, so all three are one entity even though A and C never matched directly.',
+      },
+      {
+        language: 'python',
+        title: 'Cycle detection: the parent rule for undirected, three colours for directed',
+        runnable: true,
+        code: `def has_cycle_undirected(adj):
+    seen = set()
+    def visit(u, parent):
+        seen.add(u)
+        for v in adj[u]:
+            if v not in seen:
+                if visit(v, u):
+                    return True
+            elif v != parent:      # a seen, non-parent neighbour closes a cycle
+                print(f"  back edge {u}-{v} closes a cycle")
+                return True
+        return False
+    return any(visit(s, None) for s in adj if s not in seen)
+
+adj = {"A": ["B", "D"], "B": ["A", "C", "E"], "C": ["B", "F"],
+       "D": ["A", "E"], "E": ["B", "D"], "F": ["C"]}
+tree = {"A": ["B", "C"], "B": ["A"], "C": ["A", "D"], "D": ["C"]}
+print("cycle in the 6-node graph:", has_cycle_undirected(adj))
+print("cycle in a tree:", has_cycle_undirected(tree))`,
+        output: `  back edge D-A closes a cycle
+cycle in the 6-node graph: True
+cycle in a tree: False`,
+        explanation:
+          'In an undirected graph every edge appears in both adjacency lists, so arriving at B from A and then seeing A again is not a cycle — it is the same edge looked at from the other end. Excluding the immediate parent fixes that, and any other already-seen neighbour genuinely closes a loop. Note the rule is wrong in two situations: a directed graph, where an edge to a finished vertex is legal and the parent exclusion would hide real cycles, and an undirected multigraph with two parallel edges between the same pair, which is a cycle that the parent check silently forgives unless you track edge identity rather than vertex identity.',
+      },
+      {
+        language: 'python',
+        title: 'Topological sort of a pipeline DAG, and what a cycle looks like',
+        runnable: true,
+        code: `pipeline = {"ingest": ["clean"], "clean": ["features", "validate"],
+            "features": ["train"], "validate": ["train"],
+            "train": ["evaluate"], "evaluate": []}
+
+WHITE, GREY, BLACK = 0, 1, 2
+
+def topo_sort(graph):
+    colour = {v: WHITE for v in graph}
+    out = []
+    def visit(u):
+        colour[u] = GREY                       # on the stack
+        for v in graph[u]:
+            if colour[v] == GREY:
+                raise ValueError(f"cycle: {u} -> {v} is a back edge")
+            if colour[v] == WHITE:
+                visit(v)
+        colour[u] = BLACK
+        out.append(u)                          # postorder
+    for v in graph:
+        if colour[v] == WHITE:
+            visit(v)
+    return out[::-1]                           # reverse postorder
+
+print("topological order:", topo_sort(pipeline))
+
+pipeline["evaluate"] = ["clean"]               # someone wires a feedback edge
+try:
+    topo_sort(pipeline)
+except ValueError as e:
+    print("ValueError:", e)`,
+        output: `topological order: ['ingest', 'clean', 'validate', 'features', 'train', 'evaluate']
+ValueError: cycle: evaluate -> clean is a back edge`,
+        explanation:
+          'Three colours rather than a boolean visited flag is the whole point. Grey means the vertex is an open ancestor on the current stack, so an edge into grey is a back edge and a genuine cycle; black means finished, and an edge into black is a perfectly legal shortcut in a DAG — a two-state implementation would report that as a cycle and refuse a valid pipeline. Reverse postorder needs no sorting step because finishing times already encode the constraint: every edge in a DAG runs from a later-finishing vertex to an earlier-finishing one. Kahn\'s algorithm, which repeatedly removes in-degree-zero vertices from a queue, computes the same thing iteratively and is preferable when the graph is deep enough to overflow the recursion limit.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Build systems, schedulers and autograd',
+        usage:
+          'Make, Bazel, Airflow and PyTorch all topologically sort a dependency DAG before executing it, and all report a cycle as an error rather than looping forever. PyTorch\'s backward pass walks the computation graph in reverse topological order, which is why an in-place operation that creates a cycle produces a runtime error rather than wrong gradients.',
+      },
+      {
+        context: 'Entity resolution and transitive deduplication',
+        usage:
+          'When fuzzy matching says record A resembles B and B resembles C, the true clusters are the connected components of the match graph. A DFS or union-find pass over the pairwise matches collapses them into entities, and the component count is the deduplicated row count.',
+      },
+      {
+        context: 'Import-cycle and package-dependency analysis',
+        usage:
+          'Python\'s circular-import failures, npm\'s dependency resolution and linting rules such as import/no-cycle are all DFS back-edge detection over a module graph. The error message naming a chain of files is literally the grey stack at the moment the back edge was found.',
+      },
+      {
+        context: 'Knowledge-graph reasoning over paths',
+        usage:
+          'Multi-hop question answering enumerates candidate reasoning chains — entity to relation to entity — with a depth-bounded DFS, because the question is which chain of facts supports an answer rather than how far away something is. Depth bounding is essential: an unbounded DFS on a dense knowledge graph never returns.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'networkx', role: 'dfs_preorder_nodes, find_cycle, topological_sort, connected_components and strongly_connected_components are all DFS with the bookkeeping done for you.' },
+      { tool: 'Apache Airflow', role: 'Validates that a DAG really is acyclic at parse time and derives task execution order from a topological sort of the dependency graph.' },
+      { tool: 'PyTorch autograd', role: 'Builds a DAG of operations in the forward pass and traverses it in reverse topological order during backward, which is why every op must be recorded on the way in.' },
+      { tool: 'sys.setrecursionlimit', role: 'The lever you reach for when a recursive DFS on a deep graph raises RecursionError — although converting to an explicit stack is the more honest fix.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Using a two-state visited set to detect cycles in a directed graph',
+        why: 'A vertex reachable by two different paths is seen twice legitimately — that is a diamond, not a cycle. A boolean flag cannot distinguish "ancestor still on the stack" from "finished long ago", so the code reports cycles in perfectly valid DAGs.',
+        fix: 'Use three colours: white, grey (on the stack), black (finished). Only an edge into grey is a back edge. Remember to repaint to black on the way out.',
+      },
+      {
+        mistake: 'Applying the undirected parent check to a directed graph',
+        why: 'In a directed graph u -> v does not imply v -> u, so excluding the parent hides real two-cycles and mislabels legal cross edges. The rule exists only because undirected edges appear in both adjacency lists.',
+        fix: 'Keep the parent exclusion for undirected graphs and the three-colour rule for directed ones, and never mix them. Write down which kind of graph the function expects.',
+      },
+      {
+        mistake: 'Recursing on a deep graph in CPython',
+        why: 'The default recursion limit is 1000 frames, so a path of a few thousand vertices — a long chain of dependencies, a linked-list-shaped graph, a deep filesystem tree — raises RecursionError, often in production on the one large input.',
+        fix: 'Convert to an explicit stack, or raise sys.setrecursionlimit and the thread stack size together. An iterative DFS with the post-pop visited check is the robust choice for graphs of unknown depth.',
+      },
+      {
+        mistake: 'Expecting DFS to return a short path',
+        why: 'DFS returns the first path it stumbles on, which is determined by adjacency-list order, not by length. It found D at distance three in a graph where D is one hop from the source.',
+        fix: 'Use BFS for fewest hops and Dijkstra for least cost. DFS is for cycles, ordering, components and connectivity structure.',
+      },
+      {
+        mistake: 'Forgetting the outer loop over unvisited vertices',
+        why: 'One traversal explores exactly one component, so a disconnected graph is silently half-analysed: components go uncounted and cycles in the unvisited part go undetected.',
+        fix: 'Wrap the traversal in a loop over all vertices, starting a new DFS from each still-white one. The shared colour map keeps the total cost at O(V + E).',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'How do you detect a cycle in a directed graph, and why is a plain visited set not enough?',
+        answer:
+          'Run DFS with three states per vertex: white for undiscovered, grey for on the current recursion stack, black for finished. When examining an edge u -> v while u is grey, an edge into a grey vertex is a back edge and proves a cycle, because grey means v is an ancestor of u that is still open, so there is a tree path from v down to u and this edge closes it. An edge into black is a forward or cross edge and is entirely legal in a DAG. That last case is exactly what a plain boolean visited set gets wrong: with two states you cannot tell an ancestor from a vertex that was finished ten calls ago, so a diamond — A pointing to both B and C, each pointing to D — reports a cycle that does not exist. The cost is one traversal, O(V + E) time and O(V) space, and the grey stack at the moment of detection is the cycle itself, which is what makes a useful error message. Kahn\'s algorithm is the iterative alternative: repeatedly remove vertices with in-degree zero, and if any remain, they form a cycle.',
+        followUp:
+          'Being asked how to report the cycle and not just its existence tests whether the candidate realises the grey path on the stack is the answer.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Why does reversing DFS postorder produce a topological order?',
+        answer:
+          'Take any edge u -> v in a DAG and look at v\'s colour when DFS examines that edge, with u grey. If v is white, DFS recurses into it, so v finishes before u does. If v is black, it finished even earlier. And v cannot be grey, because that would be a back edge and the graph is acyclic by assumption. So in every case f(u) > f(v): the finishing time of the source exceeds the finishing time of the target, for every edge without exception. Listing vertices in decreasing finishing time therefore places each vertex ahead of everything it points to, which is the definition of a topological order. Postorder appends vertices in increasing finishing time, so reversing it is exactly that list, obtained from a single O(V + E) traversal with no comparison sort involved. In practice I would use Kahn\'s in-degree algorithm if I also wanted a deterministic tie-break or needed to avoid recursion depth limits on a deep graph, and either way I would validate acyclicity rather than assume it.',
+        followUp:
+          'A strong candidate notes that topological order is generally not unique and says which tie-break their implementation produces.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'You have 40 million fuzzy-matched record pairs and need to collapse them into entities. How do you do it, and what is the risk?',
+        answer:
+          'Build a graph whose vertices are records and whose edges are accepted pairwise matches, then take its connected components — each component is one entity. A DFS or BFS with an outer loop over unvisited vertices does this in O(V + E), and at this scale I would use union-find instead, which is effectively linear, streams the pairs without materialising adjacency lists, and parallelises far better. The real risk is not performance but transitive over-merging: matching is not transitive, so a single weak edge between two genuine clusters collapses them, and one bad threshold can produce a component containing a million records. I would guard against that by monitoring the component size distribution, refusing to merge components above a size cap, and using stronger blocking or a higher match threshold for the edges that join large components. Where accuracy matters most, correlation clustering or looking for bridges — single edges whose removal splits a component — gives a principled way to cut the suspicious links rather than accepting whatever the transitive closure produces.',
+        followUp:
+          'Mentioning union-find with path compression, and the size-distribution monitor as the practical safety net, distinguishes someone who has run this in production.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Write an iterative DFS that returns the preorder in exactly the same sequence as the recursive version, and explain the two places where a naive implementation goes wrong.',
+        hint: 'A stack reverses the order you push in, and a vertex can be pushed twice before it is popped once.',
+        solution:
+          'def dfs_iterative(adj, start):\n    seen, order, stack = set(), [], [start]\n    while stack:\n        u = stack.pop()\n        if u in seen:\n            continue            # guard 1: it may have been stacked twice\n        seen.add(u)\n        order.append(u)\n        for v in reversed(adj[u]):   # guard 2: restore the recursion order\n            if v not in seen:\n                stack.append(v)\n    return order\n\nThe first trap is ordering: the recursion visits adj[u][0] first, but a stack pops the last thing pushed, so pushing in list order visits the last neighbour first. Pushing reversed(adj[u]) restores the recursive sequence. The second is duplication: unlike BFS, the mark cannot be applied at push time if you want to match the recursion, because a vertex may sit on the stack under several entries and should be visited when the deepest branch reaches it. So the post-pop `if u in seen: continue` is the correctness guard, and the pre-push filter is only an optimisation. Cost is unchanged at O(V + E) time and O(V) space, but the iterative version survives graphs deeper than the 1000-frame CPython recursion limit.',
+      },
+      {
+        prompt: 'Given a directed graph of Python module imports, write a function that returns one concrete import cycle as a list of module names, or None if the graph is acyclic.',
+        hint: 'The cycle is sitting on the stack at the moment you find the back edge.',
+        solution:
+          'WHITE, GREY, BLACK = 0, 1, 2\n\ndef find_cycle(graph):\n    colour = {v: WHITE for v in graph}\n    stack = []\n    def visit(u):\n        colour[u] = GREY\n        stack.append(u)\n        for v in graph.get(u, ()):  \n            if colour.get(v, WHITE) == GREY:\n                return stack[stack.index(v):] + [v]\n            if colour.get(v, WHITE) == WHITE:\n                found = visit(v)\n                if found:\n                    return found\n        colour[u] = BLACK\n        stack.pop()\n        return None\n    for v in graph:\n        if colour[v] == WHITE:\n            found = visit(v)\n            if found:\n                return found\n    return None\n\nThe key realisation is that detection and reporting are the same step: when the edge u -> v hits a grey vertex, the portion of the explicit stack from v onwards is precisely the cycle, and appending v again closes it for readability. Using graph.get(v, WHITE) tolerates modules that appear only as import targets and have no entry of their own, which is the usual shape of a scraped import graph. Cost is O(V + E) time and O(V) space. This is exactly the analysis behind the import/no-cycle lint rule, and the message it prints is this list.',
+      },
+      {
+        prompt: 'The same six-node graph gives BFS order A, B, D, C, E, F and DFS order A, B, C, F, E, D from A. Explain precisely which line of code causes the difference, and give one question each traversal answers that the other cannot answer efficiently.',
+        hint: 'Both algorithms are identical apart from which end of the pending collection they take from.',
+        solution:
+          'The difference is a single line: BFS removes from the front of the pending collection (deque.popleft, FIFO) and DFS removes from the back (list.pop, LIFO). Everything else — the visited set, the neighbour loop, the O(V + E) cost — is identical. FIFO makes the pending collection hold at most two consecutive distance levels, which is what forces vertices out in non-decreasing distance and gives the shortest-path guarantee. LIFO makes it hold the current root-to-node path plus pending siblings, which is what makes ancestry, and therefore cycles and finishing order, visible.\n\nOnly BFS answers "what is the fewest number of edges from A to F?" in one pass, because first arrival is shortest arrival; DFS found D by a three-edge detour when D is one hop away. Only DFS answers "does this graph contain a cycle, and what is it?" cheaply, because the cycle is the grey path currently on the stack, a notion BFS simply does not maintain. Topological sorting, articulation points, bridges and strongly connected components all belong to DFS for the same reason; levels, bipartiteness and nearest-source distances belong to BFS.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DSA-014-q1',
+        type: 'mcq',
+        concept: 'cycle detection',
+        prompt: 'While running DFS on a directed graph you find an edge pointing to a vertex that is already black (finished). What does this prove?',
+        options: [
+          'Nothing about cycles — it is a forward or cross edge and is perfectly legal in a DAG',
+          'The graph contains a cycle',
+          'The graph is disconnected',
+          'The traversal has a bug and must restart',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Only an edge into a grey vertex — one still open on the recursion stack, hence an ancestor — is a back edge and proves a cycle. Edges into finished vertices happen whenever two paths converge, which is a diamond, not a loop.',
+      },
+      {
+        id: 'DSA-014-q2',
+        type: 'order',
+        concept: 'topological sort',
+        prompt: 'Order these steps of producing a topological order with DFS.',
+        items: [
+          'Paint the vertex grey when entering it',
+          'Recurse into every white neighbour, raising an error on any grey one',
+          'Paint the vertex black when all neighbours are exhausted',
+          'Append the vertex to the postorder list',
+          'Reverse the finished postorder list',
+        ],
+        explanation:
+          'The vertex is appended only after every descendant has finished, so the postorder is in increasing finishing time. Reversing it puts each vertex ahead of everything it points to, which is a topological order.',
+      },
+      {
+        id: 'DSA-014-q3',
+        type: 'truefalse',
+        concept: 'shortest paths',
+        prompt: 'If DFS finds a path from u to v, that path has the fewest possible edges.',
+        answer: false,
+        explanation:
+          'DFS returns the first path it stumbles into, chosen by adjacency-list order. In the worked example it reached D by a three-edge detour when D was one hop from the source. Fewest hops is BFS territory.',
+      },
+      {
+        id: 'DSA-014-q4',
+        type: 'code-output',
+        language: 'python',
+        concept: 'iterative traversal order',
+        prompt: 'What does this print, given adj = {"A": ["B", "D"], "B": ["A", "C", "E"], "C": ["B", "F"], "D": ["A", "E"], "E": ["B", "D"], "F": ["C"]}?',
+        code: `seen, order, stack = set(), [], ["A"]
+while stack:
+    u = stack.pop()
+    if u in seen:
+        continue
+    seen.add(u); order.append(u)
+    for v in adj[u]:          # NOT reversed
+        if v not in seen:
+            stack.append(v)
+print(order)`,
+        options: [
+          "['A', 'D', 'E', 'B', 'C', 'F']",
+          "['A', 'B', 'C', 'F', 'E', 'D']",
+          "['A', 'B', 'D', 'C', 'E', 'F']",
+          "['A', 'D', 'B', 'E', 'C', 'F']",
+        ],
+        answerIndex: 0,
+        explanation:
+          'Pushing B then D means D is popped first, so the traversal dives A, D, E, then B and onwards — a valid DFS, but the mirror image of the recursive order. Pushing reversed(adj[u]) is what makes the iterative version match the recursion.',
+      },
+      {
+        id: 'DSA-014-q5',
+        type: 'fill',
+        concept: 'colour states',
+        prompt: 'In three-colour DFS, an edge pointing to a ______ vertex is a back edge and proves the graph has a cycle.',
+        answers: ['grey', 'gray', 'GREY', 'GRAY'],
+        explanation:
+          'Grey means the vertex has been entered but not finished, so it is still on the recursion stack and is therefore an ancestor of the current vertex. The tree path from it down to the current vertex, plus this edge, is the cycle.',
+      },
+      {
+        id: 'DSA-014-q6',
+        type: 'explain',
+        concept: 'BFS versus DFS',
+        prompt: 'The only code difference between BFS and DFS is which end of the pending collection you remove from. Explain what that one change buys and what it costs.',
+        rubric: [
+          'Identifies FIFO versus LIFO as the sole structural difference, with both at O(V + E) time',
+          'Explains that FIFO yields non-decreasing distance order and hence shortest paths, while LIFO yields ancestry information and hence cycles, topological order and components',
+          'Contrasts the memory profiles: frontier width for BFS against path depth for DFS',
+        ],
+        sampleAnswer:
+          'Swap deque.popleft for list.pop and the traversal changes character completely while its cost does not move: both visit every vertex once and every edge once per endpoint, O(V + E) time. Taking from the front means the pending collection holds at most two adjacent distance levels, so vertices emerge in non-decreasing distance and first arrival is shortest arrival — that is the shortest-path guarantee, plus levels, bipartiteness and nearest-source queries. Taking from the back means the pending collection tracks the current root-to-node path, so the algorithm always knows its own ancestors; an edge into one of them is a cycle, the order in which calls finish gives a topological order on a DAG, and an outer loop over unvisited vertices counts components. The costs mirror each other in memory: BFS holds a whole level, which on a graph with branching factor 100 is hopeless three rings out, while DFS holds one path, which is tiny on a wide graph and fatal on a chain of a million vertices, where CPython raises RecursionError at a thousand frames.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What is a back edge, and what does it prove?', back: 'An edge to a vertex still open on the recursion stack (grey). It proves the graph contains a cycle, and the grey stack from that vertex onwards is the cycle itself.' },
+      { front: 'How do you get a topological order from DFS?', back: 'Take the postorder — vertices appended as their calls finish — and reverse it. Every edge in a DAG runs from a later-finishing vertex to an earlier-finishing one.' },
+      { front: 'Why three colours instead of a visited boolean?', back: 'A boolean cannot distinguish an ancestor still on the stack from a vertex finished long ago, so it reports cycles in valid DAGs wherever two paths converge.' },
+      { front: 'Why must an iterative DFS push neighbours in reverse?', back: 'A stack returns the last item pushed, while the recursion takes the first neighbour first, so pushing reversed(adj[u]) reproduces the recursive visit order.' },
+      { front: 'Time and space cost of DFS?', back: 'O(V + E) time, the same as BFS. Space is O(depth of the deepest path), worst case O(V) — the recursion stack, which is why CPython raises RecursionError past about 1000 frames.' },
+      { front: 'Which questions belong to DFS rather than BFS?', back: 'Cycles, topological order, connected and strongly connected components, bridges and articulation points — anything about structure rather than distance.' },
+    ],
+
+    challenge: {
+      title: 'A dependency checker for a task pipeline',
+      brief:
+        'Write a small library that takes a dict of task -> list of tasks it depends on and offers three operations: validate (raise with a readable cycle if one exists), order (a valid execution sequence), and levels (groups of tasks that could run in parallel, where every task in group k depends only on tasks in earlier groups). Make the cycle message name the actual chain, not merely the fact of a cycle.',
+      acceptanceCriteria: [
+        'Uses three-colour DFS and reports a concrete cycle as an ordered list of task names that closes on itself',
+        'order() returns reverse postorder and is verified by an assertion that every dependency appears earlier in the list',
+        'levels() assigns each task the longest depth from any root, so parallel groups are genuinely safe, and explains why shortest depth would be wrong',
+        'Handles tasks that appear only as dependencies and never as keys, without raising KeyError',
+        'Does not blow the recursion limit on a chain of 100,000 tasks — either iterative, or with a documented and justified limit change',
+      ],
+      starterCode: 'class Pipeline:\n    def __init__(self, deps: dict[str, list[str]]):\n        self.deps = deps\n\n    def validate(self) -> None:\n        """Raise ValueError naming the cycle, or return None."""\n        ...\n\n    def order(self) -> list[str]:\n        ...\n\n    def levels(self) -> list[list[str]]:\n        ...\n',
+      language: 'python',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone how depth-first search works, what it can tell you that breadth-first search cannot, and how it detects cycles.',
+      mustCover: [
+        'DFS follows one branch to its end and backtracks, using a stack — usually the call stack itself',
+        'Every vertex has a time it is entered and a time it is finished, and the finishing order is where the useful information lives',
+        'A cycle is an edge to a vertex still open on the stack, which needs three states rather than a visited boolean in a directed graph',
+        'Reversing the finishing order gives a topological order of a DAG',
+        'The cost is O(V + E) time and O(depth) space, and DFS gives no shortest-path guarantee',
+      ],
+      bonusSignals: [
+        'contrasts the visit order with BFS on the same graph',
+        'mentions the parenthesis theorem or interval nesting',
+        'notes the CPython recursion limit and the iterative rewrite',
+        'connects it to build systems, import cycles or autograd',
+      ],
+      sampleExplanation:
+        'Depth-first search explores the way you would explore a cave with a ball of string: take the first passage you see, keep going until you hit a dead end, then reel back to the last junction and take the next one. In code the string is the call stack, so a recursive version is only a few lines. Two moments matter for each place you visit: when you walk in, and when you finally walk back out for good. The walking-out order is the valuable one. Because you only leave a place after everything beyond it is finished, writing names down as you leave and then reversing the list gives an order in which nothing appears before something it depends on — which is exactly what a build system or a task scheduler needs. Cycles come from the same picture. While you are inside a room, your string is still running through it; if you find a passage leading into a room your own string currently occupies, you have gone in a circle, and the stretch of string from that room to where you stand is the loop. That is why a simple "have I seen this before" flag is not enough in a one-way network: seeing a place you finished with earlier is fine, since two different routes can converge, and only seeing a place you are still inside is a real loop. What DFS cannot tell you is distance. It reports the first route it stumbled on, which may be an absurd detour, so any question about fewest steps belongs to breadth-first search instead.',
+    },
+
+    masteryRequirements: { understoodScore: 0.7, proficientScore: 0.85, practiceRequired: 2, teachRequired: true },
+  },
+  {
+    id: 'DSA-015',
+    domain: 'DSA',
+    module: 'Recursion & Search',
+    topic: 'Self-similar problems and systematic search',
+    title: 'Recursion and Backtracking',
+    slug: 'recursion-and-backtracking',
+    difficulty: 4,
+    estimatedMinutes: 45,
+    prerequisites: ['DSA-002', 'DSA-014'],
+    related: ['DSA-001', 'DSA-009', 'DSA-014'],
+    tags: ['recursion', 'backtracking', 'base-case', 'recursion-tree', 'subsets', 'n-queens', 'call-stack'],
+
+    learningObjectives: [
+      'Write a recursive function by naming the base case first, then the single step that shrinks the problem, and prove to yourself that the shrinking always terminates',
+      'Draw a recursion tree for a small input and read the time complexity off it as nodes times work-per-node, and the space complexity off its depth',
+      'Apply the choose / explore / unchoose pattern to enumerate subsets, permutations and other combinatorial spaces without ever copying the partial state',
+      'Prune a backtracking search with constraint checks, and quantify the saving against brute force on the N-queens problem',
+      'Recognise when recursion is being used for exhaustive search, when it hides overlapping subproblems that memoisation should collapse, and when it is simply a worse loop',
+    ],
+
+    terminology: [
+      {
+        term: 'Base case',
+        definition:
+          'The input small enough to answer outright, with no further recursive call. Every recursive function needs at least one, and every recursive call must move measurably towards it.',
+        simple: 'The size of problem you can just answer, which stops the function calling itself forever.',
+      },
+      {
+        term: 'Recursive case',
+        definition:
+          'The branch that expresses the answer for size n in terms of the answer for strictly smaller inputs. Writing it correctly means trusting that the smaller call already works — the recursive leap of faith.',
+        simple: 'The step where you hand a smaller version of the same job to yourself.',
+      },
+      {
+        term: 'Call stack',
+        definition:
+          'The runtime structure holding one frame per in-progress call, with its local variables and return address. Recursion depth is stack depth, and CPython caps it at 1000 frames by default.',
+        simple: 'The pile of unfinished jobs, each waiting for the one above it to come back.',
+      },
+      {
+        term: 'Recursion tree',
+        definition:
+          'A drawing with one node per call, children being the calls it makes. Total time is the number of nodes times the work each does; maximum stack depth is the height of the tree.',
+        simple: 'A picture of every call the function makes, branching downwards.',
+      },
+      {
+        term: 'Backtracking',
+        definition:
+          'Depth-first search over a tree of partial solutions in which each step makes a choice, recurses, then undoes the choice. Pruning abandons a branch as soon as the partial solution cannot possibly be completed.',
+        simple: 'Try something, see where it leads, and if it leads nowhere put it back exactly as it was and try the next thing.',
+      },
+      {
+        term: 'Pruning',
+        definition:
+          'Rejecting a partial candidate before exploring its subtree, using a constraint that can only get harder to satisfy. Pruning does not change the worst-case bound but routinely changes the practical runtime by orders of magnitude.',
+        simple: 'Not bothering to explore a path you can already see is hopeless.',
+      },
+    ],
+
+    simpleExplanation:
+      'Recursion is what happens when a function solves a problem by calling itself on a smaller version of the same problem. To make that work you need exactly two things: a case so small you can answer it outright, and a rule that turns a big case into smaller ones. Getting the factorial of five means five times the factorial of four, and the factorial of zero is one — that is the whole definition, and the machine keeps track of the unfinished multiplications for you on a stack of paused calls. Backtracking is recursion used for searching rather than computing. You are standing at a fork with several options, so you take one, write it down, and explore everything that follows from it. When that branch runs out you rub out what you wrote and try the next option, leaving the world exactly as you found it. That rub-it-out step — undo the choice — is what lets one shared scratchpad serve the entire search instead of copying the state at every fork. Add one more habit, refusing to explore a branch you can already see is doomed, and a search that would take longer than the age of the universe finishes in milliseconds.',
+
+    whyItExists:
+      'Some structures are defined in terms of themselves — a tree is a node with subtrees, a nested document contains nested documents, a permutation is a first element followed by a permutation of the rest — and code that mirrors that definition is dramatically shorter and easier to get right than an explicit stack. Backtracking exists because many problems have no formula at all, only a space of candidates to be searched systematically, and it searches that space without ever materialising it.',
+
+    analogy: {
+      scenario:
+        'You are trying to get through a hedge maze with a piece of chalk. At each junction you mark the branch you are taking, walk down it, and keep going. If you reach a dead end you walk back to the last junction and rub out your mark before taking the next branch, so the path you are carrying always describes exactly where you are and nothing more. Two refinements turn that from an ordeal into a method. First, if a sign at a junction says "no exit this way", you do not walk down it at all — that is pruning, and it saves everything beyond it. Second, if you notice you have arrived at a junction you have solved before, you look up what you learned last time rather than walking the whole thing again — that is memoisation, and it is what separates an exponential search from a fast one.',
+      mapping: [
+        { from: 'The chalk path you are carrying', to: 'The partial solution, one shared mutable list' },
+        { from: 'Marking a branch on the way in', to: 'The choose step, appending to that list' },
+        { from: 'Rubbing the mark out on the way back', to: 'The unchoose step, popping it again' },
+        { from: 'The junctions between you and the entrance', to: 'The call stack, whose depth is the recursion depth' },
+        { from: 'A sign saying "no exit this way"', to: 'A pruning constraint that cuts an entire subtree' },
+        { from: 'Remembering a junction you have solved before', to: 'Memoisation, which collapses overlapping subproblems' },
+      ],
+      bridge:
+        'The rub-it-out step is the one people leave out, and leaving it out is the classic backtracking bug: the chalk path accumulates marks from branches you have already abandoned, so the partial solution is contaminated by earlier attempts and the results are wrong in a way that looks almost right. The reason to undo rather than to pass a fresh copy down is cost: copying the path at every junction turns O(depth) space into O(nodes times depth) and adds a copy to every single call, which on a tree with millions of nodes is the difference between finishing and not.',
+      limitations:
+        'A maze walker can see a whole corridor at once and reason about it; a recursive function sees only its own frame and whatever it was passed. And real chalk never runs out, whereas the call stack does — CPython raises RecursionError at about a thousand frames, which is shallow enough to hit on a long linked list or a deep JSON document.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'The recursion tree of fib(5)',
+        caption: 'Expand each call and watch the same subproblems reappear; switch memoisation on to see 15 calls collapse to 9.',
+        widget: 'recursion-tree',
+        props: { fn: 'fib', n: 5 },
+      },
+      {
+        kind: 'ascii',
+        title: 'The subset tree for [1, 2, 3]',
+        caption: 'One level per element, two branches per level: take it or leave it. Eight leaves, 2^3 subsets.',
+        art: `                      []
+                 take 1 /  \\ skip 1
+                 [1]          []
+            2 /     \\ 2     2 /   \\ 2
+        [1,2]      [1]     [2]     []
+        3 / \\      3 / \\   3 / \\   3 / \\
+  [1,2,3] [1,2] [1,3] [1] [2,3] [2] [3]  []
+
+  leaves = 2^3 = 8 subsets; internal nodes = 7; depth = 3`,
+      },
+      {
+        kind: 'flow',
+        title: 'The choose / explore / unchoose loop',
+        caption: 'Every backtracking solution you will ever write is this shape with a different is_valid.',
+        steps: [
+          { label: 'Base case: is the candidate complete?', detail: 'If the partial solution is a full answer, record a copy of it and return. Copying here matters: the shared list keeps mutating after you return.' },
+          { label: 'Enumerate the options at this position', detail: 'The set of legal next moves — which element to add, which column to place a queen in, which digit to write in this cell.' },
+          { label: 'Prune', detail: 'Skip any option that already violates a constraint. This cuts the whole subtree below it, and it is where essentially all the speed comes from.' },
+          { label: 'Choose', detail: 'Apply the option to the shared state: append to the path, add to the occupied sets, decrement the remaining budget.' },
+          { label: 'Explore', detail: 'Recurse one level deeper. Trust that the recursive call handles the rest of the problem correctly.' },
+          { label: 'Unchoose', detail: 'Undo every mutation the choose step made, in reverse. The invariant is that the function leaves the state exactly as it found it.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Reading complexity off a recursion tree',
+        caption: 'Nodes times work per node gives time; height gives stack space. b is the branching factor and d the depth.',
+        columns: ['Pattern', 'Recurrence', 'Tree shape', 'Time', 'Stack space'],
+        rows: [
+          ['Linear recursion (factorial, list sum)', 'T(n) = T(n-1) + O(1)', 'A chain of n nodes', 'O(n)', 'O(n)'],
+          ['Halving (binary search)', 'T(n) = T(n/2) + O(1)', 'A chain of log n nodes', 'O(log n)', 'O(log n)'],
+          ['Divide and conquer (merge sort)', 'T(n) = 2T(n/2) + O(n)', 'log n levels, O(n) work per level', 'O(n log n)', 'O(log n)'],
+          ['Naive Fibonacci', 'T(n) = T(n-1) + T(n-2) + O(1)', 'Nearly a binary tree of depth n', 'O(phi^n), about O(1.618^n)', 'O(n)'],
+          ['Subsets', 'T(n) = 2T(n-1) + O(1)', 'A full binary tree of depth n', 'O(2^n)', 'O(n)'],
+          ['Permutations', 'T(n) = n * T(n-1) + O(1)', 'Branching n, then n-1, then n-2', 'O(n!)', 'O(n)'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Backtracking versus brute force',
+        caption: 'Same answer, same worst-case bound, wildly different practice — measured on 8-queens.',
+        left: {
+          heading: 'Generate then test',
+          points: [
+            'Enumerate every complete candidate, then check each one',
+            '8-queens: 8^8 = 16,777,216 boards to build and test',
+            'No information from a failed candidate is reused',
+            'Trivial to write, hopeless past tiny inputs',
+          ],
+        },
+        right: {
+          heading: 'Backtracking with pruning',
+          points: [
+            'Reject a partial candidate the moment it becomes illegal',
+            '8-queens: 15,720 placements examined, about a thousandfold fewer',
+            'One illegal placement eliminates an entire subtree of boards',
+            'Same code shape, one extra validity check per option',
+          ],
+        },
+      },
+    ],
+
+    formalDefinition:
+      'A recursive function is one defined in terms of itself on strictly smaller inputs, comprising one or more base cases answered without recursion and one or more recursive cases whose arguments are guaranteed to approach a base case under a well-founded ordering, which is what makes termination provable. Its cost is given by a recurrence relation T(n) that can be solved by expansion, by the recursion-tree method — total time equals the number of nodes multiplied by the work done at each, and auxiliary space equals the maximum depth times the frame size — or by the Master Theorem for divide-and-conquer forms. Backtracking is depth-first traversal of the implicit tree of partial candidates, extending a candidate by one choice at each level, abandoning any candidate that provably cannot be completed to a solution, and restoring the prior state on return so that a single mutable representation of the candidate suffices for the entire search.',
+
+    math: {
+      intuition:
+        'Every recursive function has a recurrence, and the recurrence is a description of its recursion tree. To get the time, count the nodes and multiply by the work each does; to get the space, measure the height. That is why subsets cost 2^n — a binary tree of depth n has 2^n leaves — while permutations cost n! — the branching factor shrinks by one each level, so the leaf count is n times (n-1) times (n-2) and so on. And it is why naive Fibonacci is exponential: the tree branches twice at almost every node even though there are only n genuinely distinct subproblems, which is precisely the redundancy that memoisation removes.',
+      formulas: [
+        {
+          latex: 'T(n) = T(n-1) + T(n-2) + O(1) \\;\\Longrightarrow\\; T(n) = \\Theta(\\varphi^{n}), \\quad \\varphi = \\frac{1 + \\sqrt{5}}{2} \\approx 1.618',
+          name: 'Naive Fibonacci recurrence',
+          meaning: 'The call count itself follows the Fibonacci recurrence, so it grows like the golden ratio to the n — the canonical example of overlapping subproblems being recomputed.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'T(n)', meaning: 'Number of calls made to compute fib(n)' },
+            { symbol: '\\varphi', meaning: 'The golden ratio, the dominant root of x^2 = x + 1' },
+          ],
+        },
+        {
+          latex: '\\text{time} = (\\text{nodes in the tree}) \\times (\\text{work per node}), \\qquad \\text{stack} = (\\text{height}) \\times (\\text{frame size})',
+          name: 'The recursion-tree method',
+          meaning: 'The general recipe for reading complexity off a recursive definition without solving the recurrence algebraically.',
+          category: 'complexity',
+          variables: [
+            { symbol: '\\text{nodes}', meaning: 'Total number of calls, summed over every level' },
+            { symbol: '\\text{height}', meaning: 'Longest chain of nested calls, which bounds the stack' },
+          ],
+        },
+        {
+          latex: '\\sum_{k=0}^{n} \\binom{n}{k} = 2^{n}, \\qquad \\text{number of permutations} = n!',
+          name: 'Sizes of the classic search spaces',
+          meaning: 'Enumerating all subsets is inescapably 2^n and all permutations n!, so any enumeration algorithm is at best O(output size) — the goal of pruning is to avoid the candidates you do not need, not to beat these bounds.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'n', meaning: 'Number of elements' },
+            { symbol: '\\binom{n}{k}', meaning: 'Number of subsets of size k' },
+          ],
+        },
+        {
+          latex: 'T(n) = a\\,T(n/b) + f(n) \\;\\Longrightarrow\\; T(n) = \\Theta(n^{\\log_b a}) \\text{ when } f(n) = O(n^{\\log_b a - \\epsilon})',
+          name: 'Master Theorem, case 1',
+          meaning: 'The shortcut for divide-and-conquer recurrences: a subproblems of size n/b each, plus f(n) to combine them. Merge sort is a = 2, b = 2, f(n) = n, which lands in the balanced case and gives n log n.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'a', meaning: 'Number of recursive calls per level' },
+            { symbol: 'b', meaning: 'Factor by which the input shrinks' },
+            { symbol: 'f(n)', meaning: 'Work done outside the recursive calls' },
+          ],
+        },
+      ],
+      derivation: [
+        'Count the calls made by naive fib(n). Let C(n) be that count, with C(0) = C(1) = 1.',
+        'Each call to fib(n) for n >= 2 makes one call to fib(n-1) and one to fib(n-2), so C(n) = 1 + C(n-1) + C(n-2).',
+        'This is the Fibonacci recurrence plus a constant, so C(n) = 2 * F(n+1) - 1, where F is the Fibonacci sequence itself.',
+        'Since F(n) grows as phi^n / sqrt(5), the number of calls grows as phi^n — exponential, and measurably so: fib(30) makes 2,692,537 calls.',
+        'But there are only n + 1 distinct arguments, 0 through n, so almost every call recomputes something already computed.',
+        'Memoising turns the tree into a directed acyclic graph with n + 1 distinct nodes, each computed once, giving O(n) time at the cost of O(n) space — fib(30) drops from 2,692,537 calls to 31 distinct computations.',
+        'This is exactly the observation that turns exponential recursion into dynamic programming, which the greedy-and-DP unit develops in full.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Enumerating every subset of [1, 2, 3] by hand',
+      setup:
+        'The rule is one decision per element, taken left to right: include it or do not. The function keeps a single shared list called path and an index i saying which element is being decided. When i reaches the end of the input, path is a complete subset and is copied into the output. Read the trace as a depth-first walk of the tree in the visual above, and watch path mutate and then get restored.',
+      steps: [
+        { label: 'backtrack(0), path = []', detail: 'Element 1 is undecided. Choose to take it: append 1, so path = [1]. Recurse to depth 1.' },
+        { label: 'backtrack(1), path = [1]', detail: 'Take 2: path = [1, 2]. Recurse to depth 2.' },
+        { label: 'backtrack(2), path = [1, 2]', detail: 'Take 3: path = [1, 2, 3]. Recurse to depth 3.' },
+        { label: 'backtrack(3) — base case', detail: 'i equals len(nums), so path is complete. Record a copy: output = [[1, 2, 3]]. Return. Recording path itself rather than path.copy() would store a reference to a list that is about to be emptied, which is the single most common bug in this pattern.' },
+        { label: 'Unchoose 3, then skip 3', detail: 'Back at depth 2, pop 3 so path = [1, 2], then recurse without taking 3. The base case fires again: output = [[1, 2, 3], [1, 2]]. Depth 2 is now exhausted and returns.' },
+        { label: 'Unchoose 2, then skip 2', detail: 'Back at depth 1, pop 2 so path = [1], then recurse. Depth 2 now decides 3 both ways, giving [1, 3] and [1]. output = [[1,2,3], [1,2], [1,3], [1]].' },
+        { label: 'Unchoose 1, then skip 1', detail: 'Back at depth 0, pop 1 so path = [], then recurse without 1. The right half of the tree mirrors the left, producing [2, 3], [2], [3] and finally the empty subset.' },
+        { label: 'Final output', detail: '[[1,2,3], [1,2], [1,3], [1], [2,3], [2], [3], []] — eight subsets, 2^3, in exactly the depth-first order of the tree.' },
+        { label: 'Verify the invariant', detail: 'Every call returns with path exactly as it found it: each append is matched by a pop before the function returns. Check this by asserting len(path) == i at the top of the function; if the assertion ever fails, an unchoose is missing.', latex: '|\\text{path}| = i \\text{ on entry to } \\texttt{backtrack}(i)' },
+        { label: 'Complexity from the tree', detail: 'The tree has 2^(n+1) - 1 = 15 nodes for n = 3, with O(1) work at each internal node and O(n) at each of the 2^n leaves for the copy. Time is O(n * 2^n), dominated by writing out the output; space is O(n) for the path plus O(n) stack depth, excluding the O(n * 2^n) needed to hold the answers.', latex: 'T(n) = \\Theta(n \\cdot 2^{n}), \\quad S_{\\text{aux}}(n) = \\Theta(n)' },
+        { label: 'The same skeleton, with pruning: 4-queens', detail: 'Replace "take or skip element i" with "place a queen in row i at some column c", and prune any c that shares a column or diagonal with a queen already placed. Start row 0 at column 0: row 1 can then only be column 2 or 3. Column 2 leaves row 2 with nothing legal, so that branch dies after one extra placement rather than after enumerating the 16 boards beneath it. Column 3 lets row 2 take column 1, but then row 3 has nothing, so the whole of row 0 = column 0 is dead.' },
+        { label: 'The first solution', detail: 'Row 0 = column 1 forces row 1 = column 3, then row 2 = column 0 and row 3 = column 2 — the solution (1, 3, 0, 2). A second, its mirror image, is (2, 0, 3, 1). Pruning examined 60 candidate placements in total against 4^4 = 256 complete boards for generate-and-test; at n = 8 the gap is 15,720 against 16,777,216.' },
+      ],
+      conclusion:
+        'Subset enumeration costs Theta(n * 2^n) time, because there are 2^n subsets and each is copied out in O(n), and Theta(n) auxiliary space: one shared path of length at most n, plus a call stack of depth at most n. No algorithm can do better on time, since the output alone is that large — which is the honest answer to "can we speed up subsets?" and is worth distinguishing from problems where the exponential is avoidable. Backtracking\'s real leverage is elsewhere: the identical skeleton with a validity check prunes doomed branches before they are explored, and on 8-queens that turns 16.7 million candidate boards into 15,720 placements examined. The invariant that makes it all work is that each call leaves the shared state exactly as it found it, so choose must be undone by an exactly matching unchoose on every path out of the function, including early returns.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Subsets with choose / explore / unchoose',
+        runnable: true,
+        code: `def subsets(nums, trace=False):
+    out, path = [], []
+    def backtrack(i):
+        assert len(path) <= i          # the invariant: nothing left over from a sibling
+        if i == len(nums):             # base case: every element decided
+            out.append(path.copy())    # copy! path keeps mutating after we return
+            if trace:
+                print(f"  leaf -> {{{', '.join(map(str, path))}}}")
+            return
+        path.append(nums[i])           # choose
+        backtrack(i + 1)               # explore
+        path.pop()                     # unchoose
+        backtrack(i + 1)               # skip nums[i]
+    backtrack(0)
+    return out
+
+print(subsets([1, 2, 3], trace=True))
+print("count:", len(subsets([1, 2, 3])), "= 2^3")`,
+        output: `  leaf -> {1, 2, 3}
+  leaf -> {1, 2}
+  leaf -> {1, 3}
+  leaf -> {1}
+  leaf -> {2, 3}
+  leaf -> {2}
+  leaf -> {3}
+  leaf -> {}
+[[1, 2, 3], [1, 2], [1, 3], [1], [2, 3], [2], [3], []]
+count: 8 = 2^3`,
+        explanation:
+          'One shared list serves the whole search, which is why the pop is not optional: without it, path accumulates elements from branches already abandoned and every later subset is wrong. The copy in the base case is the mirror-image trap — appending path itself stores a reference to a list that will be empty by the time the function returns, so the output becomes a list of eight empty lists. Cost is Theta(n * 2^n) time and Theta(n) auxiliary space. Swapping the order of the two recursive calls changes only the order of the output, not its contents, which is a useful sanity check that you have understood the tree rather than memorised the code.',
+      },
+      {
+        language: 'python',
+        title: 'The recursion tree is real: counting calls in naive Fibonacci',
+        runnable: true,
+        code: `calls = 0
+def fib(n):
+    global calls
+    calls += 1
+    return n if n < 2 else fib(n - 1) + fib(n - 2)
+
+for n in (5, 10, 20, 30):
+    calls = 0
+    v = fib(n)
+    print(f"fib({n}) = {v:<7} calls = {calls}")
+
+from functools import lru_cache
+
+@lru_cache(maxsize=None)
+def fib_memo(n):
+    return n if n < 2 else fib_memo(n - 1) + fib_memo(n - 2)
+
+print("fib_memo(30) =", fib_memo(30), "cache:", fib_memo.cache_info())`,
+        output: `fib(5) = 5       calls = 15
+fib(10) = 55      calls = 177
+fib(20) = 6765    calls = 21891
+fib(30) = 832040  calls = 2692537
+fib_memo(30) = 832040 cache: CacheInfo(hits=28, misses=31, maxsize=None, currsize=31)`,
+        explanation:
+          'The call counts follow the Fibonacci numbers themselves — 2 * F(n+1) - 1 — so they grow like 1.618^n, and the printed figures match: each increment of 10 in n multiplies the work by roughly 120. Yet there are only 31 distinct arguments for n = 30, which is exactly what the cache_info line shows: 31 misses, meaning 31 real computations, and 28 hits. That gap between the number of calls and the number of distinct subproblems is the definition of overlapping subproblems, and collapsing it is the whole idea of dynamic programming. Note that lru_cache requires hashable arguments, which is why memoised functions take tuples rather than lists.',
+      },
+      {
+        language: 'python',
+        title: 'N-queens: the same skeleton plus pruning',
+        runnable: true,
+        code: `def solve_n_queens(n, trace=False):
+    cols, diag, anti = set(), set(), set()     # occupied columns and both diagonals
+    board, solutions = [], []
+    nodes = 0
+
+    def place(row):
+        nonlocal nodes
+        if row == n:                            # base case: all rows filled
+            solutions.append(tuple(board))
+            return
+        for c in range(n):
+            nodes += 1
+            if c in cols or (row - c) in diag or (row + c) in anti:
+                continue                        # prune: this square is attacked
+            cols.add(c); diag.add(row - c); anti.add(row + c); board.append(c)
+            if trace:
+                print("  " * row + f"row {row} -> col {c}")
+            place(row + 1)                      # explore
+            cols.remove(c); diag.remove(row - c); anti.remove(row + c); board.pop()
+
+    place(0)
+    return solutions, nodes
+
+sols, nodes = solve_n_queens(4, trace=True)
+print("solutions:", sols)
+print("candidate placements examined:", nodes, "out of", 4 ** 4, "brute-force boards")
+for n in (6, 8):
+    s, k = solve_n_queens(n)
+    print(f"n={n}: {len(s)} solutions, {k} placements examined vs {n**n} brute force")`,
+        output: `row 0 -> col 0
+  row 1 -> col 2
+  row 1 -> col 3
+    row 2 -> col 1
+row 0 -> col 1
+  row 1 -> col 3
+    row 2 -> col 0
+      row 3 -> col 2
+row 0 -> col 2
+  row 1 -> col 0
+    row 2 -> col 3
+      row 3 -> col 1
+row 0 -> col 3
+  row 1 -> col 0
+  row 1 -> col 1
+solutions: [(1, 3, 0, 2), (2, 0, 3, 1)]
+candidate placements examined: 60 out of 256 brute-force boards
+n=6: 4 solutions, 894 placements examined vs 46656 brute force
+n=8: 92 solutions, 15720 placements examined vs 16777216 brute force`,
+        explanation:
+          'Three sets do all the pruning, and the diagonal encoding is the trick worth remembering: every square on a north-west diagonal has the same value of row - col, and every square on a north-east diagonal the same row + col, so an attack test is three O(1) set lookups rather than a scan of the board. One queen placed in row 0 eliminates a column and two diagonals for every remaining row, which is why 8-queens examines 15,720 placements rather than the 16.7 million boards generate-and-test would build. Note that the unchoose step must undo all four mutations; forgetting one of the diagonal sets produces a program that finds some valid solutions and silently misses others, which is far harder to spot than a crash. The trace also shows the first dead end plainly: row 0 = 0 then row 1 = 2 prints with no row 2 beneath it.',
+      },
+      {
+        language: 'python',
+        title: 'Permutations, and the copy bug seen in the wild',
+        runnable: true,
+        code: `def permutations(nums):
+    out, path, used = [], [], [False] * len(nums)
+    def backtrack():
+        if len(path) == len(nums):
+            out.append(tuple(path))
+            return
+        for i, x in enumerate(nums):
+            if used[i]:
+                continue                 # each element used at most once
+            used[i] = True; path.append(x)
+            backtrack()
+            path.pop(); used[i] = False  # undo BOTH mutations
+    backtrack()
+    return out
+
+print(permutations([1, 2, 3]))
+
+def subsets_buggy(nums):
+    out, path = [], []
+    def backtrack(i):
+        if i == len(nums):
+            out.append(path)             # BUG: appends the same list object
+            return
+        path.append(nums[i]); backtrack(i + 1); path.pop(); backtrack(i + 1)
+    backtrack(0)
+    return out
+
+print("what forgetting .copy() gives you:", subsets_buggy([1, 2, 3]))`,
+        output: `[(1, 2, 3), (1, 3, 2), (2, 1, 3), (2, 3, 1), (3, 1, 2), (3, 2, 1)]
+[[], [], [], [], [], [], [], []]`,
+        explanation:
+          'Permutations branch n ways at the first level, n - 1 at the second and so on, so the tree has n! leaves and the algorithm is Theta(n * n!) — for n = 12 that is already half a billion tuples, which is the honest reason "just try all orderings" is not a plan. The used array is the pruning: it is what stops the same element appearing twice, and it must be reset in the unchoose step alongside the pop, since a single missed undo corrupts every sibling branch. The second function shows the copy bug producing its characteristic output: eight references to one list, which is empty by the time anything prints it. The symptom — the right number of results, all identical and all empty — is distinctive enough to diagnose on sight.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Parsers and tree-structured data',
+        usage:
+          'JSON, HTML and source code are recursively defined, so the code that walks them is recursive: json.loads builds nested structures with nested calls, and Python raises RecursionError on documents nested past 1000 levels — a real denial-of-service vector that parsers defend against with explicit depth limits.',
+      },
+      {
+        context: 'Hyperparameter and neural-architecture search',
+        usage:
+          'Searching a space of configurations is backtracking with pruning: a partial configuration that already violates a memory or latency budget is abandoned before the remaining dimensions are explored, which is exactly the N-queens saving applied to a search space nobody can enumerate.',
+      },
+      {
+        context: 'Constraint solvers and schedulers',
+        usage:
+          'Sudoku solvers, exam timetabling, register allocation and SAT solvers are all backtracking with progressively cleverer pruning — unit propagation and conflict-driven clause learning are pruning rules that let a solver ignore an astronomically large fraction of the candidate space.',
+      },
+      {
+        context: 'Beam search and constrained decoding in language models',
+        usage:
+          'Generating text is a search over sequences, and constrained decoding — forcing valid JSON, or a grammar — is backtracking over token prefixes with the grammar as the pruning rule. The reason beam search is preferred to exhaustive search is that the tree has vocabulary-size branching at every position.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'functools.lru_cache', role: 'One decorator turns an exponential recursive function into a linear one by memoising on the argument tuple; the standard first move when a recursive solution is correct but too slow.' },
+      { tool: 'sys.setrecursionlimit / threading.stack_size', role: 'The escape hatch for legitimately deep recursion, and the pair of knobs you need together — raising the limit alone can segfault the interpreter rather than raising RecursionError.' },
+      { tool: 'itertools', role: 'combinations, permutations and product implement the classic enumerations in C. Reach for them before writing your own, and write your own when you need pruning, which itertools cannot do.' },
+      { tool: 'python-constraint / OR-Tools', role: 'Production constraint solvers built on backtracking with sophisticated propagation, for scheduling and assignment problems too large for a hand-rolled search.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Appending the shared path instead of a copy of it',
+        why: 'Python lists are references. Storing path stores a pointer to the one list the whole search mutates, so by the time the function returns every recorded result is the same empty list.',
+        fix: 'Append path.copy(), list(path) or tuple(path) at the base case. The symptom is unmistakable: the correct number of results, all identical.',
+      },
+      {
+        mistake: 'Forgetting the unchoose step, or undoing only some of the mutations',
+        why: 'The next branch inherits state from the abandoned one, so results are contaminated in a way that still looks plausible. Partial undo is worse than none: N-queens that forgets one diagonal set still finds valid solutions, just not all of them.',
+        fix: 'Make every choose and unchoose a matched pair on the same two lines of the loop, undo in reverse order, and assert an invariant such as len(path) == depth at the top of the function.',
+      },
+      {
+        mistake: 'A base case that cannot be reached',
+        why: 'If the recursive call does not strictly shrink the input — passing n instead of n - 1, or recursing on the same node — the function recurses until the stack is exhausted and raises RecursionError, which is reported at whatever call happened to overflow rather than at the real bug.',
+        fix: 'Name the quantity that decreases and check that every recursive call decreases it. Handle the boundary explicitly too: n <= 0 rather than n == 0, so a negative input terminates instead of running away.',
+      },
+      {
+        mistake: 'Recursing deeply in CPython',
+        why: 'The default limit is 1000 frames, and each frame is expensive. A recursive walk over a linked list, a long dependency chain or a deep JSON document hits it on real data having passed every test.',
+        fix: 'Convert tail-style recursion to a loop — CPython does not eliminate tail calls — or use an explicit stack. Raise the limit only when you also raise the thread stack size and know the true depth bound.',
+      },
+      {
+        mistake: 'Using recursion where a loop is plainly better',
+        why: 'A recursive sum over a list costs a stack frame per element and is slower and more fragile than a for loop, with no gain in clarity. Recursion earns its keep on self-similar structure, not on sequences.',
+        fix: 'Ask whether the data is genuinely recursive — trees, nested documents, branching search. If it is a flat sequence, iterate.',
+      },
+      {
+        mistake: 'Leaving an exponential recursion exponential when the subproblems overlap',
+        why: 'Naive Fibonacci makes 2.7 million calls for n = 30 to compute 31 distinct values. The same pattern hides in grid paths, edit distance and coin change, where the recursive formulation is correct but unusable.',
+        fix: 'Count the distinct argument tuples. If it is polynomial while the call count is exponential, add lru_cache or convert to a table — that is the whole content of dynamic programming.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Walk me through how you would write any backtracking solution, and how you reason about its complexity.',
+        answer:
+          'I start by naming three things: what a complete candidate looks like, which makes the base case; what the options are at each step; and which constraint lets me reject a partial candidate early. The body is then always the same shape — for each option, skip it if it violates the constraint, otherwise apply it to the shared state, recurse, and undo exactly what I applied. Keeping one mutable candidate rather than copying at every level is what keeps auxiliary space at O(depth) instead of O(nodes times depth), and the discipline that makes it safe is that every function call leaves the state exactly as it found it. For complexity I draw the recursion tree: the branching factor times the depth gives the node count, multiplied by the work per node, so subsets are 2^n, permutations n!, and N-queens is bounded by n! but in practice enormously less because pruning cuts whole subtrees. Space is the height of the tree times the frame size, plus whatever the shared state costs. I always say explicitly that pruning does not improve the worst-case bound — it improves the practical runtime, and for 8-queens that is 15,720 placements against 16.7 million boards.',
+        followUp:
+          'Asking how they would test it separates people who assert the invariant len(path) == depth from people who only check the final output.',
+      },
+      {
+        level: 'intermediate',
+        question: 'When should you convert a recursive solution to an iterative one, and how?',
+        answer:
+          'Three triggers. First, depth: CPython raises RecursionError at about 1000 frames, so any recursion whose depth scales with the input — a linked list, a dependency chain, a deeply nested document — needs converting before it meets real data. Second, performance: a Python frame is expensive, so hot recursive code with a trivial body is often two or three times faster as a loop. Third, resumability: an explicit stack can be checkpointed or streamed, a call stack cannot. The mechanical conversion is to make the implicit stack explicit — push the arguments you would have passed, pop in the loop, and for post-order work push a marker or a second entry recording that the children are done. Tail recursion is the easy case and becomes a plain while loop, since CPython performs no tail-call elimination. The cases where I would not convert are genuinely tree-shaped recursion of bounded depth, where the recursive form is much clearer; log-depth recursion such as binary search or the recursion in merge sort, where the depth is 20 for a million elements and will never overflow; and anything where the explicit-stack version would need to reconstruct most of a call frame by hand.',
+        followUp:
+          'Mentioning that raising sys.setrecursionlimit without also raising the thread stack size can segfault rather than raise shows real experience.',
+      },
+      {
+        level: 'ai-engineer',
+        question: 'A candidate writes a correct recursive solution that times out on the large test. What is your diagnostic process?',
+        answer:
+          'I count two numbers: how many calls the function makes, and how many distinct argument tuples it can possibly have. If the call count is exponential while the distinct-argument count is polynomial, the subproblems overlap and memoisation fixes it outright — that is naive Fibonacci with 2.7 million calls over 31 distinct arguments, and one lru_cache decorator turns it linear. If the distinct-argument count is itself exponential, memoisation cannot help and the question becomes whether a better pruning rule exists, or whether the problem needs a different formulation such as a greedy rule with a proof, or an approximation. The intermediate case is worth naming too: sometimes the state is unnecessarily fine-grained — carrying the whole path when only its length and last element matter — and coarsening the memo key collapses an exponential state space into a polynomial one. I would also check the mundane causes before any of that: quadratic string concatenation inside the recursion, an O(n) membership test against a list where a set belongs, or copying the candidate at every node instead of mutating and undoing.',
+        followUp:
+          'The strongest answers mention coarsening the memo key, since that is the step that turns a correct memoisation into a fast one.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Write a function that returns all subsets of a list that may contain duplicates, with no duplicate subsets in the output. Explain the pruning rule.',
+        hint: 'Sort first, then at each level skip an option identical to the one you just tried and rejected at the same level.',
+        solution:
+          'def subsets_with_dups(nums):\n    nums = sorted(nums)\n    out, path = [], []\n    def backtrack(start):\n        out.append(path.copy())\n        for i in range(start, len(nums)):\n            if i > start and nums[i] == nums[i - 1]:\n                continue                 # same value already tried at this level\n            path.append(nums[i])\n            backtrack(i + 1)\n            path.pop()\n    backtrack(0)\n    return out\n\nsubsets_with_dups([1, 2, 2]) -> [[], [1], [1, 2], [1, 2, 2], [2], [2, 2]]\n\nSorting puts equal values next to each other so the duplicate test is a comparison with the immediate predecessor. The condition i > start is what makes it correct: within one call, choosing the second 2 after having already explored the first 2 would regenerate an identical subtree, so it is skipped; but the first occurrence at each level, and any occurrence reached through a deeper call, is still allowed, which is how [2, 2] survives. Worst case is unchanged at O(n * 2^n), but on heavily duplicated input the output and the runtime shrink to the number of distinct subsets. The frequent wrong fix is deduplicating the output at the end, which costs the full 2^n work first and needs the subsets hashable.',
+      },
+      {
+        prompt: 'Implement a recursive flatten for arbitrarily nested lists, then explain why it fails on a list nested 5000 deep and rewrite it iteratively.',
+        hint: 'The iterative version needs a stack, and the order you push determines the order you get out.',
+        solution:
+          'def flatten(xs):\n    out = []\n    for x in xs:\n        if isinstance(x, list):\n            out.extend(flatten(x))\n        else:\n            out.append(x)\n    return out\n\nRecursion depth equals nesting depth, so a 5000-deep structure raises RecursionError: maximum recursion depth exceeded. That is not a hypothetical — it is the standard failure when parsing untrusted JSON, and it is why parsers impose explicit depth limits.\n\ndef flatten_iter(xs):\n    out, stack = [], [iter(xs)]\n    while stack:\n        it = stack[-1]\n        for x in it:\n            if isinstance(x, list):\n                stack.append(iter(x))\n                break              # descend, resuming this iterator later\n            out.append(x)\n        else:\n            stack.pop()            # this iterator is exhausted\n    return out\n\nKeeping iterators rather than lists on the stack is what preserves order: each frame remembers its own position, which is exactly the state a call frame was holding. Both versions are O(total elements) in time; the iterative one uses heap memory for the stack, which is bounded by available RAM rather than by the 1000-frame recursion limit.',
+      },
+      {
+        prompt: 'Solve the combination-sum problem: given distinct positive candidates and a target, return every multiset of candidates summing to the target, where each candidate may be reused. State why the search terminates and give the pruning rule.',
+        hint: 'Sort ascending; once a candidate exceeds the remaining target, so does every later one.',
+        solution:
+          'def combination_sum(candidates, target):\n    candidates = sorted(candidates)\n    out, path = [], []\n    def backtrack(start, remaining):\n        if remaining == 0:\n            out.append(path.copy())\n            return\n        for i in range(start, len(candidates)):\n            if candidates[i] > remaining:\n                break                # sorted, so every later candidate also overshoots\n            path.append(candidates[i])\n            backtrack(i, remaining - candidates[i])   # i, not i + 1: reuse allowed\n            path.pop()\n    backtrack(0, target)\n    return out\n\ncombination_sum([2, 3, 6, 7], 7) -> [[2, 2, 3], [7]]\n\nTermination rests on remaining strictly decreasing: every candidate is positive, so each recursive call reduces it by at least one and it cannot pass zero without the break firing first. Passing i rather than i + 1 permits reuse while the non-decreasing index prevents [2, 3] and [3, 2] both appearing, which is what keeps the output a set of multisets. The break rather than continue is the pruning that matters, and it depends on the sort: it eliminates the entire tail of the candidate list at every node. Worst-case complexity is exponential — bounded by roughly O(len(candidates)^(target/min_candidate)) — which is unavoidable, since the output itself can be exponentially large.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DSA-015-q1',
+        type: 'debug',
+        language: 'python',
+        concept: 'the copy bug',
+        prompt: 'This subset generator returns eight empty lists. What is wrong?',
+        code: `def subsets(nums):
+    out, path = [], []
+    def backtrack(i):
+        if i == len(nums):
+            out.append(path)
+            return
+        path.append(nums[i]); backtrack(i + 1)
+        path.pop(); backtrack(i + 1)
+    backtrack(0)
+    return out`,
+        options: [
+          'out.append(path) stores a reference to the one shared list; it must be path.copy()',
+          'The pop() should come before the first recursive call',
+          'The base case should be i > len(nums)',
+          'path must be declared global inside backtrack',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Appending path stores a pointer, not a snapshot. By the time the search finishes, every pop has run, so all eight stored references point at the same now-empty list. path.copy(), list(path) or tuple(path) takes the snapshot.',
+      },
+      {
+        id: 'DSA-015-q2',
+        type: 'numeric',
+        concept: 'recursion tree size',
+        prompt: 'How many calls does the naive recursive fib(5) make in total, counting the initial call?',
+        answer: 15,
+        explanation:
+          'The count satisfies C(n) = 1 + C(n-1) + C(n-2) with C(0) = C(1) = 1, giving 1, 1, 3, 5, 9, 15. The tree has 15 nodes to compute 6 distinct values, which is the redundancy memoisation removes.',
+      },
+      {
+        id: 'DSA-015-q3',
+        type: 'multi',
+        concept: 'requirements for correct recursion',
+        prompt: 'Which of these are genuinely required for a recursive function to terminate and be correct?',
+        options: [
+          'At least one base case answered without recursion',
+          'Every recursive call moves strictly towards a base case',
+          'The function must return a value',
+          'The recursion depth must be at most log n',
+          'Any mutation of shared state must be undone before returning',
+        ],
+        answerIndices: [0, 1, 4],
+        explanation:
+          'Base case plus strict progress is what proves termination, and restoring shared state is what makes sibling branches independent. Recursive functions may return nothing, and depth can legitimately be O(n) as long as it fits the stack.',
+      },
+      {
+        id: 'DSA-015-q4',
+        type: 'order',
+        concept: 'the backtracking skeleton',
+        prompt: 'Put the backtracking steps in the order they appear inside the option loop.',
+        items: [
+          'Skip the option if it violates a constraint (prune)',
+          'Apply the option to the shared state (choose)',
+          'Recurse to the next position (explore)',
+          'Undo the mutation (unchoose)',
+        ],
+        explanation:
+          'Pruning comes before choosing so the doomed subtree is never entered at all, and unchoose must be the last statement in the loop body so the next option starts from an uncontaminated state.',
+      },
+      {
+        id: 'DSA-015-q5',
+        type: 'truefalse',
+        concept: 'what pruning buys',
+        prompt: 'Pruning improves the worst-case asymptotic complexity of a backtracking search.',
+        answer: false,
+        explanation:
+          'It improves practical runtime, often by orders of magnitude — 8-queens goes from 16.7 million candidate boards to 15,720 placements — but the worst case remains exponential, since an adversarial input can defeat any fixed pruning rule.',
+      },
+      {
+        id: 'DSA-015-q6',
+        type: 'explain',
+        concept: 'recursion trees and memoisation',
+        prompt: 'Explain how you work out the complexity of a recursive function, and how you know whether memoisation will help.',
+        rubric: [
+          'Describes the recursion-tree method: nodes times work per node for time, height times frame size for space',
+          'Distinguishes the number of calls from the number of distinct argument tuples',
+          'Concludes that memoisation helps exactly when the calls are exponential but the distinct states are polynomial, and gives an example',
+        ],
+        sampleAnswer:
+          'I draw the recursion tree: one node per call, with children for the calls it makes. The time is the number of nodes multiplied by the work done at each node outside the recursive calls, and the auxiliary space is the height of the tree, because that is the deepest the call stack ever gets. Subsets branch two ways for n levels, so 2^n leaves and O(n * 2^n) with the copy at each leaf; permutations branch n then n-1 then n-2, so n! leaves; naive Fibonacci branches twice at nearly every node down to depth n, giving about 1.618^n. Whether memoisation helps is a separate count: how many distinct argument tuples can the function be called with? For Fibonacci there are only n + 1 of them, so 2.7 million calls at n = 30 are recomputing 31 values and caching makes it linear. For subsets, the argument is the whole partial path, so there are 2^n distinct states and caching gains nothing — the output is genuinely that large. The useful middle case is where the state is finer than it needs to be: if I am carrying an entire path when only its length and last element affect the answer, coarsening the key can turn an exponential state space into a polynomial one, which is exactly the move from brute-force recursion to dynamic programming.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'The two required parts of any recursive function?', back: 'A base case answered without recursion, and a recursive case whose arguments strictly approach that base case — which together prove termination.' },
+      { front: 'The backtracking pattern in four words?', back: 'Prune, choose, explore, unchoose. Every mutation applied on the way down is undone on the way back up, so one shared candidate serves the whole search.' },
+      { front: 'How do you read time and space off a recursion tree?', back: 'Time is the number of nodes times the work per node; auxiliary space is the height of the tree times the frame size.' },
+      { front: 'Cost of enumerating all subsets and all permutations?', back: 'Theta(n * 2^n) and Theta(n * n!) respectively, with O(n) auxiliary space. Both are output-bound, so no algorithm does better.' },
+      { front: 'When does memoisation turn exponential recursion into polynomial?', back: 'When the number of distinct argument tuples is polynomial while the call count is exponential — overlapping subproblems, as in fib(30): 2,692,537 calls over 31 distinct arguments.' },
+      { front: 'Why does path.copy() matter at the base case?', back: 'Python appends a reference, not a snapshot. Storing the shared path means every recorded result points at the same list, which is empty once the search unwinds.' },
+      { front: 'What is CPython\'s default recursion limit, and what does exceeding it do?', back: '1000 frames, after which RecursionError is raised. Deep structures — long lists, nested JSON, dependency chains — need an explicit stack rather than a bigger limit.' },
+    ],
+
+    challenge: {
+      title: 'A Sudoku solver with measurable pruning',
+      brief:
+        'Write a backtracking solver for standard 9x9 Sudoku that reports how many candidate placements it examined. Then add one improvement — always fill the empty cell with the fewest legal candidates next, the minimum-remaining-values heuristic — and measure the reduction on the same puzzle. Explain the result in terms of the search tree.',
+      acceptanceCriteria: [
+        'Maintains row, column and box occupancy incrementally rather than re-scanning the grid on every candidacy test',
+        'Undoes every mutation on backtrack, verified by asserting the grid is unchanged after a failed branch',
+        'Counts and reports candidate placements examined, for both the naive cell order and the minimum-remaining-values order',
+        'Solves a published "hard" puzzle, and reports honestly if the anti-backtracking puzzle designed to defeat naive ordering takes much longer',
+        'Explains the measured difference as a reduction in branching factor near the root of the search tree, not as a change to the worst-case bound',
+      ],
+      starterCode: 'def solve(grid: list[list[int]]) -> tuple[bool, int]:\n    """Solve in place. Return (solved, placements_examined)."""\n    ...\n\ndef candidates(grid, r, c) -> set[int]:\n    ...\n',
+      language: 'python',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone what recursion is, what backtracking adds to it, and how to reason about the cost of both.',
+      mustCover: [
+        'A recursive function needs a base case and a recursive case that strictly shrinks the problem',
+        'The call stack holds one frame per in-progress call, so recursion depth is memory and CPython caps it around 1000',
+        'Backtracking is choose, explore, unchoose over a tree of partial solutions, with pruning to skip doomed branches',
+        'Complexity comes from the recursion tree: nodes times work for time, height for space',
+        'Overlapping subproblems make naive recursion exponential, and memoisation collapses it',
+      ],
+      bonusSignals: [
+        'explains why the candidate is mutated and restored rather than copied',
+        'gives the 2^n and n! figures for subsets and permutations',
+        'notes that pruning changes practical runtime but not the worst-case bound',
+        'mentions RecursionError and when to rewrite iteratively',
+      ],
+      sampleExplanation:
+        'Recursion is a function that solves a problem by calling itself on a smaller version of the same problem. It needs two parts: a case small enough to answer on the spot, and a rule that reduces a bigger case to smaller ones. The reduction has to be genuine — strictly smaller every time — or the calls never stop, and since the machine keeps a note of every paused call, running away means running out of memory rather than looping quietly. That pile of paused calls is also the cost model: the deepest the pile ever gets is the memory the function needs, and the total number of calls is the time. Draw the calls as a tree and both numbers are there to read. Backtracking is recursion used to search rather than to compute. You are building a candidate answer one decision at a time, so at each step you take an option, write it into a shared scratchpad, explore everything that follows, and then rub it out before trying the next option — the rubbing out is what lets one scratchpad serve the entire search instead of copying it at every fork, and forgetting it is the classic bug. The other habit is refusing to explore an option that already breaks a rule: placing a queen where an existing queen attacks eliminates every arrangement underneath that choice, which is how a problem with sixteen million possible boards is settled by examining fifteen thousand placements. One last distinction is worth drawing. If your recursion is slow because it keeps recomputing the same small problems, remember the answers and it becomes fast. If it is slow because the space of genuinely different candidates really is enormous, no amount of remembering helps, and better pruning or a different formulation is the only way out.',
+    },
+
+    masteryRequirements: { understoodScore: 0.7, proficientScore: 0.85, practiceRequired: 2, teachRequired: true },
+  },
+  {
+    id: 'DSA-016',
+    domain: 'DSA',
+    module: 'Recursion & Search',
+    topic: 'Halving a search space',
+    title: 'Binary Search',
+    slug: 'binary-search',
+    difficulty: 3,
+    estimatedMinutes: 35,
+    prerequisites: ['DSA-001', 'DSA-003'],
+    related: ['DSA-010', 'DSA-015'],
+    tags: ['binary-search', 'logarithmic', 'invariant', 'bisect', 'off-by-one', 'search-on-answer'],
+
+    learningObjectives: [
+      'State the loop invariant of a binary search precisely, and use it to derive the correct initial bounds, loop condition and updates rather than guessing at plus and minus one',
+      'Implement the three variants — exact match, first index not less than a target, first index greater than a target — and say which one a given question needs',
+      'Use the bisect module correctly, including bisect_left versus bisect_right on duplicates and the insort family',
+      'Recognise a problem that admits binary search on the answer: a monotone predicate over a numeric range, where checking a candidate is cheap but computing the optimum directly is not',
+      'Justify the O(log n) time and O(1) space bounds, and identify the three off-by-one traps that cause infinite loops or missed elements',
+    ],
+
+    terminology: [
+      {
+        term: 'Loop invariant',
+        definition:
+          'A statement about the search bounds that is true before the loop, preserved by every iteration, and strong enough at exit to give the answer. For binary search it is "if the target is present, its index lies within the current bounds".',
+        simple: 'The promise the code keeps at every single step, which is what makes the final answer right.',
+      },
+      {
+        term: 'Half-open interval',
+        definition:
+          'A range written [lo, hi) that includes lo and excludes hi. Writing binary search over half-open bounds eliminates most off-by-one errors, because hi is always "one past the last candidate" and the loop condition is simply lo < hi.',
+        simple: 'A range where the right end is a fence post, not a place you can stand.',
+      },
+      {
+        term: 'bisect_left and bisect_right',
+        definition:
+          'Python\'s standard implementations: bisect_left returns the first index where a value could be inserted keeping order, so the leftmost position of an equal run; bisect_right returns one past the rightmost equal element.',
+        simple: 'Where a new item would go if it queued in front of its equals, or behind them.',
+      },
+      {
+        term: 'Monotone predicate',
+        definition:
+          'A yes/no test over an ordered range that, once true, stays true — or once false, stays false. Binary search finds the boundary between the two regions, and needs nothing else about the problem.',
+        simple: 'A switch that flips once and never flips back as you move along the range.',
+      },
+      {
+        term: 'Binary search on the answer',
+        definition:
+          'Searching the range of possible answers rather than an array, using a feasibility check as the predicate. Applies whenever "can we achieve X?" is cheap to test and monotone in X.',
+        simple: 'Guessing the answer, checking whether it works, and halving your guess range accordingly.',
+      },
+    ],
+
+    simpleExplanation:
+      'Think about looking up a word in a paper dictionary. Nobody starts at page one. You open it somewhere in the middle, see whether your word comes before or after the words on that page, and then throw away the half that cannot contain it. Repeat, and the pile of pages still in play halves every time: a thousand pages become five hundred, then two hundred and fifty, and after about ten looks you are on the right page. That is binary search, and the reason it feels like magic is the arithmetic of halving — a million items takes twenty checks, a billion takes thirty. Two conditions make it legal. The data must be sorted, because the whole method rests on being able to tell which half to discard from a single comparison. And you must be honest about your bounds: the entire craft of writing binary search correctly is keeping a clear promise about which range of positions could still hold the answer, and updating that range so it always shrinks. Get the promise right and the plus-ones and minus-ones follow from it. Guess at them instead, and you get a loop that runs forever or a search that misses the very element it is standing on.',
+
+    whyItExists:
+      'Scanning a sorted collection linearly throws away the ordering you paid to create. Binary search converts that ordering into a logarithmic lookup, which is the difference between 500,000 comparisons and 20 on a million-element array, and the same idea generalises to searching the space of possible answers whenever feasibility is cheap to check and monotone.',
+
+    analogy: {
+      scenario:
+        'A friend picks a whole number between 1 and 100 and you must find it, being told after each guess only whether you are too high or too low. Guessing 1, 2, 3 in turn takes up to a hundred questions. Guessing 50 first halves the field immediately: if the answer is higher, everything from 1 to 50 is gone in a single question. Keep halving and seven questions always suffice, because two to the power seven exceeds a hundred. The discipline that makes it work is bookkeeping: after each answer you must know exactly which numbers are still possible. If you are told "higher than 50" and you keep 50 in the range, you can end up asking about it forever; if you drop 51 as well, you can lose the answer entirely.',
+      mapping: [
+        { from: 'The range of numbers still possible', to: 'The interval [lo, hi] — the loop invariant' },
+        { from: 'Guessing the middle', to: 'mid = lo + (hi - lo) // 2' },
+        { from: '"Too low" — discard everything up to and including the guess', to: 'lo = mid + 1' },
+        { from: '"Too high" — discard the guess and everything above', to: 'hi = mid - 1' },
+        { from: 'Running out of possible numbers', to: 'lo > hi, meaning the target is absent, with lo being its insertion point' },
+        { from: 'Seven questions for a hundred numbers', to: 'ceil(log2 n) comparisons' },
+      ],
+      bridge:
+        'The "keep 50 in the range after being told higher" mistake is precisely the infinite loop that catches everyone: if a branch can leave lo and hi unchanged, the search never terminates, and with integer division rounding down it is the lo = mid branch that does it. Requiring every branch to strictly shrink the interval is not a stylistic preference, it is the termination proof. The other half — never discarding a value that could still be the answer — is the correctness proof. Every off-by-one argument in binary search is one of those two statements in disguise.',
+      limitations:
+        'The guessing game has a total order and a free comparison, which is not always true. On disk or over a network, each probe costs a random seek, so a B-tree with a high branching factor beats binary search on a sorted file despite the same asymptotics; and on an array in RAM, a linear scan of a few dozen elements often beats binary search outright because it is cache-friendly and branch-predictable, which is why real implementations switch to a scan below a threshold.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Halving the interval',
+        caption: 'Pick a target and step through: watch lo, hi and mid move, and count the comparisons against a linear scan.',
+        widget: 'number-line-binary-search',
+        props: { array: [2, 5, 8, 12, 16, 23, 38, 56, 72, 91], target: 23 },
+      },
+      {
+        kind: 'ascii',
+        title: 'Searching for 23 in a ten-element array',
+        caption: 'Three comparisons instead of six. The brackets mark the live interval at each step.',
+        art: `index:   0   1   2    3    4    5    6    7    8    9
+array:   2   5   8   12   16   23   38   56   72   91
+
+step 1  [ 2   5   8   12   16*  23   38   56   72   91 ]   mid=4, 16 < 23 -> go right
+step 2                          [ 23   38   56*  72   91 ] mid=7, 56 > 23 -> go left
+step 3                          [ 23*  38 ]                mid=5, 23 = 23 -> found
+
+comparisons: 3        linear scan would take 6
+log2(10) = 3.32, so ceil = 4 is the worst case`,
+      },
+      {
+        kind: 'flow',
+        title: 'Deriving the code from the invariant',
+        caption: 'Write the promise first and the plus-ones stop being guesswork.',
+        steps: [
+          { label: 'State the invariant', detail: 'If the target is present, its index is in [lo, hi]. That single sentence determines everything that follows.' },
+          { label: 'Initialise so the invariant is true', detail: 'lo = 0 and hi = n - 1 covers the whole array, so the promise holds before the first iteration.' },
+          { label: 'Loop while the interval is non-empty', detail: 'lo <= hi, because [lo, hi] with lo == hi still contains one candidate that has not been examined.' },
+          { label: 'Probe the middle', detail: 'mid = lo + (hi - lo) // 2, which is identical to (lo + hi) // 2 in Python but avoids overflow in fixed-width languages.' },
+          { label: 'Restore the invariant, strictly shrinking', detail: 'If a[mid] < target, everything up to mid is too small: lo = mid + 1. If a[mid] > target, hi = mid - 1. Both exclude mid, so the interval always shrinks and the loop must terminate.' },
+          { label: 'Read the exit condition', detail: 'Falling out means lo > hi, so the interval is empty and by the invariant the target is absent. lo is then exactly where it would be inserted — which is what bisect_left returns.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'The three variants and when to use each',
+        caption: 'a is sorted ascending. Getting the variant right matters more than micro-optimising the loop.',
+        columns: ['Question', 'Variant', 'Bounds and condition', 'Returns'],
+        rows: [
+          ['Is x present, and where?', 'Exact match', '[0, n-1], while lo <= hi, exclude mid', 'An index of x, or -1'],
+          ['Where would x be inserted, before its equals?', 'Lower bound (bisect_left)', '[0, n), while lo < hi, hi = mid', 'First index with a[i] >= x'],
+          ['Where would x be inserted, after its equals?', 'Upper bound (bisect_right)', '[0, n), while lo < hi, hi = mid', 'First index with a[i] > x'],
+          ['How many copies of x are there?', 'Both bounds', 'bisect_right - bisect_left', 'A count, in O(log n)'],
+          ['Smallest feasible capacity / speed / size', 'Search on the answer', '[min possible, max possible], predicate is monotone', 'The boundary value'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Searching an array versus searching the answer',
+        caption: 'Same halving, different search space. The second is what interview questions are usually testing.',
+        left: {
+          heading: 'Binary search on an array',
+          points: [
+            'The space is indices 0 to n-1',
+            'The comparison is a[mid] against the target',
+            'Requires the array to be sorted',
+            'O(log n) comparisons, O(1) space',
+          ],
+        },
+        right: {
+          heading: 'Binary search on the answer',
+          points: [
+            'The space is every candidate answer, e.g. capacities from max(w) to sum(w)',
+            'The comparison is a feasibility check: can we do it with capacity mid?',
+            'Requires the predicate to be monotone in the candidate',
+            'O(log(range) * cost of one check)',
+          ],
+        },
+      },
+    ],
+
+    formalDefinition:
+      'Binary search locates a target in a sequence sorted by a total order by repeatedly maintaining an interval of candidate positions and halving it: at each step it compares the target with the element at the midpoint and discards the half that the ordering proves cannot contain the target. With the invariant "if the target is present its index lies in [lo, hi]", the interval strictly shrinks each iteration, so the algorithm terminates after at most floor(log2 n) + 1 comparisons, giving O(log n) time and O(1) auxiliary space in its iterative form. Generalised, binary search finds the boundary of any monotone predicate p over a totally ordered domain — the least x with p(x) true — which is what licenses searching a space of candidate answers rather than an array of stored values.',
+
+    math: {
+      intuition:
+        'Each comparison discards half the remaining candidates, so the question "how many comparisons?" is really "how many times can you halve n before reaching one?" — which is the definition of a base-two logarithm. The growth is so slow that doubling the data costs exactly one extra comparison, and that is the whole reason sorted structures are worth their maintenance cost. The information-theoretic view says the same thing from the other side: a yes/no comparison yields one bit, distinguishing n possibilities needs log2 n bits, so no comparison-based search can do better.',
+      formulas: [
+        {
+          latex: 'T(n) = T(n/2) + O(1) \\;\\Longrightarrow\\; T(n) = O(\\log_2 n)',
+          name: 'The binary search recurrence',
+          meaning: 'One constant-time comparison plus a search of half the data. The recursion tree is a single chain of depth log2 n, which is both the time and, in the recursive form, the stack depth.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'T(n)', meaning: 'Comparisons needed on an interval of n candidates' },
+            { symbol: 'n/2', meaning: 'The surviving half after one comparison' },
+          ],
+        },
+        {
+          latex: '\\text{comparisons} \\le \\lfloor \\log_2 n \\rfloor + 1',
+          name: 'Exact worst-case bound',
+          meaning: 'For n = 10 that is 4; for a million, 20; for a billion, 30. Doubling n adds exactly one comparison.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'n', meaning: 'Number of elements in the sorted range' },
+          ],
+        },
+        {
+          latex: '\\text{sorted once, searched } k \\text{ times: } O(n \\log n) + k\\,O(\\log n) \\;<\\; k\\,O(n) \\iff k \\gtrsim \\log n',
+          name: 'When sorting first pays for itself',
+          meaning: 'The break-even analysis that decides between a linear scan and sort-then-search: the sort is amortised across queries, so a handful of lookups favours scanning and many lookups favour sorting — or a hash table, if you need only equality.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'k', meaning: 'Number of searches performed against the same data' },
+            { symbol: 'n', meaning: 'Number of elements' },
+          ],
+        },
+        {
+          latex: 'p \\text{ monotone on } [lo, hi] \\;\\Longrightarrow\\; \\exists!\\, x^{*} : p(x) \\text{ false for } x < x^{*},\\; \\text{true for } x \\ge x^{*}',
+          name: 'The boundary of a monotone predicate',
+          meaning: 'Formalises binary search on the answer: monotonicity guarantees a unique switching point, and the search finds it in log2(range) evaluations of the predicate.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'p', meaning: 'The feasibility check, e.g. "can all packages ship within D days at capacity x?"' },
+            { symbol: 'x^{*}', meaning: 'The answer: the least feasible candidate' },
+          ],
+        },
+      ],
+      derivation: [
+        'Start with n candidates. After one comparison at most ceil(n/2) remain, because mid is excluded from both branches.',
+        'After k comparisons at most n / 2^k remain.',
+        'The loop ends when fewer than one candidate remains: n / 2^k < 1, that is 2^k > n.',
+        'Taking base-two logarithms, k > log2 n, so k = floor(log2 n) + 1 comparisons suffice in the worst case.',
+        'For n = 1,000,000 that is 20; for n = 1,000,000,000 it is 30. A linear scan would need 500,000 and 500,000,000 respectively on average.',
+        'The lower bound matches: each comparison returns one of two outcomes, so k comparisons distinguish at most 2^k arrangements, and distinguishing n positions requires 2^k >= n. Binary search is therefore optimal among comparison-based searches.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Two searches traced by hand, one hit and one miss',
+      setup:
+        'The array a = [2, 5, 8, 12, 16, 23, 38, 56, 72, 91], with indices 0 to 9. Use the exact-match variant: lo = 0, hi = 9, loop while lo <= hi, mid = lo + (hi - lo) // 2, and both branches exclude mid. Search first for 23, which is present, and then for 40, which is not, and watch what the failed search leaves behind.',
+      steps: [
+        { label: 'Search 23 — initialise', detail: 'lo = 0, hi = 9. Invariant: if 23 is in the array, its index is in [0, 9]. Trivially true.' },
+        { label: 'Iteration 1', detail: 'mid = 0 + (9 - 0) // 2 = 4, a[4] = 16. Since 16 < 23, every index 0 to 4 holds a value at most 16 and can be discarded: lo = 5. Live interval [5, 9], five candidates left.' },
+        { label: 'Iteration 2', detail: 'mid = 5 + (9 - 5) // 2 = 7, a[7] = 56. Since 56 > 23, indices 7 to 9 are too large: hi = 6. Live interval [5, 6], two candidates.' },
+        { label: 'Iteration 3', detail: 'mid = 5 + (6 - 5) // 2 = 5, a[5] = 23. Match — return 5. Three comparisons, against six for a left-to-right scan, and against the worst case of floor(log2 10) + 1 = 4.', latex: '\\lfloor \\log_2 10 \\rfloor + 1 = 4' },
+        { label: 'Search 40 — iterations 1 and 2', detail: 'Identical to before: mid = 4 gives 16 < 40 so lo = 5; mid = 7 gives 56 > 40 so hi = 6. Live interval [5, 6].' },
+        { label: 'Iteration 3', detail: 'mid = 5, a[5] = 23 < 40, so lo = 6. Live interval [6, 6] — still non-empty, which is exactly why the loop condition must be lo <= hi and not lo < hi. Using the strict condition here would exit now and miss a candidate that has never been examined.' },
+        { label: 'Iteration 4', detail: 'mid = 6, a[6] = 38 < 40, so lo = 7. Now lo = 7 > hi = 6, the interval is empty, and the loop exits: 40 is absent.' },
+        { label: 'What the failure left behind', detail: 'lo = 7 is the insertion point: a[6] = 38 is the last value below 40 and a[7] = 56 is the first above it, so inserting 40 at index 7 keeps the array sorted. bisect.bisect_left(a, 40) returns exactly 7. A search that returns -1 has thrown this away.' },
+        { label: 'Why every branch must exclude mid', detail: 'Suppose iteration 1 had set lo = mid instead of mid + 1. With lo = 4 and hi = 9, mid becomes 6, then the interval [6, 9] gives mid 7, and on an interval of size two, mid = lo, so lo = mid leaves lo and hi untouched and the loop spins forever. Integer division rounds down, so mid can equal lo but never hi — which is precisely why lo = mid hangs and hi = mid does not.' },
+        { label: 'Now search the answer instead of the array', detail: 'Ship weights [1..10] must go out in order within 5 days; find the smallest daily capacity. The candidate range is [max(w), sum(w)] = [10, 55], since capacity below 10 cannot carry the heaviest package and 55 ships everything in one day. The predicate "5 days suffice at capacity x" is monotone: more capacity never needs more days.' },
+        { label: 'Halving the capacity range', detail: 'mid = 32 needs 2 days — feasible, so nothing above 32 can be the answer: hi = 32. mid = 21 needs 3 days: hi = 21. mid = 15 needs exactly 5 days: hi = 15. mid = 12 needs 6 days — infeasible, so lo = 13. mid = 14 needs 6 days: lo = 15. Now lo = hi = 15 and the loop ends.', latex: '\\lceil \\log_2 (55 - 10) \\rceil = 6 \\text{ probes}' },
+        { label: 'Check the boundary', detail: 'Capacity 14 needs 6 days and capacity 15 needs 5, so 15 is exactly the switching point of the predicate. Note the update rule here is hi = mid, not mid - 1: a feasible mid might itself be the answer and must not be discarded, which is the half-open form and the reason this variant uses while lo < hi.' },
+      ],
+      conclusion:
+        'Both searches cost O(log n): three and four comparisons on ten elements, against a worst case of floor(log2 10) + 1 = 4, and O(1) extra space since only three integers are kept. The generalisation costs O(log(range) * cost of one predicate evaluation): six probes over a capacity range of 45, each costing an O(n) simulation, so O(n log(sum of weights)) overall — trivial compared with trying every capacity. Three rules carry all of it. The invariant says which positions are still candidates; every branch must shrink the interval strictly, or the loop hangs; and the exit state is informative — lo is the insertion point of a missing element, and the switching point of a monotone predicate. Note also that the two variants use different loop conditions on purpose: exact match keeps lo <= hi with both branches excluding mid, while boundary-finding uses lo < hi with hi = mid, because a candidate that satisfies the predicate may be the answer itself.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Exact match, traced',
+        runnable: true,
+        code: `def binary_search(a, target, verbose=False):
+    lo, hi = 0, len(a) - 1        # invariant: if present, target is in a[lo..hi]
+    while lo <= hi:               # <= : [lo, lo] still holds an unexamined candidate
+        mid = lo + (hi - lo) // 2 # same as (lo + hi)//2 here, overflow-safe elsewhere
+        if verbose:
+            print(f"  lo={lo} hi={hi} mid={mid} a[mid]={a[mid]}")
+        if a[mid] == target:
+            return mid
+        if a[mid] < target:
+            lo = mid + 1          # a[mid] and everything left of it is too small
+        else:
+            hi = mid - 1          # a[mid] and everything right of it is too large
+    return -1                     # lo is now the insertion point
+
+a = [2, 5, 8, 12, 16, 23, 38, 56, 72, 91]
+print("find 23 ->", binary_search(a, 23, verbose=True))
+print("find 40 ->", binary_search(a, 40, verbose=True))`,
+        output: `  lo=0 hi=9 mid=4 a[mid]=16
+  lo=5 hi=9 mid=7 a[mid]=56
+  lo=5 hi=6 mid=5 a[mid]=23
+find 23 -> 5
+  lo=0 hi=9 mid=4 a[mid]=16
+  lo=5 hi=9 mid=7 a[mid]=56
+  lo=5 hi=6 mid=5 a[mid]=23
+  lo=6 hi=6 mid=6 a[mid]=38
+find 40 -> -1`,
+        explanation:
+          'Every line follows from the invariant. hi starts at n - 1 because the interval is closed at both ends; the condition is lo <= hi because an interval of one element still contains an unexamined candidate; and both updates use mid plus or minus one because a[mid] has just been ruled out, which is also what guarantees the interval strictly shrinks and the loop terminates. The mid formula matters outside Python: in Java or C, (lo + hi) can overflow a 32-bit int on a large array, a bug that sat in the JDK\'s own binary search for nine years. Note the miss costs one comparison more than the hit, and ends with lo = 7, the correct insertion point — information this function throws away and bisect_left keeps.',
+      },
+      {
+        language: 'python',
+        title: 'bisect: the version you should actually use',
+        runnable: true,
+        code: `import bisect
+
+a = [2, 5, 8, 12, 16, 23, 38, 56, 72, 91]
+print("bisect_left(a, 40) =", bisect.bisect_left(a, 40))   # insertion point for a miss
+print("bisect_left(a, 23) =", bisect.bisect_left(a, 23))   # index of an existing value
+
+dups = [1, 3, 3, 3, 3, 7, 9]
+lo = bisect.bisect_left(dups, 3)
+hi = bisect.bisect_right(dups, 3)
+print(f"3 occupies [{lo}, {hi}) -> {hi - lo} copies")
+
+grades = [60, 70, 80, 90]
+labels = ["F", "D", "C", "B", "A"]
+for score in (55, 60, 79, 90, 100):
+    print(score, "->", labels[bisect.bisect_right(grades, score)])`,
+        output: `bisect_left(a, 40) = 7
+bisect_left(a, 23) = 5
+3 occupies [1, 5) -> 4 copies
+55 -> F
+60 -> D
+79 -> C
+90 -> A
+100 -> A`,
+        explanation:
+          'bisect is a C implementation of the half-open variant, and reaching for it removes an entire category of bug from your code. Three idioms are worth memorising. Testing presence is i = bisect_left(a, x); found = i < len(a) and a[i] == x — the length check is not optional, since a value larger than everything returns len(a). Counting duplicates is bisect_right minus bisect_left, in O(log n) rather than a scan. And bucketing a value into ranges is a single bisect_right into the boundary list, which is how pandas.cut and histogram binning work; note that bisect_right puts a score of exactly 60 into the D bucket, so which of bisect_left and bisect_right you choose is a decision about whether boundaries are inclusive.',
+      },
+      {
+        language: 'python',
+        title: 'Binary search on the answer: minimum shipping capacity',
+        runnable: true,
+        code: `def days_needed(weights, capacity):
+    days, load = 1, 0
+    for w in weights:                      # packages must ship in the given order
+        if load + w > capacity:
+            days += 1
+            load = 0
+        load += w
+    return days
+
+def min_capacity(weights, deadline, verbose=False):
+    lo, hi = max(weights), sum(weights)    # invariant: the answer lies in [lo, hi]
+    while lo < hi:                         # half-open: hi is itself a live candidate
+        mid = (lo + hi) // 2
+        d = days_needed(weights, mid)
+        if verbose:
+            print(f"  lo={lo} hi={hi} mid={mid} -> {d} days "
+                  f"({'feasible' if d <= deadline else 'too slow'})")
+        if d <= deadline:
+            hi = mid                       # mid works; something smaller might too
+        else:
+            lo = mid + 1                   # mid fails, so does anything smaller
+    return lo
+
+w = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+print("minimum capacity:", min_capacity(w, 5, verbose=True))
+print("checks:", [(c, days_needed(w, c)) for c in (14, 15, 16)])`,
+        output: `  lo=10 hi=55 mid=32 -> 2 days (feasible)
+  lo=10 hi=32 mid=21 -> 3 days (feasible)
+  lo=10 hi=21 mid=15 -> 5 days (feasible)
+  lo=10 hi=15 mid=12 -> 6 days (too slow)
+  lo=13 hi=15 mid=14 -> 6 days (too slow)
+minimum capacity: 15`,
+        explanation:
+          'There is no array here at all: the search space is the range of candidate capacities, and the comparison is a simulation. The three things to get right are the bounds — max(weights) because nothing smaller can carry the heaviest item, sum(weights) because that always finishes in one day — the monotonicity, since more capacity can never need more days, and the asymmetric update, hi = mid rather than mid - 1, because a feasible candidate may be the answer itself. Cost is O(n log(sum of weights)): six evaluations of an O(n) check. This shape covers a whole family of problems — minimum eating speed, smallest largest partition sum, maximum minimum distance, and capacity planning for real services — and the giveaway is always a question asking for the smallest or largest value such that some property holds.',
+      },
+      {
+        language: 'python',
+        title: 'The infinite loop, demonstrated',
+        runnable: true,
+        code: `def broken(a, t, budget=6):
+    lo, hi = 0, len(a) - 1
+    steps = 0
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if a[mid] < t:
+            lo = mid            # BUG: mid stays inside the live interval
+        else:
+            hi = mid
+        steps += 1
+        print(f"  step {steps}: lo={lo} hi={hi} mid={mid}")
+        if steps == budget:
+            print("  ...still going: lo and hi never meet")
+            return None
+    return lo
+
+broken([1, 3, 5, 7], 7)`,
+        output: `  step 1: lo=1 hi=3 mid=1
+  step 2: lo=2 hi=3 mid=2
+  step 3: lo=2 hi=3 mid=2
+  step 4: lo=2 hi=3 mid=2
+  step 5: lo=2 hi=3 mid=2
+  step 6: lo=2 hi=3 mid=2
+  ...still going: lo and hi never meet`,
+        explanation:
+          'Once the interval narrows to two elements, integer division makes mid equal lo, so lo = mid is a no-op and the state never changes again. The asymmetry is the thing to internalise: because // rounds down, mid can equal lo but never hi, which is why hi = mid is safe in the half-open variant while lo = mid always hangs. The correct pairs are lo = mid + 1 with hi = mid for lower-bound searches, or lo = mid + 1 with hi = mid - 1 for exact match. If a problem genuinely needs lo = mid — searching for the last feasible value rather than the first — bias the midpoint upwards with mid = lo + (hi - lo + 1) // 2, which makes mid equal hi instead and restores termination.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Database indexes and log-structured storage',
+        usage:
+          'A B-tree index is binary search generalised to a high branching factor so that each probe reads one disk page rather than one element, and every sorted SSTable in RocksDB, Cassandra or a Parquet row group is searched by bisection over its index block. The asymptotics are the same; the branching factor is chosen to match the block size.',
+      },
+      {
+        context: 'Sampling from a categorical distribution',
+        usage:
+          'Drawing a token from a language model\'s output distribution means taking the cumulative sum of the probabilities and binary searching it with a uniform random number, which is exactly np.searchsorted. Nucleus sampling additionally uses a bisection over the sorted cumulative probabilities to find the top-p cutoff.',
+      },
+      {
+        context: 'Capacity planning and hyperparameter tuning by bisection',
+        usage:
+          'Finding the largest batch size that fits in GPU memory, or the smallest number of replicas that holds latency under a service-level objective, is binary search on the answer with an experiment as the predicate — valid precisely because the property is monotone, and worth stating out loud because non-monotone metrics quietly break it.',
+      },
+      {
+        context: 'git bisect',
+        usage:
+          'Finding the commit that introduced a bug is binary search over history with the test suite as the predicate, taking about ten builds to isolate one commit among a thousand. It relies on the same monotonicity assumption: that the bug, once introduced, stays present.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'bisect', role: 'The standard library\'s correct implementation. bisect_left, bisect_right and insort cover almost every array-search need, and the key= parameter added in Python 3.10 handles sorting by a derived value.' },
+      { tool: 'numpy.searchsorted', role: 'Vectorised binary search over a sorted array for a whole array of queries at once — the workhorse behind histogram binning, digitisation and cumulative-distribution sampling.' },
+      { tool: 'pandas', role: 'A sorted index uses binary search for .loc lookups and slices, which is why is_monotonic_increasing on an index is worth checking when lookups seem slow.' },
+      { tool: 'sortedcontainers', role: 'SortedList and SortedDict keep a collection sorted with O(log n) insertion and bisect-style queries, for when the data changes between searches.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Writing lo = mid instead of lo = mid + 1',
+        why: 'Integer division rounds down, so on a two-element interval mid equals lo. The assignment changes nothing, the loop state repeats forever, and the process hangs rather than crashing — the worst failure mode to diagnose in production.',
+        fix: 'Require every branch to strictly shrink the interval. Use lo = mid + 1 with hi = mid, or bias the midpoint upwards with mid = lo + (hi - lo + 1) // 2 when you genuinely need lo = mid.',
+      },
+      {
+        mistake: 'Mismatching the loop condition and the bounds',
+        why: 'Closed bounds [0, n-1] need lo <= hi; half-open bounds [0, n) need lo < hi. Mixing them either exits with an unexamined candidate still live — missing an element that is present — or dereferences a[n] and raises IndexError.',
+        fix: 'Pick one convention and derive the rest from it. Half-open with hi = len(a) and while lo < hi is the form that generalises to the bisect variants, so prefer it.',
+      },
+      {
+        mistake: 'Binary searching data that is not sorted, or sorted by a different key',
+        why: 'The result is not an error but a wrong answer: the comparison discards a half that may contain the target, and the function reports "absent" for a value sitting in the array. Sorting by name and searching by date is the same bug wearing a disguise.',
+        fix: 'Assert the precondition in development, or sort once and document the invariant. When you need lookups by several keys, keep a hash index per key rather than re-sorting.',
+      },
+      {
+        mistake: 'Assuming bisect_left tells you the value is present',
+        why: 'It returns an insertion point, which for a value larger than everything is len(a). Indexing a[i] straight away raises IndexError, and comparing without a length guard is a latent crash on the largest input.',
+        fix: 'Use i = bisect_left(a, x); found = i < len(a) and a[i] == x. Write it once as a helper rather than inline at every call site.',
+      },
+      {
+        mistake: 'Applying binary search on the answer to a non-monotone predicate',
+        why: 'The method finds a boundary, and if the predicate switches back and forth there is no single boundary to find. The search returns one of the switching points, silently, with no indication that it is not the optimum.',
+        fix: 'State the monotonicity explicitly — "if x works then x + 1 works" — and test it on a sample of the range. If it does not hold, use ternary search for a unimodal function, or a proper optimiser.',
+      },
+      {
+        mistake: 'Reaching for binary search on a small or unsorted-in-cache array',
+        why: 'Below a few dozen elements, a linear scan wins: it is branch-predictable and reads contiguous cache lines, while binary search jumps about and mispredicts almost every branch. Sorting first to enable one search is also a clear loss, at O(n log n) against O(n).',
+        fix: 'Scan below a threshold — real implementations of sort and search do exactly this — and sort only when the data will be searched many times, or use a hash table when you need equality lookups rather than order.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'Write binary search and explain how you decide between mid + 1, mid - 1 and mid.',
+        answer:
+          'I write the invariant down first: if the target is present, its index lies in [lo, hi]. That fixes the initialisation to lo = 0, hi = n - 1, the loop condition to lo <= hi since a one-element interval still holds an unexamined candidate, and both updates to exclude mid — lo = mid + 1 when a[mid] is too small, hi = mid - 1 when it is too large — because the comparison has just ruled mid out. Excluding mid also guarantees the interval strictly shrinks, which is the termination proof. For the boundary variants the invariant changes and so do the updates: searching for the first index with a[i] >= x, I use half-open bounds [0, n) with while lo < hi and hi = mid rather than mid - 1, because a candidate satisfying the predicate might itself be the answer and must stay live. The asymmetry between hi = mid, which is safe, and lo = mid, which hangs, comes from integer division rounding down so mid can equal lo but never hi. I would also mention mid = lo + (hi - lo) // 2 for languages with fixed-width integers, and that in Python I would just call bisect.',
+        followUp:
+          'Asking what the function should return when the value is absent tests whether they know the exit value of lo is the insertion point.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Given a sorted array with duplicates, return the first and last index of a target in O(log n). How?',
+        answer:
+          'Two binary searches with different tie-breaking. The first index is the lower bound: search for the first position where a[i] >= target, and check that a[i] actually equals it. The last index is the upper bound minus one: find the first position where a[i] > target and step back. In Python that is bisect_left and bisect_right, and the count of occurrences is simply their difference. Written by hand, the difference is what happens on equality: for the lower bound, a[mid] == target sets hi = mid, keeping mid live because an earlier copy may exist; for the upper bound, equality sets lo = mid + 1, pushing past the run. The naive alternative — find any occurrence, then walk outwards — is O(log n + k) where k is the number of duplicates, which degrades to O(n) on an array that is entirely one value, and that is precisely the case an interviewer will test. Total cost is two O(log n) searches with O(1) space, and the pair of bounds generalises directly to range queries on a sorted column.',
+        followUp:
+          'A strong candidate notes that this is how a range predicate on a sorted database index is evaluated: two bisections delimiting a contiguous block.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'You must find the largest batch size that trains without an out-of-memory error. Describe your approach and its assumptions.',
+        answer:
+          'Binary search on the answer, with a short training step as the predicate. The range is [1, some batch size that certainly fails], which I would find first by doubling from a known-good value — exponential search — so I do not have to guess an upper bound. Then bisect: if batch size mid runs a few steps without an out-of-memory error, it becomes the new lower bound; if it fails, the new upper bound. About ten to twelve probes cover a range up to a few thousand, which is a handful of minutes rather than a sweep. The assumption is monotonicity: if batch size b fits, every smaller one fits. That is nearly true, since activation memory grows with batch size, but there are honest exceptions worth stating — cuDNN or Flash Attention may pick a different algorithm with a different workspace at particular sizes, memory fragmentation makes failures non-deterministic, and gradient checkpointing or variable sequence lengths change the picture entirely. So I would clear the allocator cache between probes, run several steps rather than one to catch a peak that only appears at optimiser step time, and take roughly ninety per cent of the discovered maximum as the value I actually ship.',
+        followUp:
+          'Mentioning exponential search to establish the upper bound, and the safety margin for fragmentation, is what distinguishes a practical answer from a textbook one.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Implement bisect_left yourself, then explain in one sentence why its loop condition and updates differ from the exact-match version.',
+        hint: 'Use half-open bounds and let the equality case keep mid alive.',
+        solution:
+          'def bisect_left(a, x):\n    lo, hi = 0, len(a)          # half-open: hi is one past the last candidate\n    while lo < hi:\n        mid = (lo + hi) // 2\n        if a[mid] < x:\n            lo = mid + 1        # a[mid] is strictly too small: never the answer\n        else:\n            hi = mid            # a[mid] >= x: mid may BE the answer, keep it live\n    return lo\n\nThe difference is what the code is looking for. Exact match is hunting one specific position and can discard mid the moment it compares unequal, so both updates step past it and the loop runs while lo <= hi. Lower bound is hunting a boundary, and a candidate satisfying a[mid] >= x is itself a legitimate answer, so the update must be hi = mid rather than mid - 1 — which forces the half-open convention and the strict loop condition, because [lo, lo) is genuinely empty. Termination still holds: the lo branch adds one, and the hi branch strictly decreases hi since mid < hi always. The return value is meaningful whether or not x is present: it is the index of the first element not less than x, equal to len(a) when x exceeds everything.',
+      },
+      {
+        prompt: 'Find the minimum element of an array that was sorted ascending and then rotated an unknown number of positions, for example [16, 23, 38, 2, 5, 8, 12], in O(log n).',
+        hint: 'Compare the midpoint with the right end rather than with a target value.',
+        solution:
+          'def find_min_rotated(a):\n    lo, hi = 0, len(a) - 1\n    while lo < hi:\n        mid = (lo + hi) // 2\n        if a[mid] > a[hi]:\n            lo = mid + 1     # the rotation point is strictly right of mid\n        else:\n            hi = mid         # mid could be the minimum itself\n    return a[lo]\n\nThe trick is that there is no target to compare against, so the predicate is about structure: a[mid] > a[hi] means the segment from mid to hi is not sorted, which can only happen if the rotation point lies in (mid, hi], so lo = mid + 1. Otherwise mid to hi is sorted and the minimum is at mid or to its left, so hi = mid keeps mid live. Comparing with a[lo] instead does not work, because a rotation of zero makes a[mid] > a[lo] on a perfectly sorted array and sends the search the wrong way. Cost is O(log n) time, O(1) space. With duplicates the bound degrades to O(n) in the worst case — for [2, 2, 2, 1, 2] no comparison distinguishes the halves, and the standard fix of decrementing hi when a[mid] == a[hi] is correct but linear on an all-equal array.',
+      },
+      {
+        prompt: 'A monotonically increasing function f is expensive to evaluate and defined on integers 1 to 10^9. Find the largest x with f(x) <= T, using as few evaluations as possible, without any array.',
+        hint: 'You are looking for the last true rather than the first true, which changes how you pick the midpoint.',
+        solution:
+          'def last_true(lo, hi, ok):\n    """Largest x in [lo, hi] with ok(x) true, or lo - 1 if none."""\n    best = lo - 1\n    while lo <= hi:\n        mid = lo + (hi - lo) // 2\n        if ok(mid):\n            best = mid\n            lo = mid + 1     # mid works; look for something bigger\n        else:\n            hi = mid - 1\n    return best\n\nlargest = last_true(1, 10**9, lambda x: f(x) <= T)\n\nThis costs ceil(log2(10^9)) = 30 evaluations of f, regardless of where the boundary sits, and O(1) space. Carrying a `best` variable is the clearest way to write last-true searches: it sidesteps the trap of the symmetric formulation, where lo = mid would be needed and would hang unless the midpoint is biased upwards with mid = lo + (hi - lo + 1) // 2. The only requirement on f is monotonicity — the predicate must switch from true to false exactly once — and it is worth asserting the endpoints first, since if f(1) > T the answer is "none" and if f(10^9) <= T the range was too small. This is the pattern behind rate-limit calibration, learning-rate range tests and any "largest safe value" question.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DSA-016-q1',
+        type: 'numeric',
+        concept: 'logarithmic growth',
+        prompt: 'What is the maximum number of comparisons binary search needs on a sorted array of 1,000,000 elements?',
+        answer: 20,
+        explanation:
+          'floor(log2 1,000,000) + 1 = 19 + 1 = 20, since 2^20 = 1,048,576 exceeds a million. A linear scan would average 500,000 comparisons, and doubling the array adds exactly one comparison.',
+      },
+      {
+        id: 'DSA-016-q2',
+        type: 'debug',
+        language: 'python',
+        concept: 'infinite loop',
+        prompt: 'This search hangs on some inputs. Which line is responsible?',
+        code: `while lo < hi:
+    mid = (lo + hi) // 2
+    if a[mid] < t:
+        lo = mid
+    else:
+        hi = mid`,
+        options: [
+          'lo = mid — integer division makes mid equal lo on a two-element interval, so the state never changes',
+          'hi = mid should be hi = mid - 1',
+          'The condition should be lo <= hi',
+          'mid must be computed as lo + (hi - lo) // 2 to avoid overflow',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Because // rounds down, mid can equal lo but never hi. So hi = mid always shrinks the interval while lo = mid may be a no-op, leaving lo and hi frozen and the loop spinning. The fix is lo = mid + 1.',
+      },
+      {
+        id: 'DSA-016-q3',
+        type: 'mcq',
+        concept: 'bisect semantics',
+        prompt: 'For a = [1, 3, 3, 3, 3, 7, 9], what do bisect_left(a, 3) and bisect_right(a, 3) return?',
+        options: [
+          '1 and 5',
+          '1 and 4',
+          '2 and 5',
+          '0 and 5',
+        ],
+        answerIndex: 0,
+        explanation:
+          'bisect_left gives the first index where 3 could be inserted while keeping order, which is 1; bisect_right gives one past the last 3, which is 5. Their difference, 4, is the number of copies, computed in O(log n).',
+      },
+      {
+        id: 'DSA-016-q4',
+        type: 'truefalse',
+        concept: 'preconditions',
+        prompt: 'Binary search on an unsorted array returns the wrong answer rather than raising an error.',
+        answer: true,
+        explanation:
+          'Each comparison discards a half based on an ordering that does not hold, so the target can sit in the discarded half. The function reports "absent" for a value that is present, silently — which is why the sortedness precondition deserves an assertion.',
+      },
+      {
+        id: 'DSA-016-q5',
+        type: 'order',
+        concept: 'binary search on the answer',
+        prompt: 'Order the steps for solving "find the smallest capacity that ships everything within D days".',
+        items: [
+          'Identify the range of candidate answers: lo = max(weight), hi = sum(weights)',
+          'Write a feasibility check: how many days does capacity x need?',
+          'Confirm the check is monotone — more capacity never needs more days',
+          'Bisect the candidate range, moving hi = mid on success and lo = mid + 1 on failure',
+          'Return lo, the smallest feasible capacity',
+        ],
+        explanation:
+          'The bounds and the monotonicity argument are the real work; the bisection itself is mechanical. Note hi = mid rather than mid - 1, because a feasible candidate may itself be the answer.',
+      },
+      {
+        id: 'DSA-016-q6',
+        type: 'explain',
+        concept: 'invariant-driven implementation',
+        prompt: 'Explain how stating a loop invariant removes the guesswork from binary search\'s plus-ones and minus-ones.',
+        rubric: [
+          'States an invariant, such as "if the target is present its index lies in [lo, hi]", and derives the initial bounds from it',
+          'Derives the loop condition from when the interval becomes empty, and the updates from what the comparison has just ruled out',
+          'Connects strict shrinking to termination, and explains why lo = mid hangs while hi = mid does not',
+        ],
+        sampleAnswer:
+          'The invariant is a promise about which positions could still hold the answer, and every other decision falls out of it. If the promise is "the target, if present, is in the closed interval [lo, hi]", then lo starts at 0 and hi at n - 1 so the promise holds initially; the loop runs while lo <= hi, because [lo, lo] still contains one candidate nobody has examined; and after comparing a[mid], the branch must exclude mid, since the comparison has just proved mid is not the answer — giving lo = mid + 1 and hi = mid - 1. Exiting means lo > hi, an empty interval, so by the invariant the target is absent and lo is exactly its insertion point. Termination is the same argument seen from the other side: because both branches exclude mid, the interval strictly shrinks every iteration and cannot repeat. That is why lo = mid is fatal — integer division rounds down, so on a two-element interval mid equals lo and the assignment changes nothing, while hi = mid always shrinks because mid is strictly less than hi. If instead I am searching for a boundary, the invariant changes to "the answer is in [lo, hi)" and a candidate satisfying the predicate stays live, so the updates become hi = mid and lo = mid + 1 with the loop running while lo < hi. Different invariant, different code, same derivation.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What is the loop invariant of binary search?', back: 'If the target is present, its index lies inside the current interval. Initialisation, loop condition and both updates are all derived from that one statement.' },
+      { front: 'Why does lo = mid cause an infinite loop?', back: 'Integer division rounds down, so on a two-element interval mid equals lo. The assignment changes nothing and the state repeats forever. hi = mid is safe because mid is always strictly less than hi.' },
+      { front: 'bisect_left versus bisect_right?', back: 'bisect_left returns the first index where the value could be inserted, so the start of an equal run; bisect_right returns one past its end. Their difference counts duplicates in O(log n).' },
+      { front: 'How many comparisons for n elements?', back: 'At most floor(log2 n) + 1: 20 for a million, 30 for a billion. Doubling n adds exactly one comparison.' },
+      { front: 'What does a failed binary search leave in lo?', back: 'The insertion point — the index at which the missing value would go to keep the array sorted. Returning -1 throws that information away.' },
+      { front: 'When can you binary search without an array?', back: 'When the predicate is monotone over a numeric range: once "can we do it with x?" becomes true it stays true. Cost is O(log(range) * cost of one check).' },
+    ],
+
+    challenge: {
+      title: 'One generic bisection, five problems',
+      brief:
+        'Write a single helper first_true(lo, hi, predicate) that returns the smallest integer x in [lo, hi] for which predicate(x) is true, or hi + 1 if none is. Then solve five problems by supplying only a predicate: index of a value in a sorted array; square root of n rounded down; minimum shipping capacity within D days; minimum eating speed to finish the piles in H hours; and smallest largest-sum when splitting an array into k contiguous parts.',
+      acceptanceCriteria: [
+        'first_true uses half-open reasoning, never evaluates the predicate outside [lo, hi], and is proved to terminate because every branch shrinks the interval',
+        'Each of the five problems is solved by passing a predicate and bounds only — no second copy of the bisection loop anywhere',
+        'For each problem, the monotonicity of the predicate is stated in a comment and justified in one sentence',
+        'Each solution reports the number of predicate evaluations and compares it with the size of the candidate range',
+        'Includes a property test against brute force on small random inputs for at least three of the five',
+      ],
+      starterCode: 'from typing import Callable\n\ndef first_true(lo: int, hi: int, predicate: Callable[[int], bool]) -> int:\n    """Smallest x in [lo, hi] with predicate(x) true, else hi + 1.\n    predicate must be monotone: false ... false true ... true."""\n    ...\n\ndef isqrt(n: int) -> int:\n    ...\n',
+      language: 'python',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone how binary search works, how to get the boundary conditions right, and when it applies to something other than an array.',
+      mustCover: [
+        'Each comparison discards half the remaining candidates, giving log2 n comparisons — 20 for a million elements',
+        'The data must be ordered, and the loop invariant states which positions are still candidates',
+        'Every branch must strictly shrink the interval, which is why lo = mid hangs and lo = mid + 1 does not',
+        'A failed search leaves the insertion point behind, which is what bisect_left returns',
+        'The same halving applies to any monotone predicate, which is binary search on the answer',
+      ],
+      bonusSignals: [
+        'distinguishes bisect_left from bisect_right on duplicates',
+        'mentions the overflow-safe midpoint formula',
+        'gives a real example of searching the answer, such as batch size or capacity',
+        'notes that a linear scan wins on small arrays for cache reasons',
+      ],
+      sampleExplanation:
+        'Binary search is what you do with a dictionary without thinking about it. You open it in the middle, decide whether your word is before or after, and throw away half the book. Because half goes every time, a thousand pages take about ten looks and a million entries take twenty — doubling the data costs one extra look, which is why ordered data is worth the trouble of keeping ordered. Writing it correctly is entirely a matter of bookkeeping. Keep an explicit range of positions that could still hold the answer, and write down that promise before you write the code: if the value is there, it is somewhere between here and here. Then every line follows. You start with the whole array because that is when the promise is trivially true. You keep going while the range still holds a position nobody has looked at. And when you compare against the middle, you throw away the middle too, because you have just proved it is not the answer — which is also what guarantees the range gets smaller every round and the loop ends. That last point is where the classic bug lives: if a branch leaves the range the same size, the program does not crash, it hangs. There is a bonus in the failure case. When the range finally empties, the low end of it is exactly where the missing value would be inserted, so a search that "fails" has actually told you where the value belongs — and that is more useful than a bare "not found". The bigger idea is that nothing here required an array. All the method needs is a question whose answer flips from no to yes once and never flips back. Can this many packages ship in five days at this capacity? Does this batch size fit in memory? Does this commit contain the bug? Each of those is a range and a yes-or-no test, so each can be halved the same way, and thirty tests will pin down an answer anywhere in a billion.',
+    },
+
+    masteryRequirements: { understoodScore: 0.7, proficientScore: 0.85, practiceRequired: 2, teachRequired: true },
+  },
+  {
+    id: 'DSA-017',
+    domain: 'DSA',
+    module: 'Sorting',
+    topic: 'Comparison sorts, stability and practical choice',
+    title: 'Sorting Algorithms',
+    slug: 'sorting-algorithms',
+    difficulty: 3,
+    estimatedMinutes: 45,
+    prerequisites: ['DSA-001', 'DSA-015'],
+    related: ['DSA-003', 'DSA-011', 'DSA-016'],
+    tags: ['sorting', 'merge-sort', 'quicksort', 'timsort', 'stability', 'divide-and-conquer', 'nlogn'],
+
+    learningObjectives: [
+      'Trace bubble and insertion sort on a small array and explain why both are O(n^2) yet insertion sort is the one real libraries still use',
+      'Trace merge sort through its splits and merges, and derive its O(n log n) bound from the recursion tree',
+      'Explain quicksort\'s partitioning, why the last-element pivot degrades to O(n^2) on sorted input, and how randomisation or median-of-three fixes it',
+      'Define stability precisely, demonstrate why it matters for multi-key sorting, and name which algorithms have it',
+      'Justify the Omega(n log n) comparison lower bound, and say when a non-comparison sort such as counting or radix sort legitimately beats it',
+      'Choose the right approach for a concrete situation: sorted() versus sort(), a heap for top-k, an external merge for data that does not fit in memory',
+    ],
+
+    terminology: [
+      {
+        term: 'Stability',
+        definition:
+          'A sort is stable if elements comparing equal keep their original relative order. This is what makes sorting by one key and then another produce a correct composite ordering.',
+        simple: 'Ties stay in the order they started in.',
+      },
+      {
+        term: 'In-place',
+        definition:
+          'Using O(1) or O(log n) extra space beyond the input array. Quicksort is in-place up to its recursion stack; merge sort as usually written needs an O(n) buffer.',
+        simple: 'Rearranges the array you were given instead of building a new one.',
+      },
+      {
+        term: 'Partition',
+        definition:
+          'Quicksort\'s core step: choose a pivot and rearrange the array so everything smaller precedes it and everything larger follows. The pivot is then in its final position, and the two sides are sorted independently.',
+        simple: 'Split the pile into "smaller than this one" and "bigger than this one".',
+      },
+      {
+        term: 'Run',
+        definition:
+          'A maximal already-sorted stretch of the input. Timsort finds runs, extends short ones with insertion sort, and merges them, which is why it is close to linear on partially ordered data.',
+        simple: 'A piece that already happens to be in order.',
+      },
+      {
+        term: 'Adaptive sort',
+        definition:
+          'One whose running time improves on partially sorted input. Insertion sort is O(n + inversions); Timsort inherits that and is O(n) on already-sorted data, while a naive quicksort is not adaptive at all.',
+        simple: 'Gets faster when the data is already nearly tidy.',
+      },
+      {
+        term: 'Comparison sort lower bound',
+        definition:
+          'Any algorithm that orders elements only by comparing pairs needs Omega(n log n) comparisons in the worst case, because a decision tree with n! leaves has height at least log2(n!).',
+        simple: 'If comparing is all you can do, n log n is as good as it gets.',
+      },
+    ],
+
+    simpleExplanation:
+      'There are only a few genuinely different ideas for putting things in order, and each one is a strategy you have used with a deck of cards. You can repeatedly sweep along and swap any neighbours in the wrong order, which is bubble sort: simple, and hopeless past a few dozen items. You can pick up cards one at a time and slide each into its right place among the ones already in your hand, which is insertion sort: also quadratic in the worst case, but so fast on small or nearly-ordered inputs that real libraries still use it as a subroutine. You can split the pile in two, sort each half, and then merge the two sorted halves by repeatedly taking the smaller front card, which is merge sort: reliably n log n, and easy to do with piles too big to hold. Or you can pick one card, shove everything smaller to its left and everything bigger to its right, and repeat on each side, which is quicksort: usually the fastest of all, and catastrophic if you keep choosing a card that happens to be the smallest. What Python actually runs is Timsort, which notices the stretches already in order and merges those, making already-sorted data almost free. The practical skill is not implementing these; it is knowing which properties you need — stability, memory, worst-case guarantees — and which algorithm has them.',
+
+    whyItExists:
+      'Order is the precondition for cheap access: binary search, range queries, merge joins, deduplication, grouping and top-k all assume it. Sorting is the operation that manufactures order, and because it sits under so much else, the differences between algorithms — worst case versus average, stable versus not, in-place versus buffered — show up as real production behaviour rather than trivia.',
+
+    analogy: {
+      scenario:
+        'Imagine a library returns trolley of two hundred books that must go back in shelf order. One assistant walks the trolley end to end swapping any adjacent pair out of order, and keeps walking until a full pass produces no swap. Another takes books one at a time and slides each into its correct place in a growing ordered stack. A third splits the trolley into two halves, hands each to a colleague, and then merges the two sorted halves by repeatedly taking whichever of the two front books comes first. A fourth picks one book, has everyone put books that shelve before it on the left and after it on the right, and repeats on each side. The third strategy finishes in predictable time no matter how the trolley started; the fourth is usually the fastest but grinds to a halt if the chosen book is always the very first one on the shelf.',
+      mapping: [
+        { from: 'Walking the trolley swapping neighbours', to: 'Bubble sort: O(n^2) comparisons, with an early exit when a pass makes no swap' },
+        { from: 'Sliding each book into a growing ordered stack', to: 'Insertion sort: O(n + inversions), so nearly linear on nearly-sorted input' },
+        { from: 'Splitting, delegating, then merging the two sorted halves', to: 'Merge sort: O(n log n) always, O(n) extra space, stable' },
+        { from: 'Choosing one book and splitting around it', to: 'Quicksort: partitioning, O(n log n) expected, O(n^2) if pivots are consistently extreme' },
+        { from: 'Two books by the same author in the order the trolley had them', to: 'Stability: equal keys keep their input order' },
+        { from: 'Noticing a shelf-ordered run already on the trolley', to: 'Timsort\'s run detection, which makes ordered input O(n)' },
+      ],
+      bridge:
+        'The merge step is the part worth watching closely, because it is where both the n log n bound and stability come from. Merging two sorted halves of total length n takes exactly n comparisons in the worst case, and there are log2 n levels of splitting, which multiplies out to n log n. Stability is a single character in that merge: taking from the left half when the two fronts are equal preserves input order, and taking from the right destroys it. Change the comparison from <= to < and you have silently broken every multi-key sort built on top.',
+      limitations:
+        'The trolley analogy has all the books in one place. Once the data does not fit in memory the cost model changes completely — sequential reads are enormously cheaper than random ones — and external merge sort wins not because of comparison counts but because it streams. The analogy also suggests every comparison costs the same, whereas comparing long strings or calling a Python key function can dominate the runtime, which is why decorating with a cheap key beats a clever algorithm.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Watch four sorts race',
+        caption: 'Run them on random, sorted and reversed input, and watch quicksort collapse on the sorted case with a naive pivot.',
+        widget: 'sorting-race',
+        props: { algorithms: ['bubble', 'insertion', 'merge', 'quick'], size: 40 },
+      },
+      {
+        kind: 'ascii',
+        title: 'Merge sort on [38, 27, 43, 3, 9, 82, 10]',
+        caption: 'Splitting costs nothing; all the work is in the merges, and every level merges n elements in total.',
+        art: `split:        [38, 27, 43, 3, 9, 82, 10]
+             /                          \\
+      [38, 27, 43]                [3, 9, 82, 10]
+       /       \\                   /          \\
+   [38]   [27, 43]            [3, 9]        [82, 10]
+           /    \\              /   \\          /   \\
+        [27]   [43]         [3]    [9]     [82]   [10]
+
+merge:  [27, 43]                    [3, 9]      [10, 82]
+        [27, 38, 43]                   [3, 9, 10, 82]
+                  [3, 9, 10, 27, 38, 43, 82]
+
+3 levels of merging, 7 elements per level -> about n log2 n = 7 * 2.8 = 20 comparisons`,
+      },
+      {
+        kind: 'table',
+        title: 'The sorting algorithms worth knowing',
+        caption: 'n is the element count. "Stable" means equal keys keep their input order.',
+        columns: ['Algorithm', 'Best', 'Average', 'Worst', 'Space', 'Stable', 'Use it when'],
+        rows: [
+          ['Bubble sort', 'O(n)', 'O(n^2)', 'O(n^2)', 'O(1)', 'Yes', 'Never in production; it is a teaching device'],
+          ['Insertion sort', 'O(n)', 'O(n^2)', 'O(n^2)', 'O(1)', 'Yes', 'Tiny arrays or nearly-sorted data; used inside Timsort and introsort'],
+          ['Selection sort', 'O(n^2)', 'O(n^2)', 'O(n^2)', 'O(1)', 'No', 'When writes are far more expensive than reads: exactly n - 1 swaps'],
+          ['Merge sort', 'O(n log n)', 'O(n log n)', 'O(n log n)', 'O(n)', 'Yes', 'Guaranteed bounds, stability, linked lists, external sorting'],
+          ['Quicksort', 'O(n log n)', 'O(n log n)', 'O(n^2)', 'O(log n)', 'No', 'In-memory arrays where average speed and low memory matter'],
+          ['Heapsort', 'O(n log n)', 'O(n log n)', 'O(n log n)', 'O(1)', 'No', 'Guaranteed worst case with no extra memory; the fallback in introsort'],
+          ['Timsort', 'O(n)', 'O(n log n)', 'O(n log n)', 'O(n)', 'Yes', 'What Python\'s sorted() and list.sort() already do'],
+          ['Counting / radix', 'O(n + k)', 'O(n + k)', 'O(n + k)', 'O(n + k)', 'Yes', 'Integer or fixed-width keys from a small range; beats the comparison bound'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Merge sort versus quicksort',
+        caption: 'The two divide-and-conquer sorts split the work differently: merge sort does its work on the way up, quicksort on the way down.',
+        left: {
+          heading: 'Merge sort',
+          points: [
+            'Split trivially in half; all the work is in merging',
+            'O(n log n) guaranteed, on every input',
+            'Stable, and the stability is one comparison operator',
+            'Needs an O(n) buffer, which is why it is not the default for in-memory arrays',
+            'Wins on linked lists and on data larger than memory',
+          ],
+        },
+        right: {
+          heading: 'Quicksort',
+          points: [
+            'All the work is in partitioning; combining is free',
+            'O(n log n) expected, O(n^2) worst case with a bad pivot',
+            'Not stable, because partitioning swaps distant elements',
+            'In-place apart from O(log n) stack, with excellent cache behaviour',
+            'Typically the fastest in practice, and the basis of numpy\'s default sort',
+          ],
+        },
+      },
+      {
+        kind: 'flow',
+        title: 'Choosing a sort in practice',
+        caption: 'In Python the answer is almost always the first step; the rest are the cases where it is not.',
+        steps: [
+          { label: 'Do you just need the data ordered in memory?', detail: 'Use sorted() or list.sort(). Timsort is stable, adaptive and implemented in C — any hand-written Python sort will be far slower.' },
+          { label: 'Do you need only the k smallest or largest?', detail: 'Use heapq.nsmallest / nlargest, or heapq.heappushpop over a size-k heap: O(n log k) instead of O(n log n), and O(k) memory instead of O(n).' },
+          { label: 'Do you need order by several keys?', detail: 'Use a key returning a tuple in one pass, or rely on stability and sort by the least significant key first. Do not sort twice by accident.' },
+          { label: 'Are the keys small integers or fixed-width?', detail: 'Counting or radix sort is O(n + k) and beats the comparison bound, which is what numpy does for small integer dtypes and what a bucketed groupby exploits.' },
+          { label: 'Does the data fit in memory?', detail: 'If not, use external merge sort: sort chunks, write them out, then k-way merge with a heap. This is what the shell sort utility, Spark and every database do.' },
+          { label: 'Do you need a hard worst-case guarantee?', detail: 'Prefer merge sort or heapsort over plain quicksort; adversarial inputs against a predictable pivot are a real denial-of-service vector.' },
+        ],
+        branching: true,
+      },
+    ],
+
+    formalDefinition:
+      'A sorting algorithm permutes a sequence so that a given total order holds between consecutive elements. A comparison sort obtains all its information about the input through pairwise comparisons, and its execution corresponds to a path through a decision tree whose leaves are the n! possible permutations; since a binary tree with n! leaves has height at least log2(n!) = Theta(n log n), every comparison sort requires Omega(n log n) comparisons in the worst case. Merge sort and heapsort attain this bound in the worst case; quicksort attains it in expectation over random pivots but degrades to Theta(n^2) when partitions are consistently unbalanced. A sort is stable when elements with equal keys retain their relative input order, and in-place when it uses O(log n) or less auxiliary space. Non-comparison sorts such as counting and radix sort escape the lower bound by exploiting the structure of the keys, running in O(n + k) and O(d(n + b)) respectively.',
+
+    math: {
+      intuition:
+        'Two numbers explain the whole field. The first is the merge-sort recurrence: halving gives log2 n levels, and each level does n units of merging, so the product is n log n. The second is the comparison lower bound: each comparison yields one bit, ordering n items means selecting one of n! permutations, and log2(n!) is about n log2 n - 1.44n bits, so no comparison-based algorithm can do asymptotically better. Everything else — quicksort\'s pathology, Timsort\'s adaptivity, radix sort\'s apparent violation of the bound — is a story about constants, about input structure, or about not comparing at all.',
+      formulas: [
+        {
+          latex: 'T(n) = 2T(n/2) + \\Theta(n) \\;\\Longrightarrow\\; T(n) = \\Theta(n \\log_2 n)',
+          name: 'Merge sort recurrence',
+          meaning: 'Two half-sized sorts plus a linear merge. The recursion tree has log2 n levels, each doing Theta(n) work, which is where the n log n comes from.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'T(n)', meaning: 'Comparisons to sort n elements' },
+            { symbol: '\\Theta(n)', meaning: 'The cost of merging two sorted halves' },
+          ],
+        },
+        {
+          latex: '\\log_2(n!) \\ge n \\log_2 n - n \\log_2 e \\approx n \\log_2 n - 1.44n',
+          name: 'Comparison sort lower bound',
+          meaning: 'A decision tree distinguishing n! permutations must have height at least log2(n!), so Omega(n log n) comparisons are unavoidable. For n = 8 that is at least 16 comparisons.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'n!', meaning: 'The number of possible orderings, one per leaf of the decision tree' },
+            { symbol: '\\log_2', meaning: 'Bits of information per binary comparison' },
+          ],
+        },
+        {
+          latex: 'T_{\\text{worst}}(n) = \\sum_{k=1}^{n-1} k = \\frac{n(n-1)}{2}',
+          name: 'Quicksort with maximally unbalanced partitions',
+          meaning: 'When every pivot is the smallest or largest remaining element, each partition removes one element and scans the rest, giving quadratic comparisons — 124,750 for n = 500, against about 4,500 when balanced.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'n', meaning: 'Number of elements' },
+            { symbol: 'k', meaning: 'Size of the subarray scanned at each level' },
+          ],
+        },
+        {
+          latex: 'T_{\\text{insertion}}(n) = \\Theta(n + I), \\quad I = |\\{(i,j) : i < j,\\; a_i > a_j\\}|',
+          name: 'Insertion sort is output-sensitive',
+          meaning: 'Its cost is linear in the number of inversions, so a nearly-sorted array is nearly linear. This is why it is the base case of Timsort and introsort rather than a historical curiosity.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'I', meaning: 'Number of inverted pairs — a measure of how unsorted the input is' },
+            { symbol: 'n', meaning: 'Number of elements' },
+          ],
+        },
+      ],
+      derivation: [
+        'Sorting by comparisons alone can be modelled as a binary decision tree: each internal node is a comparison, each branch an outcome, each leaf one of the possible input orderings.',
+        'To sort correctly the tree must have at least n! leaves, one for every permutation that could be the input.',
+        'A binary tree with L leaves has height at least log2 L, so the height is at least log2(n!).',
+        'By Stirling\'s approximation, log2(n!) = n log2 n - n log2 e + O(log n), which is Theta(n log n).',
+        'Height is the worst-case number of comparisons on some input, so every comparison sort needs Omega(n log n) comparisons in the worst case.',
+        'Merge sort achieves Theta(n log n) in the worst case, so the bound is tight and merge sort is asymptotically optimal among comparison sorts.',
+        'Counting sort appears to break the bound at O(n + k) because it never compares elements: it uses each key directly as an array index, which is extra information the model forbids. The bound constrains comparison sorts only.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Merge sort traced, then quicksort broken on purpose',
+      setup:
+        'Sort [38, 27, 43, 3, 9, 82, 10] with merge sort, tracking every split and every merge, then count comparisons against the n log n prediction. Afterwards, run quicksort with a last-element pivot on already-sorted input and watch the same divide-and-conquer idea collapse to quadratic.',
+      steps: [
+        { label: 'Split to depth 1', detail: 'mid = 7 // 2 = 3, so the array becomes [38, 27, 43] and [3, 9, 82, 10]. Splitting itself does no comparisons — in an array implementation it is two slices, and in a linked-list implementation a single traversal.' },
+        { label: 'Split to depth 2 and 3', detail: '[38, 27, 43] becomes [38] and [27, 43], which becomes [27] and [43]. [3, 9, 82, 10] becomes [3, 9] and [82, 10], each splitting into singletons. A single element is sorted by definition: that is the base case.' },
+        { label: 'First merges', detail: 'Merge [27] and [43]: compare 27 with 43, take 27, then 43 is appended with no further comparison. Result [27, 43], 1 comparison. Similarly [3] and [9] give [3, 9], and [82] and [10] give [10, 82] — note the merge, not a swap, is what put 10 first.' },
+        { label: 'Merge [38] with [27, 43]', detail: 'Compare 38 and 27, take 27. Compare 38 and 43, take 38. The left half is exhausted, so 43 is appended. Result [27, 38, 43], 2 comparisons. Appending the tail of whichever side is left over costs nothing, which is why merging is at most n - 1 comparisons and not n.' },
+        { label: 'Merge [3, 9] with [10, 82]', detail: 'Compare 3 and 10, take 3. Compare 9 and 10, take 9. Left exhausted, so append 10 and 82. Result [3, 9, 10, 82], 2 comparisons.' },
+        { label: 'Final merge', detail: 'Merge [27, 38, 43] with [3, 9, 10, 82]: take 3, 9, 10 (three comparisons against 27), then 27, 38, 43 (three more against 82), then append 82. Result [3, 9, 10, 27, 38, 43, 82], 6 comparisons.' },
+        { label: 'Count the work', detail: 'Total comparisons: 1 + 1 + 1 + 2 + 2 + 6 = 13. The prediction n log2 n = 7 * 2.807 = 19.6 is an upper bound; the tree has ceil(log2 7) = 3 levels and each level merges at most 7 elements, so 21 is the worst case and 13 is what this particular input costs.', latex: 'T(7) \\le 7 \\lceil \\log_2 7 \\rceil = 21' },
+        { label: 'Where stability lives', detail: 'In the merge, the comparison is left[i] <= right[j]. On a tie the element from the left half — the one earlier in the original array — is taken first. Change <= to < and equal elements come out in reverse, which silently breaks any code that sorted by a secondary key first.' },
+        { label: 'Now quicksort on sorted input', detail: 'Take [1, 2, 3, 4, 5] with the last element as pivot. Pivot 5: everything is smaller, so after partitioning 5 is at the end and the left side is [1, 2, 3, 4] — four comparisons to remove one element. Pivot 4 on that: three comparisons to remove one. Then two, then one.' },
+        { label: 'Count quicksort\'s damage', detail: '4 + 3 + 2 + 1 = 10 = n(n-1)/2 comparisons, and a recursion depth of n rather than log n. Measured at n = 500: 124,750 comparisons and depth 500 with a last-element pivot on sorted input, against about 5,300 comparisons and depth 21 with a random pivot. Same algorithm, same input, one line changed.', latex: '\\frac{n(n-1)}{2} = \\frac{500 \\cdot 499}{2} = 124{,}750' },
+        { label: 'Why this is a security problem, not just a speed problem', detail: 'Sorted or reverse-sorted input is the common case, not an exotic one — data arrives from a database with an ORDER BY, or is appended chronologically. A deterministic pivot also lets an attacker who controls the input force the quadratic case deliberately, which is why library implementations randomise the pivot or switch to heapsort when the recursion gets too deep.' },
+        { label: 'The fixes, and what each costs', detail: 'A random pivot makes the bad case a matter of luck rather than of input, at the cost of one random number per partition. Median-of-three sampling picks the median of the first, middle and last elements, which costs three comparisons and defeats sorted input specifically. Introsort — what C++ std::sort does — counts recursion depth and switches to heapsort beyond 2 log2 n, guaranteeing O(n log n) worst case while keeping quicksort\'s speed in the common case.' },
+      ],
+      conclusion:
+        'Merge sort cost 13 comparisons here against a worst case of n ceil(log2 n) = 21, and that bound holds on every input: log2 n levels, each merging at most n elements, with O(n) auxiliary space for the buffer and stability for free from a single <= in the merge. Quicksort has the same expected bound but a genuinely different worst case, and the worst case is triggered by ordinary data rather than by adversarial data — already-sorted input turned 500 elements into 124,750 comparisons and a recursion 500 frames deep, about 23 times the balanced cost. The practical reading is that neither is a default: Python already runs Timsort, which detects existing runs and merges them, giving O(n) on sorted input and stability guaranteed by the language. Write your own only when you are sorting something Timsort cannot see — records on disk, keys with special structure — and even then, borrow the structure rather than the code.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Insertion sort, and why it is adaptive',
+        runnable: true,
+        code: `def insertion_sort(a, verbose=False):
+    a = a[:]                                  # do not mutate the caller's list
+    shifts = 0
+    for i in range(1, len(a)):
+        key, j = a[i], i - 1
+        while j >= 0 and a[j] > key:          # > not >= : that is the stability
+            a[j + 1] = a[j]                   # shift right, do not swap
+            j -= 1
+            shifts += 1
+        a[j + 1] = key
+        if verbose:
+            print(f"  after i={i}: {a}")
+    return a, shifts
+
+print(insertion_sort([5, 2, 9, 1, 6], verbose=True))
+print("nearly sorted:", insertion_sort([1, 2, 3, 5, 4])[1], "shifts")
+print("reversed     :", insertion_sort([5, 4, 3, 2, 1])[1], "shifts")`,
+        output: `  after i=1: [2, 5, 9, 1, 6]
+  after i=2: [2, 5, 9, 1, 6]
+  after i=3: [1, 2, 5, 9, 6]
+  after i=4: [1, 2, 5, 6, 9]
+([1, 2, 5, 6, 9], 5)
+nearly sorted: 1 shifts
+reversed: 10 shifts`,
+        explanation:
+          'The shift count is exactly the number of inversions in the input, which is why insertion sort is Theta(n + I) rather than simply quadratic: one inversion costs one shift. Reversed input has all n(n-1)/2 = 10 inversions and costs 10 shifts; nearly-sorted input has one and costs one. That adaptivity, plus a tiny constant factor and no allocation, is why Timsort and introsort both fall back to insertion sort on subarrays below about 32 or 64 elements instead of recursing further. Note the strict > in the while condition: using >= would shift past equal elements and destroy stability, and it would also do pointless work.',
+      },
+      {
+        language: 'python',
+        title: 'Merge sort, with the merge tree printed',
+        runnable: true,
+        code: `def merge_sort(a, depth=0, verbose=False):
+    if len(a) <= 1:                   # base case: one element is already sorted
+        return a
+    mid = len(a) // 2
+    left = merge_sort(a[:mid], depth + 1, verbose)
+    right = merge_sort(a[mid:], depth + 1, verbose)
+
+    out, i, j = [], 0, 0
+    while i < len(left) and j < len(right):
+        if left[i] <= right[j]:       # <= is what makes the sort stable
+            out.append(left[i]); i += 1
+        else:
+            out.append(right[j]); j += 1
+    out += left[i:]                   # append whichever side is left over
+    out += right[j:]
+    if verbose:
+        print("  " * depth + f"merge {left} + {right} -> {out}")
+    return out
+
+print(merge_sort([38, 27, 43, 3, 9, 82, 10], verbose=True))`,
+        output: `    merge [27] + [43] -> [27, 43]
+  merge [38] + [27, 43] -> [27, 38, 43]
+    merge [3] + [9] -> [3, 9]
+    merge [82] + [10] -> [10, 82]
+  merge [3, 9] + [10, 82] -> [3, 9, 10, 82]
+merge [27, 38, 43] + [3, 9, 10, 82] -> [3, 9, 10, 27, 38, 43, 82]
+[3, 9, 10, 27, 38, 43, 82]`,
+        explanation:
+          'The printed indentation is the recursion tree: three levels of merging, each handling all seven elements, which is the n log n bound made visible. Two details carry more weight than they look. The <= in the comparison is the entire stability guarantee — with < the sort still produces a correct ordering but reverses equal elements, breaking any multi-key scheme built on it. And the two trailing appends handle the leftover tail without comparisons, which is why merging two halves costs at most n - 1 comparisons rather than n. This version allocates a new list at every level, so it uses O(n log n) total allocation; a production version merges into one preallocated buffer for O(n).',
+      },
+      {
+        language: 'python',
+        title: 'Quicksort\'s pivot pathology, measured',
+        runnable: true,
+        code: `import random, sys
+
+def quicksort_counted(a, pivot="last"):
+    comparisons = 0
+    max_depth = 0
+    def qs(lo, hi, depth):
+        nonlocal comparisons, max_depth
+        max_depth = max(max_depth, depth)
+        if lo >= hi:
+            return
+        if pivot == "random":
+            k = random.randint(lo, hi)
+            a[k], a[hi] = a[hi], a[k]        # move a random element to the end
+        p = a[hi]
+        i = lo
+        for j in range(lo, hi):              # Lomuto partition
+            comparisons += 1
+            if a[j] <= p:
+                a[i], a[j] = a[j], a[i]; i += 1
+        a[i], a[hi] = a[hi], a[i]            # pivot lands in its final place
+        qs(lo, i - 1, depth + 1)
+        qs(i + 1, hi, depth + 1)
+    sys.setrecursionlimit(10000)
+    qs(0, len(a) - 1, 1)
+    return comparisons, max_depth
+
+random.seed(0)
+n = 500
+for name, data in [("random  ", random.sample(range(10000), n)),
+                   ("sorted  ", list(range(n))),
+                   ("reversed", list(range(n))[::-1])]:
+    c, d = quicksort_counted(data[:], "last")
+    cr, dr = quicksort_counted(data[:], "random")
+    print(f"{name}: last-element pivot {c:>6} comparisons, depth {d:>4} | "
+          f"random pivot {cr:>5} comparisons, depth {dr}")
+print("n log2 n =", int(n * (n.bit_length() - 1)), " n^2/2 =", n * n // 2)`,
+        output: `random  : last-element pivot   5382 comparisons, depth   20 | random pivot  5370 comparisons, depth 22
+sorted  : last-element pivot 124750 comparisons, depth  500 | random pivot  5349 comparisons, depth 21
+reversed: last-element pivot 124750 comparisons, depth  500 | random pivot  5022 comparisons, depth 26
+n log2 n = 4000  n^2/2 = 125000`,
+        explanation:
+          'On random input the pivot choice is irrelevant; on sorted or reversed input the last-element pivot produces exactly n(n-1)/2 = 124,750 comparisons and a recursion 500 frames deep, which on a larger array is a stack overflow rather than merely slow code. The randomised version is indifferent to input order because the expected partition is balanced regardless of how the data arrived, which is the whole point: randomisation moves the bad case from "a common input shape" to "bad luck". Sorted input is not a corner case — it is what a database ORDER BY or an append-only log hands you — and a deterministic pivot with attacker-controlled input is a documented denial-of-service vector, which is why C++ introsort caps the depth at 2 log2 n and finishes with heapsort.',
+      },
+      {
+        language: 'python',
+        title: 'Stability in practice, and the one-pass alternative',
+        runnable: true,
+        code: `rows = [("carol", "eng", 3), ("alice", "eng", 5), ("dave", "sales", 3),
+        ("bob", "sales", 5), ("erin", "eng", 3)]
+
+by_name = sorted(rows, key=lambda r: r[0])
+by_team = sorted(by_name, key=lambda r: r[1])   # stable: names stay ordered in teams
+print([r[0] for r in by_name])
+print([(r[1], r[0]) for r in by_team])
+
+# Usually clearer: one sort with a tuple key. Negate for descending on a number.
+print("one pass, two keys:",
+      [r[0] for r in sorted(rows, key=lambda r: (r[1], -r[2], r[0]))])`,
+        output: `['alice', 'bob', 'carol', 'dave', 'erin']
+[('eng', 'alice'), ('eng', 'carol'), ('eng', 'erin'), ('sales', 'bob'), ('sales', 'dave')]
+one pass, two keys: ['alice', 'carol', 'erin', 'bob', 'dave']`,
+        explanation:
+          'Sorting by the least significant key first and then by the most significant works only because Python guarantees Timsort is stable; in a language whose sort is not stable — C\'s qsort, or numpy\'s default quicksort — the same two-pass idiom silently produces a wrong order that looks plausible on small test data. The one-pass tuple key is preferable when you can express it: it is faster, it does not depend on a stability guarantee, and it makes the intent explicit. The negation trick handles a descending numeric component; for a descending string you must either use reverse=True on a separate stable pass or wrap the value in a class with an inverted comparison, since strings cannot be negated. In numpy, pass kind="stable" when you need this behaviour.',
+      },
+      {
+        language: 'python',
+        title: 'Timsort exploits existing order',
+        runnable: true,
+        code: `import random, time
+
+random.seed(7)
+n = 200_000
+data_random = [random.random() for _ in range(n)]
+data_sorted = sorted(data_random)
+data_chunks = sorted(data_random[:n // 2]) + sorted(data_random[n // 2:])
+
+for name, d in [("random", data_random), ("already sorted", data_sorted),
+                ("two sorted runs", data_chunks)]:
+    t = time.perf_counter()
+    sorted(d)
+    print(f"  {name:<16} {1000 * (time.perf_counter() - t):7.1f} ms")`,
+        output: `  random             39.5 ms
+  already sorted       2.5 ms
+  two sorted runs      5.5 ms`,
+        explanation:
+          'The absolute milliseconds depend on the machine, but the ratios are the point and they are reproducible: already-sorted input is roughly fifteen times faster than random input, because Timsort detects one long run and does no merging at all — O(n) rather than O(n log n). Two concatenated sorted halves cost one merge pass. This is why appending new records to an already-sorted list and re-sorting is far cheaper than it sounds, why sorting a pandas DataFrame by a column that is already nearly ordered is close to free, and why kind="stable" in numpy — which is Timsort — can beat the default quicksort on real, partially-ordered data despite losing on random data.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Database query execution',
+        usage:
+          'ORDER BY, merge joins, GROUP BY and deduplication all sort. When the data exceeds work_mem, PostgreSQL switches from an in-memory quicksort to an external merge sort that writes sorted runs to disk and merges them with a heap — the classic algorithm, chosen for its sequential access pattern rather than its comparison count.',
+      },
+      {
+        context: 'Top-k retrieval in vector search',
+        usage:
+          'Returning the ten nearest neighbours from a million candidates never sorts the million. A size-k heap keeps the best ten in O(n log k) time and O(k) memory, and FAISS, Annoy and every vector database use exactly this, sorting only the final k results for presentation.',
+      },
+      {
+        context: 'Feature engineering and evaluation metrics',
+        usage:
+          'Quantile binning, rank features and rank-correlation measures sort a column; computing AUC sorts predictions by score. On a million rows this is the dominant cost of the metric, which is why implementations sort once and reuse the ordering across thresholds.',
+      },
+      {
+        context: 'Batching by sequence length in NLP training',
+        usage:
+          'Sorting examples by token count before batching minimises padding waste, often cutting training time by a third. It has to be a stable sort with a shuffled tie-break — bucketed sampling — because a plain sort would otherwise correlate batch composition with the data order and bias the gradient.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'list.sort / sorted', role: 'Timsort in C: stable, adaptive, and the correct default. sort() mutates in place and returns None, sorted() returns a new list — a distinction that causes a familiar TypeError when confused.' },
+      { tool: 'heapq.nlargest / nsmallest', role: 'Top-k without a full sort: O(n log k) and O(k) memory. Worth reaching for whenever k is far smaller than n.' },
+      { tool: 'numpy.sort / argsort', role: 'kind="quicksort" (actually introsort) by default, with "stable" for Timsort-like behaviour and "heapsort" for guaranteed worst case. argsort returns the permutation, which is how you reorder several parallel arrays consistently.' },
+      { tool: 'pandas.sort_values', role: 'Sorts by one or several columns with kind= controlling the algorithm; stability matters when sorting by a secondary key or when ties must preserve the original row order.' },
+      { tool: 'operator.itemgetter / attrgetter', role: 'Faster key functions than an equivalent lambda, since they run in C — measurable when the key function is called n log n times.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Assuming a sort is stable when the language does not promise it',
+        why: 'Sorting by a secondary key and then a primary one is correct only under stability. Python guarantees it; C\'s qsort, C++\'s std::sort and numpy\'s default kind do not, so the same idiom produces a plausible-looking wrong order.',
+        fix: 'Use a tuple key in a single pass, which never depends on the guarantee, or explicitly request a stable algorithm — std::stable_sort, kind="stable".',
+      },
+      {
+        mistake: 'Writing quicksort with a first- or last-element pivot',
+        why: 'Sorted and reverse-sorted input are common, not exotic, and both produce n(n-1)/2 comparisons with recursion depth n — 124,750 comparisons for 500 elements, and a stack overflow at larger sizes. With attacker-controlled input it is a denial-of-service vector.',
+        fix: 'Randomise the pivot or use median-of-three, and cap the recursion depth with a heapsort fallback. In practice, call the library sort.',
+      },
+      {
+        mistake: 'Sorting an entire dataset to get the top k',
+        why: 'O(n log n) time and O(n) memory when O(n log k) time and O(k) memory would do. For n = 10^8 and k = 10 the difference decides whether the job fits in memory at all.',
+        fix: 'Use heapq.nlargest, a bounded heap, or numpy.argpartition, which is O(n) and gives the top k unordered before a final sort of just those k.',
+      },
+      {
+        mistake: 'Calling an expensive key function inside the comparison',
+        why: 'The key is evaluated O(n log n) times if it is computed per comparison. Python\'s key= parameter instead evaluates it exactly n times and sorts the decorated values, which is the decorate-sort-undecorate pattern built in.',
+        fix: 'Always use key= rather than cmp_to_key, and precompute anything expensive — a parsed date, a lowercased string — before sorting rather than inside it.',
+      },
+      {
+        mistake: 'Confusing sort() with sorted()',
+        why: 'list.sort() sorts in place and returns None, so x = mylist.sort() silently binds None and the next line raises a TypeError somewhere unrelated.',
+        fix: 'Use sorted() when you want a new list and sort() as a statement on its own line. The same distinction applies to reverse() and reversed().',
+      },
+      {
+        mistake: 'Comparing floats or mixed types as sort keys without thinking',
+        why: 'NaN compares false against everything, so a list containing NaN sorts into an order that is not sorted at all and varies with the input order. Mixed types raise TypeError in Python 3 — at sort time, on production data, not in the test suite.',
+        fix: 'Filter or replace NaN first (numpy puts them last deliberately), and normalise types in the key function so every element yields the same key type.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'Compare merge sort and quicksort. Which would you use and when?',
+        answer:
+          'Both are divide and conquer with O(n log n) expected time, but they put the work in different places. Merge sort splits trivially and does all its work merging on the way back up, which makes it O(n log n) on every input, stable, and well suited to linked lists and to data larger than memory, at the cost of an O(n) buffer. Quicksort does all its work partitioning on the way down and nothing on the way up, which makes it in-place apart from O(log n) stack and very cache-friendly, so its constant factor is usually the best of any comparison sort — but a poor pivot gives O(n^2), and it is not stable because partitioning swaps distant elements. In practice I would call the library sort, which in Python is Timsort: stable, adaptive, O(n) on already-sorted data. If I had to choose an implementation, I would pick merge sort when I need stability or a hard worst-case bound or the data is on disk, and quicksort when memory is tight and the input is in RAM — with a randomised pivot and a heapsort fallback past a depth of 2 log2 n, which is what introsort does.',
+        followUp:
+          'Asking why quicksort is faster in practice despite the same asymptotics tests whether they can talk about cache locality and constant factors.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Why can no comparison sort beat O(n log n), and how do counting and radix sort get around it?',
+        answer:
+          'Model any comparison sort as a decision tree: internal nodes are comparisons, branches are the two outcomes, leaves are the permutations the algorithm can output. To be correct it needs at least n! leaves, since any of the n! input orderings must be reachable. A binary tree with n! leaves has height at least log2(n!), which by Stirling is about n log2 n - 1.44n, and the height is the worst-case number of comparisons — so Omega(n log n) is unavoidable, and merge sort meeting it means the bound is tight. Counting sort does not contradict this because it never compares elements: it uses each key directly as an index into a tally array, which is information the comparison model does not permit. That costs O(n + k) time and O(k) space for keys in a range of size k, so it is excellent for small integer ranges and useless for arbitrary ones — sorting 32-bit integers this way would need a four-billion-entry table. Radix sort applies counting sort digit by digit for O(d(n + b)) with d digits and base b, which is how numpy sorts small integer dtypes and how large-scale key sorting works in practice. Both require stability of the per-digit sort, and both need keys with exploitable structure.',
+        followUp:
+          'A strong answer notes that the bound is about comparisons, not about time, and that O(n) sorting is real when the keys cooperate.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'You must return the 100 nearest neighbours from a hundred million embedding scores, on one machine. How?',
+        answer:
+          'Not by sorting. I would stream the scores and maintain a min-heap of size 100: push the first hundred, then for each subsequent score compare against the heap root and use heappushpop when it is larger. That is O(n log k) time and O(k) memory, roughly seven comparisons per element against the twenty-seven a full sort would need, and it never materialises the full score array — which matters more than the comparison count when n is a hundred million. If the scores are already in a numpy array, np.argpartition is better still: it is O(n) by quickselect, gives the top hundred unordered, and a final sort of those hundred is free. Either way the last step is sorting only k elements. At real scale the honest answer is that you do not compute a hundred million exact scores at all — you use an approximate index such as HNSW or IVF-PQ, which visits a small candidate set and applies exactly this bounded-heap pattern internally. The detail worth stating is tie handling and determinism: with duplicate scores I would break ties on a stable identifier so that repeated queries return the same ordering, which matters when the results feed a cache or an evaluation harness.',
+        followUp:
+          'Mentioning argpartition, or that the heap is what every approximate nearest-neighbour library uses internally, signals hands-on experience.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Merge two sorted lists into one sorted list without using sorted(), and state the complexity. Then explain why this function is the reason merge sort is stable.',
+        hint: 'Walk two indices forward, always taking the smaller front element, and handle the leftover tail without comparisons.',
+        solution:
+          'def merge(left, right):\n    out, i, j = [], 0, 0\n    while i < len(left) and j < len(right):\n        if left[i] <= right[j]:      # <= keeps equal elements in left-then-right order\n            out.append(left[i]); i += 1\n        else:\n            out.append(right[j]); j += 1\n    out += left[i:]\n    out += right[j:]\n    return out\n\nTime is O(n + m): every iteration appends exactly one element, so the loop runs at most n + m times and the tail appends are linear. Space is O(n + m) for the output. Concatenating and calling sorted() would be O((n + m) log(n + m)) and throws away the ordering you already have — although in Python, Timsort detects the two runs and merges them, so the practical gap is smaller than the asymptotics suggest.\n\nStability comes from the single comparison operator. In merge sort, left always holds elements that appeared earlier in the original array, so taking from left on a tie preserves input order; switching to < takes from right on a tie and reverses equal elements. That one character is the difference between a sort you can safely use for multi-key ordering and one you cannot.',
+      },
+      {
+        prompt: 'Count the number of inversions in an array — pairs (i, j) with i < j and a[i] > a[j] — in O(n log n). Explain the connection to merge sort.',
+        hint: 'When the merge takes an element from the right half, count how many elements remain in the left half.',
+        solution:
+          'def count_inversions(a):\n    def sort_count(a):\n        if len(a) <= 1:\n            return a, 0\n        mid = len(a) // 2\n        left, x = sort_count(a[:mid])\n        right, y = sort_count(a[mid:])\n        merged, i, j, cross = [], 0, 0, 0\n        while i < len(left) and j < len(right):\n            if left[i] <= right[j]:\n                merged.append(left[i]); i += 1\n            else:\n                merged.append(right[j]); j += 1\n                cross += len(left) - i     # every remaining left element is > right[j]\n        merged += left[i:]; merged += right[j:]\n        return merged, x + y + cross\n    return sort_count(a)[1]\n\ncount_inversions([5, 4, 3, 2, 1]) -> 10, the maximum n(n-1)/2 for n = 5.\n\nThe insight is that an inversion is either entirely within the left half, entirely within the right, or split across them, and the merge sees exactly the split ones. When right[j] is taken while len(left) - i elements remain on the left, every one of those is greater than right[j] and starts earlier, so each is an inversion — counted in O(1) instead of by enumeration. Total cost is the merge sort recurrence, O(n log n) time and O(n) space, against the obvious O(n^2) double loop. Inversion count is a meaningful statistic in its own right: it is the numerator of Kendall\'s tau, so this is how rank correlation between two orderings is computed at scale.',
+      },
+      {
+        prompt: 'You must sort a file of 50 GB of records on a machine with 8 GB of RAM. Describe the algorithm and give its cost in terms of disk I/O rather than comparisons.',
+        hint: 'Sort what fits, write it out, then merge many sorted streams at once.',
+        solution:
+          'External merge sort, in two phases. Phase one: read the file in chunks that fit comfortably in memory — say 4 GB, leaving room for buffers — sort each chunk in memory with the library sort, and write it back out as a sorted run. That gives about 13 runs and costs one full read and one full write of the data. Phase two: open all 13 runs at once and merge them with a min-heap keyed on the current head of each run, writing the merged output as a single stream. Each heappop and heappush is O(log k) for k runs, and the whole phase is one more read and one more write.\n\nThe cost that matters is I/O, not comparisons: 2 passes over 50 GB, so 200 GB of sequential transfer, whereas the comparison count is an irrelevant O(n log n) that would be identical for any correct sort. The design goal is maximising sequential access and minimising the number of passes, which is why you merge all runs at once rather than pairwise — pairwise merging would take log2(13) = 4 passes instead of 1. The practical constraints are the per-run read buffer, which must be large enough that each read is sequential, and the file-descriptor limit if the run count is in the thousands, in which case you merge in groups. This is precisely what the Unix sort utility, PostgreSQL and Spark\'s shuffle all do.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DSA-017-q1',
+        type: 'mcq',
+        concept: 'quicksort worst case',
+        prompt: 'You run quicksort with the last element as pivot on an already-sorted array of 1000 elements. What happens?',
+        options: [
+          'Every partition is maximally unbalanced: about 500,000 comparisons and recursion depth 1000',
+          'It runs in O(n) because the array is already sorted',
+          'It runs normally in O(n log n); pivot choice only affects random input',
+          'It raises an error because the pivot equals the maximum',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Each pivot is the largest remaining element, so partitioning removes one element and scans the rest: n(n-1)/2 = 499,500 comparisons and depth n. Measured at n = 500 it is 124,750 comparisons and depth 500, against about 5,300 with a random pivot.',
+      },
+      {
+        id: 'DSA-017-q2',
+        type: 'truefalse',
+        concept: 'stability',
+        prompt: 'Sorting a list by tenure and then sorting the result by team gives rows grouped by team, ordered by tenure within each team — in Python.',
+        answer: true,
+        explanation:
+          'Python\'s sort is guaranteed stable, so the second sort preserves the relative order established by the first. The same idiom is wrong in a language whose sort is not stable, which is why a single tuple key is the more robust way to express it.',
+      },
+      {
+        id: 'DSA-017-q3',
+        type: 'match',
+        concept: 'algorithm selection',
+        prompt: 'Match each situation to the right approach.',
+        pairs: [
+          { left: '10 largest of 100 million streamed scores', right: 'Bounded min-heap: O(n log k), O(k) memory' },
+          { left: '50 GB of records, 8 GB of RAM', right: 'External merge sort: sorted runs, then a k-way merge' },
+          { left: 'A million records already almost in order', right: "Timsort — Python's sorted() — which detects runs and is O(n) on sorted input" },
+          { left: 'Ages 0 to 120 for ten million people', right: 'Counting sort: O(n + k), beating the comparison lower bound' },
+          { left: 'Hard worst-case bound with no extra memory', right: 'Heapsort: O(n log n) guaranteed, O(1) auxiliary space' },
+        ],
+        explanation:
+          'Each case is decided by a different constraint — result size, memory, existing order, key structure, worst-case guarantee — which is why "which sort is fastest" is never the right question on its own.',
+      },
+      {
+        id: 'DSA-017-q4',
+        type: 'numeric',
+        concept: 'comparison lower bound',
+        prompt: 'What is the minimum number of comparisons any comparison sort needs in the worst case to sort 8 distinct elements? (log2(8!) = log2(40320) ≈ 15.3)',
+        answer: 16,
+        explanation:
+          'The decision tree must have 8! = 40,320 leaves, so its height is at least ceil(log2 40320) = 16. No comparison-based algorithm can guarantee fewer, though a non-comparison sort such as counting sort is not bound by this at all.',
+      },
+      {
+        id: 'DSA-017-q5',
+        type: 'debug',
+        language: 'python',
+        concept: 'stability in the merge',
+        prompt: 'This merge sort orders numbers correctly, but breaks a multi-key sort built on top of it. Which line is at fault?',
+        code: `while i < len(left) and j < len(right):
+    if left[i] < right[j]:
+        out.append(left[i]); i += 1
+    else:
+        out.append(right[j]); j += 1`,
+        options: [
+          'The comparison must be <= : on a tie it takes from the right half, reversing equal elements',
+          'The two branches should both increment i',
+          'The loop condition should use "or" rather than "and"',
+          'left and right must be sorted again before merging',
+        ],
+        answerIndex: 0,
+        explanation:
+          'left holds the elements that came earlier in the original array. Taking from right when the two are equal puts a later element first, which destroys stability — correct for numbers, wrong for records that were pre-sorted by a secondary key.',
+      },
+      {
+        id: 'DSA-017-q6',
+        type: 'explain',
+        concept: 'choosing a sort',
+        prompt: 'A colleague has written their own quicksort to sort a list of dictionaries by two keys. Explain what you would tell them.',
+        rubric: [
+          'Recommends the built-in sorted() with a tuple key, noting Timsort is C-implemented, stable and adaptive',
+          'Explains that their quicksort is not stable, so the two-key result may be wrong, and that a fixed pivot is quadratic on sorted input',
+          'Mentions that key= evaluates the key once per element rather than once per comparison',
+        ],
+        sampleAnswer:
+          'I would ask them to delete it and write sorted(rows, key=lambda r: (r["team"], r["name"])). Three reasons. First, correctness: quicksort is not stable, because partitioning swaps elements across the array, so if they were relying on sorting by one key and then the other, their results are subtly wrong in a way that small test data will not reveal. A single tuple key sidesteps stability altogether by making the comparison total in one pass. Second, robustness: a hand-rolled quicksort almost always uses the first or last element as pivot, which is exactly quadratic on sorted or reverse-sorted input — and data arriving from a database ORDER BY or an append-only log is usually sorted. At half a million records that is the difference between milliseconds and minutes, and with input an attacker controls it is a denial-of-service vector. Third, speed: Timsort is implemented in C, is stable by guarantee, and detects existing runs so that nearly-ordered input is close to O(n), while any Python-level sort pays interpreter overhead per comparison. I would also point out that key= calls the key function exactly n times, whereas a comparison-based approach would evaluate it O(n log n) times — so even the API is doing them a favour.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does it mean for a sort to be stable, and why care?', back: 'Elements with equal keys keep their input order. It is what makes sorting by a secondary key and then a primary key produce a correct composite ordering. Python\'s sort guarantees it; C qsort and numpy\'s default do not.' },
+      { front: 'Merge sort: time, space, stability?', back: 'O(n log n) on every input, O(n) auxiliary space, stable. The recurrence T(n) = 2T(n/2) + O(n) gives log n levels each doing n work.' },
+      { front: 'When does quicksort become O(n^2)?', back: 'When partitions are consistently unbalanced — a first- or last-element pivot on sorted or reverse-sorted input gives n(n-1)/2 comparisons and depth n. Randomising the pivot or median-of-three fixes it.' },
+      { front: 'Why can no comparison sort beat n log n?', back: 'Its decision tree must have n! leaves, so its height is at least log2(n!) ≈ n log2 n - 1.44n. Counting and radix sort escape this by using keys as indices rather than comparing.' },
+      { front: 'What is Timsort and why is Python\'s sort fast on real data?', back: 'A stable merge sort that detects already-ordered runs, extends short ones with insertion sort, and merges them. Already-sorted input is O(n), which is fifteen times faster than random input in practice.' },
+      { front: 'How do you get the top k without sorting?', back: 'A bounded min-heap of size k, O(n log k) time and O(k) space — heapq.nlargest — or np.argpartition, which is O(n) and returns the top k unordered.' },
+      { front: 'Insertion sort\'s real complexity?', back: 'Theta(n + I) where I is the number of inversions, so it is nearly linear on nearly-sorted input. That adaptivity is why Timsort and introsort use it on small subarrays.' },
+    ],
+
+    challenge: {
+      title: 'Build an external sort, then beat it with the library',
+      brief:
+        'Generate a file of 5 million random records, one JSON object per line, larger than the memory you allow yourself. Write an external merge sort: read the file in bounded chunks, sort each in memory, write it to a temporary run file, then merge all runs with heapq.merge into a single sorted output. Measure wall time and peak memory, and compare with the naive approach of loading everything and calling sorted().',
+      acceptanceCriteria: [
+        'Chunk size is a parameter, and peak memory stays bounded as the input grows — demonstrated by measuring with tracemalloc or resource.getrusage',
+        'Merging uses a heap-based k-way merge in a single pass, not repeated pairwise merges, and the code says why',
+        'Output is verified sorted and the same multiset as the input, by comparing counts and a checksum rather than by loading both into memory',
+        'Reports wall time, peak memory and the number of bytes read and written for both approaches',
+        'Discusses where the time actually goes — JSON parsing, I/O, comparisons — with a measurement rather than a guess',
+      ],
+      starterCode: 'import heapq, json, tempfile\nfrom pathlib import Path\n\ndef sorted_runs(path: Path, key, chunk_lines: int):\n    """Yield paths of sorted temporary run files."""\n    ...\n\ndef external_sort(src: Path, dst: Path, key, chunk_lines: int = 200_000) -> None:\n    ...\n',
+      language: 'python',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone the main sorting algorithms, what stability means, and how to decide which to use.',
+      mustCover: [
+        'Insertion sort is O(n^2) but adaptive and fast on small or nearly-sorted input, which is why libraries still use it',
+        'Merge sort splits and merges for a guaranteed O(n log n), at the cost of O(n) space, and is stable',
+        'Quicksort partitions around a pivot, is usually fastest in practice, but is O(n^2) with a bad pivot and is not stable',
+        'Stability means equal keys keep their input order, which is what makes multi-key sorting work',
+        'No comparison sort can beat O(n log n), and Python already runs Timsort, so writing your own is almost always wrong',
+      ],
+      bonusSignals: [
+        'mentions that sorted input is the common case that breaks a naive quicksort pivot',
+        'knows the top-k heap alternative to a full sort',
+        'explains the comparison lower bound via the decision tree',
+        'mentions counting or radix sort as the legitimate exception',
+      ],
+      sampleExplanation:
+        'Every sorting algorithm is a strategy you have used with a deck of cards. Sliding each new card into place among the ones already in your hand is insertion sort — it does one unit of work per pair that was out of order, so it is wonderful on an almost-tidy hand and painful on a reversed one. Splitting the deck in two, sorting each half and then merging them by repeatedly taking whichever top card comes first is merge sort — it always takes the same predictable time, because there are about twenty rounds of halving for a million cards and each round handles every card once, and it is easy to do with piles too big to hold at once. Picking one card and pushing everything smaller to its left and bigger to its right is quicksort — usually the quickest, because it rearranges cards in place and never copies the deck, but it falls apart if the card you keep picking happens to be the smallest one left, which is exactly what happens if the deck was already sorted and you always pick the last card. The word worth knowing is stable. A stable sort leaves cards that tie in the order they were already in, which is what lets you sort by one thing and then by another and get both: sort by name, then by team, and each team is internally still in name order. An unstable sort scrambles the ties and the second sort quietly destroys the first. There is also a floor nobody can go under: if all you can do is compare pairs, you need about n log n comparisons, because each comparison answers one yes-or-no question and there are n factorial possible orderings to distinguish. The only way round it is not to compare at all, which is possible when the keys are small whole numbers you can use directly as slots. And the practical conclusion is that you should almost never write any of these. Python already runs Timsort, which spots stretches that are already in order and merges them, so sorted data comes back almost free, and it is stable and written in C. The real skill is knowing what you need — stability, bounded memory, only the top ten — and asking for that instead.',
+    },
+
+    masteryRequirements: { understoodScore: 0.7, proficientScore: 0.85, practiceRequired: 2, teachRequired: true },
+  },
+  {
+    id: 'DSA-018',
+    domain: 'DSA',
+    module: 'Algorithmic Patterns',
+    topic: 'Turning quadratic scans into linear ones',
+    title: 'Two Pointers, Sliding Window and Prefix Sums',
+    slug: 'two-pointers-and-sliding-window',
+    difficulty: 4,
+    estimatedMinutes: 45,
+    prerequisites: ['DSA-003', 'DSA-007'],
+    related: ['DSA-004', 'DSA-008', 'DSA-016', 'DSA-017'],
+    tags: ['two-pointers', 'sliding-window', 'prefix-sum', 'linear-time', 'amortised', 'subarray'],
+
+    learningObjectives: [
+      'Recognise the three patterns from the shape of a problem — sorted array and a pair condition, a contiguous window with a constraint, or repeated range queries — rather than by memorising solutions',
+      'Explain precisely why each pattern is O(n): what information a pointer move throws away, and why throwing it away is safe',
+      'Implement the converging two-pointer scan and prove its correctness by the exclusion argument',
+      'Implement both fixed-size and variable-size sliding windows, and identify the invariant the window maintains',
+      'Build a prefix-sum array and answer arbitrary range-sum queries in O(1), including the hash-map variant that counts subarrays with a given sum',
+      'Say when each pattern does not apply — unsorted input for two pointers, negative numbers for a shrinking window, mutable data for prefix sums',
+    ],
+
+    terminology: [
+      {
+        term: 'Two pointers (converging)',
+        definition:
+          'Two indices starting at opposite ends of a sorted array, moved inwards one at a time according to a comparison. Each step eliminates an entire row or column of the implicit n-by-n pair table.',
+        simple: 'One finger at each end, walking towards each other.',
+      },
+      {
+        term: 'Fast and slow pointers',
+        definition:
+          'The other two-pointer family: both indices move left to right at different rates or under different conditions. Used for in-place filtering, deduplication, and cycle detection in a linked list.',
+        simple: 'A reader running ahead and a writer following behind.',
+      },
+      {
+        term: 'Sliding window',
+        definition:
+          'A contiguous range [start, end] over a sequence, extended at the right and contracted at the left while maintaining a constraint. Each index enters and leaves the window at most once, giving amortised O(n).',
+        simple: 'A frame you push along the data, letting things in one end and out the other.',
+      },
+      {
+        term: 'Prefix sum',
+        definition:
+          'An array where P[i] is the sum of the first i elements, with P[0] = 0. Any range sum is then P[j+1] - P[i], computed in constant time after O(n) preprocessing.',
+        simple: 'Running totals, so any stretch is one subtraction.',
+      },
+      {
+        term: 'Amortised analysis',
+        definition:
+          'Bounding the total cost of a sequence of operations rather than the worst single one. A sliding window\'s inner loop can run many times in one iteration, but across the whole scan it runs at most n times in total.',
+        simple: 'Some steps are expensive, but they cannot all be, so the average is cheap.',
+      },
+      {
+        term: 'Monotonicity',
+        definition:
+          'The property that makes a pointer move safe: moving one pointer changes the quantity of interest in a predictable direction, so the discarded candidates can be proven irrelevant. Lose it — for instance by allowing negative numbers in a sum-constrained window — and the pattern breaks.',
+        simple: 'Moving in one direction always makes the number go one way, never both.',
+      },
+    ],
+
+    simpleExplanation:
+      'A great many problems about arrays have an obvious solution that checks every pair or every stretch, and that solution does roughly n squared units of work: fine for a thousand items, hopeless for a million. Three patterns turn most of them linear, and each works by the same trick — noticing that as you move along, the work you did a moment ago tells you something about the work you were about to do. If the data is sorted and you want a pair adding to a target, put a finger at each end: if the sum is too small only the left finger can help, and if it is too big only the right one can, so each step throws away a whole row of possibilities instead of one pair. If you want the best contiguous stretch satisfying some rule, keep a window and push its right edge along, pulling the left edge in whenever the rule breaks — each element enters once and leaves once, so the total work is linear even though the inner loop looks nested. And if you will ask many questions about the sum of a range, compute running totals once, after which any range is a single subtraction. None of these are tricks to memorise; they are all the same observation that recomputing from scratch is throwing away an answer you already had.',
+
+    whyItExists:
+      'The naive solution to most array questions re-derives from scratch, at every position, something that differs from the previous position by one element. These patterns exist to reuse that overlap, converting nested scans into single passes — an O(n^2) to O(n) change that decides whether a job on ten million rows finishes in a second or in a day.',
+
+    analogy: {
+      scenario:
+        'Think of three jobs in a warehouse of boxes lined up by weight. First, you must find two boxes whose weights sum to exactly 100 kg: rather than trying every pair, you take the lightest and heaviest and compare — if together they are under 100 you know the lightest box is useless with anything except a heavier partner, so you move up; if over, the heaviest is useless with anything lighter, so you move down. Second, you must find the longest run of consecutive boxes that together weigh under a tonne: you walk a trolley along, adding boxes at the front and unloading from the back whenever you exceed the limit, never re-weighing anything. Third, your manager keeps asking for the total weight of boxes 40 through 90, then 12 through 58, then others: you walk the line once writing down the running total at each position, after which every question is one subtraction.',
+      mapping: [
+        { from: 'Lightest and heaviest box, moved inwards', to: 'Converging two pointers on a sorted array' },
+        { from: '"This box is useless with any lighter partner"', to: 'The exclusion argument: one pointer move eliminates a whole row of the pair table' },
+        { from: 'The trolley with boxes loaded at the front and unloaded at the back', to: 'A sliding window with an amortised O(n) bound — each box handled twice' },
+        { from: 'The running total written at each position', to: 'The prefix-sum array, P[0] = 0' },
+        { from: 'Answering "40 through 90" by one subtraction', to: 'Range sum as P[91] - P[40], in O(1)' },
+        { from: 'Boxes being lined up by weight in the first place', to: 'The sortedness precondition that two pointers relies on' },
+      ],
+      bridge:
+        'The exclusion argument is what makes the first job linear rather than merely clever, and it is worth stating formally: when the pair is too light, no partner for the current lightest box can work, because every remaining partner is lighter than the one just tried — so that box can be discarded entirely, taking an entire row of the n-by-n table of pairs with it. Since each move discards a row or a column, there are at most 2n moves. The same reasoning underlies the window: when the trolley is overloaded, no window starting at the current left edge and extending further right can be legal either, so the left edge can advance and never needs to come back.',
+      limitations:
+        'All three analogies assume the line of boxes does not change. Prefix sums in particular go stale the moment a value is updated, and rebuilding is O(n) — which is why a Fenwick or segment tree exists, trading O(1) queries for O(log n) queries and O(log n) updates. The warehouse also has only positive weights; if some boxes had negative weight, removing one from the trolley could make the total go up, and the shrinking rule that makes the window work would be wrong.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Two pointers converging on a sorted array',
+        caption: 'Move the pointers by hand and watch which pairs each move eliminates from the n-by-n table.',
+        widget: 'array-indexing',
+        props: { mode: 'two-pointers', array: [2, 7, 11, 15, 19, 23], target: 26 },
+      },
+      {
+        kind: 'ascii',
+        title: 'Three patterns, one picture each',
+        caption: 'Each arrow is an index; the whole point is that indices only ever move forwards.',
+        art: `TWO POINTERS  (sorted, find a pair summing to 26)
+  [ 2,  7, 11, 15, 19, 23 ]
+    ^lo                ^hi   2+23=25 < 26 -> lo++
+        ^lo            ^hi   7+23=30 > 26 -> hi--
+        ^lo        ^hi       7+19=26  found
+
+SLIDING WINDOW  (longest stretch with no repeated letter)
+  a  b  c  a  b  c  b  b
+  [-----]                 "abc"  len 3
+     [-----]               "bca"  start jumped past the old 'a'
+        [-----]            "cab"
+                 [--]      "cb"
+
+PREFIX SUMS  (nums = 3 4 7 2 -3 1 4 2)
+  P = [0, 3, 7, 14, 16, 13, 14, 18, 20]
+  sum(nums[2..5]) = P[6] - P[2] = 14 - 7 = 7      one subtraction`,
+      },
+      {
+        kind: 'table',
+        title: 'Which pattern, and what it costs',
+        caption: 'n is the sequence length, q the number of queries, k the window size.',
+        columns: ['Problem shape', 'Pattern', 'Naive', 'With the pattern', 'Precondition'],
+        rows: [
+          ['Pair in a sorted array summing to a target', 'Converging two pointers', 'O(n^2)', 'O(n)', 'Sorted input'],
+          ['Pair in an unsorted array summing to a target', 'Hash map of complements', 'O(n^2)', 'O(n) time, O(n) space', 'Hashable values'],
+          ['Remove duplicates or filter in place', 'Fast and slow pointers', 'O(n) extra space', 'O(1) extra space', 'Output order preserved'],
+          ['Best contiguous stretch of fixed size k', 'Fixed window', 'O(nk)', 'O(n)', 'An O(1) add and remove'],
+          ['Longest or shortest stretch satisfying a rule', 'Variable window', 'O(n^2)', 'O(n) amortised', 'The rule must be monotone as the window grows'],
+          ['Many range-sum queries on static data', 'Prefix sums', 'O(nq)', 'O(n) build, O(1) per query', 'Data does not change'],
+          ['Range queries on data that changes', 'Fenwick or segment tree', 'O(nq)', 'O(log n) query and update', 'Associative operation'],
+          ['Count subarrays with sum exactly k', 'Prefix sums plus a hash map', 'O(n^2)', 'O(n)', 'None — negatives are fine'],
+        ],
+      },
+      {
+        kind: 'flow',
+        title: 'The variable-size window loop',
+        caption: 'Expand greedily, contract only when the invariant breaks. Every index enters and leaves once.',
+        steps: [
+          { label: 'Initialise', detail: 'start = 0, plus whatever state summarises the window: a running sum, a count of distinct characters, a frequency map.' },
+          { label: 'Extend the right edge', detail: 'For end from 0 to n-1, add the new element to the window state. This is the only loop over the array.' },
+          { label: 'Restore the invariant', detail: 'While the window violates the constraint, remove the element at start and advance start. This inner loop is what makes the analysis amortised rather than nested.' },
+          { label: 'Record', detail: 'The window [start, end] is now the longest valid window ending at end. Update the best answer from it.' },
+          { label: 'Argue the bound', detail: 'start only ever increases and never exceeds n, so the inner loop runs at most n times across the entire outer loop: O(n) total, despite looking like a nested loop.' },
+          { label: 'Check the assumption', detail: 'The contraction rule is only valid if removing an element can never make the violation worse. With negative numbers and a sum constraint that fails, and the correct tool becomes prefix sums with a hash map.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Sliding window versus prefix sums',
+        caption: 'Both answer questions about contiguous ranges; they assume different things.',
+        left: {
+          heading: 'Sliding window',
+          points: [
+            'One pass, O(1) extra space beyond the window state',
+            'Finds the best window satisfying a constraint',
+            'Needs monotonicity: growing the window must only ever push the constraint one way',
+            'Breaks on negative numbers with a sum constraint',
+          ],
+        },
+        right: {
+          heading: 'Prefix sums',
+          points: [
+            'O(n) preprocessing, O(n) extra space',
+            'Answers arbitrary range queries, and counts ranges with an exact property',
+            'Works with negative numbers, because it never assumes a direction',
+            'Goes stale on any update; use a Fenwick tree if the data changes',
+          ],
+        },
+      },
+    ],
+
+    formalDefinition:
+      'These are three linear-scan schemas for sequence problems. The converging two-pointer method maintains indices i < j into a sequence sorted by a total order and, at each step, uses a comparison between f(a_i, a_j) and a target to prove that either a_i or a_j participates in no remaining solution, discarding it; since each iteration discards one element, the scan terminates in at most n steps. The sliding-window method maintains a contiguous range [s, e] together with a summary of its contents, extending e monotonically and advancing s only while a predicate on the window is violated; because s and e each advance at most n times in total, the cost is amortised O(n) even though the inner contraction is unbounded per iteration. The prefix-sum method precomputes P[i] = sum of the first i elements with P[0] = 0, so that the sum over [i, j] equals P[j+1] - P[i] in O(1); combined with a hash map of previously seen prefix values it counts subarrays whose sum equals a target in a single pass, since a subarray ending at j has sum k exactly when P[j+1] - k has occurred as an earlier prefix.',
+
+    math: {
+      intuition:
+        'All three patterns are the same accounting argument in different clothes. The naive algorithms are quadratic because they consider n^2 candidate pairs or ranges. Each pattern finds a reason that most candidates can never be answers, and the reason is always monotonicity: moving a pointer changes the quantity of interest in a known direction, so everything on one side of the current position is provably out. The cost analysis is then a counting argument on pointer movements rather than on nested loops — each index advances at most n times, and that bound does not care how the advances are distributed.',
+      formulas: [
+        {
+          latex: 'P[0] = 0, \\quad P[i] = \\sum_{t=0}^{i-1} a_t, \\quad \\sum_{t=i}^{j} a_t = P[j+1] - P[i]',
+          name: 'Prefix sums and range queries',
+          meaning: 'The defining identity. The leading zero is what makes the formula work for ranges that start at index 0, without a special case.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'P[i]', meaning: 'Sum of the first i elements' },
+            { symbol: 'a_t', meaning: 'The t-th element of the input' },
+            { symbol: 'i, j', meaning: 'Inclusive bounds of the queried range' },
+          ],
+        },
+        {
+          latex: '\\sum_{t=i}^{j} a_t = k \\iff P[j+1] - P[i] = k \\iff P[i] = P[j+1] - k',
+          name: 'Counting subarrays with a given sum',
+          meaning: 'Turns a search over pairs of endpoints into a lookup: at each j, count how many earlier prefixes equal the current prefix minus k. One hash map, one pass, and negatives are handled correctly.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'k', meaning: 'The target subarray sum' },
+            { symbol: 'P[i]', meaning: 'A previously seen prefix value, counted in a hash map' },
+          ],
+        },
+        {
+          latex: 'T_{\\text{window}}(n) = \\underbrace{n}_{\\text{end advances}} + \\underbrace{\\le n}_{\\text{start advances}} = O(n)',
+          name: 'Amortised cost of a sliding window',
+          meaning: 'The inner while loop may run many times in one outer iteration, but start never decreases and never exceeds n, so the total across the whole scan is bounded by n.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'n', meaning: 'Sequence length' },
+          ],
+        },
+        {
+          latex: '\\binom{n}{2} = \\frac{n(n-1)}{2} \\;\\longrightarrow\\; \\le 2n \\text{ pointer moves}',
+          name: 'What two pointers eliminates',
+          meaning: 'The naive scan examines every one of the n(n-1)/2 pairs; the converging scan proves that each move rules out an entire row or column, so at most 2n moves settle the question.',
+          category: 'complexity',
+          variables: [
+            { symbol: 'n', meaning: 'Number of elements' },
+          ],
+        },
+      ],
+      derivation: [
+        'Take a sorted array a and a target t, with pointers lo = 0 and hi = n - 1.',
+        'Suppose a[lo] + a[hi] < t. Every remaining partner for a[lo] is a[j] with j <= hi, and since the array is sorted, a[j] <= a[hi].',
+        'So a[lo] + a[j] <= a[lo] + a[hi] < t for every remaining j: no pair involving a[lo] can reach the target.',
+        'Therefore a[lo] can be discarded entirely — which removes an entire row of the pair table — and lo advances by one.',
+        'The symmetric argument applies when the sum exceeds t: a[hi] is too large for every remaining partner, so hi retreats.',
+        'Each iteration moves exactly one pointer, and the pointers can move at most n - 1 times in total before meeting, giving O(n) comparisons and O(1) space.',
+        'Correctness follows because no discarded candidate could have been a solution, so if a solution exists the pointers are still bracketing it when they meet it.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Three canonical problems, each worked end to end',
+      setup:
+        'One problem per pattern, each traced on a small concrete input. (1) Two pointers: find a pair in the sorted array [2, 7, 11, 15, 19, 23] summing to 26. (2) Sliding window: find the longest substring of "abcabcbb" with no repeated character. (3) Prefix sums: count the subarrays of [3, 4, 7, 2, -3, 1, 4, 2] that sum to exactly 7. For each, compare the work against the naive quadratic approach.',
+      steps: [
+        { label: '(1) Two pointers: initialise', detail: 'lo = 0 pointing at 2, hi = 5 pointing at 23. The naive alternative examines all C(6,2) = 15 pairs.' },
+        { label: '(1) Step 1', detail: '2 + 23 = 25, which is below 26. Since 23 is the largest value available, 2 cannot reach 26 with anything, so the entire row for 2 — five pairs — is eliminated at once. lo advances to index 1.' },
+        { label: '(1) Step 2', detail: '7 + 23 = 30, above 26. Now 23 is too large for every remaining partner, since all of them are at most 19, so its column is eliminated. hi retreats to index 4.' },
+        { label: '(1) Step 3', detail: '7 + 19 = 26. Found, at indices (1, 4). Three comparisons against the naive fifteen, and O(1) extra space.', latex: '\\text{3 moves vs } \\binom{6}{2} = 15 \\text{ pairs}' },
+        { label: '(1) The failure case', detail: 'Searching for 100: lo and hi converge until lo meets hi without a hit, taking at most n - 1 = 5 steps, and the function returns None. Note the loop condition is lo < hi and not lo <= hi, because an element must not pair with itself.' },
+        { label: '(2) Sliding window: the state', detail: 'Keep start, the left edge, and last, a map from character to the index where it was last seen. The invariant is that the window [start, end] contains no repeated character.' },
+        { label: '(2) Walking "abcabcbb", positions 0 to 2', detail: 'a, b, c are all new: window grows to "abc", length 3, best = 3. last = {a:0, b:1, c:2}.' },
+        { label: '(2) Position 3, the second a', detail: 'a was last seen at index 0, which is at or after start = 0, so it is inside the window. start jumps to 0 + 1 = 1 — past the old a — and the window becomes "bca", still length 3. Jumping rather than stepping one at a time is what keeps this O(n).' },
+        { label: '(2) Positions 4 to 7', detail: 'The second b at index 4 pushes start to 2, giving "cab"; the second c at index 5 pushes start to 3, giving "abc"; b at index 6 pushes start to 5, giving "cb"; the final b at index 7 pushes start to 7, giving "b". Best remains 3.' },
+        { label: '(2) Count the work', detail: 'Eight iterations of the outer loop, each doing O(1) work; start moved forward a total of seven positions across the entire scan. Total O(n), against the naive O(n^2) of checking every substring, or O(n^3) if each check rescans for duplicates.', latex: 'T = n + \\text{(total start advances)} \\le 2n' },
+        { label: '(3) Prefix sums: build the array', detail: 'nums = [3, 4, 7, 2, -3, 1, 4, 2], so P = [0, 3, 7, 14, 16, 13, 14, 18, 20]. Note P[5] < P[4] because of the negative element — the prefix array is not monotone, which is exactly why a sliding window cannot solve this problem.' },
+        { label: '(3) One range query', detail: 'The sum of nums[2..5] is P[6] - P[2] = 14 - 7 = 7, one subtraction rather than four additions. With q queries the total is O(n + q) rather than O(nq).' },
+        { label: '(3) Counting subarrays summing to 7', detail: 'A subarray ending at j sums to 7 exactly when some earlier prefix equals the current running total minus 7. Walk once with a counter map seeded {0: 1}, which represents the empty prefix and is what lets a subarray starting at index 0 be counted.' },
+        { label: '(3) The single pass', detail: 'running = 3: need -4, not seen. running = 7: need 0, seen once, count = 1 (that is [3, 4]). running = 14: need 7, seen once, count = 2 (that is [7]). running = 16: need 9, no. running = 13: need 6, no. running = 14 again: need 7, seen once, count = 3 (that is [7, 2, -3, 1]). running = 18: need 11, no. running = 20: need 13, seen once, count = 4 (that is [1, 4, 2]).' },
+        { label: '(3) Verify against brute force', detail: 'The four subarrays are [3,4], [7], [7,2,-3,1] and [1,4,2], which a double loop over all 36 subarrays confirms. The hash-map pass does it in O(n) time and O(n) space, and — unlike a sliding window — handles the negative element correctly.' },
+      ],
+      conclusion:
+        'Each pattern replaced a quadratic scan with a single pass, and each did so for a different reason. Two pointers is O(n) time and O(1) space because a comparison proves a whole row or column of the pair table irrelevant — but it requires sorted input, so on unsorted data you either pay O(n log n) to sort or use a hash map of complements instead. The sliding window is O(n) amortised because start and end each advance at most n times in total, which is a counting argument rather than a loop-nesting argument — but it requires that growing the window only ever pushes the constraint one way, which negative numbers destroy. Prefix sums cost O(n) preprocessing and O(1) per query, and the hash-map variant counts exact-sum subarrays in one pass with negatives handled correctly — but the array is invalidated by any update, at which point a Fenwick tree with O(log n) queries and updates is the right structure. Knowing which precondition each pattern needs is the actual skill; the code in all three cases is about ten lines.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Converging two pointers, and the unsorted alternative',
+        runnable: true,
+        code: `def two_sum_sorted(a, target, verbose=False):
+    lo, hi = 0, len(a) - 1
+    while lo < hi:                      # < not <= : an element cannot pair with itself
+        s = a[lo] + a[hi]
+        if verbose:
+            print(f"  lo={lo}({a[lo]}) hi={hi}({a[hi]}) sum={s}")
+        if s == target:
+            return lo, hi
+        if s < target:
+            lo += 1                     # a[lo] is too small for EVERY remaining partner
+        else:
+            hi -= 1                     # a[hi] is too large for EVERY remaining partner
+    return None
+
+a = [2, 7, 11, 15, 19, 23]
+print("pair summing to 26:", two_sum_sorted(a, 26, verbose=True))
+print("pair summing to 100:", two_sum_sorted(a, 100))
+
+def two_sum_unsorted(a, target):
+    seen = {}                           # value -> index
+    for i, x in enumerate(a):
+        if target - x in seen:
+            return seen[target - x], i
+        seen[x] = i
+    return None
+
+print("unsorted:", two_sum_unsorted([11, 2, 23, 7, 19, 15], 26))`,
+        output: `  lo=0(2) hi=5(23) sum=25
+  lo=1(7) hi=5(23) sum=30
+  lo=1(7) hi=4(19) sum=26
+pair summing to 26: (1, 4)
+pair summing to 100: None
+unsorted: (3, 4)`,
+        explanation:
+          'Three comparisons settle what a double loop would take fifteen to settle, and the reason is the exclusion argument in the comments: when the sum is short of the target, the current left value cannot reach it with any remaining partner, because every remaining partner is no larger than the one just tried. The choice between the two functions is a genuine trade-off rather than a preference. Two pointers needs sorted input but uses O(1) space and returns pairs in a predictable order, which makes it the right base for three-sum and for the closest-pair variants. The hash map works on unsorted input in O(n) but costs O(n) space, and it is the correct choice when you must not disturb the original order or when sorting would cost more than the scan.',
+      },
+      {
+        language: 'python',
+        title: 'Variable-size sliding window: longest substring without repeats',
+        runnable: true,
+        code: `def longest_unique(s, verbose=False):
+    last = {}                      # char -> most recent index
+    best, start, window = 0, 0, ""
+    for i, ch in enumerate(s):
+        if ch in last and last[ch] >= start:
+            start = last[ch] + 1   # jump past the earlier copy, do not step
+        last[ch] = i
+        if i - start + 1 > best:
+            best = i - start + 1
+            window = s[start:i + 1]
+        if verbose:
+            print(f"  i={i} ch={ch} window='{s[start:i+1]}' best={best}")
+    return best, window
+
+print(longest_unique("abcabcbb", verbose=True))
+print(longest_unique("pwwkew"))`,
+        output: `  i=0 ch=a window='a' best=1
+  i=1 ch=b window='ab' best=2
+  i=2 ch=c window='abc' best=3
+  i=3 ch=a window='bca' best=3
+  i=4 ch=b window='cab' best=3
+  i=5 ch=c window='abc' best=3
+  i=6 ch=b window='cb' best=3
+  i=7 ch=b window='b' best=3
+(3, 'abc')
+(3, 'wke')`,
+        explanation:
+          'The condition last[ch] >= start is doing essential work: a character may be in the map from a position already left behind, in which case it is not actually in the window and start must not move backwards. Dropping that check produces a start that jumps around and a wrong answer on inputs such as "abba". Because start only ever increases, the whole scan is O(n) with O(min(n, alphabet)) space. The "pwwkew" case is the one that catches naive solutions: the answer is "wke", a window that begins after the repeated w, and any approach that restarts from scratch at a repeat returns 2.',
+      },
+      {
+        language: 'python',
+        title: 'Fixed-size window: add the newcomer, drop the leaver',
+        runnable: true,
+        code: `def max_window_sum(a, k):
+    s = sum(a[:k])                 # the only O(k) work in the whole function
+    best, at = s, 0
+    for i in range(k, len(a)):
+        s += a[i] - a[i - k]       # one addition and one subtraction per step
+        if s > best:
+            best, at = s, i - k + 1
+    return best, at
+
+temps = [3, 8, 2, 9, 4, 1, 7, 6]
+print("hottest 3-day stretch:", max_window_sum(temps, 3))
+
+from collections import deque
+
+def moving_average(a, k):
+    out, window, s = [], deque(), 0.0
+    for x in a:
+        window.append(x); s += x
+        if len(window) > k:
+            s -= window.popleft()
+        if len(window) == k:
+            out.append(round(s / k, 2))
+    return out
+
+print("3-point moving average:", moving_average(temps, 3))`,
+        output: `hottest 3-day stretch: (19, 1)
+3-point moving average: [4.33, 6.33, 5.0, 4.67, 4.0, 4.67]`,
+        explanation:
+          'The fixed window is the simplest of the three patterns and the one most often written badly: recomputing sum(a[i:i+k]) inside the loop is O(nk) and is the difference between a millisecond and a minute on a large series with a wide window. Maintaining the running total incrementally costs one addition and one subtraction per position regardless of k. The deque version generalises to cases where you need the window contents and not just an aggregate — a rolling median, a rolling maximum with a monotonic deque — and it is exactly what pandas .rolling() does in compiled code. One caution for floats: repeatedly adding and subtracting accumulates rounding error over a long series, so a numerically sensitive rolling sum should periodically recompute from scratch, or use math.fsum.',
+      },
+      {
+        language: 'python',
+        title: 'Prefix sums: O(1) range queries, then counting exact-sum subarrays',
+        runnable: true,
+        code: `from itertools import accumulate
+from collections import defaultdict
+
+nums = [3, 4, 7, 2, -3, 1, 4, 2]
+pre = [0] + list(accumulate(nums))     # the leading 0 removes every special case
+print("prefix:", pre)
+for i, j in [(1, 3), (0, 7), (4, 6)]:
+    print(f"  sum of nums[{i}..{j}] = pre[{j+1}] - pre[{i}] = {pre[j+1]} - {pre[i]} = {pre[j+1] - pre[i]}")
+
+def count_subarrays_with_sum(nums, k, verbose=False):
+    seen = defaultdict(int)
+    seen[0] = 1                        # the empty prefix: lets a subarray start at index 0
+    total, running = 0, 0
+    for x in nums:
+        running += x
+        total += seen[running - k]     # how many earlier prefixes make the gap exactly k
+        if verbose and seen[running - k]:
+            print(f"    running={running}: {seen[running - k]} subarray(s) end here")
+        seen[running] += 1
+    return total
+
+print("subarrays summing to 7:", count_subarrays_with_sum(nums, 7, verbose=True))
+print("brute force check:",
+      sum(1 for i in range(len(nums)) for j in range(i, len(nums)) if sum(nums[i:j+1]) == 7))`,
+        output: `prefix: [0, 3, 7, 14, 16, 13, 14, 18, 20]
+  sum of nums[1..3] = pre[4] - pre[1] = 16 - 3 = 13
+  sum of nums[0..7] = pre[8] - pre[0] = 20 - 0 = 20
+  sum of nums[4..6] = pre[7] - pre[4] = 18 - 16 = 2
+    running=7: 1 subarray(s) end here
+    running=14: 1 subarray(s) end here
+    running=14: 1 subarray(s) end here
+    running=20: 1 subarray(s) end here
+subarrays summing to 7: 4
+brute force check: 4`,
+        explanation:
+          'Two details carry the whole idea. The leading zero in the prefix array makes the formula uniform: without it, ranges starting at index 0 need a special case, which is where off-by-one bugs breed. And the seed seen[0] = 1 in the counting version represents the empty prefix, which is what allows a qualifying subarray that starts at index 0 to be counted — omitting it silently undercounts, and the bug survives any test whose answer does not begin at the start. Note also that this problem cannot be solved with a sliding window: the array contains a negative value, so extending the window does not monotonically increase the sum and there is no valid shrinking rule. The hash-map version does not care, which is exactly why it is the right tool here, at O(n) time and O(n) space.',
+      },
+      {
+        language: 'python',
+        title: 'Fast and slow pointers: filtering in place',
+        runnable: true,
+        code: `def dedupe_sorted_in_place(a):
+    if not a:
+        return 0
+    write = 1                          # slow pointer: next position to write
+    for read in range(1, len(a)):      # fast pointer: scans everything
+        if a[read] != a[write - 1]:
+            a[write] = a[read]
+            write += 1
+    return write                       # a[:write] is the deduplicated prefix
+
+a = [1, 1, 2, 3, 3, 3, 5, 8, 8]
+n = dedupe_sorted_in_place(a)
+print("unique prefix:", a[:n], "length", n, "| tail left as scratch:", a[n:])
+
+def partition_by(a, predicate):
+    write = 0
+    for read in range(len(a)):
+        if predicate(a[read]):
+            a[write], a[read] = a[read], a[write]
+            write += 1
+    return write
+
+b = [5, -2, 9, -7, 3, -1, 8]
+k = partition_by(b, lambda x: x > 0)
+print("positives first:", b, "| count:", k)`,
+        output: `unique prefix: [1, 2, 3, 5, 8] length 5 | tail left as scratch: [3, 5, 8, 8]
+positives first: [5, 9, 3, 8, -2, -1, -7] | count: 4`,
+        explanation:
+          'This is the other two-pointer family: both indices move left to right, one reading and one writing, which gives in-place filtering in O(n) time and O(1) extra space. It is the pattern behind quicksort\'s Lomuto partition, behind removing elements from a list without allocating a new one, and behind the compaction step of a garbage collector. Two things to note. The function returns a length rather than truncating, which is the convention in languages without dynamic arrays and is worth keeping because it makes the O(1)-space claim honest — the tail is left as scratch rather than freed. And partition_by is not stable: swapping moves an arbitrary earlier element into the read position, so the relative order of the failing elements is scrambled. If stability is required, write into a second array instead and accept the O(n) space.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Rolling features in time-series and finance',
+        usage:
+          'A 30-day moving average, a rolling standard deviation, or an exponentially weighted mean over a billion rows is a sliding window with incremental update. pandas .rolling() and numpy\'s stride tricks implement exactly this, which is why the window size barely affects the runtime — the cost is per row, not per row times window.',
+      },
+      {
+        context: 'Token windows and chunking for language models',
+        usage:
+          'Splitting a document into overlapping chunks of N tokens with stride S is a fixed sliding window, and the retrieval quality depends on the overlap in the same way the window boundary does here. Attention with a local window — as in Longformer or Mistral\'s sliding-window attention — is the same idea applied to the attention mask to avoid the quadratic cost.',
+      },
+      {
+        context: 'Integral images in computer vision',
+        usage:
+          'A two-dimensional prefix sum lets the sum over any rectangle be computed with four lookups, which is what made the Viola-Jones face detector real-time in 2001 and is still how box filters and average pooling over variable regions are evaluated cheaply.',
+      },
+      {
+        context: 'Cumulative distributions and sampling',
+        usage:
+          'np.cumsum over a probability vector is a prefix sum, and sampling from a categorical distribution binary searches it. Nucleus (top-p) sampling in text generation finds the cutoff by scanning the cumulative sum of sorted probabilities — a prefix sum and a threshold scan in one pass.',
+      },
+      {
+        context: 'Deduplication and merge joins in data pipelines',
+        usage:
+          'Deduplicating a sorted key column in place, or joining two sorted streams by advancing whichever pointer is behind, is the two-pointer pattern doing the work of a hash join at O(1) memory. Every database merge join and every sorted-run merge in Spark is this loop.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'itertools.accumulate', role: 'Builds a prefix sum lazily in one line, and takes an arbitrary binary function so it also produces running maxima or products.' },
+      { tool: 'numpy.cumsum', role: 'Vectorised prefix sums, including the 2D case via cumsum along both axes — the integral image. Watch for float accumulation error on long arrays and prefer float64.' },
+      { tool: 'pandas.rolling / expanding', role: 'Sliding and cumulative windows over Series and DataFrames, with min_periods controlling the ramp-up at the start of the series.' },
+      { tool: 'collections.deque', role: 'The right container for a window whose contents you need, and the basis of the monotonic deque trick for a rolling maximum in O(n).' },
+      { tool: 'np.lib.stride_tricks.sliding_window_view', role: 'A zero-copy view of every window of a given size, which turns windowed computation into one vectorised operation — powerful and easy to misuse, since the result shares memory with the source.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Using converging two pointers on an unsorted array',
+        why: 'The exclusion argument depends entirely on sortedness: without it, moving lo forwards does not guarantee larger values, so a valid pair can be discarded. The result is a plausible-looking wrong answer rather than an error.',
+        fix: 'Sort first at O(n log n) if index order does not matter, or use a hash map of complements in O(n) if it does — remembering that sorting destroys the original indices unless you sort pairs of (value, index).',
+      },
+      {
+        mistake: 'Using a sliding window when the array can contain negatives',
+        why: 'The shrink rule assumes that removing an element from the left makes the window sum smaller, so a violation can be repaired by contracting. With a negative element, removing it increases the sum and the invariant is unrecoverable.',
+        fix: 'Use prefix sums with a hash map for exact-sum questions, which never assumes a direction. Reserve the window for non-negative values, or for constraints like distinctness that remain monotone.',
+      },
+      {
+        mistake: 'Recomputing the window aggregate from scratch each step',
+        why: 'sum(a[i:i+k]) inside the loop makes the algorithm O(nk), which defeats the entire point. It is easy to miss in review because the code looks like a single loop.',
+        fix: 'Maintain the aggregate incrementally: add the entering element and subtract the leaving one. If the aggregate cannot be updated incrementally — a median, say — use a structure that can, such as two heaps or a monotonic deque.',
+      },
+      {
+        mistake: 'Forgetting the leading zero in the prefix array, or seen[0] = 1 in the counting variant',
+        why: 'Both represent the empty prefix. Without the leading zero, ranges starting at index 0 need a special case that is usually written wrong; without seen[0] = 1, every subarray that starts at index 0 goes uncounted, and the bug hides from any test whose answer starts later.',
+        fix: 'Always build P with a leading 0 so that sum(i..j) = P[j+1] - P[i] holds uniformly, and always seed the counter map with {0: 1}. Test with an input whose only answer begins at index 0.',
+      },
+      {
+        mistake: 'Letting the window start pointer move backwards',
+        why: 'In the last-seen-index formulation, a character may be recorded from a position already outside the window; assigning start = last[ch] + 1 unconditionally can move start backwards, breaking the invariant and the O(n) argument at once.',
+        fix: 'Guard with last[ch] >= start, or take start = max(start, last[ch] + 1). Test on "abba", which is the minimal input that exposes it.',
+      },
+      {
+        mistake: 'Relying on prefix sums over data that is being updated',
+        why: 'A single element change invalidates every prefix after it, so keeping the array correct costs O(n) per update — worse than the O(n) scan it was meant to replace.',
+        fix: 'Use a Fenwick (binary indexed) tree or a segment tree, which give O(log n) range queries and O(log n) point updates. Prefix sums are for static data, or for a batch that is built once and queried many times.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'How do you recognise which of these three patterns a problem needs?',
+        answer:
+          'I look at three signals. First, is the answer a contiguous range? If it is, and there is a constraint that only tightens as the range grows — a sum with non-negative values, a count of distinct elements, a character frequency — then a sliding window applies, and its correctness rests on being able to repair a violation by advancing the left edge. Second, is the input sorted and the question about a pair or triple satisfying a comparison? Then converging two pointers applies, because each comparison proves one endpoint useless for every remaining partner and eliminates a whole row of the pair table. Third, is the question about sums over many ranges, or about counting ranges with an exact property? Then prefix sums apply, and the hash-map variant handles exact-sum counting in one pass including negative values. The negations matter as much as the rules: negatives kill the window, unsortedness kills two pointers and sends me to a hash map, and updates kill prefix sums and send me to a Fenwick tree. In all three cases the underlying question I am asking is whether moving forward by one position lets me reuse the work from the previous position, because that is what turns a quadratic scan linear.',
+        followUp:
+          'Asking them to justify the O(n) bound of a window with a nested while loop tests whether they can give the amortised argument rather than eyeballing the code.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Prove that a sliding window with an inner while loop is O(n), not O(n^2).',
+        answer:
+          'The trap is reading the nested loop structurally rather than counting total work. The outer loop runs exactly n times, once per right endpoint. The inner while loop advances start, and start has two properties: it never decreases, and it never exceeds n. So across the entire execution — not per outer iteration — the inner loop body runs at most n times in total. Total work is therefore at most n outer steps plus n inner steps, which is O(n), with each step doing O(1) work provided the window summary supports O(1) add and remove. That is an amortised argument: a single outer iteration can trigger many contractions, so no per-iteration bound is useful, but the aggregate across all iterations is bounded. The same accounting proves the converging two-pointer scan is O(n) — each iteration moves one pointer, and the pointers have n - 1 moves between them before they meet. The place the argument fails, which is worth naming, is when the inner operation is not O(1): if repairing the window requires rescanning it, or if the summary is something like a median that costs O(log n) to maintain, then the bound becomes O(n log n) and the analysis has to be redone.',
+        followUp:
+          'A strong candidate points out that the same argument underlies the amortised O(1) of dynamic array append.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'You need rolling aggregates over a billion-row event log: a 30-day sum, a 30-day distinct-user count and a 30-day median, keyed by user. How would you approach each?',
+        answer:
+          'They are three different problems despite looking alike, and the difference is whether the aggregate can be maintained incrementally. The 30-day sum is a textbook sliding window: add the entering day, subtract the leaving day, O(1) per step, and over a billion rows I would compute it as a cumulative sum and take differences, which vectorises and is what pandas rolling does in compiled code. The distinct-user count cannot be maintained by subtraction, because removing one occurrence of a user does not mean the user left the window — I would keep a frequency map and decrement, removing the key at zero, which is O(1) amortised per step but needs memory proportional to distinct users in the window; at genuine scale I would use HyperLogLog sketches per day and merge them, accepting roughly two per cent error for constant memory. The median cannot be maintained by either, so I would use two heaps, a max-heap for the lower half and a min-heap for the upper, with lazy deletion for elements that have left the window, giving O(log k) per step — or, if approximate is acceptable, a t-digest, which merges across days and is the pragmatic answer at a billion rows. The general principle is that a window is cheap exactly when the aggregate has an inverse operation, and when it does not you either pay logarithmically or accept an approximation.',
+        followUp:
+          'Mentioning that sums have an inverse and distinct counts do not — the invertibility criterion — is the insight the question is testing.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Find the shortest contiguous subarray of a positive-integer array whose sum is at least a target, or 0 if none exists. Explain why the window may shrink and why that is valid here but not with negative numbers.',
+        hint: 'Grow the window until it qualifies, then shrink from the left while it still qualifies.',
+        solution:
+          'def min_subarray_len(target, nums):\n    start, total, best = 0, 0, float("inf")\n    for end, x in enumerate(nums):\n        total += x\n        while total >= target:            # shrink while still valid\n            best = min(best, end - start + 1)\n            total -= nums[start]\n            start += 1\n    return 0 if best == float("inf") else best\n\nmin_subarray_len(7, [2, 3, 1, 2, 4, 3]) -> 2, the subarray [4, 3].\n\nThe shrink loop is valid because every element is positive, so removing one strictly decreases the sum: once the window fails the condition it will keep failing until the right edge extends again, and no shorter qualifying window starting at the current left edge can have been skipped. With a negative element that reasoning collapses — removing a negative value increases the sum, so a window that just failed might succeed again after further shrinking, and the single pass would miss it. For arrays with negatives the correct approach is prefix sums with a monotonic deque, at O(n), or a sorted structure over prefixes, at O(n log n).\n\nCost is O(n) time and O(1) space: end advances n times and start advances at most n times across the whole scan, which is the amortised argument, not a nested-loop O(n^2).',
+      },
+      {
+        prompt: 'Build a 2D prefix sum over a matrix so that the sum of any rectangle can be computed in O(1), and derive the four-term formula.',
+        hint: 'Inclusion-exclusion: the overlap of the two strips you subtract has been removed twice.',
+        solution:
+          'def build_2d_prefix(grid):\n    R, C = len(grid), len(grid[0])\n    P = [[0] * (C + 1) for _ in range(R + 1)]      # one extra row and column of zeros\n    for r in range(R):\n        for c in range(C):\n            P[r+1][c+1] = grid[r][c] + P[r][c+1] + P[r+1][c] - P[r][c]\n    return P\n\ndef rect_sum(P, r1, c1, r2, c2):                   # inclusive corners\n    return P[r2+1][c2+1] - P[r1][c2+1] - P[r2+1][c1] + P[r1][c1]\n\nThe build formula is inclusion-exclusion: the rectangle ending at (r, c) is the cell itself plus the rectangle above plus the rectangle to the left, minus their shared overlap, which would otherwise be counted twice. The query formula is the same idea in reverse: start from the big rectangle, subtract the strip above and the strip to the left, then add back the top-left corner that both subtractions removed. The padding row and column of zeros is what makes queries touching row 0 or column 0 need no special case.\n\nBuild is O(RC) time and space; every query is four lookups, O(1). This is the integral image that made the Viola-Jones face detector real-time, since evaluating a rectangular Haar feature at any scale and position becomes four array reads regardless of how large the rectangle is.',
+      },
+      {
+        prompt: 'Given an array of integers that may be negative, find the length of the longest subarray summing to exactly k. Explain why a window fails and what replaces it.',
+        hint: 'Store the first index at which each prefix value occurred.',
+        solution:
+          'def longest_subarray_sum_k(nums, k):\n    first_seen = {0: -1}          # prefix 0 occurs "before" index 0\n    running, best = 0, 0\n    for i, x in enumerate(nums):\n        running += x\n        if running - k in first_seen:\n            best = max(best, i - first_seen[running - k])\n        if running not in first_seen:\n            first_seen[running] = i    # keep the EARLIEST index, for the longest span\n    return best\n\nlongest_subarray_sum_k([1, -1, 5, -2, 3], 3) -> 4, the subarray [1, -1, 5, -2].\n\nA sliding window fails because with negatives the running sum is not monotone in the window size: extending the window can decrease the sum, so there is no rule saying when to shrink, and no single pass with two pointers can be correct. Prefix sums do not assume any direction — a subarray (i, j] sums to k exactly when P[j] - P[i] = k, so at each j the question is whether the value P[j] - k has been seen before, which is a hash lookup.\n\nThe subtlety is which index to store: for the longest subarray you keep the earliest occurrence of each prefix value and never overwrite it, since an earlier start gives a longer span. For the shortest subarray you would keep the latest instead, and for counting subarrays you keep a tally of occurrences rather than an index at all. Cost is O(n) time and O(n) space in every variant, and the sentinel {0: -1} is what allows a qualifying subarray starting at index 0 to be found.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DSA-018-q1',
+        type: 'mcq',
+        concept: 'preconditions',
+        prompt: 'Why can converging two pointers not be used to find a pair summing to a target in an unsorted array?',
+        options: [
+          'Moving a pointer no longer proves anything about the values it skips, so a valid pair can be discarded',
+          'It would be O(n log n) rather than O(n)',
+          'It would use too much memory',
+          'It can be, provided the array has no duplicates',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The whole method rests on the exclusion argument: "this value is too small for every remaining partner" is only true when the remaining partners are ordered. Without sortedness the algorithm still runs and still returns an answer, which is what makes the bug dangerous.',
+      },
+      {
+        id: 'DSA-018-q2',
+        type: 'numeric',
+        concept: 'prefix sums',
+        prompt: 'For nums = [3, 4, 7, 2, -3, 1, 4, 2], the prefix array is P = [0, 3, 7, 14, 16, 13, 14, 18, 20]. What is the sum of nums[2..5] inclusive?',
+        answer: 7,
+        explanation:
+          'sum(nums[i..j]) = P[j+1] - P[i] = P[6] - P[2] = 14 - 7 = 7, namely 7 + 2 + (-3) + 1. One subtraction replaces four additions, and with q queries the total drops from O(nq) to O(n + q).',
+      },
+      {
+        id: 'DSA-018-q3',
+        type: 'truefalse',
+        concept: 'amortised analysis',
+        prompt: 'A sliding window with a while loop nested inside a for loop is O(n^2).',
+        answer: false,
+        explanation:
+          'The inner loop only ever advances start, which never decreases and never exceeds n, so its body runs at most n times across the entire scan rather than n times per outer iteration. Total work is O(n) — an amortised bound, not a structural one.',
+      },
+      {
+        id: 'DSA-018-q4',
+        type: 'debug',
+        language: 'python',
+        concept: 'window start moving backwards',
+        prompt: 'This longest-substring-without-repeats function returns 4 for "abba", which is wrong. What is the bug?',
+        code: `last, best, start = {}, 0, 0
+for i, ch in enumerate(s):
+    if ch in last:
+        start = last[ch] + 1
+    last[ch] = i
+    best = max(best, i - start + 1)`,
+        options: [
+          'start can move backwards: guard with last[ch] >= start, or use start = max(start, last[ch] + 1)',
+          'last must be reset at each iteration',
+          'best should be computed before updating last',
+          'The loop should iterate in reverse',
+        ],
+        answerIndex: 0,
+        explanation:
+          'On "abba", the second a is at index 3 with last[a] = 0, so start is set back to 1 even though the window already began at 2. The invariant breaks and the reported length is too large. Taking the maximum keeps start monotone, which is also what the O(n) argument depends on.',
+      },
+      {
+        id: 'DSA-018-q5',
+        type: 'match',
+        concept: 'pattern selection',
+        prompt: 'Match each problem to the technique that solves it in linear time.',
+        pairs: [
+          { left: 'Pair summing to a target in a sorted array', right: 'Converging two pointers, O(1) space' },
+          { left: 'Longest stretch with at most 2 distinct values', right: 'Variable sliding window with a frequency map' },
+          { left: 'Count subarrays summing to k, with negatives', right: 'Prefix sums plus a hash map of counts' },
+          { left: 'Sum of any rectangle in a static matrix', right: '2D prefix sums, four lookups per query' },
+          { left: 'Range sums on data that keeps changing', right: 'Fenwick tree: O(log n) query and update' },
+        ],
+        explanation:
+          'Each is chosen by its precondition — sortedness, monotonicity as the window grows, tolerance of negative values, or whether the data is static — rather than by the surface shape of the question.',
+      },
+      {
+        id: 'DSA-018-q6',
+        type: 'explain',
+        concept: 'why these patterns are linear',
+        prompt: 'Explain what these three patterns have in common, and what each one assumes about the data.',
+        rubric: [
+          'Identifies the shared idea: reuse the work from the previous position instead of recomputing, turning O(n^2) into O(n)',
+          'Gives the specific mechanism for each — exclusion of a whole row, amortised pointer movement, one-off preprocessing',
+          'States the precondition each needs and what breaks it: sortedness, monotonicity, static data',
+        ],
+        sampleAnswer:
+          'All three notice that consecutive positions in an array overlap almost completely, so the quadratic solution is recomputing something it already knew. They differ in how they exploit it. Converging two pointers uses a comparison on a sorted array to prove that one endpoint cannot participate in any remaining solution — when the sum is too small, the left value is too small for every partner that is left, since they are all no larger than the one just tried — so a single move eliminates an entire row of the n-by-n pair table and at most 2n moves suffice. The sliding window keeps a contiguous range and a summary of its contents, extends the right edge once per element, and advances the left edge only to repair a violation; since the left edge never retreats and never passes n, the inner loop does at most n units of work in total, which makes the whole scan linear despite looking nested. Prefix sums pay O(n) once so that every range query afterwards is a subtraction, and pairing them with a hash map of previously seen prefixes counts subarrays with an exact sum in a single pass. The assumptions are what decide which one applies. Two pointers needs sorted input, so on unsorted data I would either sort or use a hash map of complements. The window needs the constraint to move in one direction as the window grows, which negative values destroy. Prefix sums need the data to be static, since one update invalidates everything downstream — and that is when a Fenwick tree, with O(log n) updates and queries, is the right answer instead.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Why is the converging two-pointer scan O(n)?', back: 'Each comparison proves one endpoint useless for every remaining partner, eliminating a whole row or column of the pair table. Each iteration moves one pointer, so at most 2n moves settle it.' },
+      { front: 'Why is a sliding window with a nested while loop still O(n)?', back: 'Amortised analysis: start never decreases and never exceeds n, so the inner loop body runs at most n times across the whole scan, not per outer iteration.' },
+      { front: 'The prefix-sum identity?', back: 'With P[0] = 0 and P[i] = sum of the first i elements, sum(a[i..j]) = P[j+1] - P[i]. The leading zero is what removes every special case.' },
+      { front: 'When does a sliding window break?', back: 'When the array can contain negative values and the constraint is about a sum: removing an element can increase the sum, so a violation cannot be repaired by shrinking. Use prefix sums with a hash map instead.' },
+      { front: 'How do you count subarrays with sum exactly k in one pass?', back: 'Walk the array keeping a running total and a hash map of how often each prefix value has occurred, seeded {0: 1}. At each step add the count of (running - k).' },
+      { front: 'What replaces prefix sums when the data changes?', back: 'A Fenwick (binary indexed) tree or segment tree: O(log n) range query and O(log n) point update, instead of O(1) query and O(n) update.' },
+      { front: 'The fixed-window update rule?', back: 'Add the entering element and subtract the leaving one — s += a[i] - a[i-k] — which is O(1) per step. Recomputing sum(a[i:i+k]) makes it O(nk).' },
+    ],
+
+    challenge: {
+      title: 'A rolling-metrics engine over an event stream',
+      brief:
+        'Build a class that consumes timestamped events one at a time and maintains, over a trailing window of W seconds: the count, the sum and mean of a numeric field, the number of distinct user ids, and the maximum. Every update must be amortised O(1) except the maximum, which should be O(1) amortised via a monotonic deque. Then compare it against recomputing each metric from scratch over the retained events, on a million synthetic events.',
+      acceptanceCriteria: [
+        'Events are retained in a deque and expired from the left by timestamp, never scanned repeatedly',
+        'Distinct-user count uses a frequency map with keys removed at zero, and the code explains why subtraction alone is wrong',
+        'The rolling maximum uses a monotonic deque and the amortised argument is stated in a comment',
+        'Correctness is verified against a brute-force recomputation on at least ten thousand events, including out-of-order arrivals handled explicitly or rejected explicitly',
+        'Reports measured throughput for both implementations and the memory held at peak window occupancy',
+      ],
+      starterCode: 'from collections import deque, defaultdict\n\nclass RollingWindow:\n    def __init__(self, window_seconds: float):\n        self.w = window_seconds\n        self.events = deque()        # (timestamp, user_id, value)\n        ...\n\n    def add(self, ts: float, user_id: str, value: float) -> None:\n        ...\n\n    def stats(self) -> dict:\n        """count, sum, mean, distinct_users, max — all O(1)."""\n        ...\n',
+      language: 'python',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone the two-pointer, sliding-window and prefix-sum patterns: what each one is, why each is linear, and when each does not apply.',
+      mustCover: [
+        'All three replace an O(n^2) scan with a single pass by reusing work from the previous position',
+        'Two pointers on a sorted array: each comparison eliminates a whole row of candidate pairs',
+        'Sliding window: expand right, contract left, with the O(n) bound coming from an amortised counting argument',
+        'Prefix sums: O(n) preprocessing gives O(1) range queries, and with a hash map, exact-sum counting in one pass',
+        'Each has a precondition — sortedness, monotonicity, static data — and the pattern fails silently when it is missing',
+      ],
+      bonusSignals: [
+        'gives the exclusion argument explicitly rather than describing the mechanics',
+        'explains the amortised bound rather than eyeballing the nested loop',
+        'knows that negative numbers break the window and prefix sums do not',
+        'mentions the Fenwick tree for updatable range queries or the 2D prefix sum',
+      ],
+      sampleExplanation:
+        'These three patterns solve different problems but share one idea: the answer at each position overlaps almost entirely with the answer at the position before, so recomputing from scratch throws away work you already did. Say the data is sorted and you want two values adding to a target. Put one finger at each end and add. If the total is too small, the value under the left finger is hopeless — every partner still available is no bigger than the one you just tried — so you can discard it entirely and move right. That single move rules out a whole row of the table of possible pairs, which is why a job that looks like it needs every pair takes only about as many steps as there are items. Now say you want the best run of consecutive items satisfying some rule. Push the right edge of a window along, and whenever the rule breaks, pull the left edge in until it holds again. The nested loop looks quadratic, but the left edge only ever moves forwards and can only travel the length of the array once, so the total work is linear. That is an accounting argument, not a structural one, and it is worth getting comfortable with because the same reasoning explains why appending to a dynamic array is cheap on average. Finally, if you will be asked about the total of many different stretches, walk the data once writing down the running total at each point. Afterwards any stretch is one subtraction, and if you also remember how often each running total has occurred, you can count stretches with an exact total in the same single pass. What matters as much as the patterns is their fine print. The finger trick needs the data sorted, or it silently discards the answer. The window needs the rule to move in one direction as the window grows, which negative numbers destroy, since removing an item can make a sum go up. And running totals go stale the instant any value changes, at which point you want a structure built for updates instead.',
+    },
+
+    masteryRequirements: { understoodScore: 0.7, proficientScore: 0.85, practiceRequired: 2, teachRequired: true },
+  },
+  {
+    id: 'DSA-019',
+    domain: 'DSA',
+    module: 'Algorithmic Patterns',
+    topic: 'Optimisation over choices',
+    title: 'Greedy Algorithms and Dynamic Programming',
+    slug: 'greedy-and-dynamic-programming',
+    difficulty: 5,
+    estimatedMinutes: 50,
+    prerequisites: ['DSA-001', 'DSA-011', 'DSA-015'],
+    related: ['DSA-012', 'DSA-016', 'DSA-017', 'DSA-018'],
+    tags: ['greedy', 'dynamic-programming', 'memoisation', 'tabulation', 'knapsack', 'lis', 'optimal-substructure'],
+
+    learningObjectives: [
+      'State what a greedy algorithm is, and prove one correct with an exchange argument rather than trusting that it looks sensible',
+      'Produce a counterexample that kills a plausible greedy rule, and recognise the warning signs that a problem is not greedy-friendly',
+      'Identify the two properties a problem needs for dynamic programming — optimal substructure and overlapping subproblems — and check each one explicitly',
+      'Convert an exponential recursion into a memoised one, and then into a bottom-up table, and say when each form is preferable',
+      'Fill a 0/1 knapsack table by hand, reconstruct which items were chosen, and reduce the space from O(nW) to O(W)',
+      'Solve longest increasing subsequence both in O(n^2) by dynamic programming and in O(n log n) by patience sorting with binary search, and explain what the second gives up',
+    ],
+
+    terminology: [
+      {
+        term: 'Greedy algorithm',
+        definition:
+          'One that builds a solution by repeatedly taking the option that looks best right now, never reconsidering. It is correct only when a local choice is provably compatible with some global optimum.',
+        simple: 'Always take the best-looking next step and never look back.',
+      },
+      {
+        term: 'Exchange argument',
+        definition:
+          'The standard proof technique for greedy correctness: take any optimal solution, show it can be transformed step by step into the greedy one without getting worse, and conclude the greedy solution is also optimal.',
+        simple: 'Show that any better plan can be rewritten as your plan without losing anything.',
+      },
+      {
+        term: 'Optimal substructure',
+        definition:
+          'The property that an optimal solution to a problem contains optimal solutions to its subproblems, so the answer can be composed from smaller answers. Both greedy algorithms and dynamic programming require it.',
+        simple: 'The best answer to the big problem is built out of best answers to smaller ones.',
+      },
+      {
+        term: 'Overlapping subproblems',
+        definition:
+          'The property that a naive recursion solves the same subproblem many times. It is what makes memoisation pay off, and its absence is why divide and conquer — merge sort, for instance — is not dynamic programming.',
+        simple: 'The same smaller question keeps coming up again and again.',
+      },
+      {
+        term: 'Memoisation (top-down)',
+        definition:
+          'Keeping the recursive formulation and caching each result by its argument tuple. It computes only the states actually reachable, at the cost of recursion depth and cache lookups.',
+        simple: 'Write the obvious recursion, then remember every answer you work out.',
+      },
+      {
+        term: 'Tabulation (bottom-up)',
+        definition:
+          'Filling an array of states in dependency order with loops instead of recursion. It has no stack depth limit, better cache behaviour, and permits rolling-array space reduction, but it computes every state whether needed or not.',
+        simple: 'Fill in a table from the smallest cases upwards.',
+      },
+      {
+        term: 'State',
+        definition:
+          'The arguments that fully determine a subproblem\'s answer. Choosing the smallest sufficient state is the central design decision in dynamic programming: it fixes both the table size and the running time.',
+        simple: 'The few facts you actually need to remember about where you are.',
+      },
+    ],
+
+    simpleExplanation:
+      'Two strategies cover most optimisation problems, and the whole art is telling which one a problem needs. The greedy strategy takes the best-looking option at every step and never reconsiders: to make change you hand over the largest coin that fits, and with British or American coins that really does use the fewest coins. It is fast, it uses no memory, and it is sometimes completely wrong — with coins worth 1, 3 and 4, making 6 greedily gives 4 + 1 + 1, three coins, when 3 + 3 would do it in two. Nothing in the greedy method notices this, so it needs proof rather than intuition. The other strategy is dynamic programming, which is what you do when a choice now changes what is worth choosing later. You work out the best answer for every small version of the problem, write those answers down, and build the bigger answers from them. It is slower and it needs memory, but it considers every combination without ever enumerating them, so it does not miss the 3 + 3. The practical rule is that greedy needs a proof and dynamic programming needs a table, and if you cannot produce the proof in a couple of sentences you should be building the table.',
+
+    whyItExists:
+      'Optimisation problems have exponentially many candidate solutions, so enumerating them is out of the question. Greedy algorithms exist because some problems have a local rule that provably reaches a global optimum in one pass; dynamic programming exists for the far larger class where they do not, converting exponential recursion into polynomial time by solving each distinct subproblem once.',
+
+    analogy: {
+      scenario:
+        'You are planning a day of sightseeing. The greedy way is to pick whichever attraction finishes earliest, go, and then repeat with whatever is still available — and remarkably, that rule really does fit the maximum number of attractions into the day, because finishing earliest leaves the most time for everything else, and that can be proved rather than merely hoped. Now change the question: each attraction has an entry fee and a satisfaction score, and you have a fixed budget. Suddenly no simple rule works. Taking the best satisfaction-per-pound first can leave you with an awkward remaining budget that fits nothing, while a slightly worse first choice would have left room for two more visits. The only reliable method is to work out, for every possible budget and every prefix of the attraction list, what the best achievable total is, building a table upwards from the trivial cases.',
+      mapping: [
+        { from: 'Always taking the attraction that finishes earliest', to: 'A greedy rule, provable by an exchange argument' },
+        { from: '"Finishing earliest leaves the most room for the rest"', to: 'The greedy-choice property: a local choice compatible with some global optimum' },
+        { from: 'Budget plus entry fees plus satisfaction scores', to: '0/1 knapsack, where greedy by density is provably not optimal' },
+        { from: 'An awkward leftover budget that fits nothing', to: 'How a locally optimal choice destroys a better global one' },
+        { from: 'The table of best totals for each budget and each prefix', to: 'The dynamic-programming table dp[i][c]' },
+        { from: 'Reading back which attractions the best total used', to: 'Reconstructing the chosen items by walking the table backwards' },
+      ],
+      bridge:
+        'The difference between the two questions is whether a choice now changes what is worth choosing later. Picking the earliest-finishing attraction cannot make a later attraction less attractive — it only frees time — so a single sweep suffices and no table is needed. Spending part of a fixed budget does change what remains affordable, so the value of an item genuinely depends on the choices already made, and the only way to account for that without enumerating every subset is to record the best answer for every remaining budget. That is exactly what the knapsack table is, and it is why the identical problem with fractional items becomes greedy again: being able to take half an item removes the awkward leftover entirely.',
+      limitations:
+        'The itinerary story suggests dynamic programming is always available as a fallback, which is not true. It needs the state space to be small enough to enumerate, and knapsack\'s O(nW) is only pseudo-polynomial — it is polynomial in the numeric value of the capacity, not in the number of bits used to write it, which is why 0/1 knapsack is NP-hard despite the tidy table. Once capacities are large real numbers, neither strategy applies and you are in the territory of approximation algorithms and integer programming solvers.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'The recursion tree of a DP problem, before and after memoisation',
+        caption: 'Watch the same subproblem recur across branches, then switch caching on and see the tree collapse to a DAG.',
+        widget: 'recursion-tree',
+        props: { fn: 'coin-change', memo: true },
+      },
+      {
+        kind: 'ascii',
+        title: 'The 0/1 knapsack table, capacity 8',
+        caption: 'Items A(w2,v3), B(w3,v4), C(w4,v5), D(w5,v6). Each row adds one item; each column is a capacity.',
+        art: `capacity:  0   1   2   3   4   5   6   7   8
+  (none)   0   0   0   0   0   0   0   0   0
+  +A w2v3  0   0   3   3   3   3   3   3   3
+  +B w3v4  0   0   3   4   4   7   7   7   7
+  +C w4v5  0   0   3   4   5   7   8   9   9
+  +D w5v6  0   0   3   4   5   7   8   9  10   <- answer
+
+  dp[i][c] = max( dp[i-1][c],  v_i + dp[i-1][c - w_i] )
+                   skip item i        take item i
+
+  greedy by value density (1.5, 1.33, 1.25, 1.2) picks A then B = 7.
+  the table finds B + D = 10.`,
+      },
+      {
+        kind: 'compare',
+        title: 'Greedy versus dynamic programming',
+        caption: 'Both need optimal substructure. Only one of them also needs a proof that local choices are safe.',
+        left: {
+          heading: 'Greedy',
+          points: [
+            'One pass, O(n log n) at worst because of the sort',
+            'O(1) extra memory; never revisits a decision',
+            'Correct only with a greedy-choice property, proved by an exchange argument',
+            'Fails silently when the property does not hold — no error, just a worse answer',
+            'Examples: activity selection, Huffman coding, Dijkstra, fractional knapsack, Kruskal',
+          ],
+        },
+        right: {
+          heading: 'Dynamic programming',
+          points: [
+            'Considers every combination without enumerating them',
+            'Time and space are the size of the state space, times the work per state',
+            'Needs optimal substructure and overlapping subproblems',
+            'Always correct if the recurrence is right; the risk is a state that is too coarse',
+            'Examples: 0/1 knapsack, edit distance, LIS, Viterbi, matrix chain order',
+          ],
+        },
+      },
+      {
+        kind: 'flow',
+        title: 'How to attack an optimisation problem',
+        caption: 'The order matters: try to kill the greedy idea before you trust it.',
+        steps: [
+          { label: 'Write the obvious recursion', detail: 'Express the answer for a state in terms of the answers for smaller states. This is the recurrence, and everything else is an implementation of it.' },
+          { label: 'Look for a greedy rule', detail: 'Is there a single ordering — earliest finish, highest density, smallest weight — that might be optimal? Write it down as a candidate.' },
+          { label: 'Try hard to break it', detail: 'Search small inputs for a counterexample before attempting a proof. Coins [1, 3, 4] with amount 6 kills greedy change-making in one line; most wrong greedy rules die on an input with fewer than six elements.' },
+          { label: 'If it survives, prove it', detail: 'Use an exchange argument: take an optimal solution that disagrees with the greedy choice and show you can swap in the greedy choice without making it worse. No proof means no greedy.' },
+          { label: 'Otherwise, define the state', detail: 'What is the minimum information that determines the rest of the problem? Fewer dimensions means a smaller table; a state that is too coarse gives wrong answers, one that is too fine gives an intractable table.' },
+          { label: 'Memoise, then consider tabulating', detail: 'lru_cache on the recursion is the fastest route to a correct implementation. Convert to a bottom-up table when recursion depth is a risk, or when you want to reduce space with a rolling array.' },
+          { label: 'Reconstruct the solution if required', detail: 'The table holds values, not choices. Either store a parent pointer per state, or walk the table backwards comparing dp[i][c] with dp[i-1][c] to see whether item i was taken.' },
+        ],
+        branching: true,
+      },
+      {
+        kind: 'table',
+        title: 'Classic problems and which strategy they need',
+        caption: 'The pattern to notice is whether a choice now restricts what is worth choosing later.',
+        columns: ['Problem', 'Strategy', 'Why', 'Cost'],
+        rows: [
+          ['Maximum non-overlapping meetings', 'Greedy: earliest finish first', 'Finishing earliest leaves the most room; provable by exchange', 'O(n log n)'],
+          ['Fractional knapsack', 'Greedy: highest value density', 'Fractions remove the leftover-capacity problem', 'O(n log n)'],
+          ['0/1 knapsack', 'Dynamic programming', 'Taking an item changes which others fit; density greedy gives 7 instead of 10', 'O(nW) time, O(W) space'],
+          ['Coin change, arbitrary denominations', 'Dynamic programming', 'Greedy fails on [1, 3, 4] making 6: three coins instead of two', 'O(amount * coins)'],
+          ['Coin change, canonical currency', 'Greedy', 'Real coin systems are designed so the greedy rule is optimal', 'O(coins)'],
+          ['Longest increasing subsequence', 'Either', 'O(n^2) DP, or O(n log n) with patience sorting and binary search', 'O(n^2) or O(n log n)'],
+          ['Edit distance between two strings', 'Dynamic programming', 'Every prefix pair is a state; the same pair recurs across paths', 'O(mn)'],
+          ['Huffman codes', 'Greedy with a heap', 'Merging the two least frequent symbols is provably safe', 'O(n log n)'],
+          ['Shortest path, non-negative weights', 'Greedy: Dijkstra', 'The closest unvisited vertex is final; needs non-negativity', 'O((V+E) log V)'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'A problem exhibits optimal substructure when an optimal solution can be decomposed into optimal solutions of subproblems, and it exhibits the greedy-choice property when some optimal solution contains the choice a fixed local rule would make first; a greedy algorithm is correct precisely when both hold, which is typically established by an exchange argument or by showing the feasible sets form a matroid. Dynamic programming applies when a problem has optimal substructure together with overlapping subproblems — a naive recursion revisits the same states — and solves each distinct state once, either top-down with memoisation or bottom-up by tabulation in an order respecting the dependency DAG. Its cost is the number of distinct states multiplied by the transition work per state, so the 0/1 knapsack recurrence dp[i][c] = max(dp[i-1][c], v_i + dp[i-1][c - w_i]) runs in Theta(nW) time and Theta(W) space with a rolling array — pseudo-polynomial, since W is exponential in the number of bits used to encode the capacity, which is why the decision problem remains NP-complete.',
+
+    math: {
+      intuition:
+        'Dynamic programming is exhaustive search that never repeats itself. The recursion already considers every combination; memoising it changes the recursion tree into a directed acyclic graph over distinct states, and the running time becomes the number of nodes in that graph times the cost of each transition. That is why designing the state is the whole game: the state determines the node count. A greedy algorithm goes further and claims the graph has a single distinguished path through it — a claim that needs proof, because when it is false the algorithm still runs and still returns a plausible answer.',
+      formulas: [
+        {
+          latex: 'dp[i][c] = \\max\\big(dp[i-1][c],\\; v_i + dp[i-1][c - w_i]\\big) \\quad \\text{if } w_i \\le c',
+          name: '0/1 knapsack recurrence',
+          meaning: 'Either item i is left out, in which case the value is whatever the first i-1 items achieve at capacity c, or it is taken, gaining v_i and leaving capacity c - w_i for the earlier items.',
+          category: 'optimization',
+          variables: [
+            { symbol: 'dp[i][c]', meaning: 'Best value using the first i items with capacity c' },
+            { symbol: 'w_i, v_i', meaning: 'Weight and value of item i' },
+            { symbol: 'c', meaning: 'Remaining capacity, from 0 to W' },
+          ],
+        },
+        {
+          latex: 'T = |\\text{states}| \\times \\text{transitions per state}',
+          name: 'The cost of a dynamic program',
+          meaning: 'The single most useful formula in the topic: knapsack has nW states and O(1) transitions, giving O(nW); LIS has n states with O(n) transitions, giving O(n^2); edit distance has mn states with O(1) transitions, giving O(mn).',
+          category: 'complexity',
+          variables: [
+            { symbol: '|\\text{states}|', meaning: 'Number of distinct argument tuples the recursion can be called with' },
+            { symbol: '\\text{transitions}', meaning: 'Number of smaller states each state consults' },
+          ],
+        },
+        {
+          latex: 'L[i] = 1 + \\max\\{\\, L[j] : j < i,\\; a_j < a_i \\,\\}, \\quad \\text{LIS} = \\max_i L[i]',
+          name: 'Longest increasing subsequence, O(n^2) form',
+          meaning: 'L[i] is the length of the best increasing subsequence ending exactly at index i, which is what makes the subproblems independent of one another.',
+          category: 'optimization',
+          variables: [
+            { symbol: 'L[i]', meaning: 'Best length ending at index i' },
+            { symbol: 'a_j < a_i', meaning: 'The condition allowing element j to precede element i' },
+          ],
+        },
+        {
+          latex: '\\text{OPT}(S) \\supseteq \\text{greedy first choice} \\;\\Longrightarrow\\; \\text{greedy is optimal (exchange argument)}',
+          name: 'The greedy-choice property',
+          meaning: 'If some optimal solution can always be modified to contain the greedy choice without losing value, induction on the remaining subproblem proves the greedy algorithm optimal.',
+          category: 'optimization',
+          variables: [
+            { symbol: '\\text{OPT}(S)', meaning: 'An optimal solution to the instance S' },
+          ],
+        },
+      ],
+      derivation: [
+        'Prove the earliest-finish rule for activity selection by exchange. Let g be the activity that finishes first, and let O be any optimal set of non-overlapping activities.',
+        'If g is in O, nothing to do. Otherwise let f be the activity in O that finishes earliest.',
+        'By the choice of g, finish(g) <= finish(f), so replacing f with g in O cannot create an overlap with anything else in O: everything else in O starts at or after finish(f) >= finish(g).',
+        'The modified set has the same size, is still feasible, and contains g — so there is an optimal solution containing the greedy choice.',
+        'The remaining problem is the same problem restricted to activities starting at or after finish(g), so induction completes the proof.',
+        'Now try the same argument for 0/1 knapsack with the highest-density rule and watch it fail: swapping the densest item into an optimal solution may not fit, because it may weigh more than the item it replaces.',
+        'That failure is not a gap in the proof but a real counterexample. Items (w2,v3), (w3,v4), (w4,v5), (w5,v6) with capacity 8 have densities 1.5, 1.33, 1.25, 1.2; greedy takes the first two for value 7, while the optimum takes the second and fourth for value 10.',
+        'The fix is to stop committing: record the best value for every remaining capacity, which is exactly dp[i][c], and let the table decide.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Filling a 0/1 knapsack table by hand, then reading the answer back out',
+      setup:
+        'Four items — A (weight 2, value 3), B (weight 3, value 4), C (weight 4, value 5), D (weight 5, value 6) — and a knapsack of capacity 8. Each item may be taken at most once. Build dp with one row per item prefix and one column per capacity 0 to 8, where dp[i][c] is the best value obtainable from the first i items with capacity c. Row 0 is all zeros: no items means no value.',
+      steps: [
+        {
+          label: 'The recurrence',
+          detail: 'For each item i and capacity c there are exactly two options. Skip item i, giving dp[i-1][c]. Or take it, if it fits, giving v_i + dp[i-1][c - w_i] — its value plus the best the earlier items could do with the capacity that remains. Take the larger.',
+          latex: 'dp[i][c] = \\max(dp[i-1][c],\\; v_i + dp[i-1][c-w_i])',
+        },
+        { label: 'Row A (w 2, v 3)', detail: 'Capacities 0 and 1 cannot fit A, so they stay 0. From capacity 2 upwards, taking A gives 3 + dp[0][c-2] = 3, which beats skipping. Row: [0, 0, 3, 3, 3, 3, 3, 3, 3].' },
+        { label: 'Row B (w 3, v 4), the interesting cells', detail: 'At c = 3: skip gives dp[A][3] = 3, take gives 4 + dp[A][0] = 4. Take, so 4. At c = 5: skip gives 3, take gives 4 + dp[A][2] = 4 + 3 = 7 — both A and B fit. Row: [0, 0, 3, 4, 4, 7, 7, 7, 7].' },
+        { label: 'Row C (w 4, v 5)', detail: 'At c = 6: skip gives 7, take gives 5 + dp[B][2] = 5 + 3 = 8. Take. At c = 7: skip gives 7, take gives 5 + dp[B][3] = 5 + 4 = 9. Take. At c = 8: take gives 5 + dp[B][4] = 5 + 4 = 9, equal to nothing better, so 9. Row: [0, 0, 3, 4, 5, 7, 8, 9, 9].' },
+        { label: 'Row D (w 5, v 6)', detail: 'At c = 8: skip gives dp[C][8] = 9, take gives 6 + dp[C][3] = 6 + 4 = 10. Take. Row: [0, 0, 3, 4, 5, 7, 8, 9, 10]. The answer is dp[4][8] = 10.' },
+        {
+          label: 'Reconstruct the choice',
+          detail: 'Start at dp[4][8] = 10. It differs from dp[3][8] = 9, so D was taken; subtract its weight, leaving capacity 3. dp[3][3] = 4 equals dp[2][3] = 4, so C was not taken. dp[2][3] = 4 differs from dp[1][3] = 3, so B was taken; capacity drops to 0. dp[1][0] = 0 equals dp[0][0], so A was not taken. Selection: B and D, weight 3 + 5 = 8, value 4 + 6 = 10.',
+        },
+        {
+          label: 'Compare with the greedy rule',
+          detail: 'Value densities are A 1.5, B 1.33, C 1.25, D 1.2. Greedy takes A (capacity 6 left), then B (capacity 3 left), then cannot fit C or D — total value 7. The table found 10. Greedy lost not because its rule was foolish but because taking A left a capacity of 3 that nothing valuable could use.',
+        },
+        {
+          label: 'Why the same problem is greedy when items are divisible',
+          detail: 'If fractions were allowed, greedy by density would be optimal: take all of A, all of B, then three quarters of C for 3 + 4 + 3.75 = 10.75, beating 10. The leftover capacity problem disappears because any remaining capacity can always be filled. The exchange argument that fails for 0/1 succeeds here, which is a precise statement of what indivisibility costs.',
+        },
+        {
+          label: 'Count the work',
+          detail: 'The table has (n + 1)(W + 1) = 5 * 9 = 45 cells, each filled with one comparison, so Theta(nW). Brute force would examine 2^n = 16 subsets here, but 2^50 for fifty items, while the table would need only 50 * 8 = 400 cells. The saving is exactly the overlapping subproblems being collapsed.',
+          latex: '\\Theta(nW) = \\Theta(4 \\cdot 8) \\ll 2^{n}',
+        },
+        {
+          label: 'Reduce the space',
+          detail: 'Each row depends only on the row above, so one array of length W + 1 suffices — provided you iterate capacity downwards. Going upwards would let an item be used twice, because dp[c - w] would already have been updated in this same pass, which silently solves the unbounded knapsack instead. That one loop direction is the difference between the two problems.',
+          latex: '\\text{for } c = W \\text{ down to } w_i: \\; dp[c] = \\max(dp[c], v_i + dp[c - w_i])',
+        },
+        {
+          label: 'The honest caveat',
+          detail: 'Theta(nW) looks polynomial but is not: W is written in log2(W) bits, so the table is exponential in the input size. With capacity 10^9 the table has a billion columns per item and the method is useless, which is why 0/1 knapsack is NP-hard and why real solvers use branch and bound or approximation.',
+        },
+        {
+          label: 'The same machinery on a different problem',
+          detail: 'For longest increasing subsequence on [10, 9, 2, 5, 3, 7, 101, 18], the state is "best length ending exactly at index i", giving L = [1, 1, 1, 2, 2, 3, 4, 4] and an answer of 4. Each of the n states consults up to n earlier ones, so O(n^2). Patience sorting gets the same 4 in O(n log n) by keeping the smallest possible tail for each length — [2], [2,5], [2,3], [2,3,7], [2,3,7,101], [2,3,7,18] — and binary searching where each new element belongs; the final tails array is not itself a valid subsequence, so that speedup gives up easy reconstruction.',
+        },
+      ],
+      conclusion:
+        'The table costs Theta(nW) = 45 cells of O(1) work and Theta(W) = 9 cells of space with the rolling-array form, against 2^n subsets for brute force, and it returns 10 where the density-greedy rule returns 7. Three transferable lessons. First, the value table alone does not tell you what to pack; reconstruction is a second backwards pass comparing dp[i][c] with dp[i-1][c], or a stored parent pointer per state. Second, the space reduction depends on a loop direction — capacity descending for 0/1, ascending for unbounded — which makes it one of the easiest correct-looking bugs to write. Third, greedy was not obviously wrong here, which is the real point: the density rule is sensible, it is optimal for the fractional variant, and it fails for the 0/1 variant only because indivisibility leaves capacity stranded. That is why a greedy algorithm needs an exchange argument before it is trusted, and why "it passed my three test cases" is not one.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Where greedy is right, and where it silently is not',
+        runnable: true,
+        code: `def greedy_coins(coins, amount):
+    out = []
+    for c in sorted(coins, reverse=True):
+        while amount >= c:
+            amount -= c; out.append(c)
+    return out if amount == 0 else None
+
+def dp_coins(coins, amount):
+    best = [0] + [float("inf")] * amount       # best[a] = fewest coins making a
+    for a in range(1, amount + 1):
+        for c in coins:
+            if c <= a:
+                best[a] = min(best[a], best[a - c] + 1)
+    return best[amount]
+
+for coins, amount in [([1, 5, 10, 25], 30), ([1, 3, 4], 6), ([1, 7, 10], 15)]:
+    g = greedy_coins(coins, amount)
+    print(f"coins={coins} amount={amount}: greedy {g} = {len(g)} coins, "
+          f"optimal = {dp_coins(coins, amount)} coins")`,
+        output: `coins=[1, 5, 10, 25] amount=30: greedy [25, 5] = 2 coins, optimal = 2 coins
+coins=[1, 3, 4] amount=6: greedy [4, 1, 1] = 3 coins, optimal = 2 coins
+coins=[1, 7, 10] amount=15: greedy [10, 1, 1, 1, 1, 1] = 6 coins, optimal = 3 coins`,
+        explanation:
+          'The first line is why almost everyone believes greedy change-making works: real currencies are deliberately designed as canonical systems in which it does. The second and third lines show it failing by a factor of two on denominations that are not — [1, 3, 4] making 6 as 3 + 3, and [1, 7, 10] making 15 as 7 + 7 + 1 — and note that the greedy function does not signal any difficulty. It returns a valid set of coins that simply is not minimal, which is the characteristic failure mode: no exception, no warning, just a worse answer that passes every test whose denominations happen to be canonical. The dynamic program is five lines longer and always right, at O(amount * len(coins)) time and O(amount) space.',
+      },
+      {
+        language: 'python',
+        title: 'Activity selection: a greedy rule that is provably optimal',
+        runnable: true,
+        code: `meetings = [(0, 6), (1, 4), (3, 5), (5, 7), (3, 9), (5, 9),
+            (6, 10), (8, 11), (8, 12), (2, 14), (12, 16)]
+
+def select_by(meetings, key):
+    chosen = []
+    for s, f in sorted(meetings, key=key):
+        if all(f <= cs or s >= cf for cs, cf in chosen):   # no overlap with any chosen
+            chosen.append((s, f))
+    return sorted(chosen)
+
+print("earliest finish :", select_by(meetings, lambda m: m[1]),
+      len(select_by(meetings, lambda m: m[1])))
+print("earliest start  :", select_by(meetings, lambda m: m[0]),
+      len(select_by(meetings, lambda m: m[0])))
+print("shortest first  :", select_by(meetings, lambda m: m[1] - m[0]),
+      len(select_by(meetings, lambda m: m[1] - m[0])))
+
+tricky = [(0, 10), (9, 11), (10, 20)]      # where "shortest first" dies
+print("tricky, earliest finish:", select_by(tricky, lambda m: m[1]))
+print("tricky, shortest first :", select_by(tricky, lambda m: m[1] - m[0]))`,
+        output: `earliest finish : [(1, 4), (5, 7), (8, 11), (12, 16)] 4
+earliest start  : [(0, 6), (6, 10), (12, 16)] 3
+shortest first  : [(3, 5), (5, 7), (8, 11), (12, 16)] 4
+tricky, earliest finish: [(0, 10), (10, 20)]
+tricky, shortest first : [(9, 11)]`,
+        explanation:
+          'Three plausible greedy rules, and only one of them is a theorem. Earliest-finish-first is optimal by an exchange argument: if an optimal schedule does not contain the earliest-finishing meeting, swapping it in cannot create a conflict, because everything else in that schedule starts after a finish time that is no earlier. Earliest-start-first fails on the main example, taking three meetings instead of four, because one long early meeting blocks the rest of the morning. Shortest-first happens to tie on the main example, which is exactly why testing is not proving — on the three-meeting case it takes the single short meeting in the middle and blocks both of the others, one instead of two. This is the discipline the topic demands: find the counterexample before you trust the rule.',
+      },
+      {
+        language: 'python',
+        title: '0/1 knapsack: the table, the reconstruction, and the greedy comparison',
+        runnable: true,
+        code: `items = [("A", 2, 3), ("B", 3, 4), ("C", 4, 5), ("D", 5, 6)]   # name, weight, value
+cap = 8
+n = len(items)
+
+dp = [[0] * (cap + 1) for _ in range(n + 1)]
+for i in range(1, n + 1):
+    name, w, v = items[i - 1]
+    for c in range(cap + 1):
+        dp[i][c] = dp[i - 1][c]                        # skip item i
+        if w <= c:
+            dp[i][c] = max(dp[i][c], v + dp[i - 1][c - w])   # or take it
+for i in range(n + 1):
+    print(("-" if i == 0 else items[i - 1][0]), dp[i])
+print("best value:", dp[n][cap])
+
+c, taken = cap, []
+for i in range(n, 0, -1):
+    if dp[i][c] != dp[i - 1][c]:                       # the value changed: item i was used
+        name, w, v = items[i - 1]
+        taken.append(name); c -= w
+print("items taken:", sorted(taken))
+
+def greedy_density(items, cap):
+    c, val, took = cap, 0, []
+    for name, w, v in sorted(items, key=lambda it: -it[2] / it[1]):
+        if w <= c:
+            c -= w; val += v; took.append(name)
+    return val, sorted(took)
+print("greedy by value density:", greedy_density(items, cap))`,
+        output: `- [0, 0, 0, 0, 0, 0, 0, 0, 0]
+A [0, 0, 3, 3, 3, 3, 3, 3, 3]
+B [0, 0, 3, 4, 4, 7, 7, 7, 7]
+C [0, 0, 3, 4, 5, 7, 8, 9, 9]
+D [0, 0, 3, 4, 5, 7, 8, 9, 10]
+best value: 10
+items taken: ['B', 'D']
+greedy by value density: (7, ['A', 'B'])`,
+        explanation:
+          'The reconstruction loop is the part worth studying: the table stores values, not decisions, so you recover the packing by asking at each row whether the value differs from the row above — if it does, this item must have been used, and the capacity rewinds by its weight. Comparing against greedy makes the failure concrete: the density rule takes A and B for 7 because A is the densest item, and that choice strands three units of capacity that nothing can use, while the table finds B and D filling the bag exactly for 10. Cost is Theta(nW) time and Theta(nW) space as written, reducible to Theta(W) with a single rolling array iterated downwards — but keep the full table when you need to reconstruct the answer, since the rolling version discards the history.',
+      },
+      {
+        language: 'python',
+        title: 'The same problem three ways: recursion, memoisation, tabulation',
+        runnable: true,
+        code: `from functools import lru_cache
+
+grid_cost = [[1, 3, 1, 8],
+             [1, 5, 1, 2],
+             [4, 2, 1, 3]]           # minimum-cost path, moving only right or down
+
+calls = 0
+def naive(r, c):
+    global calls
+    calls += 1
+    if r == 0 and c == 0: return grid_cost[0][0]
+    if r < 0 or c < 0:    return float("inf")
+    return grid_cost[r][c] + min(naive(r - 1, c), naive(r, c - 1))
+
+print("naive :", naive(2, 3), "in", calls, "calls")
+
+@lru_cache(maxsize=None)
+def memo(r, c):
+    if r == 0 and c == 0: return grid_cost[0][0]
+    if r < 0 or c < 0:    return float("inf")
+    return grid_cost[r][c] + min(memo(r - 1, c), memo(r, c - 1))
+
+print("memo  :", memo(2, 3), memo.cache_info())
+
+R, C = len(grid_cost), len(grid_cost[0])
+dp = [[0] * C for _ in range(R)]
+for r in range(R):
+    for c in range(C):
+        if r == 0 and c == 0:
+            dp[r][c] = grid_cost[r][c]
+        else:
+            up   = dp[r - 1][c] if r else float("inf")
+            left = dp[r][c - 1] if c else float("inf")
+            dp[r][c] = grid_cost[r][c] + min(up, left)
+for row in dp:
+    print("   ", row)
+print("table :", dp[R - 1][C - 1])`,
+        output: `naive : 10 in 49 calls
+memo  : 10 CacheInfo(hits=6, misses=17, maxsize=None, currsize=17)
+    [1, 4, 5, 13]
+    [2, 7, 6, 8]
+    [6, 8, 7, 10]
+table : 10`,
+        explanation:
+          'One recurrence, three implementations, identical answers. The naive version makes 49 calls for a 3x4 grid and would make about 2^(R+C) for a large one, because the same cell is reached down many different paths. Memoisation caches on the argument tuple and drops to one computation per distinct state — 17 misses, namely the twelve grid cells plus five out-of-range sentinels — which is the transformation from exponential to Theta(RC). Tabulation computes the same states with loops in dependency order, which removes the recursion depth limit, avoids the hashing cost and has far better cache locality, at the price of computing every state whether it is needed or not. The practical route is to write the recursion, add lru_cache to make it correct and fast, and tabulate only if depth or memory forces it.',
+      },
+      {
+        language: 'python',
+        title: 'Longest increasing subsequence: O(n^2) and O(n log n)',
+        runnable: true,
+        code: `import bisect
+
+seq = [10, 9, 2, 5, 3, 7, 101, 18]
+
+def lis_quadratic(a):
+    best = [1] * len(a)
+    prev = [-1] * len(a)
+    for i in range(len(a)):
+        for j in range(i):
+            if a[j] < a[i] and best[j] + 1 > best[i]:
+                best[i] = best[j] + 1
+                prev[i] = j                 # parent pointer, for reconstruction
+    end = max(range(len(a)), key=lambda i: best[i])
+    out = []
+    while end != -1:
+        out.append(a[end]); end = prev[end]
+    return best, max(best), out[::-1]
+
+print("per-index best:", lis_quadratic(seq))
+
+def lis_nlogn(a, verbose=False):
+    tails = []                              # tails[k] = smallest tail of an LIS of length k+1
+    for x in a:
+        i = bisect.bisect_left(tails, x)
+        if i == len(tails):
+            tails.append(x)                 # x extends the longest run so far
+        else:
+            tails[i] = x                    # x is a better (smaller) tail for that length
+        if verbose:
+            print(f"  saw {x:>3} -> tails {tails}")
+    return len(tails)
+
+print("length:", lis_nlogn(seq, verbose=True))`,
+        output: `per-index best: ([1, 1, 1, 2, 2, 3, 4, 4], 4, [2, 5, 7, 101])
+  saw  10 -> tails [10]
+  saw   9 -> tails [9]
+  saw   2 -> tails [2]
+  saw   5 -> tails [2, 5]
+  saw   3 -> tails [2, 3]
+  saw   7 -> tails [2, 3, 7]
+  saw 101 -> tails [2, 3, 7, 101]
+  saw  18 -> tails [2, 3, 7, 18]
+length: 4`,
+        explanation:
+          'The quadratic version defines the state as "the best subsequence ending exactly at index i", which is the choice that makes the subproblems independent — defining it as "the best using the first i elements" would not, because whether element i + 1 can be appended depends on what the previous answer ended with. It also carries parent pointers, so the actual subsequence comes back, not merely its length. The n log n version keeps, for each achievable length, the smallest possible final element, and binary searches for where the new element belongs — replacing a tail keeps future options as open as possible. The catch, and the reason to know both: the tails array is not itself a valid subsequence — here it ends as [2, 3, 7, 18] while the quadratic version reconstructs the genuine [2, 5, 7, 101] — so recovering the actual subsequence needs extra parent bookkeeping on top.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Sequence alignment in bioinformatics and diffing',
+        usage:
+          'Needleman-Wunsch and Smith-Waterman are edit distance with a scoring matrix: a dp table over every pair of prefixes, O(mn), with the alignment recovered by backtracking. git diff, difflib and every code-review tool run the same family of algorithm, and the O(mn) memory is exactly why aligning two long genomes needs Hirschberg\'s divide-and-conquer variant.',
+      },
+      {
+        context: 'Viterbi decoding and dynamic time warping',
+        usage:
+          'The most likely hidden state sequence in an HMM is a dp over (time, state) with O(T * S^2) transitions, used in speech recognition, part-of-speech tagging and gene finding. DTW aligns two time series of different lengths with the same table shape, and both keep backpointers for exactly the reconstruction reason knapsack does.',
+      },
+      {
+        context: 'Decoding in language models',
+        usage:
+          'Greedy decoding takes the highest-probability token at each step and is fast but demonstrably not the highest-probability sequence, which is the classic greedy failure. Beam search is a bounded relaxation — keep the k best prefixes rather than one — and it is neither greedy nor a full dynamic program, because the state space of distinct sequences is far too large to tabulate.',
+      },
+      {
+        context: 'Resource allocation and scheduling',
+        usage:
+          'Fitting jobs onto GPUs under a memory budget, choosing which features to compute under a latency budget, and ad-slot allocation under a spend cap are knapsack problems. Production systems use the greedy density rule with an approximation guarantee, or an integer-programming solver, precisely because the exact table is pseudo-polynomial and the capacities are large.',
+      },
+      {
+        context: 'Huffman coding and data compression',
+        usage:
+          'Repeatedly merging the two least frequent symbols is greedy, and provably optimal for prefix-free codes by an exchange argument. It runs in O(n log n) with a heap, and sits underneath gzip, JPEG and every tokeniser that assigns shorter identifiers to more frequent pieces.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'functools.lru_cache / cache', role: 'Turns a correct recursive formulation into a memoised dynamic program with one line. Arguments must be hashable, so states are tuples rather than lists.' },
+      { tool: 'heapq', role: 'The engine of greedy algorithms that repeatedly take the best remaining option: Huffman coding, Dijkstra, and scheduling by priority.' },
+      { tool: 'numpy', role: 'Vectorises a dp row-by-row when the transition is elementwise, which is how knapsack and edit-distance tables are made fast without leaving Python.' },
+      { tool: 'difflib / python-Levenshtein / rapidfuzz', role: 'Production edit-distance implementations; reach for them rather than writing the O(mn) table yourself unless you need a custom scoring scheme.' },
+      { tool: 'OR-Tools / PuLP', role: 'When the dp table is too large — real capacities, many constraints — these solve the same optimisation as an integer program with branch and bound.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Trusting a greedy rule because it works on the examples you tried',
+        why: 'Greedy failures are silent and often need a specific shape of input to appear: shortest-meeting-first ties with the optimum on many instances and only fails when one short meeting straddles two long ones. Tests written by the same person who invented the rule rarely contain that case.',
+        fix: 'Before trusting it, brute-force all small inputs and compare against the greedy answer — a twenty-line exhaustive check over inputs of size up to six finds nearly every counterexample. If none appears, write the exchange argument.',
+      },
+      {
+        mistake: 'Choosing a state that does not capture enough information',
+        why: 'If the state omits something the future depends on, the recurrence is simply wrong — "best LIS using the first i elements" fails because whether element i + 1 can extend it depends on the last value, which the state does not record.',
+        fix: 'Ask what a solver standing at this state would need to know to finish optimally. If the answer includes something the state omits, add it — and if that makes the state space explode, the problem may not be tractable by dp at all.',
+      },
+      {
+        mistake: 'Iterating the rolling knapsack array in the wrong direction',
+        why: 'Going upwards in capacity lets dp[c - w] already reflect item i from this same pass, so the item is used repeatedly. The code runs and returns a plausible, larger number — it has silently solved the unbounded knapsack instead of the 0/1 one.',
+        fix: 'Iterate capacity from W down to w_i for 0/1, and upwards for unbounded. Write which problem the loop solves in a comment, and test with a single item whose weight is half the capacity.',
+      },
+      {
+        mistake: 'Expecting the value table to tell you the solution',
+        why: 'dp[n][W] is a number. Which items achieve it is not recorded anywhere, and guessing by re-scanning the items is wrong when several combinations reach the same value.',
+        fix: 'Either walk the full table backwards comparing dp[i][c] with dp[i-1][c], or store a choice or parent pointer per state. Note that the O(W) rolling array cannot support reconstruction, which is a reason to keep the full table.',
+      },
+      {
+        mistake: 'Calling Theta(nW) polynomial',
+        why: 'W is a numeric value, not an input size: writing it takes log2 W bits, so the table is exponential in the length of the input. A capacity of 10^9 makes the method useless despite the tidy formula, and 0/1 knapsack remains NP-hard.',
+        fix: 'Say pseudo-polynomial and mean it. If capacities or weights are large or real-valued, use an approximation scheme, branch and bound, or an integer-programming solver.',
+      },
+      {
+        mistake: 'Reaching for dynamic programming when the subproblems do not overlap',
+        why: 'Memoising a recursion whose arguments are all distinct adds hashing cost and memory for no benefit. Merge sort has optimal substructure but no overlap, which is what makes it divide and conquer rather than dp.',
+        fix: 'Count the distinct argument tuples against the number of calls. If they are the same, you have divide and conquer; if the calls are exponential and the states polynomial, you have dynamic programming.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'How do you decide whether a problem is greedy or needs dynamic programming?',
+        answer:
+          'I ask whether committing to a choice now can make a later choice worse. If it cannot — if the local choice only ever frees resources or removes constraints — greedy is plausible and I try to prove it with an exchange argument: take any optimal solution, show the greedy choice can be swapped in without making it worse, then induct on what remains. Activity selection passes that test, because taking the earliest-finishing meeting leaves the largest possible remaining window. If committing does change the future, as in 0/1 knapsack where spending capacity can strand the remainder, greedy is suspect and I look for a counterexample first: coins [1, 3, 4] making 6 needs two coins but greedy uses three, and the knapsack density rule returns 7 where the optimum is 10. Then I set up a dp by asking what the minimum state is that determines the rest of the problem, writing the recurrence, and checking that subproblems actually recur — because if every recursive call has distinct arguments, memoising buys nothing and what I have is divide and conquer. In practice I try to break the greedy rule by brute force on small inputs before attempting either proof; a counterexample is cheaper to find than a theorem, and it settles the question either way.',
+        followUp:
+          'Being asked for a problem where greedy is optimal and one where it is not, with the reason rather than just the name, separates understanding from recall.',
+      },
+      {
+        level: 'advanced',
+        question: 'Explain 0/1 knapsack, its complexity, and why the complexity is not really polynomial.',
+        answer:
+          'The state is the pair (i, c): the best value obtainable from the first i items with capacity c. The recurrence has two branches — skip item i, giving dp[i-1][c], or take it if it fits, giving v_i + dp[i-1][c - w_i] — and the answer is the maximum. That is nW states with O(1) transitions each, so Theta(nW) time, and Theta(W) space with a single rolling array iterated downwards in capacity; the downward direction is essential, because going upwards would let the same item be taken repeatedly, which is the unbounded variant. To recover which items were packed I keep the full table and walk backwards, checking at each row whether the value differs from the row above. The reason Theta(nW) is not polynomial is that W is a magnitude, not a size: the input writes it in log2 W bits, so the table is exponential in the encoding length, and that is why the decision version is NP-complete despite the simple recurrence. It is called pseudo-polynomial, and it matters practically — a capacity of a billion makes the table impossible while n stays small. In that regime I would use the fully polynomial approximation scheme, which scales values and gives a (1 - epsilon) guarantee, or branch and bound with the fractional-knapsack density as the upper bound, which is what real solvers do.',
+        followUp:
+          'Mentioning the FPTAS, or that fractional knapsack is greedy and optimal while 0/1 is not, shows the candidate understands where the hardness actually comes from.',
+      },
+      {
+        level: 'ai-engineer',
+        question: 'Where do these ideas actually appear in machine-learning systems?',
+        answer:
+          'Dynamic programming turns up wherever the structure is a sequence and the answer is a best path. Viterbi decoding for hidden Markov models is a dp over time and state, still used in forced alignment and tagging; CTC loss for speech recognition is a forward-backward dp over alignments; dynamic time warping compares two series of different lengths with the same table; and edit distance underlies word error rate, fuzzy matching and every diff tool. All of them keep backpointers for the same reason the knapsack table does — the value alone does not tell you the alignment. Greedy shows up most visibly in decoding: taking the highest-probability token at each step is greedy and is provably not the highest-probability sequence, which is why beam search exists as a bounded middle ground that keeps k prefixes instead of one, and why neither is a true dp — the space of distinct sequences is far too large to tabulate. Elsewhere, greedy with a proof is everywhere in infrastructure: Huffman coding in tokenisers and compression, Dijkstra in routing, and heap-based selection for top-k retrieval. The recurring engineering lesson is the one from knapsack: when a budget is involved — GPU memory, latency, context tokens — the greedy density rule is usually what ships, and it should ship with an explicit statement of how far from optimal it can be.',
+        followUp:
+          'Explaining why beam search is not dynamic programming, since prefixes are not recombined into shared states, is the detail that shows real depth.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Compute the edit distance between "kitten" and "sitting", giving the recurrence, the complexity and the alignment that achieves it.',
+        hint: 'The state is a pair of prefix lengths, and there are exactly three ways to consume a character.',
+        solution:
+          'def edit_distance(a, b):\n    m, n = len(a), len(b)\n    dp = [[0] * (n + 1) for _ in range(m + 1)]\n    for i in range(m + 1): dp[i][0] = i      # delete every character of a\n    for j in range(n + 1): dp[0][j] = j      # insert every character of b\n    for i in range(1, m + 1):\n        for j in range(1, n + 1):\n            cost = 0 if a[i-1] == b[j-1] else 1\n            dp[i][j] = min(dp[i-1][j] + 1,       # delete a[i-1]\n                           dp[i][j-1] + 1,       # insert b[j-1]\n                           dp[i-1][j-1] + cost)  # substitute or match\n    return dp[m][n]\n\nedit_distance("kitten", "sitting") -> 3.\n\nThe state (i, j) is "the distance between the first i characters of a and the first j of b", and the three transitions are the three edits. Optimal substructure holds because any optimal alignment ends with one of those three operations, and the subproblems overlap heavily — dp[i-1][j-1] is consulted from three different cells — which is why the naive recursion is exponential and the table is Theta(mn) time and Theta(mn) space, reducible to Theta(min(m, n)) if only the number is needed. The alignment achieving 3 is: substitute k with s, substitute e with i, insert g. Reconstructing it requires either the full table or Hirschberg\'s algorithm, which recovers the alignment in linear space at twice the time.',
+      },
+      {
+        prompt: 'Write the O(W)-space 0/1 knapsack, explain the loop direction, and show what goes wrong if you reverse it.',
+        hint: 'Ask whether dp[c - w] refers to the previous row or the current one.',
+        solution:
+          'def knapsack_rolling(items, cap):\n    dp = [0] * (cap + 1)\n    for _, w, v in items:\n        for c in range(cap, w - 1, -1):      # DOWNWARDS: dp[c - w] is still last row\n            dp[c] = max(dp[c], v + dp[c - w])\n    return dp[cap]\n\nitems = [("A", 2, 3), ("B", 3, 4), ("C", 4, 5), ("D", 5, 6)]\nknapsack_rolling(items, 8) -> 10, matching the two-dimensional table.\n\nThe single array represents the previous row until it is overwritten. Iterating capacity downwards means dp[c - w] has not yet been touched in this pass, so it still holds the value for the first i - 1 items — which is what the 0/1 recurrence requires. Iterating upwards means dp[c - w] may already include item i from this same pass, so the item can be taken again and again: with the same input, the upward loop returns 12 by taking item A four times. That is not a bug in the recurrence but a different problem, the unbounded knapsack, and the ascending loop is the standard way to write it.\n\nCost is Theta(nW) time and Theta(W) space. The trade-off to state explicitly is that the rolling array discards the history, so reconstruction of which items were chosen is no longer possible — keep the full Theta(nW) table whenever the caller needs the packing rather than the number.',
+      },
+      {
+        prompt: 'A greedy rule is proposed for scheduling: always run the job with the shortest processing time first, to minimise average completion time. Is it optimal? Prove it or break it.',
+        hint: 'Try an exchange argument on two adjacent jobs in any schedule.',
+        solution:
+          'It is optimal, and the exchange argument is short. Take any schedule and suppose two adjacent jobs, i then j, have p_i > p_j. Let t be the time when i starts. Their contribution to the total completion time is (t + p_i) + (t + p_i + p_j). Swapping them gives (t + p_j) + (t + p_j + p_i). The difference is p_i - p_j > 0, so the swap strictly reduces the total, and every other job\'s completion time is unchanged because the pair occupies the same interval either way.\n\nSo any schedule with an out-of-order adjacent pair can be improved, which means an optimal schedule has no such pair — that is, it is sorted by processing time. Shortest-job-first is therefore optimal for minimising total, and hence average, completion time, at O(n log n) for the sort.\n\nTwo caveats worth stating in an interview. The result assumes all jobs are available at time zero and are not preemptible; with release times the problem becomes harder and the preemptive rule is shortest-remaining-processing-time. And optimality here is for average completion time, not for maximum completion time or for fairness — shortest-job-first starves long jobs, which is exactly why real schedulers use ageing rather than the pure rule.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DSA-019-q1',
+        type: 'mcq',
+        concept: 'greedy failure',
+        prompt: 'With coin denominations [1, 3, 4], how many coins does the greedy largest-first rule use to make 6, and what is the true optimum?',
+        options: [
+          'Greedy uses 3 coins (4 + 1 + 1); the optimum is 2 coins (3 + 3)',
+          'Greedy uses 2 coins; the optimum is 2 coins',
+          'Greedy fails to make 6 at all',
+          'Greedy uses 6 coins; the optimum is 3',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Taking 4 first strands a remainder of 2 that only single units can fill. Nothing in the greedy method detects this: it returns a valid answer that is simply not minimal, which is the characteristic silent failure.',
+      },
+      {
+        id: 'DSA-019-q2',
+        type: 'numeric',
+        concept: 'knapsack table',
+        prompt: 'Items A(w2,v3), B(w3,v4), C(w4,v5), D(w5,v6) with capacity 8. What is the maximum total value with each item usable at most once?',
+        answer: 10,
+        explanation:
+          'B and D weigh 3 + 5 = 8 exactly and give 4 + 6 = 10. Greedy by value density takes A and B for 7, stranding three units of capacity — which is why this problem needs the table.',
+      },
+      {
+        id: 'DSA-019-q3',
+        type: 'multi',
+        concept: 'when DP applies',
+        prompt: 'Which conditions must hold for dynamic programming to be the right tool?',
+        options: [
+          'Optimal substructure: optimal solutions are built from optimal solutions of subproblems',
+          'Overlapping subproblems: the same states recur across the recursion',
+          'The state space must be small enough to enumerate',
+          'The input must be sorted',
+          'The problem must have no greedy solution',
+        ],
+        answerIndices: [0, 1, 2],
+        explanation:
+          'Substructure and overlap are the classic pair, and tractability of the state space is the practical third. Sortedness is irrelevant, and a problem having a greedy solution does not stop dp from also solving it — usually more slowly.',
+      },
+      {
+        id: 'DSA-019-q4',
+        type: 'debug',
+        language: 'python',
+        concept: 'rolling array direction',
+        prompt: 'This space-optimised 0/1 knapsack returns 12 instead of 10 for items A(2,3), B(3,4), C(4,5), D(5,6) at capacity 8. What is wrong?',
+        code: `dp = [0] * (cap + 1)
+for _, w, v in items:
+    for c in range(w, cap + 1):
+        dp[c] = max(dp[c], v + dp[c - w])`,
+        options: [
+          'The capacity loop must run downwards; going upwards lets the same item be taken repeatedly',
+          'dp should be initialised to negative infinity',
+          'The items must be sorted by weight first',
+          'The comparison should be min rather than max',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Ascending capacity means dp[c - w] may already include the current item from this same pass, so it is reused — that solves the unbounded knapsack. Descending keeps dp[c - w] at its previous-row value, which is what the 0/1 recurrence needs.',
+      },
+      {
+        id: 'DSA-019-q5',
+        type: 'truefalse',
+        concept: 'pseudo-polynomial complexity',
+        prompt: 'Because 0/1 knapsack has a Theta(nW) algorithm, it can be solved in polynomial time.',
+        answer: false,
+        explanation:
+          'W is a numeric magnitude written in log2 W bits, so Theta(nW) is exponential in the input length — pseudo-polynomial. With a capacity of 10^9 the table is unusable, and the decision problem remains NP-complete.',
+      },
+      {
+        id: 'DSA-019-q6',
+        type: 'order',
+        concept: 'designing a dynamic program',
+        prompt: 'Put the steps of designing a dynamic program in order.',
+        items: [
+          'Define the state: the minimum information that determines the rest of the problem',
+          'Write the recurrence relating a state to smaller states',
+          'Identify the base cases',
+          'Choose memoisation or tabulation, and the order to fill states in',
+          'Reconstruct the solution from parent pointers or by walking the table backwards',
+        ],
+        explanation:
+          'The state comes first because it determines both the recurrence and the cost — states times transitions. Reconstruction comes last and is a separate concern, since the table stores values rather than decisions.',
+      },
+      {
+        id: 'DSA-019-q7',
+        type: 'explain',
+        concept: 'greedy proof versus counterexample',
+        prompt: 'A colleague proposes a greedy rule for an optimisation problem. Explain how you would evaluate it.',
+        rubric: [
+          'Tries to break the rule first, by brute-forcing small inputs and comparing against the greedy answer',
+          'If it survives, proves it with an exchange argument: swap the greedy choice into an optimal solution without loss, then induct',
+          'Notes that greedy failures are silent, so "it passes our tests" is not evidence, and names the dp fallback when the proof fails',
+        ],
+        sampleAnswer:
+          'I look for a counterexample before I look for a proof, because a counterexample is cheaper to find and settles the question outright. Concretely, I write an exhaustive brute force over all inputs up to about size six and compare its answer with the greedy rule on every one; most wrong greedy rules die on a tiny input, such as coins [1, 3, 4] making 6, or three meetings where the shortest sits across the other two. If the rule survives that, I attempt an exchange argument: take any optimal solution that differs from the greedy one, show that the greedy first choice can be substituted into it without reducing its value or breaking feasibility, and then induct on the remaining subproblem. That is what makes earliest-finish-first a theorem rather than a hunch — swapping in the earliest-finishing meeting cannot create a conflict, because everything else starts after a finish time that is no earlier. If I cannot produce that argument in a few sentences, I treat the rule as unproven and switch to dynamic programming, defining the state as the minimum information that determines the rest of the problem. The reason I insist on this discipline is that greedy failures are silent: the algorithm returns a valid, plausible, suboptimal answer with no error, so it will pass review and tests and then quietly cost you ten per cent of something in production for years.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What two properties does dynamic programming require?', back: 'Optimal substructure — optimal solutions are composed of optimal subsolutions — and overlapping subproblems, meaning the naive recursion revisits the same states. Without overlap it is divide and conquer.' },
+      { front: 'How do you prove a greedy algorithm correct?', back: 'An exchange argument: show that any optimal solution can be modified to include the greedy first choice without becoming worse, then induct on the remaining subproblem.' },
+      { front: 'The 0/1 knapsack recurrence?', back: 'dp[i][c] = max(dp[i-1][c], v_i + dp[i-1][c - w_i]) when w_i <= c: skip the item, or take it and spend its weight. Theta(nW) time, Theta(W) space with a rolling array.' },
+      { front: 'Why is the rolling knapsack array iterated downwards?', back: 'So dp[c - w] still holds the previous row. Iterating upwards lets the same item be taken repeatedly, which solves the unbounded knapsack instead — silently, with a larger answer.' },
+      { front: 'The cost formula for any dynamic program?', back: 'Number of distinct states times the transition work per state. Knapsack: nW states, O(1) each. LIS: n states, O(n) each. Edit distance: mn states, O(1) each.' },
+      { front: 'Memoisation versus tabulation?', back: 'Top-down caching computes only reachable states but costs recursion depth and hashing; bottom-up tables compute everything but avoid depth limits, have better cache locality, and allow rolling-array space reduction.' },
+      { front: 'Why is Theta(nW) knapsack not polynomial?', back: 'W is a magnitude written in log2 W bits, so the table is exponential in the input length — pseudo-polynomial. 0/1 knapsack is NP-hard.' },
+      { front: 'A greedy rule that is provably optimal, and one that is not?', back: 'Earliest-finish-first for activity selection is optimal by exchange. Highest-value-density for 0/1 knapsack is not: it returns 7 where the optimum is 10, though it is optimal for the fractional version.' },
+    ],
+
+    challenge: {
+      title: 'A counterexample hunter for greedy rules',
+      brief:
+        'Write a harness that takes a problem specification — a brute-force optimal solver and one or more candidate greedy rules — and searches small random inputs for a case where a greedy rule is suboptimal, reporting the smallest such input it finds. Apply it to three problems: coin change with random denominations, 0/1 knapsack with several greedy orderings, and interval scheduling with earliest-start, earliest-finish and shortest-first rules.',
+      acceptanceCriteria: [
+        'The brute-force solver is exhaustive and obviously correct, even though it is exponential, and is used only on inputs small enough to permit that',
+        'Search proceeds from the smallest inputs upwards so the reported counterexample is minimal in size, not merely the first one found',
+        'For each problem it reports the counterexample, both objective values, and the ratio — or states that no counterexample was found within the search budget',
+        'Finds a counterexample for density-greedy knapsack and for shortest-first scheduling, and finds none for earliest-finish scheduling',
+        'Includes a short written note on why the absence of a counterexample is evidence rather than proof, and what the exchange argument for earliest-finish looks like',
+      ],
+      starterCode: 'from itertools import combinations\nfrom typing import Callable, Iterator\n\ndef brute_force_knapsack(items, cap):\n    """Exhaustive over all subsets. Returns the best achievable value."""\n    ...\n\ndef find_counterexample(generate: Callable[[int], Iterator], optimal, greedy, max_size=7):\n    """Smallest generated input where greedy(x) != optimal(x)."""\n    ...\n',
+      language: 'python',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone the difference between greedy algorithms and dynamic programming, how to tell which a problem needs, and how to know a greedy rule is actually correct.',
+      mustCover: [
+        'A greedy algorithm takes the locally best option and never reconsiders, which is fast but correct only when a greedy-choice property holds',
+        'Greedy correctness is proved by an exchange argument, and greedy failures are silent rather than loud',
+        'Dynamic programming needs optimal substructure and overlapping subproblems, and solves each distinct state once',
+        'Its cost is the number of states times the transition work, so choosing the state is the central design decision',
+        'Memoisation and tabulation are two implementations of the same recurrence, with different trade-offs',
+      ],
+      bonusSignals: [
+        'gives a concrete counterexample, such as coins [1, 3, 4] making 6 or the knapsack density rule returning 7 instead of 10',
+        'mentions that knapsack\'s Theta(nW) is pseudo-polynomial',
+        'explains that the table stores values and reconstruction is a separate backwards pass',
+        'contrasts 0/1 knapsack with fractional knapsack, where greedy is optimal',
+      ],
+      sampleExplanation:
+        'Both of these are ways of finding the best option among astronomically many, and they differ in whether you are allowed to commit. A greedy method takes whatever looks best right now and never revisits it. Scheduling meetings by always taking the one that finishes earliest really does fit in the most meetings, and you can prove it: if some perfect schedule does not include the earliest-finishing meeting, you can swap it in, because everything else in that schedule starts after a time no earlier than the one you removed — so the swap never creates a clash and never costs you a meeting. That kind of argument, rather than a feeling that the rule is sensible, is what makes a greedy algorithm trustworthy. When no such argument exists, greedy is usually wrong, and wrong in a nasty way: it does not crash or complain, it just quietly hands back a worse answer. With coins worth 1, 3 and 4, making 6 by always taking the biggest coin gives three coins when two would do. Filling a bag by best value-per-kilogram can leave a gap that nothing fits, so a slightly worse first choice would have won. Dynamic programming is what you do when a choice now changes what is worth choosing later. Instead of committing, you work out the best answer for every smaller situation and write it down — for every remaining capacity, for every prefix of the list — and build bigger answers from smaller ones. The knapsack table does exactly that, and it finds ten where the greedy rule finds seven. The cost of this is easy to estimate: count the distinct situations you have to record, and multiply by the work each one takes. That single calculation is also the design advice, because the situations you record are your choice, and recording too little gives wrong answers while recording too much gives a table you cannot afford. Two last things people forget. The table holds numbers, not decisions, so if you want to know which items to pack you have to walk back through it afterwards. And the tidy formula for knapsack is misleading — it is proportional to the capacity itself, not to the number of digits used to write the capacity, so with a realistic capacity the table is hopeless and you are back to approximations.',
+    },
+
+    masteryRequirements: { understoodScore: 0.7, proficientScore: 0.85, practiceRequired: 2, teachRequired: true },
+  },
 ];

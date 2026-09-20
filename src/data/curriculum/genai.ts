@@ -7313,10 +7313,12 @@ def answer(question, llm):
     hits = retrieve(question)
     context = "\\n\\n".join(f"[S{i+1}] ({name})\\n{text}" for i, (name, text) in enumerate(hits))
     return llm(PROMPT.format(context=context, question=question)), hits`,
-        output: `retrieved 4 of 25 candidates after re-ranking
-answer: Personal leave must be requested at least 14 days in advance [S1],
-        and managers approve or decline within 3 working days [S2].
-sources: policy.md, handbook.md`,
+        output: `>>> ans, hits = answer("How much notice is needed for leave?", llm)
+>>> print(ans)
+Personal leave must be requested at least 14 days in advance [S1],
+and managers approve or decline within 3 working days [S2].
+>>> [name for name, _ in hits]
+['policy.md', 'policy.md', 'handbook.md', 'handbook.md']`,
         explanation:
           'Four design choices here carry almost all the quality. Chunking on paragraph boundaries rather than a fixed character count keeps a complete thought in one retrievable unit, and the overlap stops a fact being orphaned at a boundary. The two-stage retrieval is the standard shape: a cheap vector search over everything to get 25 candidates, then an expensive cross-encoder that reads query and passage together to pick the best four — far more accurate than embeddings alone, and affordable because it only sees 25 items. The context labels each passage with a source id so citations can be validated later. And the prompt supplies an explicit escape hatch: without `NOT_IN_CONTEXT`, the model treats answering as compulsory and falls back on parametric memory precisely when retrieval failed.',
       },
