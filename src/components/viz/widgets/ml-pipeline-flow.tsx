@@ -92,7 +92,7 @@ const STAGES: Stage[] = [
   {
     id: 'register', label: 'Register', col: 2, row: 2,
     what: 'Store the model as a versioned artifact with its metrics, its data lineage and its signature — the contract of input names, types and shapes.',
-    wrong: 'The artifact is a pickle on someone laptop, with no record of the library versions it was created with.',
+    wrong: 'The artifact is a pickle file on one engineer’s laptop, with no record of the library versions it was created with.',
     tool: 'MLflow Model Registry, W&B Artifacts',
   },
   {

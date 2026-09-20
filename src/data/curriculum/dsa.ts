@@ -6651,6 +6651,8 @@ while q:
         ],
         sampleAnswer:
           'BFS processes vertices in non-decreasing order of distance from the source, because a vertex at distance k only ever appends vertices at distance k + 1 to the back of the queue, so the queue holds a block of level-k vertices followed by a block of level-(k + 1) vertices and nothing else. Now suppose some vertex v were first discovered at distance d but actually had a path of length m < d. That path\'s second-to-last vertex sits at distance at most m - 1, which is smaller than d - 1, so it would have been dequeued before the vertex that actually discovered v, and when it was expanded it would have discovered v then — giving v a distance of at most m, contradicting the assumption. Hence first arrival is shortest arrival, and that is exactly why the algorithm can skip an already-seen vertex without comparing anything. The argument leans entirely on every edge costing the same; with weights, dequeue order stops tracking cost and you need a priority queue.',
+        explanation:
+          'The examinable judgement is the queue invariant — only two consecutive levels are ever in the queue — rather than the bare assertion that BFS goes level by level.',
       },
     ],
 
@@ -7310,6 +7312,8 @@ print(order)`,
         ],
         sampleAnswer:
           'Swap deque.popleft for list.pop and the traversal changes character completely while its cost does not move: both visit every vertex once and every edge once per endpoint, O(V + E) time. Taking from the front means the pending collection holds at most two adjacent distance levels, so vertices emerge in non-decreasing distance and first arrival is shortest arrival — that is the shortest-path guarantee, plus levels, bipartiteness and nearest-source queries. Taking from the back means the pending collection tracks the current root-to-node path, so the algorithm always knows its own ancestors; an edge into one of them is a cycle, the order in which calls finish gives a topological order on a DAG, and an outer loop over unvisited vertices counts components. The costs mirror each other in memory: BFS holds a whole level, which on a graph with branching factor 100 is hopeless three rings out, while DFS holds one path, which is tiny on a wide graph and fatal on a chain of a million vertices, where CPython raises RecursionError at a thousand frames.',
+        explanation:
+          'The examinable judgement is that FIFO buys distance information while LIFO buys ancestry information, with the memory profiles mirroring each other, rather than a list of what each algorithm is used for.',
       },
     ],
 
@@ -7956,6 +7960,8 @@ print("what forgetting .copy() gives you:", subsets_buggy([1, 2, 3]))`,
         ],
         sampleAnswer:
           'I draw the recursion tree: one node per call, with children for the calls it makes. The time is the number of nodes multiplied by the work done at each node outside the recursive calls, and the auxiliary space is the height of the tree, because that is the deepest the call stack ever gets. Subsets branch two ways for n levels, so 2^n leaves and O(n * 2^n) with the copy at each leaf; permutations branch n then n-1 then n-2, so n! leaves; naive Fibonacci branches twice at nearly every node down to depth n, giving about 1.618^n. Whether memoisation helps is a separate count: how many distinct argument tuples can the function be called with? For Fibonacci there are only n + 1 of them, so 2.7 million calls at n = 30 are recomputing 31 values and caching makes it linear. For subsets, the argument is the whole partial path, so there are 2^n distinct states and caching gains nothing — the output is genuinely that large. The useful middle case is where the state is finer than it needs to be: if I am carrying an entire path when only its length and last element affect the answer, coarsening the key can turn an exponential state space into a polynomial one, which is exactly the move from brute-force recursion to dynamic programming.',
+        explanation:
+          'The examinable judgement is separating the number of calls from the number of distinct states, since that difference is exactly what decides whether memoisation helps at all.',
       },
     ],
 
@@ -8565,6 +8571,8 @@ broken([1, 3, 5, 7], 7)`,
         ],
         sampleAnswer:
           'The invariant is a promise about which positions could still hold the answer, and every other decision falls out of it. If the promise is "the target, if present, is in the closed interval [lo, hi]", then lo starts at 0 and hi at n - 1 so the promise holds initially; the loop runs while lo <= hi, because [lo, lo] still contains one candidate nobody has examined; and after comparing a[mid], the branch must exclude mid, since the comparison has just proved mid is not the answer — giving lo = mid + 1 and hi = mid - 1. Exiting means lo > hi, an empty interval, so by the invariant the target is absent and lo is exactly its insertion point. Termination is the same argument seen from the other side: because both branches exclude mid, the interval strictly shrinks every iteration and cannot repeat. That is why lo = mid is fatal — integer division rounds down, so on a two-element interval mid equals lo and the assignment changes nothing, while hi = mid always shrinks because mid is strictly less than hi. If instead I am searching for a boundary, the invariant changes to "the answer is in [lo, hi)" and a candidate satisfying the predicate stays live, so the updates become hi = mid and lo = mid + 1 with the loop running while lo < hi. Different invariant, different code, same derivation.',
+        explanation:
+          'The examinable judgement is deriving the bounds and updates from a stated invariant, rather than recalling which variant uses mid + 1 and which uses mid.',
       },
     ],
 
@@ -9215,6 +9223,8 @@ for name, d in [("random", data_random), ("already sorted", data_sorted),
         ],
         sampleAnswer:
           'I would ask them to delete it and write sorted(rows, key=lambda r: (r["team"], r["name"])). Three reasons. First, correctness: quicksort is not stable, because partitioning swaps elements across the array, so if they were relying on sorting by one key and then the other, their results are subtly wrong in a way that small test data will not reveal. A single tuple key sidesteps stability altogether by making the comparison total in one pass. Second, robustness: a hand-rolled quicksort almost always uses the first or last element as pivot, which is exactly quadratic on sorted or reverse-sorted input — and data arriving from a database ORDER BY or an append-only log is usually sorted. At half a million records that is the difference between milliseconds and minutes, and with input an attacker controls it is a denial-of-service vector. Third, speed: Timsort is implemented in C, is stable by guarantee, and detects existing runs so that nearly-ordered input is close to O(n), while any Python-level sort pays interpreter overhead per comparison. I would also point out that key= calls the key function exactly n times, whereas a comparison-based approach would evaluate it O(n log n) times — so even the API is doing them a favour.',
+        explanation:
+          'The examinable judgement is naming the two concrete risks — lost stability and a quadratic pivot on sorted input — rather than simply preferring the library on principle.',
       },
     ],
 
@@ -9900,6 +9910,8 @@ for i, ch in enumerate(s):
         ],
         sampleAnswer:
           'All three notice that consecutive positions in an array overlap almost completely, so the quadratic solution is recomputing something it already knew. They differ in how they exploit it. Converging two pointers uses a comparison on a sorted array to prove that one endpoint cannot participate in any remaining solution — when the sum is too small, the left value is too small for every partner that is left, since they are all no larger than the one just tried — so a single move eliminates an entire row of the n-by-n pair table and at most 2n moves suffice. The sliding window keeps a contiguous range and a summary of its contents, extends the right edge once per element, and advances the left edge only to repair a violation; since the left edge never retreats and never passes n, the inner loop does at most n units of work in total, which makes the whole scan linear despite looking nested. Prefix sums pay O(n) once so that every range query afterwards is a subtraction, and pairing them with a hash map of previously seen prefixes counts subarrays with an exact sum in a single pass. The assumptions are what decide which one applies. Two pointers needs sorted input, so on unsorted data I would either sort or use a hash map of complements. The window needs the constraint to move in one direction as the window grows, which negative values destroy. Prefix sums need the data to be static, since one update invalidates everything downstream — and that is when a Fenwick tree, with O(log n) updates and queries, is the right answer instead.',
+        explanation:
+          'The examinable judgement is the shared reuse-the-previous-position idea together with the precondition each pattern needs, rather than three memorised code shapes.',
       },
     ],
 
@@ -10655,6 +10667,8 @@ for _, w, v in items:
         ],
         sampleAnswer:
           'I look for a counterexample before I look for a proof, because a counterexample is cheaper to find and settles the question outright. Concretely, I write an exhaustive brute force over all inputs up to about size six and compare its answer with the greedy rule on every one; most wrong greedy rules die on a tiny input, such as coins [1, 3, 4] making 6, or three meetings where the shortest sits across the other two. If the rule survives that, I attempt an exchange argument: take any optimal solution that differs from the greedy one, show that the greedy first choice can be substituted into it without reducing its value or breaking feasibility, and then induct on the remaining subproblem. That is what makes earliest-finish-first a theorem rather than a hunch — swapping in the earliest-finishing meeting cannot create a conflict, because everything else starts after a finish time that is no earlier. If I cannot produce that argument in a few sentences, I treat the rule as unproven and switch to dynamic programming, defining the state as the minimum information that determines the rest of the problem. The reason I insist on this discipline is that greedy failures are silent: the algorithm returns a valid, plausible, suboptimal answer with no error, so it will pass review and tests and then quietly cost you ten per cent of something in production for years.',
+        explanation:
+          'The examinable judgement is hunting a counterexample before attempting a proof, and recognising that greedy failures are silent, so passing tests is not evidence of correctness.',
       },
     ],
 

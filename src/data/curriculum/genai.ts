@@ -7265,6 +7265,27 @@ MRR      = 0.50`,
     formalDefinition:
       'Retrieval-augmented generation conditions a language model on a query q together with a set of passages R(q) selected from an external corpus by a retriever, so the output is sampled from P(answer | q, R(q)) rather than from P(answer | q) alone; system quality is therefore bounded above by the retriever’s recall, since no passage outside R(q) can influence the result. An agent is a control loop in which the model maps the current transcript to either a terminal answer or a structured tool call whose execution result is appended as an observation, iterating under an explicit termination condition; because the model selects the control flow, end-to-end reliability is approximately the product of per-step reliabilities.',
 
+    workedExample: {
+      title: 'Diagnosing a documentation assistant that answers 61% of questions correctly',
+      setup:
+        'An internal handbook assistant is live. Users report that it is "often wrong". The corpus is 4,200 chunks produced by splitting every document every 1,000 characters. Retrieval is dense-only, top 5, no re-ranker. The team is about to spend a sprint rewriting the prompt. Work out whether that is where the problem is.',
+      steps: [
+        { label: 'Build the only thing that makes this measurable', detail: 'Take 30 real questions from the support channel. For each, have someone find the chunk ids that genuinely answer it, and write a one-line reference answer. This is a day of work and it determines where the sprint goes.' },
+        { label: 'Measure the ceiling first', detail: 'Recall at 5 — the fraction of questions whose answering chunk appears in the retrieved context — comes out at 0.70. Nine of the thirty questions therefore cannot be answered correctly by any model, for any prompt.' },
+        { label: 'Isolate the generator', detail: 'Re-run all thirty questions with the gold chunks supplied directly instead of retrieved. Accuracy is 0.89. Compare with end-to-end accuracy of 0.61: the generator is doing its job on 89% of questions when it is given the evidence.' },
+        { label: 'Attribute the gap', detail: 'The 28-point gap between 0.89 and 0.61 is retrieval, not generation. A perfect prompt could recover at most the 11 points the generator is losing, and only some of those. The sprint was aimed at the smaller problem.' },
+        { label: 'Inspect the nine retrieval failures individually', detail: 'Five are queries containing an exact token — an error code, a form number, a product name — that dense search diluted. Three have the answer split across a 1,000-character boundary, with the heading in one chunk and the value in the next. One document was never ingested at all.' },
+        { label: 'Fix the cheapest failure class first', detail: 'Add BM25 alongside the dense search and fuse the rankings. Recall at 5 moves from 0.70 to 0.83, recovering four of the five exact-token failures. This is roughly an afternoon of work.' },
+        { label: 'Fix the chunking', detail: 'Re-chunk on headings with a 50-word overlap instead of a fixed 1,000 characters. Chunk count falls to 3,100 and recall at 5 reaches 0.90, recovering the boundary-split cases. Reindexing is the only cost.' },
+        { label: 'Add a re-ranker over a wider shortlist', detail: 'Retrieve 25 candidates and re-rank with a cross-encoder, keeping 4. Recall at 4 after re-ranking is 0.94, and p95 latency rises by about 380 ms — a product decision, not a technical one.' },
+        { label: 'Now spend a little on the prompt', detail: 'With retrieval fixed, end-to-end accuracy is 0.85 against an oracle ceiling of 0.89. Adding an explicit NOT_IN_CONTEXT refusal path and a per-claim citation requirement takes it to 0.87 and, more importantly, converts most of the remaining failures from confident wrong answers into refusals.' },
+        { label: 'Verify the citations mechanically', detail: 'Check that every cited span exists in the cited source. Two answers cite a source that does not contain the quoted text; both are counted as failures rather than successes. Citations nobody validates are decoration.' },
+        { label: 'Measure the refusal behaviour deliberately', detail: 'Add ten questions whose answers are genuinely not in the corpus. The system refuses on nine. A system that never refuses is hallucinating; one that always refuses is useless, and only measuring both catches it.' },
+      ],
+      conclusion:
+        'End-to-end accuracy went from 0.61 to 0.87, and 24 of those 26 points came from retrieval changes the team was not planning to make. The general lesson is the diagnostic, not the numbers: always compare end-to-end accuracy against accuracy with the gold passage supplied, because that single comparison tells you which half of the system to work on — and the visible half is almost never the failing one.',
+    },
+
     codeExamples: [
       {
         language: 'python',
