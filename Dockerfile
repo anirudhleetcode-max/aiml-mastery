@@ -16,7 +16,20 @@ COPY . .
 # *some* value because the session module validates its length at import.
 ENV AUTH_SECRET="build-time-placeholder-not-a-secret-0123456789"
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npx prisma generate && npm run build
+# Prisma will not read the datasource provider from the environment at run
+# time — it is compiled into the generated client — so the provider this image
+# will be pointed at has to be decided here, while it is being built.
+#
+# It defaults to postgresql because that is what a deployed container is
+# almost always given, and because the failure in the other direction is
+# silent: a client generated for SQLite against a postgresql:// URL builds,
+# starts, serves every page that avoids the database, and then fails every
+# read and write at request time. That exact fault reached production once
+# already. Build with --build-arg DATABASE_PROVIDER=sqlite for an image meant
+# to run against a mounted SQLite file.
+ARG DATABASE_PROVIDER=postgresql
+ENV DATABASE_PROVIDER=${DATABASE_PROVIDER}
+RUN npm run build
 
 FROM node:22-alpine AS runner
 WORKDIR /app

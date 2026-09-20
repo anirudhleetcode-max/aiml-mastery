@@ -59,13 +59,31 @@ if (/\/login/.test(page.url())) {
   await page.getByLabel('Your name').fill('Perf Audit');
   await page.getByLabel('Email').fill(`perf-${stamp}@example.com`);
   await page.getByLabel('Password', { exact: true }).fill('a-long-enough-perf-passphrase');
-  await page.getByRole('button', { name: /sign up|create account/i }).click();
-  await page.waitForURL(/dashboard|onboarding/, { timeout: 60000 }).catch(() => {});
+  await page.getByRole('button', { name: 'Start my journey' }).click();
+  await page.waitForURL(/\/onboarding/, { timeout: 120000 }).catch(() => {});
+
+  // A new account is held at onboarding by the app shell's layout, so without
+  // walking it every "authenticated" route below would measure the onboarding
+  // page instead — the same class of quiet mismeasurement the refusal below
+  // exists to prevent.
+  if (/\/onboarding/.test(page.url())) {
+    await page.getByLabel('Name').fill('Perf Audit');
+    await page.getByRole('button', { name: /Continue/ }).click();
+    await page.getByRole('button', { name: /1 hour a day/ }).click();
+    await page.getByRole('button', { name: /Continue/ }).click();
+    await page.getByRole('button', { name: /Some Python/ }).click();
+    await page.getByRole('button', { name: /Continue/ }).click();
+    await page.getByRole('button', { name: /AI\/ML internship/ }).click();
+    await page.getByRole('button', { name: /Continue/ }).click();
+    await page.getByRole('button', { name: /Start day one/ }).click();
+    await page.waitForURL(/\/today/, { timeout: 120000 }).catch(() => {});
+  }
+  await page.goto(`${BASE}/dashboard`);
 }
 
 // Measuring the login page seven times and calling it a perf report is worse
 // than reporting nothing, so refuse to continue rather than swallow this.
-if (/\/login|\/signup/.test(page.url())) {
+if (/\/login|\/signup|\/onboarding/.test(page.url())) {
   console.error(
     '\n  Could not authenticate — every signed-in route would measure the login\n' +
       '  page instead. Against a local build, seed the database (npm run db:reset)\n' +

@@ -283,10 +283,19 @@ note saying which happened.
 
 ## Deploying
 
+Live at **https://aiml-mastery.vercel.app**, on Vercel with a Neon PostgreSQL
+database, deployed by `.github/workflows/deploy.yml` and gated on
+`scripts/smoke-production.mjs` — a deploy whose smoke test fails is a failed
+deploy. The smoke test exercises the live alias rather than inspecting a build
+log: it signs up, checks the row survives a logout and a fresh sign-in, reads
+the learner state back, and asserts the cookie flags and security headers on
+the response the platform's proxy actually returns.
+
 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) covers three targets — a container
 (portable anywhere), Vercel, and Fly.io — with the environment each needs, the
-one-line change from SQLite to PostgreSQL, and a five-point verification that
-does not accept "the CLI exited zero" as evidence.
+one-line change from SQLite to PostgreSQL, a verification that does not accept
+"the CLI exited zero" as evidence, and a table separating what the live site
+has proved from what has only been checked locally.
 
 ## Accessibility
 
