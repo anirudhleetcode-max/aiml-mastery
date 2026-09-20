@@ -14,6 +14,7 @@ import { Tabs } from '@/components/ui/tabs';
 import { EmptyState } from '@/components/ui/misc';
 import { ProgressBar } from '@/components/ui/progress';
 import { pct } from '@/lib/format';
+import { AnswerEvaluator } from '@/components/evaluation/answer-evaluator';
 
 export interface InterviewRow {
   unitId: string;
@@ -295,12 +296,24 @@ export function InterviewView({
               <h3 className="mt-4 text-[16px] font-semibold leading-snug text-ink">{current.question}</h3>
 
               {!revealed ? (
-                <div className="mt-4">
+                <div className="mt-4 space-y-4">
                   <p className="text-[13px] leading-relaxed text-subtle">
                     Answer it out loud, properly, before you reveal anything. Recognising a good answer is not the same
                     as producing one, and only one of those is what an interview measures.
                   </p>
-                  <Button className="mt-3" onClick={() => setRevealed(true)}>
+
+                  {/* Writing it out is optional and always has been. It exists
+                      for the learner who wants a second opinion before seeing
+                      the reference answer — after which the reference, and
+                      their own verdict on it, are still what decide things. */}
+                  <AnswerEvaluator
+                    endpoint="/api/evaluate/interview"
+                    body={{ unitId: current.unitId, questionIndex: current.questionIndex }}
+                    label="Optional: write your answer out and have it checked"
+                    placeholder="Answer as you would in the room — a few sentences, in your own words."
+                  />
+
+                  <Button onClick={() => setRevealed(true)}>
                     <Eye size={14} /> Show a strong answer
                   </Button>
                 </div>
