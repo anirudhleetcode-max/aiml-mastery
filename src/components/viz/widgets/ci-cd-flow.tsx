@@ -229,6 +229,11 @@ export default function CiCdFlow() {
             <PlayButton
               playing={playing}
               onToggle={() => {
+                // Motion reduced: run the pipeline to its stopping point without animating it.
+                if (reduced) {
+                  setElapsed(runEnd);
+                  return;
+                }
                 if (finished) setElapsed(0);
                 setPlaying((p) => !p);
               }}
@@ -243,7 +248,11 @@ export default function CiCdFlow() {
               }}
               label="the pipeline run"
             />
-            {reduced && <span className="text-[11px] text-subtle">Motion reduced — Step advances one stage.</span>}
+            {reduced && (
+              <span className="text-[11px] text-subtle">
+                Motion reduced — Play jumps to the end of the run; Step advances one stage.
+              </span>
+            )}
           </div>
           <div>
             <p className="mb-1 text-[12px] font-medium text-muted">Make a stage fail</p>

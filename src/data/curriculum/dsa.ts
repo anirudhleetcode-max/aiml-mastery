@@ -8730,7 +8730,8 @@ merge:  [27, 43]                    [3, 9]      [10, 82]
         [27, 38, 43]                   [3, 9, 10, 82]
                   [3, 9, 10, 27, 38, 43, 82]
 
-3 levels of merging, 7 elements per level -> about n log2 n = 7 * 2.8 = 20 comparisons`,
+3 levels of merging, at most 7 elements merged per level -> at most 7 * 3 = 21 comparisons
+(this particular input costs 13)`,
       },
       {
         kind: 'table',

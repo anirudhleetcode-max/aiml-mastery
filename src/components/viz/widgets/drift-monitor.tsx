@@ -344,6 +344,11 @@ export default function DriftMonitor() {
             <PlayButton
               playing={playing}
               onToggle={() => {
+                // Motion reduced: skip the animation and show day 60 outright.
+                if (reduced) {
+                  setDay(DAYS);
+                  return;
+                }
                 if (day >= DAYS) setDay(0);
                 setPlaying((p) => !p);
               }}
@@ -357,7 +362,11 @@ export default function DriftMonitor() {
               }}
               label="the 60 days"
             />
-            {reduced && <span className="text-[11px] text-subtle">Motion reduced — use Step or the day slider.</span>}
+            {reduced && (
+              <span className="text-[11px] text-subtle">
+                Motion reduced — Play jumps to day {DAYS}; Step and the day slider move one day at a time.
+              </span>
+            )}
           </div>
           <Slider label="Day" value={day} min={0} max={DAYS} step={1} onChange={(v) => { setPlaying(false); setDay(v); }} format={(v) => `${v} of ${DAYS}`} />
           <Slider

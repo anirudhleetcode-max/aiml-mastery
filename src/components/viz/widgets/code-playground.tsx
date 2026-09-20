@@ -179,6 +179,33 @@ export default function CodePlayground({ props }: { props?: Record<string, unkno
     setLines((prev) => (prev.length > 400 ? [...prev.slice(-400), line] : [...prev, line]));
   }, []);
 
+  /**
+   * One watchdog at a time. Both paths through `run` arm it, so a worker that
+   * dies quietly — a blocked CDN, a crashed tab — still resolves into a real
+   * message rather than a spinner that never stops.
+   */
+  const armBootWatchdog = React.useCallback(() => {
+    disarm();
+    timerRef.current = setTimeout(() => {
+      kill();
+      setFatal(CDN_MESSAGE);
+      setStatus('unavailable');
+    }, BOOT_TIMEOUT_MS);
+  }, [disarm, kill]);
+
+  const armRunWatchdog = React.useCallback(() => {
+    disarm();
+    timerRef.current = setTimeout(() => {
+      kill();
+      append({
+        stream: 'err',
+        text: 'Your code ran for too long — check for an infinite loop. The runtime was stopped and will reload on your next run.',
+      });
+      setStatus('idle');
+      setElapsed(RUN_TIMEOUT_MS);
+    }, RUN_TIMEOUT_MS);
+  }, [append, disarm, kill]);
+
   const spawn = React.useCallback((): Worker => {
     const blob = new Blob([WORKER_SOURCE], { type: 'text/javascript' });
     const url = URL.createObjectURL(blob);
@@ -190,12 +217,7 @@ export default function CodePlayground({ props }: { props?: Record<string, unkno
 
       if (m.type === 'booting') {
         setStatus('booting');
-        disarm();
-        timerRef.current = setTimeout(() => {
-          kill();
-          setFatal(CDN_MESSAGE);
-          setStatus('unavailable');
-        }, BOOT_TIMEOUT_MS);
+        armBootWatchdog();
         return;
       }
 
@@ -203,16 +225,7 @@ export default function CodePlayground({ props }: { props?: Record<string, unkno
         setBooted(true);
         setStatus('running');
         startedAt.current = performance.now();
-        disarm();
-        timerRef.current = setTimeout(() => {
-          kill();
-          append({
-            stream: 'err',
-            text: 'Your code ran for too long — check for an infinite loop. The runtime was stopped and will reload on your next run.',
-          });
-          setStatus('idle');
-          setElapsed(RUN_TIMEOUT_MS);
-        }, RUN_TIMEOUT_MS);
+        armRunWatchdog();
         return;
       }
 
@@ -252,7 +265,7 @@ export default function CodePlayground({ props }: { props?: Record<string, unkno
     };
 
     return worker;
-  }, [append, disarm, kill]);
+  }, [append, armBootWatchdog, armRunWatchdog, disarm, kill]);
 
   const run = React.useCallback(() => {
     if (busy) return;
@@ -281,13 +294,15 @@ export default function CodePlayground({ props }: { props?: Record<string, unkno
         return;
       }
       setStatus('booting');
+      armBootWatchdog();
     } else {
       setStatus('running');
       startedAt.current = performance.now();
+      armRunWatchdog();
     }
 
     workerRef.current.postMessage({ type: 'run', code });
-  }, [busy, code, spawn]);
+  }, [armBootWatchdog, armRunWatchdog, busy, code, spawn]);
 
   const stop = React.useCallback(() => {
     if (!busy) return;
@@ -428,7 +443,7 @@ export default function CodePlayground({ props }: { props?: Record<string, unkno
             autoCorrect="off"
             wrap="off"
             aria-label="Python code editor"
-            className="h-56 w-full resize-y bg-transparent px-2.5 py-3 font-mono text-[12.5px] leading-[20px] text-ink outline-none"
+            className="h-56 min-w-0 flex-1 resize-y bg-transparent px-2.5 py-3 font-mono text-[12.5px] leading-[20px] text-ink outline-none"
           />
         </div>
 

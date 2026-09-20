@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { apiUser } from '@/lib/auth/guard';
-import { clientKey, rateLimit, sameOrigin } from '@/lib/auth/rate-limit';
+import { rateLimit, sameOrigin } from '@/lib/auth/rate-limit';
 import { applyEvents } from '@/lib/sync/apply';
 import { syncRequestSchema } from '@/lib/sync/events';
 

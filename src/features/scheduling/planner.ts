@@ -131,14 +131,14 @@ function themeFor(items: DailyPlanItem[], units: UnitMeta[]): string {
   const byId = new Map(units.map((u) => [u.id, u]));
   const counts = new Map<string, number>();
   for (const it of items) {
-    const module = byId.get(it.unitId)?.module;
-    if (module) counts.set(module, (counts.get(module) ?? 0) + 1);
+    const moduleName = byId.get(it.unitId)?.module;
+    if (moduleName) counts.set(moduleName, (counts.get(moduleName) ?? 0) + 1);
   }
   let best = '';
   let bestCount = 0;
-  for (const [module, count] of counts) {
+  for (const [moduleName, count] of counts) {
     if (count > bestCount) {
-      best = module;
+      best = moduleName;
       bestCount = count;
     }
   }

@@ -37,7 +37,9 @@ export function Dialog({
     document.body.style.overflow = 'hidden';
 
     const panel = panelRef.current;
-    panel?.querySelector<HTMLElement>('[data-autofocus]')?.focus() ?? panel?.focus();
+    const autofocus = panel?.querySelector<HTMLElement>('[data-autofocus]');
+    if (autofocus) autofocus.focus();
+    else panel?.focus();
 
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') {

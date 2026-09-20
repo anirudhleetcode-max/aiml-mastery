@@ -359,6 +359,11 @@ export default function TransformerFlow() {
             <PlayButton
               playing={playing}
               onToggle={() => {
+                // With motion reduced there is no playback, so Play jumps to the end state.
+                if (reduced) {
+                  setStep(stages.length - 1);
+                  return;
+                }
                 if (clampedStep >= stages.length - 1) setStep(0);
                 setPlaying((p) => !p);
               }}
@@ -393,7 +398,8 @@ export default function TransformerFlow() {
           </div>
           {reduced && (
             <p className="text-[11px] text-subtle">
-              Motion is reduced, so playback is off — use Back and Forward to walk the stages.
+              Motion is reduced, so playback is off: Back and Forward walk the stages, and Play jumps to the final
+              distribution.
             </p>
           )}
           <Slider
@@ -550,8 +556,8 @@ export default function TransformerFlow() {
                         style={{ width: `${allowed ? Math.max(1.5, weight * 100) : 100}%` }}
                       />
                     </div>
-                    <span className="w-16 shrink-0 text-right font-mono text-[10.5px] tabular-nums text-subtle">
-                      {allowed ? `${(weight * 100).toFixed(1)}%` : 'masked'}
+                    <span className="w-24 shrink-0 text-right font-mono text-[10.5px] tabular-nums text-subtle">
+                      {allowed ? `${block.scores[j].toFixed(2)} → ${(weight * 100).toFixed(1)}%` : '−∞ masked'}
                     </span>
                   </div>
                 );
