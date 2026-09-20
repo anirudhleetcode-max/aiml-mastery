@@ -36,6 +36,14 @@ on:
         description: Create or update the database schema before deploying
         type: boolean
         default: true
+      public_url:
+        description: >-
+          Public URL to smoke-test instead of the deployment URL. A production
+          deploy is aliased to the project's stable domain, and Vercel's
+          Deployment Protection answers the deployment-specific URL with an SSO
+          redirect — so testing that URL measures the protection, not the app.
+        type: string
+        default: ''
 
 concurrency:
   group: deploy-${{ github.ref }}
@@ -80,10 +88,18 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: vercel pull --yes --environment=${{ inputs.environment }} --token=${{ secrets.VERCEL_TOKEN }}
 
+      # DATABASE_PROVIDER has to be stated here, not just on the Vercel
+      # project. `vercel build` runs `npm run build` in an environment of its
+      # own, and when the variable does not reach it the build generates a
+      # SQLite client against a postgresql:// URL — which compiles, deploys,
+      # serves every page that does not touch the database, and then fails
+      # every read and write at runtime. A managed host cannot keep a SQLite
+      # file anyway, which is why this is a constant and not an input.
       - name: Build
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          DATABASE_PROVIDER: postgresql
         run: vercel build ${{ inputs.environment == 'production' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Deploy
@@ -99,7 +115,11 @@ jobs:
       # The point of the whole job. A URL that has not been exercised is a
       # claim, not a result.
       - name: Smoke-test the deployment
-        run: node scripts/smoke-production.mjs "${{ steps.deploy.outputs.url }}"
+        run: |
+          target="${{ inputs.public_url }}"
+          [ -n "$target" ] || target="${{ steps.deploy.outputs.url }}"
+          echo "Smoke-testing $target"
+          node scripts/smoke-production.mjs "$target"
 
       - name: Summary
         if: always()
@@ -110,5 +130,6 @@ jobs:
             echo "- environment: \`${{ inputs.environment }}\`"
             echo "- commit: \`${{ github.sha }}\`"
             echo "- url: ${{ steps.deploy.outputs.url }}"
+            echo "- smoke-tested: ${{ inputs.public_url || steps.deploy.outputs.url }}"
             echo "- smoke test: ${{ job.status }}"
           } >> "$GITHUB_STEP_SUMMARY"
