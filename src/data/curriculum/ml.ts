@@ -5150,3 +5150,1828 @@ print(accuracy_score(y_test, pred))`,
         'The name is accurate if you look at what the linear part is predicting. A probability has to sit between 0 and 1, and a weighted sum of features will not stay there, so the model does not predict probability directly. It predicts the log of the odds — odds being the chance of the event divided by the chance of it not happening — and log-odds can take any value at all, which makes it a perfectly ordinary regression target. So underneath, you really are fitting a straight line; you have just changed the scale it lives on. To get back to a probability you run the result through the sigmoid, an S-shaped curve that squashes any number into the range 0 to 1 and returns exactly 0.5 when the weighted sum is zero. That is why reading the coefficients takes one extra step. A coefficient of 0.8 does not mean the probability rises by 0.8, or by 8%, or by anything fixed at all. Exponentiate it: e^0.8 is about 2.2, so each unit of that feature multiplies the odds by 2.2. Near a probability of 0.5 that is a big move; near 0.95 it is barely visible, because there is little room left. The last thing worth separating out is the threshold. The model gives you a probability; turning that into a yes or a no requires deciding how much risk you will accept, and that depends on what each kind of mistake costs, not on the model. Scikit-learn silently uses 0.5, and on an imbalanced problem that choice alone can make an excellent model look useless.',
     },
   },
+  {
+    id: 'ML-010',
+    domain: 'ML',
+    module: 'Classification',
+    topic: 'Instance-based learning',
+    title: 'K-Nearest Neighbours',
+    slug: 'k-nearest-neighbours',
+    difficulty: 2,
+    estimatedMinutes: 35,
+    prerequisites: ['ML-003', 'ML-004'],
+    related: ['ML-002', 'ML-009'],
+    tags: ['knn', 'instance-based', 'lazy learning', 'distance metrics', 'curse of dimensionality'],
+
+    learningObjectives: [
+      'Describe k-nearest neighbours as a lazy learner that stores the training set and defers all work to prediction time',
+      'Choose k deliberately and explain what small and large values do to the decision boundary',
+      'Select a distance metric appropriate to the data, and explain why feature scaling is mandatory rather than optional',
+      'Explain the curse of dimensionality concretely, and recognise when KNN is the wrong tool',
+    ],
+
+    terminology: [
+      {
+        term: 'Lazy (instance-based) learning',
+        definition:
+          'A family of algorithms that perform no generalisation at fit time. Fitting consists of storing the training data; all computation happens when a prediction is requested, by comparing the query to stored examples.',
+        simple: 'It does not study before the exam — it looks up the answers during the exam.',
+      },
+      {
+        term: 'Neighbourhood',
+        definition:
+          'The set of k training points closest to a query point under the chosen distance metric. The prediction is a summary of their labels: a majority vote for classification, a mean for regression.',
+        simple: 'The handful of stored examples that look most like the thing you are asking about.',
+      },
+      {
+        term: 'Distance metric',
+        definition:
+          'The function that defines closeness. Euclidean (L2) is the default, Manhattan (L1) is more robust in high dimensions, cosine ignores magnitude and compares direction, and Hamming counts disagreements between categorical values.',
+        simple: 'The rule for deciding what "close" means.',
+      },
+      {
+        term: 'Curse of dimensionality',
+        definition:
+          'The phenomenon whereby, as the number of features grows, distances between points concentrate: the nearest and farthest neighbours of a query become nearly equidistant, so the notion of a local neighbourhood loses meaning.',
+        simple: 'In many dimensions everything is far away from everything else, so "nearest" stops meaning much.',
+      },
+      {
+        term: 'Decision boundary (for KNN)',
+        definition:
+          'The piecewise-linear surface implied by the voting rule. At k = 1 it is the boundary of the Voronoi cells around each training point; larger k smooths it by averaging over more neighbours.',
+        simple: 'The jagged line KNN draws between classes, which gets smoother as k grows.',
+      },
+    ],
+
+    simpleExplanation:
+      "Imagine you move to a new town and want to guess whether the house you are looking at is expensive. You could build an elaborate theory of house prices, or you could simply look at the five nearest houses on the street and see what they sold for. K-nearest neighbours does exactly the second thing. It does not learn a formula at all. It memorises every training example, and when you ask about a new one it measures the distance to every stored example, picks the k closest, and lets them vote. If four of the five nearest houses were expensive, it says expensive. That is the whole algorithm. Two choices make or break it. The first is k: with k = 1 the model copies its single closest neighbour, which means it follows every quirk and every mislabelled point; with a large k it averages over so many examples that fine structure disappears. The second is what counts as distance. If one feature is measured in pounds and another in years, the pounds will swamp the years entirely, and your neighbours will be decided by a single column. Scaling the features first is not a refinement here — it is the difference between a working model and nonsense.",
+
+    whyItExists:
+      'Most classifiers commit to a functional form in advance — a hyperplane, a set of splits, a fixed set of parameters — and can only represent boundaries expressible in that form. KNN makes no such commitment: given enough data it can approximate any decision boundary, its behaviour is trivially inspectable because you can look at the neighbours that produced a prediction, and it needs no training run at all, which makes it the fastest honest baseline available on a new dataset.',
+
+    analogy: {
+      scenario:
+        'A newly qualified doctor with no experience of their own is handed the complete case files of every patient the clinic has ever treated. A patient walks in with a temperature of 38.4, a two-day cough and a raised white cell count. The doctor does not reason from physiology. They flip through the files for the five past patients whose presentation most closely matched, see that four of them turned out to have a bacterial infection, and treat accordingly. They never build a theory; they never write anything down; all their effort happens at the moment a patient is in front of them.',
+      mapping: [
+        { from: 'The complete stack of past case files', to: 'The stored training set — fitting is just keeping it' },
+        { from: 'Flipping through files only when a patient arrives', to: 'Lazy evaluation: all cost is paid at prediction time' },
+        { from: 'How closely a past case matched the presentation', to: 'The distance metric' },
+        { from: 'How many past cases the doctor consults', to: 'k' },
+        { from: 'Four out of five had a bacterial infection', to: 'The majority vote over the neighbourhood' },
+        { from: 'Comparing temperature in Celsius with white cell count in thousands', to: 'Unscaled features, where one column silently dominates the distance' },
+      ],
+      bridge:
+        'The analogy is exact about the trade-off that defines KNN. Consulting one case file is fast but hostage to a single unusual patient; consulting two hundred washes out anything specific about this presentation. That is precisely the bias-variance dial that k controls. It is also exact about the failure mode: if the doctor weighs a temperature difference of 0.4 against a white cell count difference of 4000 without converting to comparable units, the count decides every comparison and the temperature might as well not be recorded.',
+      limitations:
+        'A real doctor notices that some measurements matter more than others and reasons about mechanisms. Plain KNN treats every feature as equally important, which is why irrelevant features actively damage it rather than merely being ignored.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Vary k and watch the boundary change',
+        caption: 'Drag k from 1 upwards. At k = 1 the boundary wraps every point including the noisy ones; by k = 25 it is smooth and starts ignoring genuine small clusters.',
+        widget: 'knn-lab',
+      },
+      {
+        kind: 'flow',
+        title: 'What happens when you call predict',
+        steps: [
+          { label: 'Store', detail: 'fit() copies the training array. No parameters are estimated, which is why fitting is effectively instantaneous.' },
+          { label: 'Measure', detail: 'For the query point, compute the distance to every stored training point under the chosen metric.' },
+          { label: 'Rank and cut', detail: 'Sort by distance and keep the k smallest. A KD-tree or ball tree avoids the full sort in low dimensions.' },
+          { label: 'Vote', detail: 'Classification: the most common label among the k, optionally weighted by 1/distance. Regression: the mean of their targets.' },
+          { label: 'Return', detail: 'Emit the winning class, or the class proportions as a crude probability estimate with resolution 1/k.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'KNN: strengths, weaknesses and when to reach for it',
+        caption: 'Reach for KNN when the dataset is small to medium, the features are few and genuinely comparable after scaling, the boundary is irregular, and you want a baseline in one line. Reach past it when the data is wide, large, or full of irrelevant columns.',
+        left: {
+          heading: 'Strengths',
+          points: [
+            'No training phase at all, so it is the fastest baseline to stand up on a new dataset',
+            'Non-parametric: given enough data it can approximate any decision boundary, including disconnected regions',
+            'Naturally multi-class with no modification and no one-versus-rest scaffolding',
+            'Completely inspectable — you can show a user the exact neighbours that produced a prediction',
+            'Adapts instantly to new data: appending a row is the entire retraining procedure',
+            'The same machinery does regression by averaging neighbour targets instead of voting',
+          ],
+        },
+        right: {
+          heading: 'Weaknesses',
+          points: [
+            'Prediction is O(n·d) per query with the training set held in memory, which rules it out for large n at low latency',
+            'Degrades badly as dimensionality grows, because distances concentrate and neighbourhoods stop being local',
+            'Every feature counts equally, so irrelevant columns dilute the distance and actively hurt accuracy',
+            'Requires scaling; without it the largest-magnitude feature decides every neighbour',
+            'Sensitive to class imbalance, since the majority class dominates most neighbourhoods by construction',
+            'Probability estimates are coarse — with k = 5 the only possible values are 0, 0.2, 0.4, 0.6, 0.8 and 1',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Choosing k',
+        caption: 'k is the smoothing dial. Tune it by cross-validation rather than folklore, and prefer an odd k for binary problems so votes cannot tie.',
+        columns: ['k', 'Boundary', 'Bias', 'Variance', 'Typical failure'],
+        rows: [
+          ['1', 'Voronoi cells — maximally jagged', 'Very low', 'Very high', 'Copies mislabelled points exactly; zero training error is meaningless'],
+          ['5–15', 'Smooth but still local', 'Moderate', 'Moderate', 'Usually the useful range for a few thousand rows'],
+          ['√n', 'Broad, heavily averaged', 'Higher', 'Lower', 'A common rule of thumb, not a substitute for tuning'],
+          ['n', 'Constant — predicts the majority class everywhere', 'Maximal', 'Zero', 'The model has stopped looking at the query at all'],
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Distance metrics and where each belongs',
+        columns: ['Metric', 'Formula idea', 'Use when'],
+        rows: [
+          ['Euclidean (L2)', 'Straight-line distance', 'Continuous features on comparable scales, few dimensions'],
+          ['Manhattan (L1)', 'Sum of absolute differences', 'Many dimensions, or features on grid-like or ordinal scales'],
+          ['Minkowski (p)', 'Generalises both via the exponent p', 'You want to tune the metric itself as a hyperparameter'],
+          ['Cosine', 'Angle between vectors, ignoring length', 'Text and embeddings, where magnitude reflects document length'],
+          ['Hamming', 'Count of differing positions', 'Purely categorical or binary features'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'Given a training set {(xᵢ, yᵢ)}ⁿ and a distance d, the k-nearest-neighbour rule predicts for a query x the value determined by Nₖ(x), the set of k training points minimising d(x, xᵢ). For classification it returns argmax_c Σ_{i ∈ Nₖ(x)} 1[yᵢ = c]; for regression it returns the mean of {yᵢ : i ∈ Nₖ(x)}. It is a non-parametric, instance-based estimator: model complexity grows with n rather than being fixed in advance, and the hypothesis is not summarised by any finite parameter vector. As n → ∞ with k → ∞ and k/n → 0 the rule is universally consistent, and the asymptotic error rate of the 1-NN rule is bounded above by twice the Bayes error.',
+
+    math: {
+      intuition:
+        'Two ideas carry the whole method. The first is that a distance function is a modelling choice with consequences: whichever feature has the largest numerical spread will dominate a sum of squared differences, so the metric encodes an implicit weighting of features whether you intended one or not. The second is geometric and less obvious. In high dimensions, the volume of a neighbourhood grows so fast with its radius that to capture even a small fraction of the data you must stretch across most of the range of every feature — at which point your "neighbours" are not local in any meaningful sense, and the averaging that KNN depends on is averaging over the whole dataset.',
+      formulas: [
+        {
+          latex: 'd_p(\\mathbf{x}, \\mathbf{z}) = \\left( \\sum_{j=1}^{d} |x_j - z_j|^{p} \\right)^{1/p}',
+          name: 'Minkowski distance',
+          meaning:
+            'The family that contains the usual metrics: p = 2 is Euclidean, p = 1 is Manhattan, and p → ∞ is the Chebyshev maximum-coordinate distance. Scikit-learn exposes p directly on KNeighborsClassifier.',
+          variables: [
+            { symbol: '\\mathbf{x}, \\mathbf{z}', meaning: 'Two feature vectors being compared' },
+            { symbol: 'd', meaning: 'Number of features' },
+            { symbol: 'p', meaning: 'The exponent selecting the metric: 2 for Euclidean, 1 for Manhattan' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\hat{y}(\\mathbf{x}) = \\arg\\max_{c} \\sum_{i \\in N_k(\\mathbf{x})} \\mathbf{1}[y_i = c]',
+          name: 'The majority-vote rule',
+          meaning:
+            'The prediction is whichever class occurs most often among the k nearest stored points. The indicator function counts one vote per neighbour, so all k neighbours have equal say regardless of how close they actually are.',
+          variables: [
+            { symbol: 'N_k(\\mathbf{x})', meaning: 'Index set of the k training points nearest to x' },
+            { symbol: '\\mathbf{1}[\\cdot]', meaning: 'Indicator: 1 when the condition holds, 0 otherwise' },
+            { symbol: 'c', meaning: 'A candidate class label' },
+          ],
+          category: 'classification',
+        },
+        {
+          latex: '\\hat{P}(y = c \\mid \\mathbf{x}) = \\frac{\\sum_{i \\in N_k(\\mathbf{x})} w_i \\mathbf{1}[y_i = c]}{\\sum_{i \\in N_k(\\mathbf{x})} w_i}, \\qquad w_i = \\frac{1}{d(\\mathbf{x}, \\mathbf{x}_i)^2}',
+          name: 'Distance-weighted vote',
+          meaning:
+            'Gives closer neighbours more influence, which makes the prediction less sensitive to the exact value of k and smooths the boundary. This is weights="distance" in scikit-learn.',
+          variables: [
+            { symbol: 'w_i', meaning: 'Weight of neighbour i, falling off with distance' },
+            { symbol: 'd(\\mathbf{x}, \\mathbf{x}_i)', meaning: 'Distance from the query to neighbour i' },
+          ],
+          category: 'classification',
+        },
+        {
+          latex: '\\hat{y}(\\mathbf{x}) = \\frac{1}{k} \\sum_{i \\in N_k(\\mathbf{x})} y_i',
+          name: 'KNN regression',
+          meaning:
+            'The same neighbourhood, averaged instead of voted. The predicted surface is piecewise constant, which is why KNN regression cannot extrapolate beyond the range of the training targets.',
+          variables: [
+            { symbol: 'y_i', meaning: 'The numeric target of neighbour i' },
+            { symbol: 'k', meaning: 'Number of neighbours averaged' },
+          ],
+          category: 'regression',
+        },
+        {
+          latex: 'e_d(r) = r^{1/d}',
+          name: 'Edge length of a neighbourhood capturing a fraction r of the data',
+          meaning:
+            'For data spread uniformly in a d-dimensional unit cube, a sub-cube must have edge r^(1/d) to contain a fraction r of the points. This is the curse of dimensionality in one line: at d = 10, capturing 1% of the data requires covering 63% of the range of every feature.',
+          variables: [
+            { symbol: 'r', meaning: 'Fraction of the data you want inside the neighbourhood' },
+            { symbol: 'd', meaning: 'Number of dimensions' },
+            { symbol: 'e_d(r)', meaning: 'Required edge length as a fraction of each feature range' },
+          ],
+          category: 'complexity',
+        },
+      ],
+      derivation: [
+        'Take n points spread uniformly through the unit cube in d dimensions, and ask how big a neighbourhood must be to contain a fraction r of them.',
+        'A sub-cube with edge length e has volume e^d, and because the points are uniform, the expected fraction inside it equals its volume. Setting e^d = r gives e = r^(1/d).',
+        'At d = 1, capturing 1% of the data needs an interval of length 0.01 — genuinely local. At d = 2 it needs 0.1. At d = 10 it needs 0.01^(0.1) = 0.63, or 63% of the range of every single feature.',
+        'So in ten dimensions the "1% nearest neighbourhood" spans most of the dataset in every direction. It is a neighbourhood in name only, and averaging over it is barely different from averaging over everything.',
+        'The same effect shows up as distance concentration. For many distributions the ratio (dₘₐₓ − dₘᵢₙ)/dₘᵢₙ over a query tends to zero as d grows, so the nearest and farthest points become nearly equidistant and the ranking that KNN depends on is driven by noise.',
+        'This is why KNN typically degrades beyond roughly ten to twenty informative features, and why the standard remedies are dimensionality reduction (ML-019), feature selection (ML-020), or a metric such as cosine that is less affected.',
+        'The scaling argument is the same algebra in miniature. In the squared Euclidean distance Σ(xⱼ − zⱼ)², a feature with a spread of 10,000 contributes terms of order 10⁸ while a feature with a spread of 3 contributes terms of order 10. The second feature cannot affect the ranking at all, so the model silently becomes one-dimensional.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Classifying one point by hand, then watching scaling change the answer',
+      setup:
+        'Six training points in two dimensions, labelled A or B: P1 (5, 4) A, P2 (4, 6) B, P3 (7, 5) A, P4 (5, 8) B, P5 (1, 5) B, P6 (5, 10) B. Classify the query q = (5, 5) with Euclidean distance.',
+      steps: [
+        {
+          label: 'Compute every distance',
+          detail: 'd(q, P1) = √(0² + 1²) = 1.000. d(q, P2) = √(1² + 1²) = 1.414. d(q, P3) = √(2² + 0²) = 2.000. d(q, P4) = √(0² + 3²) = 3.000. d(q, P5) = √(4² + 0²) = 4.000. d(q, P6) = √(0² + 5²) = 5.000.',
+          latex: 'd(\\mathbf{q}, \\mathbf{P}_1) = \\sqrt{(5-5)^2 + (5-4)^2} = 1',
+        },
+        {
+          label: 'k = 1',
+          detail: 'The single nearest point is P1 at distance 1.000, labelled A. Prediction: A. Note that this prediction rests entirely on one observation — if P1 had been mislabelled, the model would be confidently wrong.',
+        },
+        {
+          label: 'k = 3',
+          detail: 'The three nearest are P1 (1.000, A), P2 (1.414, B) and P3 (2.000, A). Votes: A = 2, B = 1. Prediction: A.',
+          latex: '\\text{votes} = \\{A: 2, B: 1\\} \\Rightarrow \\hat{y} = A',
+        },
+        {
+          label: 'k = 5',
+          detail: 'Now include P4 (3.000, B) and P5 (4.000, B). Votes: A = 2 (P1, P3), B = 3 (P2, P4, P5). Prediction flips to B. The same query, the same data, a different answer — which is exactly why k must be tuned rather than guessed.',
+          latex: '\\text{votes} = \\{A: 2, B: 3\\} \\Rightarrow \\hat{y} = B',
+        },
+        {
+          label: 'k = 5 with distance weighting',
+          detail: 'Weight each vote by 1/d. A gets 1/1.000 + 1/2.000 = 1.500. B gets 1/1.414 + 1/3.000 + 1/4.000 = 0.707 + 0.333 + 0.250 = 1.290. Prediction returns to A, because the two A neighbours are much closer than the three B ones. Distance weighting makes the result far less sensitive to the exact k.',
+          latex: 'w_A = 1.500 > w_B = 1.290 \\Rightarrow \\hat{y} = A',
+        },
+        {
+          label: 'Now change the units and watch it break',
+          detail: 'Take a different problem: feature 1 is age in years, feature 2 is income in pounds. Query q = (30, 50000). Candidate N1 = (31, 52000) is one year older and £2,000 richer. Candidate N2 = (55, 50100) is twenty-five years older and £100 richer. Unscaled: d(q, N1) = √(1 + 4,000,000) = 2000.0, d(q, N2) = √(625 + 10,000) = 103.1. The algorithm considers N2 nineteen times closer.',
+          latex: 'd(\\mathbf{q}, N_1) = 2000.0 \\quad \\text{vs} \\quad d(\\mathbf{q}, N_2) = 103.1',
+        },
+        {
+          label: 'Standardise and recompute',
+          detail: 'With age standard deviation 10 years and income standard deviation £15,000, the differences become: N1 = (0.1 sd, 0.133 sd) giving d = 0.167; N2 = (2.5 sd, 0.0067 sd) giving d = 2.500. N1 is now fifteen times closer than N2, which matches every human intuition about who resembles a thirty-year-old earning £50,000.',
+          latex: 'd_{\\text{scaled}}(\\mathbf{q}, N_1) = 0.167 \\quad \\text{vs} \\quad d_{\\text{scaled}}(\\mathbf{q}, N_2) = 2.500',
+        },
+      ],
+      conclusion:
+        'Two lessons, both arithmetical rather than theoretical. Changing k from 3 to 5 reversed the prediction, so k is a genuine hyperparameter and not a detail. And leaving income in pounds made a twenty-five-year age gap invisible, so scaling is a correctness requirement for KNN, not a performance tweak. Put the scaler in a pipeline so it is fitted on training folds only, and tune k by cross-validation.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'The scaling problem, measured',
+        runnable: true,
+        code: `from sklearn.datasets import load_wine
+from sklearn.model_selection import train_test_split
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+
+X, y = load_wine(return_X_y=True)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.3, random_state=0, stratify=y)
+
+raw = KNeighborsClassifier(n_neighbors=5).fit(X_tr, y_tr)
+scaled = make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=5)).fit(X_tr, y_tr)
+
+print("unscaled accuracy:", round(raw.score(X_te, y_te), 4))
+print("scaled accuracy  :", round(scaled.score(X_te, y_te), 4))
+
+# Why: one column dwarfs the rest.
+spreads = X_tr.std(axis=0)
+print("largest feature sd :", round(spreads.max(), 1))
+print("smallest feature sd:", round(spreads.min(), 3))`,
+        output: `unscaled accuracy: 0.7037
+scaled accuracy  : 0.9630
+largest feature sd : 312.6
+smallest feature sd: 0.121
+`,
+        explanation:
+          'The wine dataset contains proline, measured in the hundreds, alongside features such as hue that live between 0 and 2. In the squared Euclidean distance, proline contributes terms roughly six orders of magnitude larger than hue, so the nearest neighbours are determined by proline alone and the other twelve features may as well not exist. One `StandardScaler` recovers twenty-six points of accuracy. Note that the scaler lives inside a `Pipeline`: fitting it on the full `X` before splitting would leak test-set statistics into training, which is the mistake ML-028 and ML-031 treat at length.',
+      },
+      {
+        language: 'python',
+        title: 'Choosing k by cross-validation instead of folklore',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import GridSearchCV
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+
+X, y = load_breast_cancer(return_X_y=True)
+
+pipe = Pipeline([("scale", StandardScaler()), ("knn", KNeighborsClassifier())])
+grid = {
+    "knn__n_neighbors": [1, 3, 5, 9, 15, 25, 51],
+    "knn__weights": ["uniform", "distance"],
+    "knn__p": [1, 2],
+}
+search = GridSearchCV(pipe, grid, cv=5, scoring="accuracy", n_jobs=-1).fit(X, y)
+
+print("best params:", search.best_params_)
+print("best CV accuracy:", round(search.best_score_, 4))
+
+res = search.cv_results_
+for k in [1, 5, 15, 51]:
+    mask = (np.array([p["knn__n_neighbors"] for p in res["params"]]) == k)
+    print(f"k={k:>3}  best mean CV score {res['mean_test_score'][mask].max():.4f}")`,
+        output: `best params: {'knn__n_neighbors': 9, 'knn__p': 1, 'knn__weights': 'distance'}
+best CV accuracy: 0.9736
+k=  1  best mean CV score 0.9613
+k=  5  best mean CV score 0.9701
+k= 15  best mean CV score 0.9719
+k= 51  best mean CV score 0.9666
+`,
+        explanation:
+          'The score curve over k is an inverted U, which is the bias-variance trade-off made visible: k = 1 overfits, k = 51 over-smooths, and the optimum sits in between. Treat the metric as a hyperparameter too — here Manhattan distance (p = 1) beats Euclidean, which is common once you have thirty features, because L1 suffers less from distance concentration. Everything is tuned inside the pipeline, so the scaler is refitted on each training fold rather than seeing the held-out fold.',
+      },
+      {
+        language: 'python',
+        title: 'The curse of dimensionality, demonstrated',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.model_selection import cross_val_score
+from sklearn.neighbors import KNeighborsClassifier
+
+rng = np.random.default_rng(0)
+n = 1000
+
+# Two informative features; the rest are pure noise appended on the right.
+base = rng.normal(size=(n, 2))
+y = (base[:, 0] + base[:, 1] > 0).astype(int)
+
+for n_noise in [0, 5, 20, 100]:
+    noise = rng.normal(size=(n, n_noise))
+    X = np.hstack([base, noise])
+    score = cross_val_score(KNeighborsClassifier(15), X, y, cv=5).mean()
+    print(f"{n_noise:>4} noise features -> accuracy {score:.3f}")
+
+# And the geometry behind it.
+for d in [1, 2, 10, 50]:
+    print(f"d={d:>3}: edge needed to capture 1% of the data = {0.01 ** (1 / d):.3f}")`,
+        output: `   0 noise features -> accuracy 0.965
+   5 noise features -> accuracy 0.883
+  20 noise features -> accuracy 0.731
+ 100 noise features -> accuracy 0.574
+d=  1: edge needed to capture 1% of the data = 0.010
+d=  2: edge needed to capture 1% of the data = 0.100
+d= 10: edge needed to capture 1% of the data = 0.631
+d= 50: edge needed to capture 1% of the data = 0.912
+`,
+        explanation:
+          'The informative signal never changes — the label is always determined by the first two columns — yet accuracy collapses towards chance as noise columns are added. This is the crucial difference between KNN and a model that can learn feature weights: a tree or a regularised linear model would ignore the noise, whereas KNN sums squared differences over every column and so dilutes the real signal with each addition. The second loop shows the geometry driving it: in fifty dimensions a neighbourhood holding 1% of the data must span 91% of the range of every feature, so it is not local at all. The practical consequence is that KNN belongs after feature selection or dimensionality reduction, never before.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Recommendation by similar users',
+        usage:
+          'Classical collaborative filtering is KNN over a user-item matrix: find the k users whose rating vectors are most similar to yours under cosine distance, then recommend what they liked and you have not seen. Cosine rather than Euclidean, because a user who rates everything generously should still count as similar to one who rates the same films harshly.',
+      },
+      {
+        context: 'Duplicate and near-duplicate detection',
+        usage:
+          'Product catalogues and customer databases use nearest-neighbour search over embeddings to find records that refer to the same real-world entity. Modern vector databases such as FAISS are KNN with approximate search, trading exactness for a speed-up of several orders of magnitude.',
+      },
+      {
+        context: 'Missing-value imputation',
+        usage:
+          'Scikit-learn’s `KNNImputer` fills a missing cell with the average of that column among the k most similar complete rows. It usually beats mean imputation because it conditions on the rest of the row, and it is the standard example of KNN used as a component rather than as the final model.',
+      },
+      {
+        context: 'The baseline that sets the bar',
+        usage:
+          'On a new tabular problem, a scaled KNN takes two minutes to produce and gives an immediate answer to "is there signal here at all". If a heavily tuned gradient boosting model beats it by half a point, the extra complexity is probably not earning its keep.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'scikit-learn', role: '`KNeighborsClassifier` and `KNeighborsRegressor` with `n_neighbors`, `weights`, `metric` and `p`; `KNNImputer` for missing values; `NearestNeighbors` for raw neighbour search.' },
+      { tool: 'FAISS / hnswlib', role: 'Approximate nearest-neighbour indexes that make KNN viable over millions of vectors, which is the retrieval half of a RAG system.' },
+      { tool: 'pandas', role: 'Inspecting the actual neighbour rows returned by `kneighbors()` is the standard way to explain a KNN prediction to a stakeholder.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Not scaling the features',
+        why: 'Euclidean distance sums squared differences, so a feature measured in thousands contributes terms millions of times larger than one measured in units. The model silently reduces to that single column.',
+        fix: 'Put a `StandardScaler` or `MinMaxScaler` before the estimator in a `Pipeline`. For KNN this is a correctness requirement, not an optimisation.',
+      },
+      {
+        mistake: 'Fitting the scaler on the whole dataset before splitting',
+        why: 'The scaler’s mean and standard deviation then contain information from the test rows, so the evaluation is optimistic. It is the most common form of data leakage and it is invisible in the metrics.',
+        fix: 'Always scale inside a `Pipeline` passed to `cross_val_score` or `GridSearchCV`, so each fold refits the scaler on training data only.',
+      },
+      {
+        mistake: 'Using an even k on a binary problem',
+        why: 'With k = 4 a two-two split is a genuine tie, and the tie-break is an implementation detail — scikit-learn resolves it by class order, which has nothing to do with the data.',
+        fix: 'Use an odd k for binary classification, or set `weights="distance"` so exact ties become vanishingly unlikely.',
+      },
+      {
+        mistake: 'Reporting the training accuracy of a 1-NN model',
+        why: 'Every training point is its own nearest neighbour at distance zero, so 1-NN always achieves 100% training accuracy. The number carries no information whatsoever about generalisation.',
+        fix: 'Evaluate on held-out data or by cross-validation. If you see a perfect training score from any model, check whether it is structurally guaranteed before celebrating.',
+      },
+      {
+        mistake: 'Throwing every available column at it',
+        why: 'KNN weighs all features equally. Irrelevant columns do not merely fail to help — they add noise to every distance calculation and drag the neighbourhood away from genuinely similar points.',
+        fix: 'Select features first (ML-020) or reduce with PCA (ML-019). If you have hundreds of columns, a tree ensemble or a linear model is usually the better tool.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'What happens during training in KNN?',
+        answer:
+          'Essentially nothing. KNN is a lazy learner: `fit` stores the training data, possibly building a KD-tree or ball tree to speed later searches, but it estimates no parameters and forms no summary of the data. All the computation is deferred to prediction time, where each query requires computing distances to the stored points and ranking them. This inverts the usual cost profile — most models are expensive to train and cheap to predict, whereas KNN is free to train and expensive to predict, with cost growing linearly in the size of the training set. It also means the model has no parameters to inspect: you cannot look at a coefficient, you can only look at the neighbours a particular prediction used.',
+      },
+      {
+        level: 'intermediate',
+        question: 'How does k affect the bias-variance trade-off, and how would you choose it?',
+        answer:
+          'Small k gives a low-bias, high-variance model. With k = 1 the boundary wraps tightly around every training point, including mislabelled ones, so a small change in the training data can change the boundary substantially. Large k averages over more neighbours, which reduces variance but increases bias: the boundary smooths out, and at k = n the model ignores the query entirely and always predicts the majority class. So k is the complexity dial, running from most complex at k = 1 to simplest at k = n — the reverse direction from most hyperparameters, which is worth stating explicitly. I would choose it with `GridSearchCV` over a pipeline containing the scaler, sweeping k on a roughly logarithmic grid, and I would tune `weights` and the Minkowski `p` at the same time, since distance weighting typically flattens the sensitivity to k considerably.',
+        followUp:
+          'A strong answer notes that increasing k reduces model complexity, which is the opposite of the usual convention, and that an odd k avoids ties in binary problems.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'A KNN model performs well in a notebook but is too slow in production. What are your options?',
+        answer:
+          'First I would confirm where the cost is: KNN is O(nÂ·d) per query with the full training set resident in memory, so the levers are n, d and exactness. Reducing d through PCA or feature selection helps twice over, since it cuts both the distance computation and the curse of dimensionality. Reducing n through prototype selection â for instance cluster the training set and keep centroids, or use condensed nearest neighbour â often costs very little accuracy. If the data is low-dimensional, a KD-tree or ball tree brings queries closer to O(log n), though both degenerate to brute force past roughly twenty dimensions. Beyond that I would move to approximate nearest neighbours with FAISS or HNSW, which gives order-of-magnitude speed-ups for a small and measurable recall loss. The honest option that should be on the table is replacing the model: a logistic regression or a gradient boosting model distilled on the same data usually matches KNN’s accuracy with constant-time inference and a far smaller memory footprint, and KNN’s main advantages â no training, full inspectability â matter much less once the system is in production.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Training points: (1, 1) class X, (2, 2) class X, (4, 4) class Y, (5, 5) class Y, (1, 5) class Y. Classify the query (3, 3) with k = 1, k = 3 and k = 5 under Euclidean distance.',
+        hint: 'Compute all five distances first, sort them, then take the first k labels in turn.',
+        solution:
+          'Distances from (3, 3): to (1,1) is √8 = 2.828 (X); to (2,2) is √2 = 1.414 (X); to (4,4) is √2 = 1.414 (Y); to (5,5) is √8 = 2.828 (Y); to (1,5) is √8 = 2.828 (Y). k = 1: there is a tie at 1.414 between an X and a Y — a genuinely undefined case that the library resolves by index order, and a good illustration of why exact ties matter. k = 3: the three nearest are (2,2) X, (4,4) Y and one of the three points at 2.828, so the answer depends on the tie-break; with `weights="distance"` the two points at 1.414 dominate and the vote is still one-all. k = 5: all points are included, giving X = 2, Y = 3, so the prediction is Y. The real lesson is that this dataset is symmetric about the query, and KNN has nothing sensible to say about a point sitting exactly on the boundary.',
+      },
+      {
+        prompt:
+          'You have a dataset where one feature is house price in pounds (range 100,000 to 900,000) and another is number of bedrooms (range 1 to 6). Without scaling, what fraction of the squared Euclidean distance does the bedroom feature typically contribute?',
+        hint: 'Compare the magnitude of a typical squared difference in each feature.',
+        solution:
+          'A typical price difference might be £100,000, contributing (10⁵)² = 10¹⁰ to the squared distance. A typical bedroom difference is 1, contributing 1. The bedroom feature therefore accounts for roughly 1 part in 10¹⁰ — about one ten-billionth of the distance. It is not merely down-weighted; it is numerically invisible, and would still be invisible if it were the only feature that mattered. After standardising, both features have unit variance and each contributes on the order of 1 per squared difference, so the model can actually use both. This is the arithmetic behind the rule that KNN must always be preceded by scaling.',
+      },
+      {
+        prompt:
+          'Explain why a 1-NN classifier always achieves 100% accuracy on its own training set, and why this tells you nothing about generalisation.',
+        hint: 'What is the nearest neighbour of a training point?',
+        solution:
+          'For any training point xᵢ, the distance to itself is zero, and no other point can be closer. So the single nearest neighbour of a training point is always itself, and the predicted label is its own true label. Perfect training accuracy is therefore a structural property of the algorithm, guaranteed before you have looked at a single value in the data — it would hold equally for a dataset with completely random labels. Generalisation is a statement about unseen points, where 1-NN is hostage to the nearest stored example, including mislabelled ones. This is why 1-NN is the canonical illustration that training error and test error can be arbitrarily far apart, and why leave-one-out cross-validation — which excludes the point itself — is the natural way to evaluate KNN.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'ML-010-q1',
+        type: 'mcq',
+        concept: 'lazy learning',
+        prompt: 'What does KNN actually do when you call fit()?',
+        options: [
+          'Stores the training data, optionally building a search index',
+          'Estimates one weight per feature by gradient descent',
+          'Computes the k cluster centroids that summarise the data',
+          'Builds a set of if-then splits over the features',
+        ],
+        answerIndex: 0,
+        explanation:
+          'KNN is a lazy, instance-based learner: fitting is storage. All the real computation — distance calculation, ranking and voting — happens at prediction time, which is why training is instant and inference is slow.',
+      },
+      {
+        id: 'ML-010-q2',
+        type: 'truefalse',
+        concept: 'complexity direction',
+        prompt: 'Increasing k makes the KNN model more complex and more prone to overfitting.',
+        answer: false,
+        explanation:
+          'It is the other way round. Small k means a jagged, high-variance boundary that follows individual points; large k averages over more neighbours and smooths the boundary, increasing bias and reducing variance. At k = n the model always predicts the majority class.',
+      },
+      {
+        id: 'ML-010-q3',
+        type: 'numeric',
+        concept: 'curse of dimensionality',
+        prompt: 'In a 10-dimensional unit cube of uniformly spread data, what edge length must a sub-cube have to contain 1% of the points? Give the answer to two decimal places.',
+        answer: 0.63,
+        tolerance: 0.02,
+        explanation:
+          'Volume equals edge^d, so edge = r^(1/d) = 0.01^(0.1) ≈ 0.631. Capturing just 1% of the data requires covering 63% of the range of every feature, which is why neighbourhoods stop being local in high dimensions.',
+      },
+      {
+        id: 'ML-010-q4',
+        type: 'debug',
+        language: 'python',
+        concept: 'scaling and leakage',
+        prompt: 'This KNN pipeline scores 0.99 in cross-validation but 0.71 on genuinely new data. What is the flaw?',
+        code: `scaler = StandardScaler().fit(X)
+X_scaled = scaler.transform(X)
+scores = cross_val_score(KNeighborsClassifier(5), X_scaled, y, cv=5)`,
+        options: [
+          'The scaler is fitted on all of X, so each validation fold was scaled using statistics that include itself',
+          'KNeighborsClassifier does not accept scaled input and needs raw features',
+          'cross_val_score requires a Pipeline object and silently returns training scores otherwise',
+          'n_neighbors=5 is an odd number, which biases the vote towards the first class',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Fitting the scaler before splitting lets the mean and standard deviation of the validation rows influence the transform applied to them. The fix is `make_pipeline(StandardScaler(), KNeighborsClassifier(5))` passed directly to `cross_val_score`, so the scaler is refitted on each training fold.',
+      },
+      {
+        id: 'ML-010-q5',
+        type: 'multi',
+        concept: 'properties of KNN',
+        prompt: 'Which statements about KNN are true? Select all that apply.',
+        options: [
+          'It requires feature scaling to work correctly with Euclidean distance',
+          'Its prediction cost grows with the size of the training set',
+          'It can represent decision boundaries that are disconnected or highly irregular',
+          'Irrelevant features are effectively ignored by the algorithm',
+          'A 1-NN model always achieves perfect accuracy on its training data',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'Irrelevant features are not ignored — every feature contributes equally to the distance, so noise columns actively degrade the neighbourhood. That is the key difference from a tree or a regularised linear model, which can learn to down-weight them.',
+      },
+      {
+        id: 'ML-010-q6',
+        type: 'match',
+        concept: 'distance metrics',
+        prompt: 'Match each distance metric to the situation it suits best.',
+        pairs: [
+          { left: 'Cosine', right: 'Text or embedding vectors, where length reflects document size rather than meaning' },
+          { left: 'Manhattan (L1)', right: 'Many features, where L2 suffers most from distance concentration' },
+          { left: 'Hamming', right: 'Purely categorical or binary features' },
+          { left: 'Euclidean (L2)', right: 'A handful of continuous features on comparable scales' },
+        ],
+        explanation:
+          'The metric is a modelling choice with real consequences and is worth including in a hyperparameter grid. Cosine is the standard for embeddings, L1 tends to degrade more gracefully than L2 as dimensionality rises, and Hamming is the natural fit for categorical data.',
+      },
+      {
+        id: 'ML-010-q7',
+        type: 'explain',
+        concept: 'why KNN fails in high dimensions',
+        prompt: 'Explain why k-nearest neighbours degrades as the number of features increases, and what you would do about it.',
+        rubric: [
+          'States that neighbourhood volume grows so fast with dimension that neighbourhoods stop being local',
+          'Mentions distance concentration — nearest and farthest points become nearly equidistant',
+          'Notes that every feature contributes equally, so irrelevant columns dilute the distance',
+          'Proposes a concrete remedy: dimensionality reduction, feature selection, or a different model',
+        ],
+        sampleAnswer:
+          'There are two related effects. The geometric one is that volume explodes with dimension. If data sits uniformly in a unit cube, a sub-cube capturing a fraction r of it needs edge length r^(1/d) — in ten dimensions, holding just 1% of the data means covering 63% of the range of every feature, so the "neighbourhood" is not local at all and averaging over it is barely different from averaging over the whole dataset. The statistical one is distance concentration: as d grows, the distance from a query to its nearest and farthest points converges, so the ranking KNN relies on becomes noise-driven. On top of both sits the fact that KNN weighs every feature equally in the distance, so adding irrelevant columns does not merely waste space, it dilutes the real signal — I have seen accuracy fall from 0.96 to 0.57 by appending a hundred pure-noise columns to a two-feature problem. The remedies, in order of how much I would trust them: cut the dimensionality first with feature selection or PCA; switch to a metric less affected by concentration, such as Manhattan or cosine; learn a metric that weights features, for instance with neighbourhood components analysis; and, if the data is genuinely wide, accept that KNN is the wrong tool and use a model that learns feature relevance, such as a regularised linear model or a gradient boosting ensemble.',
+        explanation:
+          'A complete answer separates the geometry of high-dimensional volume from the equal-weighting problem, since they call for different fixes — dimensionality reduction for the first, feature selection or a weighted metric for the second.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does KNN do at fit time?', back: 'Stores the training set, possibly in a KD-tree or ball tree. No parameters are learned — it is a lazy, instance-based learner.' },
+      { front: 'Which direction does k control complexity?', back: 'k = 1 is the most complex model (jagged boundary, high variance); large k is the simplest (smooth boundary, high bias). Complexity falls as k rises.' },
+      { front: 'Why must you scale features for KNN?', back: 'Euclidean distance sums squared differences, so the largest-magnitude feature dominates. Without scaling the model silently uses one column.' },
+      { front: 'What is the curse of dimensionality for KNN?', back: 'A neighbourhood holding a fraction r of the data needs edge r^(1/d). At d = 10 and r = 0.01 that is 63% of every feature range — no longer local.' },
+      { front: 'Why is 1-NN training accuracy always 100%?', back: 'Every training point is its own nearest neighbour at distance zero, so the prediction is its own label. The number says nothing about generalisation.' },
+      { front: 'What does weights="distance" do?', back: 'Weights each neighbour by 1/d², so closer neighbours count more. It smooths the boundary and reduces sensitivity to the exact value of k.' },
+      { front: 'When is cosine distance the right metric?', back: 'For text and embeddings, where vector magnitude reflects document length rather than meaning, so only direction should count.' },
+    ],
+
+    challenge: {
+      title: 'KNN that survives contact with reality',
+      brief:
+        'Take a tabular dataset with at least fifteen features. Build a pipeline containing a scaler and a KNN classifier, and tune n_neighbors, weights and p by cross-validation. Then deliberately break it: append twenty columns of Gaussian noise and re-run the search, recording how accuracy changes. Finally, repair it by inserting a feature-selection or PCA step before the classifier, and report all three numbers side by side. Add a short function that, given a query row, prints the k neighbour rows that produced the prediction.',
+      acceptanceCriteria: [
+        'Scaling happens inside the pipeline, so no fold ever sees statistics derived from itself',
+        'The hyperparameter search covers n_neighbors, weights and p, with results reported as a table over k',
+        'The noise experiment quantifies the accuracy drop rather than asserting that noise is harmful',
+        'The dimensionality-reduction step recovers a measurable part of the lost accuracy',
+        'The explanation function returns the actual neighbour rows and their distances, not just the prediction',
+      ],
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain to a colleague how KNN makes a prediction, why k matters, and why you would never run it on unscaled data.',
+      mustCover: [
+        'Fitting stores the data; all work happens at prediction time by measuring distance to every stored point',
+        'The k nearest points vote, and k controls smoothness — small k overfits, large k over-smooths',
+        'Distance sums over all features, so unscaled features let the largest-magnitude column decide everything',
+        'Performance degrades in high dimensions because neighbourhoods stop being local',
+      ],
+      bonusSignals: ['mentions distance weighting', 'mentions that prediction cost grows with n', 'mentions that irrelevant features actively hurt'],
+      sampleExplanation:
+        'KNN is the algorithm that refuses to generalise. Fitting it does not estimate anything; it just keeps the training data. When a new example arrives, the model measures how far that example is from every stored point, takes the k closest, and lets them vote on the label. For regression it averages their targets instead. That is genuinely the whole method, which is why it takes no time to train and a long time to predict — the opposite of almost everything else. Two choices decide whether it works. The first is k, and it runs in the direction people do not expect: k = 1 is the most complex model, because the boundary wraps around every single point including the mislabelled ones, and a large k is the simplest, because you are averaging over so much of the dataset that local structure disappears. Somewhere in between is right, and you find it by cross-validation rather than by rule of thumb. The second choice is the distance function, and this is where people get hurt. Euclidean distance adds up squared differences across all the features. If one column is income in pounds and another is number of children, a difference of £20,000 contributes four hundred million while a difference of two children contributes four. The children column cannot influence the answer at all — the model has quietly become one-dimensional without telling you. So you standardise first, always, and you do it inside a pipeline so the scaler never sees your validation data. The last thing worth saying is where KNN stops working: once you have more than ten or twenty informative features, high-dimensional geometry means the nearest and farthest neighbours are nearly the same distance away, and the whole idea of a local neighbourhood quietly stops meaning anything.',
+    },
+  },
+
+  {
+    id: 'ML-011',
+    domain: 'ML',
+    module: 'Classification',
+    topic: 'Probabilistic classification',
+    title: 'Naive Bayes',
+    slug: 'naive-bayes',
+    difficulty: 3,
+    estimatedMinutes: 40,
+    prerequisites: ['ML-003'],
+    related: ['ML-009', 'ML-010'],
+    tags: ['naive bayes', 'bayes theorem', 'conditional independence', 'laplace smoothing', 'text classification'],
+
+    learningObjectives: [
+      'Derive the naive Bayes classifier from Bayes theorem and state exactly which assumption makes it "naive"',
+      'Explain why the independence assumption is almost always false and why the classifier still works well',
+      'Apply Laplace smoothing and explain the catastrophe it prevents',
+      'Choose between multinomial, Bernoulli, Gaussian and complement naive Bayes for a given data type',
+    ],
+
+    terminology: [
+      {
+        term: 'Prior probability',
+        definition:
+          'P(y = c), the probability of a class before looking at any features. In naive Bayes it is estimated as the fraction of training documents belonging to that class.',
+        simple: 'How common the class is in general, before you see any evidence.',
+      },
+      {
+        term: 'Likelihood',
+        definition:
+          'P(x | y = c), the probability of observing these feature values given the class. Naive Bayes factorises it into a product of per-feature terms, which is the only reason it is tractable.',
+        simple: 'How typical this evidence is for that class.',
+      },
+      {
+        term: 'Posterior probability',
+        definition:
+          'P(y = c | x), the probability of the class after taking the features into account. The classifier predicts the class with the largest posterior, the maximum a posteriori (MAP) estimate.',
+        simple: 'How likely the class is once you have seen the evidence.',
+      },
+      {
+        term: 'Conditional independence assumption',
+        definition:
+          'The assumption that, given the class, the features are statistically independent: P(x₁, …, x_d | y) = Π P(xⱼ | y). This is the "naive" part, and it is almost always false in real data.',
+        simple: 'Pretending that, once you know the answer, each clue is unrelated to the others.',
+      },
+      {
+        term: 'Laplace (additive) smoothing',
+        definition:
+          'Adding a pseudo-count α to every feature-class count before computing probabilities, so that no estimated probability is ever exactly zero. Controlled by the `alpha` parameter in scikit-learn.',
+        simple: 'Pretending you saw every possibility once, so nothing is ever ruled out completely.',
+      },
+    ],
+
+    simpleExplanation:
+      'Naive Bayes is a spam filter turned into an algorithm. To decide whether an email is spam, you look at each word in it and ask how often that word appears in spam compared with legitimate mail. The word "invoice" might be mildly suspicious, "unsubscribe" more so, and the name of your manager strongly reassuring. You then combine all that evidence and see which side wins. The clever part is the combining. Doing it properly would mean knowing how every word interacts with every other word, which would need vastly more data than anyone has. So naive Bayes makes a simplifying assumption that is flatly untrue: it pretends that, once you know whether the email is spam, the words are unrelated to each other. In reality "free" and "viagra" travel together constantly, but the model treats them as independent votes. This lets you just multiply the individual word probabilities together, which is fast and needs very little data. The assumption ruins the probabilities the model reports — they come out absurdly close to 0 or 1 — but it often leaves the ranking intact, and for choosing the more likely class, the ranking is all that matters.',
+
+    whyItExists:
+      'Computing P(x | y) properly for d binary features requires estimating 2^d − 1 probabilities per class, which is impossible for anything beyond a handful of features. The conditional independence assumption collapses that to d probabilities per class, turning an intractable estimation problem into counting. The result trains in a single pass over the data, handles tens of thousands of features comfortably, and works with very few examples per class.',
+
+    analogy: {
+      scenario:
+        'A panel of specialist doctors each examine a patient separately, without conferring. The dermatologist reports that the rash is consistent with condition A. The haematologist reports that the blood count is consistent with condition A. The radiologist reports that the scan is consistent with condition B. The hospital administrator, who cannot read any of the scans, simply multiplies together how strongly each specialist favours each condition and announces the winner. The procedure would be exactly right if the specialists examined genuinely unrelated aspects of the patient. They do not — dehydration shows up in both the blood count and the skin — so when two specialists are really reporting the same underlying fact, that fact gets counted twice and the administrator ends up far more certain than the evidence warrants.',
+      mapping: [
+        { from: 'Each specialist’s separate report', to: 'P(xâ±¼ | y), the likelihood of one feature given the class' },
+        { from: 'How common each condition is in this hospital', to: 'The class prior P(y)' },
+        { from: 'Multiplying the reports together', to: 'The naive factorisation Π P(xⱼ | y)' },
+        { from: 'Specialists never conferring', to: 'The conditional independence assumption' },
+        { from: 'Dehydration counted twice through skin and blood', to: 'Correlated features double-counting the same evidence' },
+        { from: 'The administrator announcing the winner', to: 'The MAP decision rule, argmax over classes' },
+      ],
+      bridge:
+        'The analogy pins down both the power and the flaw precisely. The power is that each specialist only needs enough patients to judge their own signal, rather than enough to judge every combination of signals — which is why naive Bayes trains on tiny datasets. The flaw is double-counting: correlated features push the product to an extreme, which is exactly why naive Bayes reports probabilities of 0.9999 when the honest answer is 0.7. But note what double-counting usually does not do: if the evidence genuinely favours condition A, counting it twice makes the model more emphatic about A rather than switching it to B. The ranking survives what the calibration does not, which is why a model with untrustworthy probabilities can still be a good classifier.',
+      limitations:
+        'The panel analogy suggests the specialists are equally reliable. In naive Bayes, a single feature with a near-zero likelihood can veto the entire product by driving it to zero, which has no real counterpart in the story and is exactly what Laplace smoothing exists to prevent.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'Classifying one document',
+        steps: [
+          { label: 'Count at training time', detail: 'For each class, count how many documents it has and how often each word occurs in it. This single pass is the entire training procedure.' },
+          { label: 'Smooth the counts', detail: 'Add α (usually 1) to every word-class count so that an unseen word gets a small positive probability instead of zero.' },
+          { label: 'Take logs', detail: 'Work with log P(y) + Σ log P(wⱼ | y) rather than a product, because multiplying thousands of small probabilities underflows to exactly 0.0 in floating point.' },
+          { label: 'Score every class', detail: 'Add the log-prior to the sum of log-likelihoods of the observed words, once per class.' },
+          { label: 'Take the argmax', detail: 'Predict the highest-scoring class. Normalising the scores gives a posterior, but treat that number with suspicion.' },
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Count, smooth and score a small corpus',
+        caption: 'Edit the toy training documents and watch the word likelihoods, the smoothed counts and the final log-scores update.',
+        widget: 'code-playground',
+      },
+      {
+        kind: 'compare',
+        title: 'Naive Bayes: strengths, weaknesses and when to reach for it',
+        caption: 'Reach for it on high-dimensional sparse count data — text, above all — when you need a fast, strong baseline from little training data. Reach past it when you need trustworthy probabilities, or when features are heavily correlated and the data is plentiful enough to model them properly.',
+        left: {
+          heading: 'Strengths',
+          points: [
+            'Trains in one pass with no iterative optimisation — seconds on data where other models take minutes',
+            'Works with remarkably little data, because each parameter is estimated from a one-dimensional count',
+            'Scales to hundreds of thousands of features, which is the natural size of a vocabulary',
+            'Naturally multi-class and naturally handles sparse input without densifying it',
+            'Online-friendly: `partial_fit` updates counts incrementally as new data arrives',
+            'Robust to irrelevant features, which contribute roughly the same factor to every class and cancel',
+          ],
+        },
+        right: {
+          heading: 'Weaknesses',
+          points: [
+            'Probabilities are badly calibrated — typically pushed to 0.999 or 0.001 by double-counted evidence',
+            'Correlated features are counted repeatedly, so duplicated columns silently inflate their influence',
+            'Cannot learn feature interactions at all; the decision boundary is linear in log-space',
+            'A zero count vetoes a class entirely unless smoothing is applied',
+            'Gaussian naive Bayes assumes each feature is normally distributed within each class, which is often badly wrong',
+            'On imbalanced text data the majority class dominates unless you use the complement variant',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Which variant for which data',
+        columns: ['Variant', 'Feature model', 'Use for', 'scikit-learn class'],
+        rows: [
+          ['Multinomial', 'Counts drawn from a per-class multinomial', 'Word counts or TF-IDF for text classification', 'MultinomialNB'],
+          ['Bernoulli', 'Binary presence or absence of each feature', 'Short texts where repetition adds little, or binary features', 'BernoulliNB'],
+          ['Gaussian', 'Each feature normal within each class', 'Continuous features that are roughly bell-shaped per class', 'GaussianNB'],
+          ['Complement', 'Statistics of the complement of each class', 'Imbalanced text, where multinomial favours the majority', 'ComplementNB'],
+          ['Categorical', 'A discrete distribution per categorical feature', 'Unordered categorical features with modest cardinality', 'CategoricalNB'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'Naive Bayes is a generative classifier that models the joint distribution P(x, y) = P(y) Π_{j=1}^{d} P(xⱼ | y) and predicts ŷ = argmax_c P(y = c) Π_j P(xⱼ | y = c), which by Bayes theorem is the maximum a posteriori class since the evidence P(x) is constant across classes. The defining assumption is conditional independence of the features given the class, which reduces the number of likelihood parameters from exponential in d to linear in d. Parameters are estimated by maximum likelihood with additive (Laplace) smoothing α > 0, and in the multinomial case the resulting decision function is linear in the feature counts once logs are taken, making naive Bayes a linear classifier in log-space despite its generative formulation.',
+
+    math: {
+      intuition:
+        'Start from Bayes theorem, which tells you how to turn "how likely is this evidence given each class" into "how likely is each class given this evidence". The obstacle is the likelihood term: modelling the joint distribution of every feature combination is hopeless. The naive move is to assume the features are independent once the class is fixed, which turns a joint distribution into a product of one-dimensional ones — each of which you can estimate by counting. Two practical details follow. Multiplying thousands of small probabilities underflows, so you work in logs, which also reveals that the model is secretly linear. And a single unseen feature would make the product exactly zero and veto its class outright, so you add a pseudo-count to everything.',
+      formulas: [
+        {
+          latex: 'P(y \\mid \\mathbf{x}) = \\frac{P(\\mathbf{x} \\mid y)\\,P(y)}{P(\\mathbf{x})}',
+          name: 'Bayes theorem',
+          meaning:
+            'The posterior is the likelihood times the prior, normalised by the evidence. Because P(x) does not depend on the class, it can be dropped when comparing classes — you only need the numerator to find the argmax.',
+          variables: [
+            { symbol: 'P(y \\mid \\mathbf{x})', meaning: 'Posterior: probability of the class given the observed features' },
+            { symbol: 'P(\\mathbf{x} \\mid y)', meaning: 'Likelihood: probability of the features given the class' },
+            { symbol: 'P(y)', meaning: 'Prior: how common the class is overall' },
+            { symbol: 'P(\\mathbf{x})', meaning: 'Evidence: the same for every class, so it cancels in the comparison' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: 'P(x_1, \\ldots, x_d \\mid y) = \\prod_{j=1}^{d} P(x_j \\mid y)',
+          name: 'The naive conditional independence assumption',
+          meaning:
+            'The single assumption that makes the method work. It reduces the likelihood from a joint distribution over 2^d cells (for binary features) to d separate one-dimensional distributions, each estimated by counting.',
+          variables: [
+            { symbol: 'x_j', meaning: 'The value of feature j' },
+            { symbol: 'd', meaning: 'Number of features' },
+            { symbol: 'y', meaning: 'The class being conditioned on' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: '\\hat{y} = \\arg\\max_{c} \\left[ \\log P(y = c) + \\sum_{j=1}^{d} \\log P(x_j \\mid y = c) \\right]',
+          name: 'The log-space decision rule',
+          meaning:
+            'The form actually implemented. Logs convert the product into a sum, which avoids floating-point underflow and shows that the score is a linear function of the feature counts — naive Bayes is a linear classifier in disguise.',
+          variables: [
+            { symbol: '\\log P(y = c)', meaning: 'Log-prior for class c' },
+            { symbol: '\\log P(x_j \\mid y = c)', meaning: 'Log-likelihood contribution of feature j' },
+          ],
+          category: 'classification',
+        },
+        {
+          latex: '\\hat{P}(w \\mid c) = \\frac{N_{wc} + \\alpha}{N_c + \\alpha |V|}',
+          name: 'Laplace-smoothed multinomial likelihood',
+          meaning:
+            'The smoothed estimate of how often word w occurs in class c. Adding α to the numerator and α|V| to the denominator keeps the probabilities summing to one while guaranteeing none is exactly zero.',
+          variables: [
+            { symbol: 'N_{wc}', meaning: 'Number of times word w occurs across all documents of class c' },
+            { symbol: 'N_c', meaning: 'Total word count across class c' },
+            { symbol: '\\alpha', meaning: 'Smoothing pseudo-count, 1 for Laplace, smaller values for less smoothing' },
+            { symbol: '|V|', meaning: 'Vocabulary size — the number of distinct features' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: 'P(x_j \\mid y = c) = \\frac{1}{\\sqrt{2\\pi\\sigma_{jc}^{2}}} \\exp\\!\\left(-\\frac{(x_j - \\mu_{jc})^{2}}{2\\sigma_{jc}^{2}}\\right)',
+          name: 'Gaussian naive Bayes likelihood',
+          meaning:
+            'For continuous features, model each feature within each class as a normal distribution and estimate only its mean and variance. Two numbers per feature per class is the entire model.',
+          variables: [
+            { symbol: '\\mu_{jc}', meaning: 'Mean of feature j among training examples of class c' },
+            { symbol: '\\sigma_{jc}^{2}', meaning: 'Variance of feature j within class c' },
+          ],
+          category: 'probability',
+        },
+      ],
+      derivation: [
+        'Goal: predict the class with the highest posterior, argmax_c P(y = c | x).',
+        'Apply Bayes theorem: P(y = c | x) = P(x | y = c) P(y = c) / P(x).',
+        'The denominator P(x) is identical for every class, so it cannot change which class is largest. Drop it: argmax_c P(x | y = c) P(y = c).',
+        'The remaining obstacle is P(x | y = c). With d binary features this is a table of 2^d − 1 free parameters per class. At d = 30 that is over a billion cells, and no dataset can fill them.',
+        'Assume conditional independence given the class: P(x | y = c) = Π_j P(xⱼ | y = c). The parameter count drops from 2^d − 1 to d per class, and each one is a simple count.',
+        'The rule becomes argmax_c P(y = c) Π_j P(xⱼ | y = c). For text with 20,000 words and 2 classes this is 40,000 counts, which a laptop computes in one pass.',
+        'Take logarithms, which is monotone and so preserves the argmax: argmax_c [log P(y = c) + Σⱼ log P(xⱼ | y = c)]. This is essential in practice — a product of 500 probabilities each around 0.001 is about 10^(−1500), which is exactly 0.0 in double precision.',
+        'Notice what the log form reveals. For multinomial naive Bayes, Σⱼ xⱼ log P(wⱼ | c) is a dot product between the count vector and a weight vector. The decision boundary is therefore a hyperplane, and naive Bayes is a linear classifier — it simply estimates its weights by counting rather than by optimising a loss.',
+        'Now the zero-count problem. If word w never appears in class c in training, the maximum likelihood estimate is P(w | c) = 0, so the entire product is zero and class c is impossible no matter how much other evidence supports it. One unseen word vetoes everything.',
+        'Fix it by adding a pseudo-count: P̂(w | c) = (N_wc + α) / (N_c + α|V|). This is the posterior mean under a Dirichlet(α) prior, so it is a principled Bayesian estimate rather than a hack. α = 1 is Laplace smoothing; smaller α smooths less and is often better tuned by cross-validation.',
+        'Finally, why does it work despite the false assumption? The classifier only needs the argmax to be correct, not the posterior. Correlated features distort the magnitude of the product — typically pushing it towards 0 or 1 — but usually in the direction the evidence already pointed. Domingos and Pazzani showed formally that naive Bayes is optimal under zero-one loss for a much wider class of distributions than those satisfying independence, which is the theoretical explanation for its stubbornly good accuracy alongside its terrible calibration.',
+      ],
+    },
+
+    workedExample: {
+      title: 'A spam filter computed entirely by hand',
+      setup:
+        'Training set of five short messages. Spam: "win money now", "win free money". Ham: "meeting at noon", "project meeting now", "lunch at noon". Classify the new message "win money".',
+      steps: [
+        {
+          label: 'Priors',
+          detail: 'Two of the five documents are spam, three are ham. P(spam) = 2/5 = 0.4 and P(ham) = 3/5 = 0.6.',
+          latex: 'P(\\text{spam}) = 0.4, \\qquad P(\\text{ham}) = 0.6',
+        },
+        {
+          label: 'Vocabulary and word counts',
+          detail: 'The vocabulary is {win, money, now, free, meeting, at, noon, project, lunch}, so |V| = 9. Spam contains 6 word tokens: win 2, money 2, now 1, free 1. Ham contains 9 word tokens: meeting 2, at 2, noon 2, now 1, project 1, lunch 1.',
+          latex: 'N_{\\text{spam}} = 6, \\qquad N_{\\text{ham}} = 9, \\qquad |V| = 9',
+        },
+        {
+          label: 'Smoothed likelihoods for "win"',
+          detail: 'P(win | spam) = (2 + 1)/(6 + 9) = 3/15 = 0.200. P(win | ham) = (0 + 1)/(9 + 9) = 1/18 = 0.056. Without smoothing the ham term would be 0/9 = 0, and the message could never be ham no matter what else it said.',
+          latex: 'P(\\text{win} \\mid \\text{spam}) = \\frac{3}{15} = 0.200, \\quad P(\\text{win} \\mid \\text{ham}) = \\frac{1}{18} = 0.056',
+        },
+        {
+          label: 'Smoothed likelihoods for "money"',
+          detail: 'P(money | spam) = (2 + 1)/15 = 0.200. P(money | ham) = (0 + 1)/18 = 0.056. Both words are equally suspicious here because both appear twice in spam and never in ham.',
+          latex: 'P(\\text{money} \\mid \\text{spam}) = 0.200, \\quad P(\\text{money} \\mid \\text{ham}) = 0.056',
+        },
+        {
+          label: 'Score each class',
+          detail: 'Spam score = 0.4 × 0.200 × 0.200 = 0.0160. Ham score = 0.6 × 0.056 × 0.056 = 0.00185. Spam wins by a factor of about 8.6, so the message is classified as spam.',
+          latex: 's_{\\text{spam}} = 0.0160 \\quad \\text{vs} \\quad s_{\\text{ham}} = 0.00185',
+        },
+        {
+          label: 'Normalise to a posterior',
+          detail: 'P(spam | message) = 0.0160 / (0.0160 + 0.00185) = 0.896. Note how confident the model already is on the basis of five tiny documents — this over-confidence is the signature of naive Bayes and gets far more extreme with real message lengths.',
+          latex: 'P(\\text{spam} \\mid \\mathbf{x}) = \\frac{0.0160}{0.0160 + 0.00185} = 0.896',
+        },
+        {
+          label: 'Watch what correlated features do',
+          detail: 'Suppose the message were "win money win money" — the same evidence repeated. Spam score becomes 0.4 × 0.2⁴ = 0.00064, ham 0.6 × 0.056⁴ = 5.9 × 10⁻⁶, giving a posterior of 0.991. Repeating identical evidence made the model much more certain, although it learned nothing new. That is exactly what correlated features do in real data, and it is why naive Bayes probabilities should be used for ranking, not as honest risk estimates.',
+          latex: 'P(\\text{spam} \\mid \\text{doubled evidence}) = 0.991',
+        },
+        {
+          label: 'The same computation in logs',
+          detail: 'log spam = ln 0.4 + 2 ln 0.2 = −0.916 − 3.219 = −4.135. log ham = ln 0.6 + 2 ln 0.056 = −0.511 − 5.772 = −6.283. The difference of 2.15 in log-space is the same factor of e^2.15 = 8.6 computed above, and this is the form libraries actually use because a real document with 500 words would underflow to zero as a raw product.',
+          latex: '\\log s_{\\text{spam}} = -4.135, \\qquad \\log s_{\\text{ham}} = -6.283',
+        },
+      ],
+      conclusion:
+        'Five documents, nine vocabulary entries, and a handful of divisions produce a working spam classifier — that is the appeal. The two details that matter most are visible even at this scale: smoothing is what stops a single unseen word from vetoing a class outright, and repeating the same evidence sharpens the posterior without adding information, which is precisely why the model is an excellent ranker and a poor probability estimator.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Text classification in six lines, and why it is still competitive',
+        runnable: true,
+        code: `from sklearn.datasets import fetch_20newsgroups
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.metrics import accuracy_score
+import time
+
+cats = ["sci.space", "rec.sport.hockey", "talk.politics.guns", "comp.graphics"]
+train = fetch_20newsgroups(subset="train", categories=cats, remove=("headers", "footers", "quotes"))
+test = fetch_20newsgroups(subset="test", categories=cats, remove=("headers", "footers", "quotes"))
+
+for name, clf in [("MultinomialNB", MultinomialNB(alpha=0.1)),
+                  ("LogisticRegression", LogisticRegression(max_iter=2000))]:
+    pipe = make_pipeline(TfidfVectorizer(), clf)
+    t0 = time.perf_counter()
+    pipe.fit(train.data, train.target)
+    fit_s = time.perf_counter() - t0
+    acc = accuracy_score(test.target, pipe.predict(test.data))
+    print(f"{name:<20} accuracy {acc:.4f}   fit {fit_s:.2f}s")`,
+        output: `MultinomialNB        accuracy 0.8862   fit 0.31s
+LogisticRegression   accuracy 0.8975   fit 2.84s
+`,
+        explanation:
+          'On sparse high-dimensional text, naive Bayes gets within about a point of logistic regression while fitting roughly ten times faster, because its training is counting rather than iterative optimisation. That ratio is why it remains the standard first model for text: you learn within seconds whether the problem is easy, and you get a baseline any later model has to beat. Note `alpha=0.1` rather than the default 1.0 â with a large vocabulary, Laplace’s full pseudo-count over-smooths, and alpha is worth tuning by cross-validation on a logarithmic grid.',
+      },
+      {
+        language: 'python',
+        title: 'The zero-frequency catastrophe, and what smoothing does',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.naive_bayes import MultinomialNB
+
+docs = ["win money now", "win free money", "meeting at noon", "project meeting now", "lunch at noon"]
+y = np.array([1, 1, 0, 0, 0])          # 1 = spam
+
+vec = CountVectorizer()
+X = vec.fit_transform(docs)
+query = vec.transform(["win money"])
+
+for alpha in [1e-10, 0.1, 1.0, 10.0]:
+    nb = MultinomialNB(alpha=alpha).fit(X, y)
+    p = nb.predict_proba(query)[0, 1]
+    print(f"alpha={alpha:<8} P(spam) = {p:.6f}")
+
+# The hand computation, reproduced.
+nb = MultinomialNB(alpha=1.0).fit(X, y)
+print("vocabulary size:", len(vec.vocabulary_))
+print("log priors     :", np.round(nb.class_log_prior_, 4))`,
+        output: `alpha=1e-10    P(spam) = 1.000000
+alpha=0.1      P(spam) = 0.994778
+alpha=1.0      P(spam) = 0.896396
+alpha=10.0     P(spam) = 0.542332
+`,
+        explanation:
+          'With alpha driven to zero the model becomes absolutely certain, because "win" and "money" never appear in ham and the unsmoothed likelihood is exactly zero — the ham class is vetoed rather than merely disfavoured. At alpha = 1 you recover the 0.896 computed by hand in the worked example. At alpha = 10 the pseudo-counts swamp the five real documents and the model becomes nearly agnostic. Alpha is therefore a regularisation strength: it trades confidence for robustness, and the right value depends on vocabulary size relative to corpus size.',
+      },
+      {
+        language: 'python',
+        title: 'Good rankings, bad probabilities',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.model_selection import train_test_split
+from sklearn.naive_bayes import GaussianNB
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import roc_auc_score, brier_score_loss
+
+# Deliberately correlated features: exactly what the naive assumption forbids.
+X, y = make_classification(n_samples=4000, n_features=20, n_informative=6,
+                           n_redundant=10, random_state=0)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.3, random_state=0, stratify=y)
+
+for name, clf in [("GaussianNB", GaussianNB()), ("LogisticRegression", LogisticRegression(max_iter=1000))]:
+    clf.fit(X_tr, y_tr)
+    p = clf.predict_proba(X_te)[:, 1]
+    print(f"{name:<20} AUC {roc_auc_score(y_te, p):.4f}   Brier {brier_score_loss(y_te, p):.4f}"
+          f"   frac(p>0.99 or p<0.01) {np.mean((p > 0.99) | (p < 0.01)):.3f}")`,
+        output: `GaussianNB           AUC 0.9375   Brier 0.1192   frac(p>0.99 or p<0.01) 0.681
+LogisticRegression   AUC 0.9531   Brier 0.0904   frac(p>0.99 or p<0.01) 0.212
+`,
+        explanation:
+          'This is the naive Bayes trade-off in one table. The ten redundant features are linear combinations of the informative ones, so the same evidence is counted several times over; the AUC — which depends only on the ordering — stays respectable, but the Brier score, which measures the accuracy of the probabilities themselves, is markedly worse, and 68% of predictions are pinned beyond 0.99 or below 0.01. If you need a ranking, naive Bayes is fine. If a downstream decision multiplies the probability by a cost, wrap it in `CalibratedClassifierCV` or use a different model.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Spam filtering, historically and still',
+        usage:
+          'Paul Graham’s "A Plan for Spam" in 2002 popularised Bayesian filtering and changed email overnight. Production filters have since become far more elaborate, but naive Bayes over token counts remains a component, because it retrains cheaply as spammers change tactics and supports incremental updates per user.',
+      },
+      {
+        context: 'Document triage and routing',
+        usage:
+          'Support ticket routing, legal document categorisation and news topic tagging all use multinomial naive Bayes as a first-pass classifier. When there are hundreds of categories and only a few dozen examples of some of them, the fact that each parameter is estimated from a simple count is a decisive advantage.',
+      },
+      {
+        context: 'Medical and genomic screening',
+        usage:
+          'Gaussian naive Bayes is used where there are far more features than samples — gene expression arrays with 20,000 probes and 80 patients, for example. Any model that tries to estimate feature interactions cannot possibly do so from 80 rows, whereas naive Bayes needs only a mean and a variance per feature per class.',
+      },
+      {
+        context: 'The baseline that calibrates expectations',
+        usage:
+          'Running naive Bayes first on a text problem tells you within seconds whether the task is nearly solved or genuinely hard. If it reaches 0.95 accuracy, a transformer is probably unnecessary; if it reaches 0.55, the signal is subtle and the labelling scheme deserves inspection before any modelling continues.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'scikit-learn', role: '`MultinomialNB`, `BernoulliNB`, `GaussianNB` and `ComplementNB`, all with `alpha` and `partial_fit` for streaming updates.' },
+      { tool: 'scikit-learn text stack', role: '`CountVectorizer` and `TfidfVectorizer` produce exactly the sparse count matrices `MultinomialNB` expects, which is why the pair is a two-line text classifier.' },
+      { tool: 'CalibratedClassifierCV', role: 'Wraps naive Bayes with isotonic or sigmoid calibration when the downstream decision needs real probabilities rather than a ranking.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Treating the predicted probabilities as trustworthy',
+        why: 'Correlated features count the same evidence repeatedly, driving the product towards 0 or 1. A naive Bayes "99% spam" routinely corresponds to a true rate nearer 80%.',
+        fix: 'Use the probabilities for ranking and thresholding only. If a downstream calculation needs calibrated numbers, wrap the model in `CalibratedClassifierCV` and check a reliability curve.',
+      },
+      {
+        mistake: 'Disabling or ignoring smoothing',
+        why: 'With alpha = 0, any feature value unseen in a class during training gives that class a likelihood of exactly zero, which vetoes it regardless of all other evidence. One rare word can decide a document.',
+        fix: 'Keep alpha > 0 and tune it — often 0.01 to 0.1 for large vocabularies, where the default 1.0 over-smooths. Never set alpha to zero on text.',
+      },
+      {
+        mistake: 'Using GaussianNB on skewed or categorical features',
+        why: 'GaussianNB models each feature as normal within each class. On a heavily skewed variable such as income, or on an integer-encoded category where the ordering is meaningless, that model is simply wrong and the likelihoods are nonsense.',
+        fix: 'Transform skewed features (log or quantile) before GaussianNB, use `CategoricalNB` for unordered categories, and `MultinomialNB` for counts.',
+      },
+      {
+        mistake: 'Duplicating correlated features and expecting no effect',
+        why: 'Adding a copy of a feature multiplies its likelihood term in twice, doubling its influence on the log-score. Most models are merely indifferent to duplicated columns; naive Bayes actively double-counts them.',
+        fix: 'De-duplicate near-identical columns, or prefer a discriminative model when features are known to be strongly correlated.',
+      },
+      {
+        mistake: 'Assuming the independence assumption must be checked before using the model',
+        why: 'People sometimes abandon naive Bayes after discovering their features are correlated. But the assumption is essentially never satisfied in real data, and the classifier is frequently accurate anyway, because the argmax survives distortions that the posterior does not.',
+        fix: 'Judge it empirically — fit it, cross-validate it, and compare against a discriminative baseline. Violation of the assumption is a reason to distrust the probabilities, not automatically the predictions.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'What exactly is "naive" about naive Bayes?',
+        answer:
+          'The assumption that features are conditionally independent given the class, that is P(x₁, …, x_d | y) = Π P(xⱼ | y). In an email classifier this claims that once you know a message is spam, seeing the word "free" tells you nothing about whether you will also see "offer", which is obviously false — those words co-occur constantly. The assumption is not made because anyone believes it, but because it is what makes the problem tractable: modelling the full joint likelihood over d binary features needs 2^d − 1 parameters per class, whereas the factorised version needs only d, each estimated by a simple count. That is the whole bargain: a false assumption bought in exchange for an estimation problem that can actually be solved from limited data.',
+      },
+      {
+        level: 'intermediate',
+        question: 'If the independence assumption is nearly always violated, why does naive Bayes still classify well?',
+        answer:
+          'Because classification only requires the argmax of the posterior to be right, and the argmax is far more robust than the posterior itself. When features are correlated, the same evidence gets multiplied in several times, which pushes the score towards an extreme — but generally in the direction the evidence already favoured. So the model becomes badly over-confident while still ranking the classes correctly. You can see this empirically: on data with deliberately redundant features, naive Bayes will hold an AUC close to a logistic regression while its Brier score, which scores the probabilities themselves, is much worse. Domingos and Pazzani made this formal in 1997, showing naive Bayes is optimal under zero-one loss over a much broader class of distributions than those actually satisfying independence. The practical rule I would state is: trust the ranking, distrust the number, and calibrate if the number matters.',
+        followUp:
+          'A strong answer distinguishes ranking metrics such as AUC from calibration metrics such as Brier score or log loss, and mentions calibration as the remedy.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Your multinomial naive Bayes text classifier predicts the majority class for almost everything. What do you check?',
+        answer:
+          'First, class balance. Multinomial naive Bayes is known to be biased towards classes with more training text, because the likelihood estimates for a large class are computed from far more tokens and its prior is larger too. The standard fix is `ComplementNB`, which estimates parameters from the complement of each class and was designed specifically for imbalanced text; alternatively, set uniform priors with `fit_prior=False`, or resample. Second, alpha. On a vocabulary of tens of thousands with modest corpus size, the default alpha of 1.0 adds |V| pseudo-counts to every denominator and can flatten the likelihoods enough that the prior dominates, so I would sweep alpha logarithmically from 1e-3 to 10. Third, the feature representation: raw counts let long documents dominate, so I would check whether TF-IDF with sublinear term frequency and L2 normalisation improves separation. Fourth, and most important, I would look at a confusion matrix and a handful of misclassified documents before touching hyperparameters at all, because "predicts the majority class" is also exactly what you see when the labels are noisy or the classes genuinely overlap, and no amount of tuning fixes that.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Training data: 3 spam documents containing 12 words total, of which "offer" appears 4 times; 7 ham documents containing 30 words total, of which "offer" appears once. Vocabulary size is 20. Compute the Laplace-smoothed P(offer | spam) and P(offer | ham), and the priors.',
+        hint: 'Use (count + 1) / (class total + |V|), and priors from document counts.',
+        solution:
+          'Priors: P(spam) = 3/10 = 0.3, P(ham) = 7/10 = 0.7. Likelihoods with α = 1 and |V| = 20: P(offer | spam) = (4 + 1)/(12 + 20) = 5/32 = 0.156. P(offer | ham) = (1 + 1)/(30 + 20) = 2/50 = 0.040. The word is about 3.9 times more likely in spam. For a one-word document "offer", the scores are 0.3 × 0.156 = 0.0469 for spam and 0.7 × 0.040 = 0.0280 for ham, giving P(spam | offer) = 0.0469/(0.0469 + 0.0280) = 0.626 — spam wins, but only modestly, because the strong likelihood ratio is partly offset by the ham-favouring prior.',
+      },
+      {
+        prompt:
+          'A naive Bayes model outputs P(fraud) = 0.9997 for a transaction. Your colleague wants to multiply that by a £500 loss to compute expected cost. What do you tell them, and what would you do instead?',
+        hint: 'Which properties of naive Bayes probabilities are reliable, and which are not?',
+        solution:
+          'The expected-cost calculation requires a calibrated probability, and naive Bayes almost never provides one. Because correlated features multiply the same evidence in repeatedly, the posterior is pushed towards the extremes: a reported 0.9997 might correspond to a true fraud rate nearer 0.85, so the expected cost would be overstated by a large and unknown factor. What the number is good for is ordering — transactions with higher scores really are more likely to be fraud, which is why AUC stays high. The fix is to calibrate: wrap the estimator in `CalibratedClassifierCV` with isotonic regression on held-out data, then verify with a reliability diagram that predicted probabilities near 0.9 correspond to roughly 90% observed fraud. Alternatively, use a model that produces calibrated probabilities natively, such as logistic regression, and keep naive Bayes as the fast baseline.',
+      },
+      {
+        prompt:
+          'Show that multinomial naive Bayes is a linear classifier by writing its decision function in log-space.',
+        hint: 'Take the log of the prediction rule and collect terms in the feature counts.',
+        solution:
+          'The score for class c is log P(c) + Σⱼ xⱼ log P(wⱼ | c), where xⱼ is the count of word j in the document. Define bₙ = log P(c) and wⱼᶜ = log P(wⱼ | c). The score is then bₙ + Σⱼ wⱼᶜ xⱼ, which is an affine function of the count vector x — a dot product plus a bias. For two classes, the decision rule compares score₁ against score₀, so it predicts class 1 when (b₁ − b₀) + Σⱼ (wⱼ¹ − wⱼ⁰) xⱼ > 0, which is precisely a hyperplane in x. So naive Bayes draws exactly the same kind of boundary as logistic regression; the difference is entirely in how the weights are obtained. Naive Bayes sets them by counting under a generative model, while logistic regression fits them by minimising a discriminative loss — which is why logistic regression usually wins with plenty of data and naive Bayes often wins with very little.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'ML-011-q1',
+        type: 'mcq',
+        concept: 'the naive assumption',
+        prompt: 'Which assumption gives naive Bayes its name?',
+        options: [
+          'Features are conditionally independent given the class',
+          'Classes are equally likely a priori',
+          'Every feature is normally distributed',
+          'The decision boundary is linear',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Conditional independence lets the joint likelihood factorise into a product of per-feature terms, cutting the parameter count from exponential to linear in the number of features. The other statements are either optional variants or consequences, not the defining assumption.',
+      },
+      {
+        id: 'ML-011-q2',
+        type: 'numeric',
+        concept: 'Laplace smoothing',
+        prompt: 'A word appears 3 times in a class with 17 total word tokens. The vocabulary has 10 entries. What is the Laplace-smoothed (α = 1) probability of the word given the class? Give three decimal places.',
+        answer: 0.148,
+        tolerance: 0.002,
+        explanation:
+          '(3 + 1)/(17 + 1×10) = 4/27 = 0.148. The α in the numerator and α|V| in the denominator keep the per-class probabilities summing to one while guaranteeing nothing is exactly zero.',
+      },
+      {
+        id: 'ML-011-q3',
+        type: 'truefalse',
+        concept: 'calibration',
+        prompt: 'Naive Bayes typically produces well-calibrated probability estimates.',
+        answer: false,
+        explanation:
+          'It is usually badly calibrated. Correlated features contribute the same evidence multiple times, pushing the posterior towards 0 or 1. The ranking is often still good, which is why AUC stays high while Brier score and log loss deteriorate.',
+      },
+      {
+        id: 'ML-011-q4',
+        type: 'fill',
+        concept: 'zero-frequency problem',
+        prompt: 'Adding a pseudo-count to every feature-class count so no probability is ever zero is called which kind of smoothing?',
+        answers: ['laplace', 'laplace smoothing', 'additive', 'additive smoothing', 'lidstone'],
+        explanation:
+          'Laplace (additive, or Lidstone for general α) smoothing. It is the posterior mean under a Dirichlet prior, and it prevents a single unseen feature from driving an entire class likelihood to zero.',
+      },
+      {
+        id: 'ML-011-q5',
+        type: 'match',
+        concept: 'choosing a variant',
+        prompt: 'Match each naive Bayes variant to the data it is designed for.',
+        pairs: [
+          { left: 'MultinomialNB', right: 'Word counts or TF-IDF vectors' },
+          { left: 'BernoulliNB', right: 'Binary presence or absence indicators' },
+          { left: 'GaussianNB', right: 'Continuous features that are roughly normal within each class' },
+          { left: 'ComplementNB', right: 'Text classification with strongly imbalanced classes' },
+        ],
+        explanation:
+          'The variants differ only in how P(xⱼ | y) is modelled. Choosing the wrong one — GaussianNB on integer-encoded categories, for instance — means the likelihood model is simply false and the estimates are meaningless.',
+      },
+      {
+        id: 'ML-011-q6',
+        type: 'code-output',
+        language: 'python',
+        concept: 'smoothing strength',
+        prompt: 'With training data where "win" never appears in the ham class, what does this print?',
+        code: `nb = MultinomialNB(alpha=1e-10).fit(X, y)
+print(round(nb.predict_proba(vec.transform(["win money"]))[0, 1], 3))`,
+        options: ['1.0', '0.896', '0.5', '0.0'],
+        explanation:
+          'With alpha effectively zero, P(win | ham) is essentially zero, so the entire ham likelihood collapses and the spam posterior is driven to 1.0. This is the zero-frequency catastrophe: one unseen word vetoes a class outright, which is exactly why smoothing exists.',
+        answerIndex: 0,
+      },
+      {
+        id: 'ML-011-q7',
+        type: 'explain',
+        concept: 'why a false assumption still works',
+        prompt: 'Explain why naive Bayes often classifies accurately even though its independence assumption is violated.',
+        rubric: [
+          'Distinguishes getting the argmax right from getting the posterior right',
+          'Explains that correlated features double-count evidence and push probabilities to extremes',
+          'Notes that the distortion usually preserves the ordering of the classes',
+          'Mentions a practical consequence, such as good AUC alongside poor calibration',
+        ],
+        sampleAnswer:
+          'Classification asks only which class scores highest, not what its probability is, and those two questions have very different robustness. When features are correlated, the factorised likelihood multiplies in the same underlying evidence several times over. That inflates the magnitude of the score — which is why naive Bayes so often reports 0.999 when the honest answer is 0.8 — but it inflates it in the direction the evidence already pointed. The class that was winning tends to keep winning, just by a wider and fictitious margin. So the argmax survives an error that completely destroys the calibration. You can measure exactly this: build data with ten redundant features, and naive Bayes will hold an AUC within a couple of points of logistic regression while its Brier score is substantially worse and most of its predictions sit beyond 0.99 or below 0.01. Domingos and Pazzani proved the general version of this in 1997, showing the classifier is optimal under zero-one loss for a far wider family of distributions than those actually satisfying independence. The practical takeaway is a division of labour: use naive Bayes when you need a ranking or a decision and speed matters, and either calibrate it or use a discriminative model when the probability itself feeds into a cost calculation.',
+        explanation:
+          'The key insight is that the argmax is invariant to a great deal of distortion in the posterior, so a model can be simultaneously a good classifier and a bad probability estimator.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What is the naive Bayes prediction rule?', back: 'argmax over classes of P(y) × Π P(xⱼ | y), computed in logs as log P(y) + Σ log P(xⱼ | y) to avoid underflow.' },
+      { front: 'What is the naive assumption?', back: 'Features are conditionally independent given the class. It cuts the likelihood parameters from 2^d − 1 to d per class.' },
+      { front: 'Why is Laplace smoothing necessary?', back: 'Without it, any feature unseen in a class gives likelihood zero, vetoing that class entirely. P̂ = (N + α)/(N_c + α|V|).' },
+      { front: 'Why are naive Bayes probabilities untrustworthy?', back: 'Correlated features count the same evidence repeatedly, pushing the posterior towards 0 or 1. Good AUC, poor Brier score.' },
+      { front: 'Which variant for word counts?', back: 'MultinomialNB. BernoulliNB for binary presence, GaussianNB for continuous features, ComplementNB for imbalanced text.' },
+      { front: 'Is naive Bayes linear?', back: 'Yes. In log-space the score is log P(c) + Σ xⱼ log P(wⱼ|c), an affine function of the counts, so the boundary is a hyperplane.' },
+      { front: 'When does naive Bayes beat logistic regression?', back: 'With very little training data, or very many features relative to samples — its parameters are one-dimensional counts, so they converge fast.' },
+    ],
+
+    challenge: {
+      title: 'A spam filter you can explain line by line',
+      brief:
+        'Implement multinomial naive Bayes from scratch with NumPy: fit should compute class log-priors and smoothed log-likelihoods from a sparse count matrix, and predict should return the argmax of the log-scores. Verify it matches `MultinomialNB` to within floating-point tolerance on the 20 newsgroups data. Then extend it: add an `alpha` sweep showing the accuracy curve, and add a method that, for a given document, returns the ten tokens contributing most to the winning class’s score.',
+      acceptanceCriteria: [
+        'Training is a single pass of counting — no loops over documents at prediction time',
+        'All arithmetic is done in log-space, and the code notes where a raw product would underflow',
+        'Predictions match scikit-learn’s `MultinomialNB` to at least six decimal places on the same data',
+        'The alpha sweep is plotted or tabulated, and the chosen value is justified by held-out accuracy',
+        'The token-contribution method returns log-probability contributions, not raw counts, and the top tokens are recognisably sensible for the class',
+      ],
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain to a colleague how naive Bayes classifies an email, what the naive assumption is, and why the model is useful despite that assumption being false.',
+      mustCover: [
+        'Bayes theorem turns P(evidence | class) into P(class | evidence), and the evidence term cancels across classes',
+        'The naive assumption factorises the likelihood into a product of per-feature terms, making estimation a counting exercise',
+        'The assumption is false because features correlate, which double-counts evidence and wrecks calibration',
+        'The argmax is far more robust than the posterior, so the classifier still ranks correctly',
+      ],
+      bonusSignals: ['mentions Laplace smoothing and the zero-frequency problem', 'mentions working in log-space to avoid underflow', 'notes that naive Bayes is linear in log-space'],
+      sampleExplanation:
+        'Start with what you actually want: given the words in this email, how likely is it to be spam. What you can easily measure is the reverse — given that emails are spam, how often does each word show up. Bayes theorem converts one into the other: the posterior is the likelihood times the prior, divided by the evidence, and since the evidence term is identical for every class it cannot change which class wins, so you can ignore it. That leaves the likelihood of the whole email given the class, and this is where the difficulty lives. Modelling the probability of a specific combination of words would require seeing that combination many times, and with a vocabulary of twenty thousand words you never will. So naive Bayes assumes the words are independent of one another once you know the class, which lets you multiply the individual word probabilities together. That assumption is plainly wrong — "free" and "offer" turn up together far more than independence predicts — but it turns an impossible estimation problem into counting, and counting works with very little data. What you lose is the honesty of the number. Correlated words feed the same evidence into the product repeatedly, so the model reports 0.9999 when the truthful answer is around 0.8. What you keep is the ordering: the class that was ahead stays ahead, it just wins by an exaggerated margin, and for choosing a class the margin does not matter. Two practical details finish the picture. You work in logarithms, because multiplying five hundred small probabilities underflows to exactly zero in floating point. And you add a pseudo-count to every word, because a word never seen in a class would otherwise give that class a likelihood of zero and veto it outright, however strong the rest of the evidence.',
+    },
+  },
+
+  {
+    id: 'ML-012',
+    domain: 'ML',
+    module: 'Classification',
+    topic: 'Margin-based classification',
+    title: 'Support Vector Machines',
+    slug: 'support-vector-machines',
+    difficulty: 4,
+    estimatedMinutes: 45,
+    prerequisites: ['ML-009'],
+    related: ['ML-010', 'ML-011'],
+    tags: ['svm', 'margin', 'support vectors', 'kernel trick', 'hinge loss', 'rbf'],
+
+    learningObjectives: [
+      'Explain what the margin is and why maximising it is a sensible objective rather than an arbitrary one',
+      'Identify support vectors and explain why the rest of the training data has no effect on the fitted boundary',
+      'Describe the kernel trick and explain how an RBF kernel produces a curved boundary without ever computing the mapped features',
+      'Tune C and gamma with an understanding of what each one does, and know when an SVM is the wrong choice',
+    ],
+
+    terminology: [
+      {
+        term: 'Margin',
+        definition:
+          'The perpendicular distance from the decision hyperplane to the nearest training point of either class. A support vector machine chooses, among all separating hyperplanes, the one for which this distance is greatest.',
+        simple: 'The width of the empty corridor between the boundary and the closest examples.',
+      },
+      {
+        term: 'Support vector',
+        definition:
+          'A training point that lies on the margin boundary or violates it. Only these points have non-zero dual coefficients, so the fitted hyperplane depends on them alone; removing any other point leaves the solution unchanged.',
+        simple: 'The few examples right on the edge that actually decide where the line goes.',
+      },
+      {
+        term: 'Hinge loss',
+        definition:
+          'The loss max(0, 1 − y·f(x)), which is zero once a point is correctly classified with margin at least 1 and grows linearly thereafter. It is what makes the SVM solution sparse in the training points.',
+        simple: 'No penalty once you are safely on the right side; a growing penalty as you cross over.',
+      },
+      {
+        term: 'Kernel trick',
+        definition:
+          'Replacing every inner product xᵢᵀxⱼ in the dual problem with a kernel function K(xᵢ, xⱼ) that equals an inner product in some higher-dimensional space, thereby fitting a linear model in that space without ever computing the coordinates.',
+        simple: 'Getting the benefit of a huge feature expansion by computing similarities instead of the features.',
+      },
+      {
+        term: 'C (regularisation parameter)',
+        definition:
+          'The penalty applied to margin violations. Large C insists on classifying training points correctly, giving a narrow margin and a complex boundary; small C tolerates violations in exchange for a wider, smoother margin.',
+        simple: 'How much you care about getting every training point right versus keeping a wide, simple corridor.',
+      },
+      {
+        term: 'Gamma (RBF kernel width)',
+        definition:
+          'The inverse width of the radial basis function K(x, z) = exp(−γ‖x − z‖²). Large gamma makes each training point influence only its immediate vicinity; small gamma makes influence spread widely and the boundary smooth.',
+        simple: 'How far the influence of each training point reaches.',
+      },
+    ],
+
+    simpleExplanation:
+      'If two groups of points can be separated by a straight line, there are infinitely many lines that do it. Most of them pass uncomfortably close to some of the points, and a line that barely squeezes past an example is a line that will misclassify the next similar example. A support vector machine picks the line that leaves the widest possible empty corridor between the two groups — it pushes the boundary as far from both sides as it can. The width of that corridor is called the margin, and a striking consequence is that only the points sitting right on the edge of it matter. Those are the support vectors. Delete every other training point, refit, and you get exactly the same line. The second idea is what made SVMs famous. Many datasets cannot be separated by a straight line at all, but could be if you first transformed them into a higher-dimensional space where the groups pull apart. Actually computing that transformation is usually far too expensive. The kernel trick sidesteps it entirely: the algorithm only ever needs to know how similar pairs of points are in the new space, and for the right choice of similarity function that number can be computed directly from the original coordinates, without ever constructing the new space.',
+
+    whyItExists:
+      'Perceptrons and unregularised logistic regression will happily return any separating hyperplane, including one that passes within a hair of a training point and therefore generalises poorly. Maximising the margin gives a unique, well-defined solution with a generalisation bound that depends on the margin rather than on the number of dimensions, which is what allows an SVM to work in feature spaces of effectively infinite dimension without overfitting catastrophically.',
+
+    analogy: {
+      scenario:
+        'You are asked to draw the border between two neighbouring countries on a map where villages of each nationality are already marked. One option is to draw a line that hugs the outskirts of a village on one side â technically it separates everybody, but the first new house built in that village ends up on the wrong side. The sensible approach is to find the widest strip of empty land between the two populations and run the border down its middle. The only villages that constrain your choice are those on the edges of that empty strip: the ones deep inside each country could be moved, added to or removed without changing your border at all. And if the populations are interleaved in a way that no straight border can separate â one country’s villages forming a ring around the other’s capital â you might notice that the two groups separate cleanly once you also take altitude into account, so the border becomes a flat plane in three dimensions that looks like a circle when projected back onto the map.',
+      mapping: [
+        { from: 'The widest empty strip between the populations', to: 'The margin' },
+        { from: 'Villages on the edges of the strip', to: 'Support vectors, the only points with non-zero dual coefficients' },
+        { from: 'Villages deep inside a country', to: 'Non-support vectors, which can be deleted without changing the solution' },
+        { from: 'Allowing a few villages inside the strip to get a wider strip overall', to: 'The soft margin, controlled by C' },
+        { from: 'Adding altitude as an extra coordinate', to: 'Mapping into a higher-dimensional feature space' },
+        { from: 'A flat plane in 3D that looks curved on the flat map', to: 'A linear boundary in kernel space that is nonlinear in the original space' },
+      ],
+      bridge:
+        'The analogy captures the two claims that define an SVM. First, that among all valid borders the one with the greatest clearance is the most defensible, because clearance is exactly what buys tolerance to new, unseen villages — this is the intuition behind the margin-based generalisation bound. Second, that only the boundary villages carry information: the fitted hyperplane is a weighted sum over support vectors alone, which is why an SVM can be trained on a large dataset and then described entirely by a small subset of it.',
+      limitations:
+        'The map analogy makes the higher-dimensional space sound like a concrete, inspectable place. With an RBF kernel that space is infinite-dimensional and no coordinates are ever computed — only pairwise similarities exist, which is exactly what makes the trick affordable and also what makes the resulting model uninterpretable.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Drag the margin and the kernel',
+        caption: 'Move points, change C and gamma, and watch the support vectors light up. Notice that dragging a non-support vector does nothing at all until it crosses the margin.',
+        widget: 'svm-margin-lab',
+      },
+      {
+        kind: 'flow',
+        title: 'How an SVM is fitted',
+        steps: [
+          { label: 'State the objective', detail: 'Among all hyperplanes separating the classes, find the one maximising the distance to the nearest point of either class.' },
+          { label: 'Make it soft', detail: 'Real data overlaps, so allow violations with slack variables ξᵢ and penalise their total by C. Hard margin is the special case C → ∞.' },
+          { label: 'Take the dual', detail: 'Lagrangian duality turns the problem into a quadratic program in α, where the data appears only inside inner products xᵢᵀxⱼ.' },
+          { label: 'Swap in a kernel', detail: 'Because the data appears only as inner products, replacing them with K(xᵢ, xⱼ) fits a linear model in an implicit feature space at no extra cost.' },
+          { label: 'Solve and keep the survivors', detail: 'The optimiser (SMO) returns α; points with αᵢ = 0 are discarded and only the support vectors are stored.' },
+          { label: 'Predict', detail: 'f(x) = Σ αᵢyᵢK(xᵢ, x) + b, a similarity-weighted vote over support vectors. The sign is the class.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'SVM: strengths, weaknesses and when to reach for it',
+        caption: 'Reach for an SVM on small to medium datasets — say under 50,000 rows — with many features and a clear margin, especially text with a linear kernel or a genuinely curved boundary with RBF. Reach past it for large n, for probability outputs, or when you need to explain the model.',
+        left: {
+          heading: 'Strengths',
+          points: [
+            'Maximising the margin gives a unique solution with a generalisation bound that does not depend on dimensionality',
+            'Effective when features outnumber samples, which breaks many other methods',
+            'The kernel trick buys highly nonlinear boundaries without an explicit feature expansion',
+            'The model is defined by support vectors alone, so it is memory-efficient relative to the training set',
+            'Convex objective: no local optima and a deterministic solution for fixed hyperparameters',
+            'LinearSVC on sparse text data is fast, strong, and competitive with logistic regression',
+          ],
+        },
+        right: {
+          heading: 'Weaknesses',
+          points: [
+            'Training is roughly O(n²) to O(n³) in the number of samples, so kernel SVMs are impractical beyond tens of thousands of rows',
+            'No native probability output; `probability=True` runs Platt scaling via internal cross-validation and is slow',
+            'Results are highly sensitive to C and gamma, so a hyperparameter search is mandatory rather than optional',
+            'Requires feature scaling, since both the margin and the RBF kernel are distance-based',
+            'A kernel SVM is essentially uninterpretable — there are no coefficients in the original feature space',
+            'Multi-class is handled by one-versus-one or one-versus-rest wrappers rather than natively',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'What C and gamma actually do',
+        caption: 'These two interact, so they must be tuned jointly on a logarithmic grid. A common failure is finding a good C at one gamma and assuming it transfers.',
+        columns: ['Setting', 'Effect on the boundary', 'Bias / variance', 'Symptom when wrong'],
+        rows: [
+          ['Small C (0.01)', 'Wide margin, many violations tolerated, smooth', 'High bias, low variance', 'Underfits: training and test scores both mediocre'],
+          ['Large C (1000)', 'Narrow margin, few violations tolerated, contorted', 'Low bias, high variance', 'Overfits: near-perfect training score, poor test score'],
+          ['Small gamma (0.001)', 'Each point influences a wide region; boundary near-linear', 'High bias', 'RBF behaves like a linear kernel and underfits'],
+          ['Large gamma (100)', 'Each point influences only its immediate neighbourhood', 'Very high variance', 'Islands around individual points; memorises the training set'],
+          ['gamma="scale"', 'Sets γ = 1/(d · Var(X)), adapting to feature spread', 'Sensible default', 'Still needs tuning, but rarely catastrophic'],
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Common kernels',
+        columns: ['Kernel', 'K(x, z)', 'Implicit feature space', 'Use when'],
+        rows: [
+          ['Linear', 'xᵀz', 'The original space', 'Many features, sparse data, text; also when you need coefficients'],
+          ['Polynomial', '(γ xᵀz + r)^d', 'All monomials up to degree d', 'Interactions of known order matter; prone to numerical trouble at high d'],
+          ['RBF (Gaussian)', 'exp(−γ‖x − z‖²)', 'Infinite-dimensional', 'The sensible default for dense, low-dimensional numeric data'],
+          ['Sigmoid', 'tanh(γ xᵀz + r)', 'Not always a valid inner product', 'Rarely — included for historical reasons, often not positive semi-definite'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'A support vector machine finds the hyperplane wáµx + b = 0 solving min_{w,b,Î¾} Â½âwâÂ² + C Î£áµ¢ Î¾áµ¢ subject to yáµ¢(wáµxáµ¢ + b) â¥ 1 â Î¾áµ¢ and Î¾áµ¢ â¥ 0, where yáµ¢ â {â1, +1}. The geometric margin is 2/âwâ, so minimising âwâÂ² maximises it. The Lagrangian dual is max_Î± Î£áµ¢ Î±áµ¢ â Â½ Î£áµ¢Î£â±¼ Î±áµ¢Î±â±¼yáµ¢yâ±¼ K(xáµ¢, xâ±¼) subject to 0 â¤ Î±áµ¢ â¤ C and Î£áµ¢ Î±áµ¢yáµ¢ = 0, in which the data enters only through inner products, permitting their replacement by any positive semi-definite kernel K by Mercer’s theorem. The decision function is f(x) = sign(Î£áµ¢ Î±áµ¢yáµ¢K(xáµ¢, x) + b), with Î±áµ¢ > 0 exactly for support vectors. The primal is equivalent to minimising the average hinge loss plus an L2 penalty, which places the SVM in the same regularised-empirical-risk family as logistic regression with a different loss.',
+
+    math: {
+      intuition:
+        'Everything follows from one geometric fact: for a hyperplane wᵀx + b = 0, the distance from a point to that plane is |wᵀx + b|/‖w‖. Fix the scale so that the closest points satisfy |wᵀx + b| = 1, and the margin becomes exactly 2/‖w‖. Maximising the margin is then the same as minimising ‖w‖², which is a clean convex objective. Switching to the dual is what makes kernels possible: in the dual, the data never appears on its own, only inside inner products between pairs of points — and an inner product is exactly what a kernel computes. That single structural observation is the kernel trick.',
+      formulas: [
+        {
+          latex: '\\gamma_{\\text{geom}} = \\frac{y_i(\\mathbf{w}^{\\top}\\mathbf{x}_i + b)}{\\lVert \\mathbf{w} \\rVert}, \\qquad \\text{margin width} = \\frac{2}{\\lVert \\mathbf{w} \\rVert}',
+          name: 'Geometric margin',
+          meaning:
+            'The signed perpendicular distance from a point to the hyperplane, made positive by multiplying by the label. Under the canonical scaling |wᵀx + b| = 1 at the closest points, the full corridor is 2/‖w‖ wide.',
+          variables: [
+            { symbol: '\\mathbf{w}', meaning: 'Normal vector to the hyperplane; its direction fixes the orientation' },
+            { symbol: 'b', meaning: 'Bias, shifting the hyperplane away from the origin' },
+            { symbol: 'y_i', meaning: 'Label, coded as −1 or +1 so that the product is positive when correct' },
+            { symbol: '\\lVert \\mathbf{w} \\rVert', meaning: 'Euclidean norm of w; small norm means a wide margin' },
+          ],
+          category: 'classification',
+        },
+        {
+          latex: '\\min_{\\mathbf{w}, b, \\xi} \\; \\frac{1}{2}\\lVert \\mathbf{w} \\rVert^{2} + C\\sum_{i=1}^{n}\\xi_i \\quad \\text{s.t.} \\quad y_i(\\mathbf{w}^{\\top}\\mathbf{x}_i + b) \\geq 1 - \\xi_i, \\; \\xi_i \\geq 0',
+          name: 'Soft-margin primal problem',
+          meaning:
+            'Maximise the margin while paying C for every unit of margin violation. The two terms are in direct tension: the first wants a wide corridor, the second wants every point outside it.',
+          variables: [
+            { symbol: '\\xi_i', meaning: 'Slack: how far point i intrudes into or across the margin' },
+            { symbol: 'C', meaning: 'Cost per unit of violation. Large C approaches a hard margin' },
+            { symbol: 'n', meaning: 'Number of training examples' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: '\\max_{\\alpha} \\; \\sum_{i}\\alpha_i - \\frac{1}{2}\\sum_{i}\\sum_{j}\\alpha_i\\alpha_j y_i y_j K(\\mathbf{x}_i, \\mathbf{x}_j) \\quad \\text{s.t.} \\quad 0 \\leq \\alpha_i \\leq C, \\; \\sum_i \\alpha_i y_i = 0',
+          name: 'The dual problem',
+          meaning:
+            'The form actually solved. Crucially the training points appear only inside K, never alone — which is precisely what permits swapping the inner product for any valid kernel.',
+          variables: [
+            { symbol: '\\alpha_i', meaning: 'Dual coefficient for point i; non-zero exactly for support vectors' },
+            { symbol: 'K(\\mathbf{x}_i, \\mathbf{x}_j)', meaning: 'Kernel: an inner product in the implicit feature space' },
+            { symbol: 'C', meaning: 'Upper bound on each αᵢ, which is how the soft margin appears in the dual' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: 'K_{\\text{RBF}}(\\mathbf{x}, \\mathbf{z}) = \\exp\\!\\left(-\\gamma \\lVert \\mathbf{x} - \\mathbf{z} \\rVert^{2}\\right)',
+          name: 'Radial basis function kernel',
+          meaning:
+            'A similarity that decays with distance: 1 when the points coincide, approaching 0 as they separate. Its implicit feature map is infinite-dimensional, which is why it can fit essentially any boundary — and why it needs regularising.',
+          variables: [
+            { symbol: '\\gamma', meaning: 'Inverse width. Large γ means influence decays quickly, giving a wiggly boundary' },
+            { symbol: '\\lVert \\mathbf{x} - \\mathbf{z} \\rVert^{2}', meaning: 'Squared Euclidean distance, which is why scaling matters' },
+          ],
+          category: 'classification',
+        },
+        {
+          latex: 'L_{\\text{hinge}}(y, f) = \\max\\left(0, \\; 1 - y \\, f(\\mathbf{x})\\right)',
+          name: 'Hinge loss',
+          meaning:
+            'Zero once a point is correct with margin at least 1, then linear. The flat region is what makes the solution sparse: points comfortably correct contribute no gradient and end up with αᵢ = 0.',
+          variables: [
+            { symbol: 'y', meaning: 'True label in {−1, +1}' },
+            { symbol: 'f(\\mathbf{x})', meaning: 'Signed distance-like score wᵀx + b' },
+          ],
+          category: 'optimization',
+        },
+      ],
+      derivation: [
+        'A hyperplane is the set {x : wᵀx + b = 0}. The distance from any point x₀ to it is |wᵀx₀ + b|/‖w‖ — the numerator measures how far off the plane you are, and dividing by ‖w‖ removes the arbitrary scale of w.',
+        'w and b can be rescaled together without moving the plane, so fix the scale by requiring the closest points on each side to satisfy |wᵀx + b| = 1. The two margin boundaries are then wᵀx + b = ±1.',
+        'The distance between those two parallel planes is 2/‖w‖. So maximising the margin means minimising ‖w‖, and for convenience we minimise ½‖w‖² instead, which has the same minimiser and a nicer derivative.',
+        'Require every point to be on the correct side with margin at least 1: yᵢ(wᵀxᵢ + b) ≥ 1, with labels coded as ±1 so one inequality covers both classes. This is the hard-margin problem, and it has no solution when the classes overlap.',
+        'Introduce slack ξᵢ ≥ 0, relaxing the constraint to yᵢ(wᵀxᵢ + b) ≥ 1 − ξᵢ, and add C Σξᵢ to the objective. Now overlap is permitted at a price, and C sets the price.',
+        'Form the Lagrangian with multipliers αᵢ for the margin constraints and μᵢ for the non-negativity of the slacks, then set the derivatives with respect to w, b and ξ to zero.',
+        '∂L/∂w = 0 yields w = Σᵢ αᵢyᵢxᵢ. This is the key structural result: the optimal normal vector is a linear combination of the training points, weighted by their dual coefficients.',
+        '∂L/∂b = 0 yields Σᵢ αᵢyᵢ = 0, and ∂L/∂ξᵢ = 0 yields αᵢ = C − μᵢ, which combined with μᵢ ≥ 0 gives the box constraint 0 ≤ αᵢ ≤ C.',
+        'Substituting back eliminates w, b and ξ entirely, leaving the dual: max_α Σαᵢ − ½ΣΣ αᵢαⱼyᵢyⱼ xᵢᵀxⱼ. Observe carefully: the only appearance of the data is the inner product xᵢᵀxⱼ.',
+        'The Karush-Kuhn-Tucker conditions state αᵢ[yᵢ(wᵀxᵢ + b) − 1 + ξᵢ] = 0. So either αᵢ = 0, meaning the point sits strictly outside the margin and contributes nothing, or the constraint is tight and the point lies on or inside the margin. The latter are the support vectors, and since w = Σ αᵢyᵢxᵢ, only they define the boundary.',
+        'Now the trick. Suppose you map every point through some φ into a higher-dimensional space and fit there. The dual would need φ(xᵢ)ᵀφ(xⱼ) — only that, never φ(xᵢ) alone. If a function K(x, z) equals φ(x)ᵀφ(z) for some φ, you can compute the dual without ever evaluating φ.',
+        'Mercer’s theorem says any continuous, symmetric, positive semi-definite K corresponds to such a Ï. The RBF kernel qualifies, and its Ï maps into an infinite-dimensional space â so an RBF SVM fits a linear model in infinitely many dimensions using only nÂ² distance computations.',
+        'Finally, rewrite the primal to see what the SVM is really doing. Since ξᵢ = max(0, 1 − yᵢf(xᵢ)) at the optimum, the objective is ½‖w‖² + C Σ max(0, 1 − yᵢf(xᵢ)) — an L2 penalty plus total hinge loss. So an SVM is regularised empirical risk minimisation with hinge loss, exactly as logistic regression is with log loss. The flat region of the hinge is the entire source of sparsity: log loss is never exactly zero, so every point influences a logistic model, whereas comfortably-correct points contribute nothing to an SVM.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Finding the maximum-margin line by hand',
+      setup:
+        'Four points in two dimensions. Class +1: (3, 3) and (4, 4). Class −1: (1, 1) and (0, 1). Find the maximum-margin separating line, identify the support vectors, and compute the margin width.',
+      steps: [
+        {
+          label: 'Spot the closest opposing pair',
+          detail: 'By inspection the two classes are closest at (3, 3) from the positive side and (1, 1) from the negative side, at a distance of √8 = 2.828. The points (4, 4) and (0, 1) are further back and will turn out not to constrain the solution.',
+          latex: '\\lVert (3,3) - (1,1) \\rVert = \\sqrt{8} = 2.828',
+        },
+        {
+          label: 'Guess the orientation',
+          detail: 'The maximum-margin hyperplane is perpendicular to the segment joining the closest opposing pair and passes through its midpoint. That segment runs along direction (2, 2), so w is proportional to (1, 1), and the midpoint is (2, 2).',
+          latex: '\\mathbf{w} \\propto (1, 1), \\qquad \\text{midpoint} = (2, 2)',
+        },
+        {
+          label: 'Apply the canonical scaling',
+          detail: 'Write w = (a, a) and require wᵀx + b = +1 at (3, 3) and −1 at (1, 1). That gives 6a + b = 1 and 2a + b = −1. Subtracting, 4a = 2, so a = 0.5 and b = −1 − 2(0.5) = −2.',
+          latex: '\\mathbf{w} = (0.5,\\, 0.5), \\qquad b = -2',
+        },
+        {
+          label: 'Write down the boundary',
+          detail: 'The decision boundary is 0.5x₁ + 0.5x₂ − 2 = 0, that is x₁ + x₂ = 4 — the anti-diagonal through (2, 2). The margin boundaries are x₁ + x₂ = 6 and x₁ + x₂ = 2.',
+          latex: 'x_1 + x_2 = 4',
+        },
+        {
+          label: 'Compute the margin width',
+          detail: '‖w‖ = √(0.25 + 0.25) = √0.5 = 0.7071, so the margin width is 2/‖w‖ = 2.828. That matches the distance between (3, 3) and (1, 1) exactly, as it must, since those two points sit on opposite margin boundaries.',
+          latex: '\\frac{2}{\\lVert \\mathbf{w} \\rVert} = \\frac{2}{0.7071} = 2.828',
+        },
+        {
+          label: 'Check the other two points',
+          detail: 'At (4, 4): wᵀx + b = 2 + 2 − 2 = 2, and y·f = +1 × 2 = 2 ≥ 1, so it is strictly outside the margin. At (0, 1): 0 + 0.5 − 2 = −1.5, and y·f = −1 × (−1.5) = 1.5 ≥ 1, also outside. Both have α = 0 and hinge loss 0.',
+          latex: 'y \\, f(4,4) = 2 > 1, \\qquad y \\, f(0,1) = 1.5 > 1',
+        },
+        {
+          label: 'Confirm the support vectors',
+          detail: 'Only (3, 3) and (1, 1) satisfy y·f = 1 exactly, so only they are support vectors. Delete (4, 4) and (0, 1) entirely and refit: the same line comes back. Move (4, 4) to (10, 10) and nothing changes either — but move (3, 3) by a centimetre and the whole boundary shifts.',
+          latex: '\\alpha_{(3,3)} > 0, \\; \\alpha_{(1,1)} > 0, \\; \\alpha_{(4,4)} = \\alpha_{(0,1)} = 0',
+        },
+        {
+          label: 'Recover the dual coefficients',
+          detail: 'With two support vectors, w = α₁(+1)(3,3) + α₂(−1)(1,1) and Σαᵢyᵢ = 0 forces α₁ = α₂ = α. Then w = α(3,3) − α(1,1) = α(2,2) = (0.5, 0.5), so α = 0.25. Each support vector carries a quarter of the weight, and the whole model is two numbers and two stored points.',
+          latex: '\\alpha_1 = \\alpha_2 = 0.25',
+        },
+      ],
+      conclusion:
+        'The entire fitted model is two support vectors with α = 0.25 each, giving the line x₁ + x₂ = 4 and a margin 2.828 wide. Half the training set had no influence whatsoever — and that is the defining property of an SVM, not an artefact of this tiny example. It is also the reason SVMs are sensitive to outliers near the boundary and completely indifferent to outliers far from it, the opposite of least-squares behaviour.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Support vectors are the model',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.svm import SVC
+
+X = np.array([[3.0, 3.0], [4.0, 4.0], [1.0, 1.0], [0.0, 1.0]])
+y = np.array([1, 1, -1, -1])
+
+clf = SVC(kernel="linear", C=1e6).fit(X, y)      # huge C ~ hard margin
+print("w =", np.round(clf.coef_[0], 4), " b =", round(clf.intercept_[0], 4))
+print("support vectors:", clf.support_vectors_.tolist())
+print("dual coefs    :", np.round(clf.dual_coef_[0], 4))
+print("margin width  :", round(2 / np.linalg.norm(clf.coef_[0]), 4))
+
+# Delete the two non-support vectors and refit: identical model.
+keep = np.array([0, 2])
+clf2 = SVC(kernel="linear", C=1e6).fit(X[keep], y[keep])
+print("refit w =", np.round(clf2.coef_[0], 4), " b =", round(clf2.intercept_[0], 4))`,
+        output: `w = [0.5 0.5]  b = -2.0
+support vectors: [[1.0, 1.0], [3.0, 3.0]]
+dual coefs    : [-0.25  0.25]
+margin width  : 2.8284
+`,
+        explanation:
+          'The library reproduces the hand computation exactly: w = (0.5, 0.5), b = −2, margin 2.828, and dual coefficients of magnitude 0.25. The final refit on only the two support vectors returns the identical model, which is the sharpest possible demonstration that non-support vectors carry no information. `dual_coef_` stores αᵢyᵢ rather than αᵢ, which is why one entry is negative. Setting C very large approximates a hard margin, the right choice here because the data is cleanly separable.',
+      },
+      {
+        language: 'python',
+        title: 'C and gamma, tuned jointly because they interact',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.datasets import make_moons
+from sklearn.model_selection import GridSearchCV, train_test_split
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
+
+X, y = make_moons(n_samples=800, noise=0.28, random_state=0)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.3, random_state=0, stratify=y)
+
+pipe = make_pipeline(StandardScaler(), SVC(kernel="rbf"))
+grid = {"svc__C": [0.1, 1, 10, 100, 1000], "svc__gamma": [0.01, 0.1, 1, 10, 100]}
+search = GridSearchCV(pipe, grid, cv=5, n_jobs=-1).fit(X_tr, y_tr)
+print("best:", search.best_params_, "CV score", round(search.best_score_, 4))
+
+# What the extremes look like.
+for C, g in [(0.1, 0.1), (1000, 100), (1, 1)]:
+    m = make_pipeline(StandardScaler(), SVC(kernel="rbf", C=C, gamma=g)).fit(X_tr, y_tr)
+    n_sv = m[-1].n_support_.sum()
+    print(f"C={C:<6} gamma={g:<5} train {m.score(X_tr, y_tr):.3f}  test {m.score(X_te, y_te):.3f}  SVs {n_sv}")`,
+        output: `best: {'svc__C': 10, 'svc__gamma': 1} CV score 0.9518
+C=0.1    gamma=0.1   train 0.859  test 0.850  SVs 401
+C=1000   gamma=100   train 1.000  test 0.821  SVs 331
+C=1      gamma=1     train 0.948  test 0.946  SVs 189
+`,
+        explanation:
+          'The three rows are the whole story of these two hyperparameters. Small C with small gamma underfits: the boundary is nearly straight, training and test scores are both around 0.85, and almost every point is a support vector because the wide margin swallows them all. Large C with large gamma memorises: a perfect training score, a test score twelve points lower, and a boundary that has drawn little islands around individual training points. The tuned middle generalises, and the support-vector count is a useful diagnostic — if most of your training set ends up a support vector, the model is either heavily regularised or badly mis-specified. Note the `StandardScaler`: the RBF kernel is a function of squared Euclidean distance, so unscaled features corrupt it exactly as they corrupt KNN.',
+      },
+      {
+        language: 'python',
+        title: 'Linear versus kernel, and why LinearSVC exists',
+        runnable: true,
+        code: `import time
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.svm import SVC, LinearSVC
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+
+for n in [2000, 8000, 32000]:
+    X, y = make_classification(n_samples=n, n_features=20, n_informative=10, random_state=0)
+    row = [f"n={n:>6}"]
+    for name, est in [("SVC(rbf)", SVC(kernel="rbf")), ("LinearSVC", LinearSVC(dual="auto", max_iter=5000))]:
+        m = make_pipeline(StandardScaler(), est)
+        t0 = time.perf_counter()
+        m.fit(X, y)
+        row.append(f"{name} {time.perf_counter() - t0:6.2f}s acc {m.score(X, y):.3f}")
+    print("   ".join(row))`,
+        output: `n=  2000   SVC(rbf)   0.14s acc 0.967   LinearSVC   0.02s acc 0.862
+n=  8000   SVC(rbf)   1.58s acc 0.956   LinearSVC   0.06s acc 0.859
+n= 32000   SVC(rbf)  22.41s acc 0.951   LinearSVC   0.24s acc 0.857
+`,
+        explanation:
+          'Kernel SVM training time grows super-linearly — roughly quadratically here — because the optimiser works with an n × n kernel matrix, while `LinearSVC` solves the primal directly and scales close to linearly. At 32,000 rows the gap is already a factor of ninety, and by a million rows the kernel version is simply not an option. The accuracy column shows what you are paying for: on data with genuine nonlinearity, RBF buys about nine points. The practical rule is to use `LinearSVC` (or `SGDClassifier` with hinge loss) for large or sparse high-dimensional data such as text, where the boundary is usually close to linear anyway, and reserve kernel SVC for smaller dense problems where the curvature is real.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Text categorisation before deep learning',
+        usage:
+          'Linear SVMs on TF-IDF features were the state of the art for topic classification and sentiment analysis for roughly fifteen years, and remain a strong baseline. High-dimensional sparse text tends to be nearly linearly separable, which is precisely the regime where margin maximisation shines and where the number of features exceeding the number of samples is not a problem.',
+      },
+      {
+        context: 'Bioinformatics and small-sample problems',
+        usage:
+          'Gene expression classification often has 20,000 features and 100 patients. SVMs handle this because the generalisation bound depends on the margin rather than the dimensionality, and because specialised kernels — string kernels for sequences, graph kernels for molecules — let domain structure be encoded directly in the similarity function.',
+      },
+      {
+        context: 'Novelty and anomaly detection',
+        usage:
+          'One-class SVM fits a boundary around the region occupied by normal data and flags anything outside it. It is used in manufacturing quality control and network intrusion detection, where you have abundant examples of normal behaviour and almost none of the failures you want to catch.',
+      },
+      {
+        context: 'Handwritten digit recognition',
+        usage:
+          'An RBF SVM on MNIST reaches roughly 98.5% accuracy with modest tuning, which was competitive with the best systems for years and is still a useful reference point. It is the standard demonstration that a kernel method can match early neural networks on a genuinely nonlinear problem.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'scikit-learn', role: '`SVC` and `SVR` for kernel methods, `LinearSVC` for large linear problems, `OneClassSVM` for novelty detection; `gamma="scale"` as the sane default.' },
+      { tool: 'LIBSVM / LIBLINEAR', role: 'The C libraries scikit-learn wraps. LIBSVM implements sequential minimal optimisation for the dual; LIBLINEAR solves the primal and is what makes LinearSVC fast.' },
+      { tool: 'CalibratedClassifierCV', role: 'The recommended route to probabilities from an SVM — cheaper and more transparent than `SVC(probability=True)`, which runs an internal five-fold cross-validation.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Not scaling the features',
+        why: 'The margin is a Euclidean distance and the RBF kernel is a function of squared Euclidean distance. An unscaled feature with a large range dominates both, so the model effectively ignores the others and gamma becomes impossible to tune.',
+        fix: 'Always put a `StandardScaler` before the SVM in a pipeline. This is not a refinement; an unscaled SVM is often worse than a majority-class baseline.',
+      },
+      {
+        mistake: 'Tuning C and gamma independently',
+        why: 'They interact strongly: a large gamma with a large C gives a wildly overfitted boundary, while the same gamma with a small C can be reasonable. Optimising one with the other fixed usually lands in the wrong region of the grid entirely.',
+        fix: 'Search them jointly on a logarithmic grid, typically C in 10^(−2 … 3) and gamma in 10^(−4 … 1), then refine around the winner.',
+      },
+      {
+        mistake: 'Running a kernel SVC on hundreds of thousands of rows',
+        why: 'Kernel SVM training is roughly O(n²) to O(n³) and the kernel matrix needs O(n²) memory. At n = 500,000 the matrix alone would be two terabytes in double precision.',
+        fix: 'Use `LinearSVC`, `SGDClassifier(loss="hinge")`, or an explicit kernel approximation such as `Nystroem` or `RBFSampler` followed by a linear model.',
+      },
+      {
+        mistake: 'Treating `SVC(probability=True)` output as a free probability',
+        why: 'That flag triggers Platt scaling fitted by internal five-fold cross-validation, which multiplies training time by roughly five and can produce probabilities that disagree with `predict()` near the boundary, because the two use different fitted quantities.',
+        fix: 'If you need probabilities, wrap the SVM in `CalibratedClassifierCV` explicitly so the calibration is visible and evaluable, or use logistic regression instead.',
+      },
+      {
+        mistake: 'Expecting interpretable feature importances from an RBF SVM',
+        why: 'The model lives in an implicit feature space that is never materialised; there are no coefficients in the original features, only dual weights attached to training points.',
+        fix: 'Use a linear kernel if you need coefficients, or apply a model-agnostic method such as permutation importance or SHAP while remembering these explain the behaviour rather than the mechanism.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What is a support vector, and why does it matter that most training points are not support vectors?',
+        answer:
+          'A support vector is a training point that lies exactly on the margin boundary or violates it — formally, one whose dual coefficient αᵢ is non-zero. The Karush-Kuhn-Tucker conditions force αᵢ = 0 for every point that is correctly classified with margin strictly greater than 1, and since the fitted normal vector is w = Σ αᵢyᵢxᵢ, those points contribute nothing at all. Three consequences follow. The model is compact: you store only the support vectors, which can be a small fraction of the training set. Prediction cost scales with the number of support vectors rather than with n. And the model has an unusual robustness profile — moving a point that sits far from the boundary has literally no effect, whereas moving a support vector by a small amount shifts the entire hyperplane. That is the opposite of least squares, where every point pulls on the fit in proportion to its residual. It also gives a useful diagnostic: if nearly every training point is a support vector, either C is very small or the kernel is badly mis-specified.',
+      },
+      {
+        level: 'advanced',
+        question: 'Explain the kernel trick. Why can you use an infinite-dimensional feature space without infinite computation?',
+        answer:
+          'When you derive the dual of the SVM problem, the training data appears in exactly one place: the inner product xáµ¢áµxâ±¼. It never appears alone. So if you wanted to fit in a transformed space Ï(x), the only thing you would ever need is Ï(xáµ¢)áµÏ(xâ±¼) â and if some function K(x, z) happens to equal that inner product, you can compute it directly from the original coordinates and never construct Ï at all. Mercer’s theorem tells you which functions qualify: any continuous, symmetric, positive semi-definite kernel corresponds to an inner product in some Hilbert space. The RBF kernel exp(âÎ³âx â zâÂ²) qualifies, and expanding the exponential shows its implicit feature map contains polynomial terms of every degree, so the space is infinite-dimensional. You never pay for those dimensions because you only ever evaluate nÂ² similarities, each costing O(d). What you pay instead is that the model is now defined implicitly through the training points: there is no weight vector in the original space to inspect, prediction requires evaluating the kernel against every support vector, and training requires an n Ã n matrix, which is what makes kernel SVMs impractical beyond tens of thousands of samples.',
+        followUp:
+          'A strong answer states the structural reason — the data appears only inside inner products in the dual — rather than just asserting that kernels compute similarity, and names the cost: O(n²) memory and loss of interpretability.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'How do an SVM and logistic regression actually differ, given both fit linear boundaries?',
+        answer:
+          'They are the same template with a different loss. Both minimise a regularised empirical risk: an L2 penalty on the weights plus an average loss. Logistic regression uses log loss, which is smooth, never exactly zero, and yields a probabilistic model with a clean likelihood interpretation. An SVM uses hinge loss, which is exactly zero once a point is correct with margin at least 1. That flat region has three practical consequences. First, sparsity: points comfortably on the right side contribute nothing to the solution, which is why only support vectors matter, whereas every point influences a logistic fit. Second, robustness profile: hinge loss grows linearly for misclassified points while log loss also grows without bound but more gently near the boundary, so the SVM cares intensely about points near the margin and not at all about confident ones. Third, output: log loss is a proper scoring rule so logistic regression gives usable probabilities directly, whereas an SVM gives an uncalibrated decision value that needs Platt scaling. In practice I would choose logistic regression when I need probabilities or coefficient interpretation, LinearSVC when I have wide sparse data and want the margin’s robustness, and a kernel SVM when the dataset is small enough to afford it and the boundary is genuinely curved.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Given w = (2, −1) and b = −3, compute the margin width and the signed distance from the point (4, 1) to the decision boundary.',
+        hint: 'Margin width is 2/‖w‖; signed distance is (wᵀx + b)/‖w‖.',
+        solution:
+          '‖w‖ = √(4 + 1) = √5 = 2.2361, so the margin width is 2/2.2361 = 0.8944. For the point (4, 1): wᵀx + b = 2(4) + (−1)(1) − 3 = 8 − 1 − 3 = 4. The signed distance is 4/2.2361 = 1.7889, so the point lies on the positive side, about 1.79 units from the boundary. Since the functional margin 4 is comfortably greater than 1, this point sits strictly outside the margin, its hinge loss is zero, and its dual coefficient would be zero — it is not a support vector and could be deleted without changing the model.',
+      },
+      {
+        prompt:
+          'Your RBF SVM scores 1.000 on training data and 0.72 on the test set. Which hyperparameters would you change, and in which direction?',
+        hint: 'Which settings make the boundary contort around individual points?',
+        solution:
+          'A perfect training score with a large gap is classic overfitting, and with an RBF kernel there are two culprits. Gamma is likely too large: a big gamma makes each training point’s influence decay very quickly with distance, so the model can draw a small island around every point and memorise the data. Lower gamma so influence spreads and the boundary smooths. C is likely too large as well: a big C makes margin violations very expensive, forcing the boundary to contort to classify every training point. Lower C to allow violations and widen the margin. I would search both jointly on a logarithmic grid rather than adjusting one at a time, because their effects compound, and I would watch the support-vector count as a diagnostic â an overfitted RBF model typically has a large number of support vectors scattered through the data rather than concentrated along a boundary. If lowering both does not close the gap, the next question is whether the test set differs systematically from the training set, or whether there is simply not enough data to support a nonlinear boundary, in which case a linear kernel may generalise better.',
+      },
+      {
+        prompt:
+          'Explain why an SVM is unaffected by moving a correctly-classified point further away from the boundary, while linear regression is affected by moving any point at all.',
+        hint: 'Compare the shape of hinge loss with squared error.',
+        solution:
+          'Hinge loss is max(0, 1 − y·f(x)). Once y·f(x) ≥ 1 the loss is exactly zero and — crucially — its gradient is also exactly zero, so the point exerts no force on the solution. Moving it further away keeps y·f(x) above 1, so the loss stays at zero and nothing changes; formally, the KKT conditions give it a dual coefficient of αᵢ = 0 and it drops out of w = Σ αᵢyᵢxᵢ entirely. Squared error, by contrast, is (y − f(x))², which is zero only when the prediction is exactly right and grows quadratically otherwise. Every point has a non-zero residual and therefore a non-zero gradient, and the quadratic shape means distant points pull hardest. So the two models have opposite sensitivities: an SVM is completely indifferent to confident, distant points and extremely sensitive to points near the margin, whereas least squares is dominated by the most distant points. This is why a single far-away outlier can visibly rotate a regression line while leaving an SVM boundary untouched — and conversely, why mislabelled points right at the class boundary are far more damaging to an SVM.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'ML-012-q1',
+        type: 'mcq',
+        concept: 'the objective',
+        prompt: 'Among all hyperplanes that separate the classes, which one does an SVM select?',
+        options: [
+          'The one maximising the distance to the nearest training point of either class',
+          'The one minimising the total squared distance to all training points',
+          'The one passing through the mean of each class',
+          'The one minimising the number of misclassified points',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The SVM maximises the geometric margin, 2/‖w‖, which is why the objective minimises ½‖w‖². Maximising clearance to the nearest points is what yields a generalisation bound independent of dimensionality.',
+      },
+      {
+        id: 'ML-012-q2',
+        type: 'truefalse',
+        concept: 'support vectors',
+        prompt: 'Deleting a training point that is not a support vector and refitting produces exactly the same SVM.',
+        answer: true,
+        explanation:
+          'Non-support vectors have dual coefficient αᵢ = 0, and since w = Σ αᵢyᵢxᵢ they contribute nothing to the solution. This is a defining property of the SVM and follows from the KKT conditions.',
+      },
+      {
+        id: 'ML-012-q3',
+        type: 'numeric',
+        concept: 'margin arithmetic',
+        prompt: 'If the fitted weight vector is w = (3, 4), what is the width of the margin? Give two decimal places.',
+        answer: 0.4,
+        tolerance: 0.01,
+        explanation:
+          '‖w‖ = √(9 + 16) = 5, and the margin width is 2/‖w‖ = 2/5 = 0.40. A larger weight norm always means a narrower margin, which is why minimising ‖w‖² maximises the corridor.',
+      },
+      {
+        id: 'ML-012-q4',
+        type: 'multi',
+        concept: 'C and gamma',
+        prompt: 'Which changes would you make to an RBF SVM that scores 1.00 on training and 0.70 on test data? Select all that apply.',
+        options: [
+          'Decrease gamma',
+          'Decrease C',
+          'Increase gamma',
+          'Increase C',
+          'Add more training data if it is available',
+        ],
+        answerIndices: [0, 1, 4],
+        explanation:
+          'That gap is overfitting. Lower gamma widens each point’s region of influence and smooths the boundary; lower C tolerates margin violations and widens the margin; more data is the remedy that costs no bias. Increasing either parameter would make the overfitting worse.',
+      },
+      {
+        id: 'ML-012-q5',
+        type: 'order',
+        concept: 'how an SVM is fitted',
+        prompt: 'Put the steps of fitting a kernel SVM into order.',
+        items: [
+          'Write the primal: maximise the margin subject to correct classification with slack',
+          'Form the Lagrangian and set derivatives with respect to w, b and slack to zero',
+          'Obtain the dual, in which data appears only inside inner products',
+          'Replace each inner product with a kernel function',
+          'Solve the quadratic program for the dual coefficients',
+          'Keep only the points with non-zero coefficients as support vectors',
+        ],
+        explanation:
+          'The critical step is the third: the dual’s structure, where data appears only as inner products, is precisely what makes substituting a kernel legitimate. Without taking the dual there is nowhere for a kernel to go.',
+      },
+      {
+        id: 'ML-012-q6',
+        type: 'fill',
+        concept: 'the loss function',
+        prompt: 'The SVM minimises an L2 penalty plus which loss function?',
+        answers: ['hinge', 'hinge loss', 'the hinge loss', 'max(0, 1 - y f(x))'],
+        explanation:
+          'Hinge loss, max(0, 1 − y·f(x)). Its exactly-zero region for confidently correct points is what makes the solution sparse in the training data, unlike log loss which is never exactly zero.',
+      },
+      {
+        id: 'ML-012-q7',
+        type: 'explain',
+        concept: 'the kernel trick',
+        prompt: 'Explain the kernel trick to someone who understands linear models but has never seen an SVM.',
+        rubric: [
+          'Explains that a nonlinear boundary can be made linear by mapping into a higher-dimensional space',
+          'States that in the dual formulation the data appears only inside inner products',
+          'Explains that a kernel computes that inner product directly, so the mapping is never performed',
+          'Notes a cost: the O(n²) kernel matrix, loss of interpretability, or the need to tune gamma',
+        ],
+        sampleAnswer:
+          'Start with a dataset that no straight line can separate â say one class forming a ring around the other. If you add a third coordinate equal to xâÂ² + xâÂ², the ring lifts into a bowl shape and a flat plane now separates the classes cleanly. Project that plane back down and it looks like a circle. So nonlinearity can always be bought by adding features; the problem is that the useful expansions are enormous. All polynomial terms up to degree five over twenty features is already tens of thousands of columns, and some expansions are infinite. The kernel trick removes the need to build them. When you derive the SVM’s dual optimisation problem, the training data turns out to appear in exactly one place: the inner product between pairs of points. It never appears on its own. So if you want to fit in the expanded space Ï(x), the only quantity you ever need is Ï(xáµ¢)áµÏ(xâ±¼) â and for well-chosen expansions there is a function K(xáµ¢, xâ±¼) computable from the original coordinates that equals it. The RBF kernel exp(âÎ³âx â zâÂ²) corresponds to an infinite-dimensional expansion and costs one exponential and one distance to evaluate. Mercer’s theorem tells you which functions are legitimate: symmetric and positive semi-definite ones. The price is real, though. You now need an n Ã n matrix of pairwise similarities, which is why kernel SVMs stall past tens of thousands of rows, and because the expanded features never exist, there are no coefficients to interpret â only weights attached to individual support vectors.',
+        explanation:
+          'The essential point is structural: kernels are possible because the dual formulation only ever touches the data through inner products. An answer that only says "kernels measure similarity" has missed the mechanism.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does an SVM maximise?', back: 'The geometric margin, 2/‖w‖ — the perpendicular distance from the boundary to the nearest point of either class. Equivalently it minimises ½‖w‖².' },
+      { front: 'What is a support vector?', back: 'A training point on or inside the margin, with non-zero dual coefficient αᵢ. Only these define the boundary; all other points can be deleted.' },
+      { front: 'What does C control?', back: 'The penalty for margin violations. Large C means a narrow margin and a complex boundary (low bias, high variance); small C means a wide, smoother margin.' },
+      { front: 'What does gamma control?', back: 'The RBF kernel width. Large gamma means each point influences only its immediate neighbourhood, giving a wiggly, high-variance boundary.' },
+      { front: 'Why is the kernel trick possible?', back: 'In the dual, data appears only inside inner products xᵢᵀxⱼ. Replacing them with K(xᵢ, xⱼ) fits in an implicit feature space without computing it.' },
+      { front: 'What loss does an SVM minimise?', back: 'Hinge loss max(0, 1 − y·f(x)) plus an L2 penalty. The flat zero region is what makes the solution sparse in the training points.' },
+      { front: 'Why not use a kernel SVM on a million rows?', back: 'Training is roughly O(n²)–O(n³) and the kernel matrix needs O(n²) memory. Use LinearSVC, SGDClassifier, or Nystroem approximation instead.' },
+    ],
+
+    challenge: {
+      title: 'Mapping the C-gamma landscape',
+      brief:
+        'Take a two-dimensional dataset with a genuinely curved boundary, such as make_moons with noise. Fit RBF SVMs across a 5 × 5 logarithmic grid of C and gamma, and for each one record the training score, the cross-validated score and the number of support vectors. Present the three as heatmaps or tables over the grid. Then answer, in writing and with evidence from your own numbers: which corner of the grid overfits, which underfits, what the support-vector count tells you that the accuracy does not, and where the two hyperparameters trade off against one another.',
+      acceptanceCriteria: [
+        'A StandardScaler is inside the pipeline, and the write-up explains why an unscaled RBF kernel is meaningless',
+        'Training and cross-validated scores are reported separately for every grid cell, not just the best one',
+        'The support-vector count is tabulated and interpreted, not merely printed',
+        'The write-up identifies the overfitting and underfitting corners by reference to the recorded numbers',
+        'The chosen model is evaluated once on a held-out test set that took no part in the search',
+      ],
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain to a colleague what makes a support vector machine different from logistic regression, covering the margin, support vectors and the kernel trick.',
+      mustCover: [
+        'The SVM picks the separating hyperplane with the widest margin, not just any separating hyperplane',
+        'Only support vectors — points on or inside the margin — determine the solution',
+        'Hinge loss is zero for confidently correct points, which is the source of that sparsity',
+        'The kernel trick works because the dual touches the data only through inner products',
+      ],
+      bonusSignals: ['mentions that C and gamma interact and must be tuned jointly', 'mentions the O(n²) scaling limit', 'notes that SVM and logistic regression differ only in the loss'],
+      sampleExplanation:
+        'Both models draw a straight boundary, so the difference is in which straight boundary they draw and why. If two classes are separable there are infinitely many lines that work, and unregularised logistic regression is content with any of them â it will happily return one that skims a training point, because moving further away always improves its loss a little. The support vector machine asks a sharper question: which separating line leaves the widest empty corridor on both sides. That corridor is the margin, and the logic behind maximising it is that clearance is exactly what buys tolerance for the next unseen example. Now the surprising consequence. Once you have found the widest corridor, only the points touching its edges had any say in where it went. Those are the support vectors. Everything else could be deleted, or moved further away, and the same line comes back â which you can verify in about five lines of scikit-learn. That comes from the shape of the loss: hinge loss is exactly zero once a point is correct by a comfortable margin, so such points contribute no gradient at all. Logistic regression’s log loss is never exactly zero, so every single point tugs on the fit. That is genuinely the whole difference between the two models â same L2 penalty, different loss â and it explains why an SVM ignores distant outliers while a logistic fit does not. The second idea is what made SVMs famous. Lots of data cannot be split by any straight line, but could be if you first expanded it into more dimensions. Building those dimensions explicitly is usually prohibitive. The trick is that when you rewrite the optimisation in its dual form, the data only ever shows up inside inner products between pairs of points â never on its own. So if a function exists that computes what that inner product would have been in the expanded space, you can use it directly and skip the expansion entirely. The RBF kernel does this for an infinite-dimensional expansion at the cost of one exponential per pair. What you give up is interpretability, since those features never exist, and scalability, since you now need an n by n matrix of pairwise similarities â which is why a kernel SVM is a great choice at ten thousand rows and a terrible one at ten million.',
+    },
+  },
+

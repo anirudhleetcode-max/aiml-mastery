@@ -4023,4 +4023,1758 @@ lr=1.05   too high: diverges       loss: start 9.000  mid 2.740e+03  end 6.908e+
         "Backpropagation tells you which direction is downhill, but a direction is not a plan — you still have to decide how far to walk. That distance is the learning rate, and it is one number applied to every parameter at once. If it is too large you overshoot the valley and land higher on the far side, then overshoot again more violently, and within a few dozen steps the numbers overflow and everything becomes nan. If it is too small you do improve, but so slowly that you cannot tell within your budget whether the model is any good. You can read which case you are in straight off the loss curve: a nan or a rising loss means too high, a wide bouncing band means slightly too high for the current phase, a smooth fall means about right, and an almost flat slow decline means too low. The reason a single value cannot serve throughout is that the surface changes under you. Far from a solution it is relatively flat and long strides are efficient; close to one it is sharply curved and the same stride bounces you between the walls. Worse, because gradients are estimated from small batches they are noisy, so a large rate means you settle into a wide noisy region rather than a point — there is a floor on the loss you simply cannot get below without shrinking the steps. That is why almost every serious run schedules the rate: ramp up gently for the first few hundred steps so the random initial weights do not get wrecked, hold near a peak while covering ground, then decay smoothly toward zero so the model can settle. And before all of this, spend ten minutes on a range test: ramp the rate up exponentially, watch where the loss starts falling fastest, and pick from that region rather than guessing.",
     },
   },
+
+  {
+    id: 'DL-008',
+    domain: 'DL',
+    module: 'Optimisers',
+    topic: 'Stochastic descent and velocity',
+    title: 'SGD and Momentum',
+    slug: 'sgd-and-momentum',
+    difficulty: 4,
+    estimatedMinutes: 40,
+    prerequisites: ['DL-005', 'DL-006', 'DL-007'],
+    related: ['DL-004', 'DL-006', 'DL-007'],
+    tags: ['sgd', 'momentum', 'nesterov', 'optimiser', 'gradient-noise', 'ravine', 'velocity'],
+
+    learningObjectives: [
+      'Explain why the mini-batch gradient is a noisy but unbiased estimate of the full-batch gradient, and why that noise helps rather than hurts',
+      'Write the plain SGD update and the momentum update, and say exactly what the velocity buffer accumulates',
+      'Show that momentum multiplies the effective step by 1/(1 - mu) along consistent directions and damps oscillating ones',
+      'Distinguish classical momentum from Nesterov accelerated gradient, and configure both correctly in torch.optim.SGD',
+    ],
+
+    terminology: [
+      {
+        term: 'Stochastic gradient descent (SGD)',
+        definition:
+          'Gradient descent in which each update uses the gradient of the loss on a single mini-batch rather than on the whole training set. The batch gradient is a random variable whose expectation is the full-batch gradient.',
+        simple: 'Take a step downhill after looking at only a handful of examples instead of all of them.',
+      },
+      {
+        term: 'Gradient noise',
+        definition:
+          'The difference between the mini-batch gradient and the true full-dataset gradient. Its magnitude scales roughly as 1/sqrt(B) for batch size B, so smaller batches mean noisier steps.',
+        simple: 'The wobble in the direction you pick because you only looked at a sample.',
+      },
+      {
+        term: 'Momentum (velocity buffer)',
+        definition:
+          'A running exponentially weighted sum of past gradients, held one number per parameter, that replaces the raw gradient in the update. It gives the optimiser inertia.',
+        simple: 'A memory of which way you have been going, so a single odd step cannot throw you off course.',
+      },
+      {
+        term: 'Ravine (ill-conditioned valley)',
+        definition:
+          'A region of the loss surface that is steeply curved in some directions and nearly flat in others. Plain gradient descent bounces across the steep walls while creeping along the flat floor.',
+        simple: 'A narrow gorge: you keep bouncing off the sides instead of walking down the middle.',
+      },
+      {
+        term: 'Nesterov accelerated gradient',
+        definition:
+          'A variant of momentum that evaluates the gradient at the point the velocity is about to carry you to, rather than where you currently stand, giving a correction term that damps overshoot.',
+        simple: 'Look where you are about to land before deciding how hard to push.',
+      },
+    ],
+
+    simpleExplanation:
+      "Imagine walking down a foggy hillside with a phone that tells you which way is downhill, but the phone is cheap and only samples the ground under a few of your steps, so its arrow jitters. Plain stochastic gradient descent means trusting the jittery arrow completely: read it, take a small step that way, read it again. You do get down the hill, but you zigzag, and in a narrow gully you spend most of your effort bouncing from one wall to the other instead of walking along the floor. Momentum fixes this by making you heavy. Instead of stepping exactly where the arrow points, you keep a rolling memory of every direction you have been going, weighted so that recent directions count most. If the arrow has pointed the same way for a while, that memory builds up and you move faster and faster in that direction, like a ball rolling downhill. If the arrow keeps flipping left and right, the flips cancel in the memory and you stop wasting energy on them. The result is the same destination, reached in far fewer steps, with a much smoother path.",
+
+    whyItExists:
+      'Computing the gradient over the whole training set is far too expensive to do for every update on any realistic dataset, so practitioners moved to mini-batch gradients — which are noisy. Plain SGD on top of that noise is slow: it crawls along flat directions and oscillates violently across steep ones, so a badly conditioned loss surface can need tens of thousands of steps for progress that momentum makes in hundreds. Momentum exists to convert that wasted oscillation into forward speed by averaging gradients over time instead of trusting each one on its own.',
+
+    analogy: {
+      scenario:
+        'Two people are pushing shopping trolleys through a supermarket toward the exit, guided by a friend who shouts a direction every few seconds but is sometimes wrong. The first trolley has perfect brakes: it stops dead after every push, so every wrong shout costs a full wasted push and the trolley judders left and right down the aisle. The second trolley is heavy and rolls freely. A single wrong shout barely deflects it, because the momentum it has already built keeps it going roughly straight, while shouts that agree with each other pile up and it accelerates down the long straight aisle.',
+      mapping: [
+        { from: "The friend's shouted direction", to: 'The mini-batch gradient, a noisy estimate of the true descent direction' },
+        { from: 'The trolley with perfect brakes', to: 'Plain SGD, where each update depends only on the current gradient' },
+        { from: 'The heavy rolling trolley', to: 'SGD with momentum, where the velocity buffer carries information from past gradients' },
+        { from: 'Shouts that agree piling up into speed', to: 'Consistent gradients accumulating into a velocity up to 1/(1 - mu) times larger' },
+        { from: 'Contradictory shouts cancelling out', to: 'Oscillating gradient components partially cancelling in the exponential average' },
+      ],
+      bridge:
+        'The velocity buffer is literally an exponentially weighted sum of past gradients, so the trolley mass is not a metaphor for something vague — it is the coefficient mu that decides how much of the old sum survives each step. Where the analogy stops working is that a real trolley conserves kinetic energy, so it would overshoot the exit and keep going; the optimiser velocity decays geometrically the moment the gradients stop supporting it, because each step multiplies the buffer by mu < 1.',
+      limitations:
+        'The physical picture suggests momentum always helps you go faster. It does not: on a surface with a sharp narrow minimum, inertia can carry you straight past it, which is exactly why very high mu combined with a large learning rate diverges.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'One momentum update, in order',
+        caption: 'The PyTorch convention. Note that the velocity is updated before the parameter, and that the learning rate multiplies the velocity, not the raw gradient.',
+        steps: [
+          { label: 'Sample a mini-batch', detail: 'Draw B examples, run the forward pass and compute the loss on those B examples only.' },
+          { label: 'Backward pass', detail: 'Backpropagation fills p.grad with g_t, the gradient of the mini-batch loss with respect to every parameter.' },
+          { label: 'Decay the old velocity', detail: 'Multiply the stored buffer by mu, typically 0.9. Ten per cent of the accumulated history is discarded each step.' },
+          { label: 'Add the new gradient', detail: 'v_t = mu * v_{t-1} + g_t. The buffer now holds a weighted sum in which g_t counts once, g_{t-1} counts mu, g_{t-2} counts mu squared, and so on.' },
+          { label: 'Step along the velocity', detail: 'theta = theta - lr * v_t. The direction you move is the smoothed history, not the instantaneous gradient.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Plain SGD versus SGD with momentum',
+        caption: 'Same gradients, same learning rate, different use of memory.',
+        left: {
+          heading: 'Plain SGD (mu = 0)',
+          points: [
+            'Update is theta = theta - lr * g_t; no state is stored',
+            'Memory cost: zero extra bytes per parameter',
+            'In a ravine it oscillates across the steep axis and crawls along the flat one',
+            'Every noisy batch translates directly into a noisy step',
+            'Still the default for fine-tuning large pretrained models where stability matters more than speed',
+          ],
+        },
+        right: {
+          heading: 'SGD with momentum (mu = 0.9)',
+          points: [
+            'Update is v = mu*v + g; theta = theta - lr*v',
+            'Memory cost: one extra float per parameter, the same size as the model',
+            'Consistent directions are amplified up to 1/(1 - mu) = 10 times',
+            'Oscillating components largely cancel inside the exponential average',
+            'The standard choice for training convolutional networks from scratch, usually with mu = 0.9 and weight decay',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'What mu actually buys you',
+        caption: 'Effective amplification of a persistent gradient, and the rough number of past steps the buffer remembers.',
+        columns: ['mu', 'Steady-state amplification 1/(1-mu)', 'Effective averaging window ~1/(1-mu) steps', 'Typical use'],
+        rows: [
+          ['0.0', '1x', '1 step', 'Plain SGD; debugging, or fine-tuning where you want no inertia'],
+          ['0.5', '2x', '2 steps', 'Warmup value in some recipes; mild smoothing'],
+          ['0.9', '10x', '10 steps', 'The overwhelming default for vision models'],
+          ['0.99', '100x', '100 steps', 'Very noisy gradients or tiny batches; needs a proportionally smaller learning rate'],
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Watch momentum cross a ravine',
+        caption: 'Set the surface to an elongated bowl, run plain descent, then turn momentum up to 0.9 and compare the number of steps to the minimum. Then push mu to 0.99 and watch it overshoot.',
+        widget: 'gradient-descent-lab',
+      },
+    ],
+
+    formalDefinition:
+      'Stochastic gradient descent minimises L(theta) = E_{(x,y)~D}[l(f_theta(x), y)] by the iteration theta_{t+1} = theta_t - eta * g_t, where g_t = grad_theta L_{B_t}(theta_t) is the gradient of the loss on a mini-batch B_t sampled from D, so that E[g_t] = grad L(theta_t). Classical momentum replaces g_t by a velocity v_t = mu * v_{t-1} + g_t with v_0 = 0 and mu in [0, 1), giving theta_{t+1} = theta_t - eta * v_t; expanding the recursion shows v_t = sum_{k=0}^{t} mu^k g_{t-k}, an exponentially weighted sum of all past gradients.',
+
+    math: {
+      intuition:
+        'Two ideas, one after the other. First, the mini-batch gradient is a sample mean: it is right on average and its error shrinks like one over the square root of the batch size, so it is a cheap noisy substitute for the real thing. Second, if you have a noisy estimate of a quantity that changes slowly, the natural thing to do is average several estimates — and an exponential moving average is the way to do that with one number of storage instead of a list. Momentum is exactly that average, applied to gradients. Everything else follows: a component of the gradient that keeps the same sign adds up into a geometric series, which sums to 1/(1 - mu); a component that flips sign every step alternates and largely cancels.',
+      formulas: [
+        {
+          latex: '\\theta_{t+1} = \\theta_t - \\eta\\, g_t, \\qquad g_t = \\nabla_\\theta L_{B_t}(\\theta_t)',
+          name: 'Plain stochastic gradient descent',
+          meaning:
+            'Move each parameter a fixed multiple of the negative mini-batch gradient. No state is carried between steps, so the optimiser has no memory whatsoever.',
+          variables: [
+            { symbol: '\\theta_t', meaning: 'The full parameter vector at step t' },
+            { symbol: '\\eta', meaning: 'Learning rate, the single scalar that converts a gradient into a distance' },
+            { symbol: 'g_t', meaning: 'Gradient of the loss computed on mini-batch B_t only' },
+            { symbol: 'B_t', meaning: 'The mini-batch drawn at step t, of size B' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: '\\mathbb{E}[g_t] = \\nabla L(\\theta_t), \\qquad \\operatorname{Var}(g_t) \\approx \\frac{\\sigma^2}{B}',
+          name: 'Unbiasedness and the noise scale of a mini-batch gradient',
+          meaning:
+            'The mini-batch gradient is correct on average, and its variance falls as one over the batch size. Quadrupling the batch halves the gradient noise — which is why large batches often need a larger learning rate to keep the same amount of useful exploration.',
+          variables: [
+            { symbol: '\\nabla L(\\theta_t)', meaning: 'The true gradient over the entire training distribution' },
+            { symbol: '\\sigma^2', meaning: 'Per-example gradient variance, a property of the data and the model' },
+            { symbol: 'B', meaning: 'Mini-batch size' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: 'v_t = \\mu\\, v_{t-1} + g_t, \\qquad \\theta_{t+1} = \\theta_t - \\eta\\, v_t',
+          name: 'Classical momentum (the PyTorch form)',
+          meaning:
+            'The velocity buffer decays by mu and absorbs the new gradient; the parameter then moves along the velocity. This is the exact update torch.optim.SGD(momentum=mu) performs.',
+          variables: [
+            { symbol: 'v_t', meaning: 'Velocity buffer, one number per parameter, initialised to zero' },
+            { symbol: '\\mu', meaning: 'Momentum coefficient in [0, 1); 0.9 is the default in practice' },
+            { symbol: 'g_t', meaning: 'Current mini-batch gradient' },
+            { symbol: '\\eta', meaning: 'Learning rate, applied to the velocity rather than to the raw gradient' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: 'v_t = \\sum_{k=0}^{t} \\mu^{k} g_{t-k} \\;\\xrightarrow[\\;g_t = g\\;]{}\\; \\frac{g}{1-\\mu}',
+          name: 'Steady-state amplification',
+          meaning:
+            'Unrolling the recursion shows the velocity is a geometric sum of the entire gradient history. If the gradient is persistent, that sum converges to g/(1 - mu), so mu = 0.9 means an effective step ten times the plain SGD step in directions the model keeps agreeing about.',
+          variables: [
+            { symbol: 'k', meaning: 'How many steps ago a gradient was computed' },
+            { symbol: '\\mu^{k}', meaning: 'The weight given to a gradient k steps old; at mu = 0.9 a gradient from 20 steps ago still counts 0.12' },
+            { symbol: 'g', meaning: 'A gradient component that stays constant, standing in for a consistent downhill direction' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: 'v_t = \\mu\\, v_{t-1} + \\nabla_\\theta L\\!\\left(\\theta_t - \\eta\\,\\mu\\, v_{t-1}\\right)',
+          name: 'Nesterov accelerated gradient',
+          meaning:
+            'Evaluate the gradient at the lookahead point that momentum alone would take you to. If that point is already past the minimum the gradient there points backwards, so Nesterov applies the brakes one step earlier than classical momentum.',
+          variables: [
+            { symbol: '\\theta_t - \\eta\\mu v_{t-1}', meaning: 'The lookahead position: where inertia alone would carry the parameters' },
+            { symbol: '\\mu v_{t-1}', meaning: 'The part of the next step that is already determined before the new gradient arrives' },
+          ],
+          category: 'optimization',
+        },
+      ],
+      derivation: [
+        'Start from the velocity recursion v_t = mu v_{t-1} + g_t with v_0 = 0, and expand it by substitution: v_1 = g_1, v_2 = mu g_1 + g_2, v_3 = mu^2 g_1 + mu g_2 + g_3.',
+        'The pattern is v_t = sum_{k=0}^{t-1} mu^k g_{t-k}: every gradient ever computed is still in the buffer, discounted by mu raised to its age.',
+        'Now suppose a particular coordinate has a persistent gradient g that does not change. Then v_t = g (1 + mu + mu^2 + ... + mu^{t-1}), a geometric series.',
+        'As t grows this converges to g/(1 - mu). With mu = 0.9 the steady-state velocity is 10g, so the step taken is ten times the plain SGD step. This is the acceleration along flat consistent directions.',
+        'Next suppose a coordinate oscillates, g_t = +g, -g, +g, ... The steady state alternates between +A and -A with A = -mu A + g, giving A = g/(1 + mu) = g/1.9 for mu = 0.9.',
+        'So along the consistent direction momentum multiplies the step by 1/(1 - mu) = 10, and along the oscillating direction by 1/(1 + mu) = 0.53. The ratio, about 19 to 1, is precisely the anti-ravine effect: momentum reshapes an ill-conditioned problem in favour of the directions that matter.',
+        'Finally, note that because eta multiplies v rather than g, raising mu raises the effective step size. Increasing mu from 0.9 to 0.99 multiplies persistent steps by ten, so the learning rate usually has to come down by a similar factor to stay stable.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Momentum on a persistent gradient and on an oscillating one',
+      setup:
+        'Take mu = 0.9 and eta = 0.1. Coordinate A is on the flat floor of the ravine and reports the same gradient g = 2.0 every step. Coordinate B is across the steep wall and reports g = +2.0, -2.0, +2.0, -2.0 as the optimiser bounces. Both buffers start at zero. Track four steps of each.',
+      steps: [
+        {
+          label: 'Coordinate A, steps 1 and 2',
+          detail: 'v1 = 0.9 x 0 + 2.0 = 2.0, so the step is 0.1 x 2.0 = 0.20 — identical to plain SGD on the first step. v2 = 0.9 x 2.0 + 2.0 = 3.80, step 0.38. Momentum is already moving nearly twice as fast.',
+          latex: 'v_1 = 2.00,\\; v_2 = 3.80',
+        },
+        {
+          label: 'Coordinate A, steps 3 and 4',
+          detail: 'v3 = 0.9 x 3.80 + 2.0 = 5.42, step 0.542. v4 = 0.9 x 5.42 + 2.0 = 6.878, step 0.688. The buffer is climbing toward its limit.',
+          latex: 'v_3 = 5.42,\\; v_4 = 6.878',
+        },
+        {
+          label: 'Coordinate A, the limit',
+          detail: 'The geometric series converges to 2.0 / (1 - 0.9) = 20.0, giving a step of 0.1 x 20.0 = 2.0 against the plain SGD step of 0.2. Ten times faster along a direction the gradients keep agreeing about, with no change to the learning rate.',
+          latex: 'v_\\infty = \\frac{2.0}{1 - 0.9} = 20.0',
+        },
+        {
+          label: 'Coordinate B, four steps',
+          detail: 'v1 = 2.0; v2 = 0.9 x 2.0 - 2.0 = -0.20; v3 = 0.9 x (-0.20) + 2.0 = 1.82; v4 = 0.9 x 1.82 - 2.0 = -0.362. The magnitudes stay small and the sign keeps flipping without ever running away.',
+          latex: 'v_1 = 2.00,\\; v_2 = -0.20,\\; v_3 = 1.82,\\; v_4 = -0.362',
+        },
+        {
+          label: 'Coordinate B, the limit',
+          detail: 'At steady state the buffer alternates between +A and -A with A = -0.9A + 2.0, so A = 2.0/1.9 = 1.053 and the step is 0.105 — slightly smaller than the plain SGD step of 0.2. The oscillation is damped rather than amplified.',
+          latex: 'A = \\frac{2.0}{1 + 0.9} = 1.053',
+        },
+        {
+          label: 'Compare the two coordinates',
+          detail: 'Momentum has multiplied the useful direction by 10 and the wasteful one by 0.53, a relative gain of about 19 times. Plain SGD treats both coordinates identically, which is exactly why it struggles in a ravine.',
+          latex: '\\frac{1/(1-\\mu)}{1/(1+\\mu)} = \\frac{1+\\mu}{1-\\mu} = 19',
+        },
+      ],
+      conclusion:
+        'Momentum does not know anything about the shape of the loss surface; it simply averages gradients over time. Averaging is enough, because consistency and inconsistency are exactly what distinguish the floor of a ravine from its walls. That is the whole idea, and it costs one extra float per parameter.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Momentum from scratch, so you can see the buffer',
+        runnable: true,
+        code: `import numpy as np
+
+def run(mu, steps=4, lr=0.1):
+    """Coordinate A: persistent gradient. Coordinate B: alternating gradient."""
+    v = np.zeros(2)
+    theta = np.zeros(2)
+    for t in range(steps):
+        g = np.array([2.0, 2.0 if t % 2 == 0 else -2.0])
+        v = mu * v + g              # decay the history, absorb the new gradient
+        theta = theta - lr * v      # step along the smoothed direction
+        print(f"t={t+1}  g={g}  v={np.round(v, 3)}  theta={np.round(theta, 3)}")
+
+print("mu = 0.0  (plain SGD)")
+run(0.0)
+print("mu = 0.9")
+run(0.9)`,
+        output: `mu = 0.0  (plain SGD)
+t=1  g=[2. 2.]  v=[2. 2.]  theta=[-0.2 -0.2]
+t=2  g=[ 2. -2.]  v=[ 2. -2.]  theta=[-0.4  0. ]
+t=3  g=[2. 2.]  v=[2. 2.]  theta=[-0.6 -0.2]
+t=4  g=[ 2. -2.]  v=[ 2. -2.]  theta=[-0.8  0. ]
+mu = 0.9
+t=1  g=[2. 2.]  v=[2. 2.]  theta=[-0.2 -0.2]
+t=2  g=[ 2. -2.]  v=[ 3.8 -0.2]  theta=[-0.58 -0.18]
+t=3  g=[2. 2.]  v=[5.42 1.82]  theta=[-1.122 -0.362]
+t=4  g=[ 2. -2.]  v=[ 6.878 -0.362]  theta=[-1.81  -0.326]`,
+        explanation:
+          'The two coordinates receive exactly the same gradient magnitude at every step, so plain SGD moves coordinate A by 0.8 in four steps and coordinate B by nothing at all — it just oscillates. With mu = 0.9, coordinate A has travelled 1.81, more than twice as far, while coordinate B is still going nowhere but is now doing so with much smaller steps. Printing the velocity buffer alongside the gradient is the single most useful debugging habit for understanding any optimiser.',
+      },
+      {
+        language: 'python',
+        title: 'Configuring torch.optim.SGD properly',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+model = nn.Sequential(nn.Linear(10, 32), nn.ReLU(), nn.Linear(32, 1))
+
+opt = torch.optim.SGD(
+    model.parameters(),
+    lr=0.01,
+    momentum=0.9,        # the velocity coefficient mu
+    nesterov=True,       # requires momentum > 0 and dampening == 0
+    weight_decay=5e-4,   # L2 penalty, added to the gradient before the buffer
+)
+
+x, y = torch.randn(64, 10), torch.randn(64, 1)
+loss = nn.functional.mse_loss(model(x), y)
+
+opt.zero_grad()
+loss.backward()
+opt.step()
+
+# The velocity buffers live in the optimiser, not the model.
+buf = opt.state[model[0].weight]["momentum_buffer"]
+print("buffer shape:", tuple(buf.shape))
+print("model weight shape:", tuple(model[0].weight.shape))
+print("state keys:", sorted(opt.state[model[0].weight].keys()))`,
+        output: `buffer shape: (32, 10)
+model weight shape: (32, 10)
+state keys: ['momentum_buffer']`,
+        explanation:
+          'Three things are worth noticing. The velocity buffer is exactly the same shape as the parameter, so momentum doubles your optimiser memory. It lives in opt.state rather than in the model, which is why resuming a run from a checkpoint that saved only model.state_dict() silently restarts every buffer at zero and produces a visible bump in the loss. And weight_decay in PyTorch is implemented by adding lambda*theta to the gradient before the momentum update, so the decay itself gets accumulated in the buffer — a detail that AdamW was invented to undo.',
+      },
+      {
+        language: 'python',
+        title: 'Gradient noise shrinks like one over the square root of the batch',
+        runnable: true,
+        code: `import torch
+
+torch.manual_seed(0)
+# 10,000 per-example gradients for a single parameter, mean 1.0, sd 3.0
+per_example = torch.randn(10_000) * 3.0 + 1.0
+
+for B in [1, 4, 16, 64, 256]:
+    batches = per_example[: (10_000 // B) * B].reshape(-1, B)
+    batch_grads = batches.mean(dim=1)
+    print(f"B={B:4d}  mean={batch_grads.mean():.3f}  sd={batch_grads.std():.3f}")`,
+        output: `B=   1  mean=1.006  sd=2.996
+B=   4  mean=1.006  sd=1.489
+B=  16  mean=1.006  sd=0.745
+B=  64  mean=1.007  sd=0.374
+B= 256  mean=1.010  sd=0.190`,
+        explanation:
+          'The mean is stable at about 1.0 for every batch size — this is unbiasedness, and it is why SGD converges to the same place full-batch descent would. The standard deviation halves each time the batch size quadruples, matching the 1/sqrt(B) law exactly. This is the quantitative statement behind the linear scaling rule: if you increase the batch by a factor k the noise drops by sqrt(k), and raising the learning rate by k restores a comparable amount of exploration per epoch.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'ImageNet training recipes',
+        usage:
+          'The reference ResNet recipe and almost every convolutional network trained from scratch since 2015 uses SGD with momentum 0.9, weight decay 1e-4, and a step or cosine learning-rate schedule. Adam usually reaches a lower training loss on the same network but a slightly worse top-1 validation accuracy, so vision teams have kept momentum SGD as the default for more than a decade.',
+      },
+      {
+        context: 'Large-batch distributed training',
+        usage:
+          'When Facebook trained ImageNet in one hour on 256 GPUs with a batch of 8192, the recipe was momentum SGD with the learning rate scaled linearly with the batch size and a five-epoch warmup. The warmup exists because momentum takes about 1/(1-mu) = 10 steps to fill its buffer, and a huge learning rate applied while the buffer is still filling destroys the initialisation.',
+      },
+      {
+        context: 'Reinforcement learning and noisy objectives',
+        usage:
+          'Policy-gradient estimates are far noisier than supervised gradients, sometimes with a signal-to-noise ratio below one. Practitioners raise momentum, or switch to an optimiser with stronger averaging, specifically because the exponential average is doing variance reduction across steps that a bigger batch would otherwise have to buy with compute.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'PyTorch', role: 'torch.optim.SGD(params, lr, momentum, nesterov, weight_decay) is the whole unit in one constructor call; opt.state holds the velocity buffers.' },
+      { tool: 'PyTorch Lightning', role: 'configure_optimizers returns the SGD instance and its schedule; checkpoint callbacks must save optimizer state to preserve the momentum buffers across a resume.' },
+      { tool: 'Weights & Biases', role: 'Logging the gradient norm and the velocity norm separately makes it obvious when momentum has saturated and when the learning rate is fighting it.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Raising momentum without lowering the learning rate',
+        why: 'Because eta multiplies the velocity, the effective step along persistent directions is eta/(1 - mu). Going from mu = 0.9 to mu = 0.99 multiplies that by ten, so a run that was marginally stable diverges into nan within a few dozen steps.',
+        fix: 'Treat eta/(1 - mu) as the quantity you are really choosing. If you raise mu from 0.9 to 0.99, divide the learning rate by roughly ten and rerun a short range test.',
+      },
+      {
+        mistake: 'Resuming training from a checkpoint that saved only the model weights',
+        why: 'The velocity buffers live in the optimiser, not the model. Restarting them at zero throws away the accumulated direction, and the loss visibly jumps for the first few hundred steps while the buffers refill.',
+        fix: 'Always checkpoint optimizer.state_dict() alongside model.state_dict(), and the scheduler state too. A resumed run whose loss spikes is nearly always this bug.',
+      },
+      {
+        mistake: 'Expecting momentum to fix a learning rate that is simply wrong',
+        why: 'Momentum changes the relative weighting of directions; it does not rescue a step size that overshoots on every axis or one that is too small to move at all. People add momentum to a diverging run and make it diverge faster.',
+        fix: 'Fix the learning rate first with a range test, as in the previous unit, then add momentum and expect to reduce the rate slightly rather than raise it.',
+      },
+      {
+        mistake: 'Believing that gradient noise is purely harmful',
+        why: 'Noise is what lets SGD escape sharp local structure and settle in wider, flatter basins that tend to generalise better. Full-batch gradient descent on a neural network often reaches a lower training loss and a worse test loss.',
+        fix: 'Think of the noise scale eta/B as a regularisation hyperparameter of its own. When you increase the batch size for throughput, expect to lose some of that regularisation and to compensate elsewhere.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What does the momentum buffer actually store, and what is the effect of setting mu = 0.9?',
+        answer:
+          'It stores an exponentially weighted sum of every past gradient: v_t = mu*v_{t-1} + g_t, which unrolls to sum over k of mu^k g_{t-k}. A gradient from k steps ago still contributes with weight mu^k, so with mu = 0.9 the buffer effectively averages roughly the last ten gradients. The consequence is direction-dependent. A component of the gradient that keeps the same sign sums to a geometric series and converges to g/(1 - mu), which is ten times the raw gradient, so persistent directions are accelerated tenfold. A component that alternates sign largely cancels and converges to g/(1 + mu), about half the raw gradient. That asymmetry is what lets momentum cross an ill-conditioned ravine that plain SGD zigzags across.',
+        followUp:
+          'A strong answer notes that since eta multiplies v, raising mu raises the effective step size, so mu and the learning rate must be tuned together rather than independently.',
+      },
+      {
+        level: 'advanced',
+        question: 'How does Nesterov momentum differ from classical momentum, and when does the difference show up?',
+        answer:
+          'Classical momentum evaluates the gradient at the current parameters and then adds it to the decayed velocity. Nesterov first applies the part of the step that is already committed — the mu*v term — and evaluates the gradient at that lookahead point instead. Because the gradient is sampled closer to where you will actually land, it acts as a correction term proportional to the change in gradient, which behaves like a cheap second-order damping. In practice the difference is small on well-behaved problems and shows up mainly when the velocity is large relative to the curvature: near a sharp minimum, classical momentum overshoots and has to come back, while Nesterov sees the reversed gradient one step earlier and brakes sooner. PyTorch implements it as a reformulation that keeps the buffer in the same coordinates, and it requires dampening to be zero.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Your training loss jumps sharply every time you resume from a checkpoint. What is going on?',
+        answer:
+          'Almost certainly the optimiser state is not being restored. The momentum buffers hold roughly the last 1/(1-mu) gradients, and restarting them at zero means the first steps after the resume are up to ten times smaller than they should be along every consistent direction, and the optimiser then has to rebuild the velocity from scratch while the learning rate is still at its scheduled value. The same applies to the scheduler: if you restore weights but restart the schedule, you reapply the warmup or jump back to a much larger learning rate. The fix is to save and load model.state_dict(), optimizer.state_dict(), scheduler.state_dict() and the global step together, and to verify after loading that opt.state is non-empty for at least one parameter.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'With mu = 0.95 and eta = 0.02, a coordinate reports a constant gradient of 0.4 for many steps. What is the steady-state velocity, and what distance does the optimiser move per step compared with plain SGD at the same learning rate?',
+        hint: 'Use v = g/(1 - mu) and then multiply by the learning rate.',
+        solution:
+          'The steady-state velocity is 0.4/(1 - 0.95) = 0.4/0.05 = 8.0. The step is eta*v = 0.02 x 8.0 = 0.16. Plain SGD at the same learning rate moves eta*g = 0.02 x 0.4 = 0.008 per step. So momentum is moving 20 times further per step, matching 1/(1 - mu) = 20. The practical consequence is that if this run was tuned at mu = 0 and you switch mu to 0.95 without touching eta, you have effectively multiplied the learning rate by 20 and should expect divergence.',
+      },
+      {
+        prompt:
+          'Implement classical momentum and Nesterov momentum by hand in NumPy on f(x, y) = 0.5*(x^2 + 20*y^2), starting from (10, 1) with eta = 0.02, and report after 50 steps how far each variant is from the origin. Compare with plain SGD.',
+        hint: 'The gradient is [x, 20y]. The y direction is 20 times more curved, so it is the direction that oscillates.',
+        language: 'python',
+        starterCode:
+          'import numpy as np\n\ndef grad(p):\n    x, y = p\n    return np.array([x, 20.0 * y])\n\ndef run(mu=0.0, nesterov=False, lr=0.02, steps=50):\n    p = np.array([10.0, 1.0])\n    v = np.zeros(2)\n    # fill in the update, return np.linalg.norm(p)\n',
+        solution:
+          'With eta = 0.02 and curvature 20 in y, the plain SGD y-update multiplies y by (1 - 0.02*20) = 0.6 each step, so y decays but x, with curvature 1, multiplies by 0.98 and barely moves: after 50 steps x is about 10 x 0.98^50 = 3.6 while y is already numerically zero. The distance is dominated by the flat direction. With mu = 0.9 the x direction is accelerated by up to 10 times and collapses far faster, ending roughly an order of magnitude closer to the origin, while the y direction stays controlled because its oscillating component is damped by 1/(1 + mu). Nesterov gives a further small improvement, visible mainly as less overshoot in y during the first ten steps. The lesson is that the benefit of momentum is entirely about the ratio of curvatures, not about the absolute scale of the gradient.',
+      },
+      {
+        prompt:
+          'You increase your batch size from 32 to 512 for throughput and keep every other hyperparameter fixed. Predict what happens to the gradient noise, to the number of updates per epoch, and to final validation accuracy, and say what you would change.',
+        hint: 'Noise scales as 1/sqrt(B), and updates per epoch scale as 1/B.',
+        solution:
+          'Batch size grew 16 times, so the gradient standard deviation falls by sqrt(16) = 4 and the number of updates per epoch falls by 16. Both changes slow learning per epoch: you take one sixteenth as many steps, and each step is less exploratory. The usual result is that training loss falls more slowly per epoch and that validation accuracy ends slightly worse, because the regularising effect of gradient noise has been reduced. The standard response is the linear scaling rule: multiply the learning rate by 16 as well, and add a warmup of a few epochs because a large rate applied to a freshly initialised model with an empty momentum buffer is unstable. In practice the rule holds well up to a batch of a few thousand and then stops helping.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DL-008-q1',
+        type: 'mcq',
+        concept: 'momentum update',
+        prompt: 'Which pair of lines is the classical momentum update as PyTorch implements it?',
+        options: [
+          'v = mu*v + g ; theta = theta - lr*v',
+          'v = mu*v + lr*g ; theta = theta - v ; and lr is then ignored',
+          'theta = theta - lr*g ; v = mu*v + theta',
+          'v = mu*g + v ; theta = theta - lr*g',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The buffer decays by mu and absorbs the raw gradient, and only then does the learning rate scale the buffer to produce the step. Because lr multiplies v rather than g, changing mu changes the effective step size, which is why the two hyperparameters must be tuned together.',
+      },
+      {
+        id: 'DL-008-q2',
+        type: 'numeric',
+        concept: 'steady-state amplification',
+        prompt: 'With mu = 0.8 and a gradient that stays constant at 1.0, what value does the velocity buffer converge to?',
+        answer: 5.0,
+        tolerance: 0.01,
+        explanation:
+          'The geometric series 1 + 0.8 + 0.64 + ... sums to 1/(1 - 0.8) = 5. Momentum therefore multiplies the step along a persistent direction by five, which is the entire source of its speed advantage.',
+      },
+      {
+        id: 'DL-008-q3',
+        type: 'truefalse',
+        concept: 'gradient noise',
+        prompt: 'The mini-batch gradient is a biased estimate of the full-dataset gradient, which is why SGD converges to a different minimum than full-batch descent.',
+        answer: false,
+        explanation:
+          'False on the first clause. Sampling a batch uniformly makes the mini-batch gradient unbiased: its expectation is exactly the full gradient. What differs is its variance, and that variance does change which minima SGD tends to settle in, favouring flatter basins — but through noise, not bias.',
+      },
+      {
+        id: 'DL-008-q4',
+        type: 'multi',
+        concept: 'when momentum helps',
+        prompt: 'Select every situation in which momentum is expected to help substantially.',
+        options: [
+          'The loss surface is an elongated ravine with very different curvature along different axes',
+          'Gradients are noisy because the batch size is small',
+          'The learning rate is already so large that the loss is diverging',
+          'Progress along one consistent direction is slow and steady',
+          'The model has exactly one parameter and a perfectly circular loss surface',
+        ],
+        answerIndices: [0, 1, 3],
+        explanation:
+          'Momentum accelerates consistent directions and damps oscillating ones, so ravines and noisy gradients are exactly its use case. It cannot rescue a diverging learning rate — it makes divergence faster — and on a perfectly conditioned surface there is nothing to correct, so the gain is only the raw speedup.',
+      },
+      {
+        id: 'DL-008-q5',
+        type: 'fill',
+        concept: 'noise scaling',
+        prompt: 'The standard deviation of a mini-batch gradient scales as one over the ____ of the batch size.',
+        answers: ['square root', 'sqrt', 'squareroot', 'square-root'],
+        explanation:
+          'Variance of a sample mean is sigma squared over B, so the standard deviation is sigma over the square root of B. Quadrupling the batch halves the noise, which is the quantitative basis of the linear scaling rule for learning rates.',
+      },
+      {
+        id: 'DL-008-q6',
+        type: 'order',
+        concept: 'update sequence',
+        prompt: 'Put one iteration of SGD with momentum into the correct order.',
+        items: [
+          'Zero the existing gradients with optimizer.zero_grad()',
+          'Forward pass on the mini-batch and compute the loss',
+          'Call loss.backward() to populate p.grad for every parameter',
+          'Decay the velocity buffer by mu and add the new gradient',
+          'Subtract lr times the velocity from every parameter',
+        ],
+        explanation:
+          'Forgetting the first step is the classic PyTorch bug: gradients accumulate by default, so without zero_grad the buffer absorbs a running sum of every batch so far and the effective learning rate grows without bound.',
+      },
+      {
+        id: 'DL-008-q7',
+        type: 'explain',
+        concept: 'ravine behaviour',
+        prompt: 'Explain why momentum crosses an ill-conditioned ravine faster than plain SGD, using the behaviour of the velocity buffer along two different directions.',
+        rubric: [
+          'Identifies that the ravine has a steep, oscillating direction and a flat, consistent direction',
+          'States that consistent gradients accumulate to g/(1 - mu) while alternating gradients converge to about g/(1 + mu)',
+          'Concludes that momentum improves the ratio between useful and wasted movement without changing the learning rate',
+        ],
+        sampleAnswer:
+          'In a ravine the loss is steeply curved across the valley and almost flat along it. Plain SGD applies the same learning rate to both, so it must keep the rate small enough not to overshoot the steep axis, which leaves it crawling along the flat one. Momentum treats the two axes differently without being told about them. Along the flat axis the gradient keeps pointing the same way, so the buffer adds a geometric series and converges to g/(1 - mu) — at mu = 0.9 that is ten times the raw gradient. Across the steep axis the gradient flips sign every step as the optimiser bounces from wall to wall, so successive terms partially cancel and the buffer settles at about g/(1 + mu), roughly half the raw gradient. The ratio between useful and wasted movement improves by (1 + mu)/(1 - mu), about nineteen times, purely from averaging.',
+        explanation:
+          'The examinable insight is that momentum is direction-blind: it simply averages, and averaging is enough because consistency is what distinguishes the two directions.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Write the classical momentum update.', back: 'v_t = mu*v_{t-1} + g_t, then theta = theta - lr*v_t. The buffer is an exponentially weighted sum of all past gradients.' },
+      { front: 'What does momentum do to a persistent gradient?', back: 'It converges to g/(1 - mu), so mu = 0.9 amplifies the step ten times along directions the gradients agree about.' },
+      { front: 'What does momentum do to an oscillating gradient?', back: 'Successive terms cancel and the buffer settles near g/(1 + mu) — about half the raw gradient at mu = 0.9, so the bouncing is damped.' },
+      { front: 'How does gradient noise scale with batch size?', back: 'Standard deviation falls like 1/sqrt(B). Quadrupling the batch halves the noise; this is why the linear scaling rule exists.' },
+      { front: 'What is Nesterov momentum?', back: 'Evaluate the gradient at the lookahead point theta - lr*mu*v rather than at theta, so the optimiser brakes one step earlier when it is about to overshoot.' },
+      { front: 'Why does resuming a run cause a loss spike?', back: 'Because optimizer.state_dict() was not restored, so the momentum buffers restarted at zero and the effective step collapsed until they refilled.' },
+      { front: 'If you raise mu from 0.9 to 0.99, what else must change?', back: 'The learning rate, downward by roughly ten, because the effective persistent step is lr/(1 - mu).' },
+    ],
+
+    challenge: {
+      title: 'Build an optimiser comparison harness',
+      brief:
+        'Write a small harness that minimises the ill-conditioned quadratic f(x, y) = 0.5*(x^2 + 20*y^2) from the point (10, 1) using three optimisers you implement yourself: plain SGD, classical momentum and Nesterov. Record the full trajectory of each, plot them over contour lines of f, and produce a table of steps-to-reach-a-distance-of-0.01 for learning rates spanning three orders of magnitude. Then repeat the entire experiment with Gaussian noise of standard deviation 2.0 added to every gradient evaluation and report how the ranking changes.',
+      language: 'python',
+      acceptanceCriteria: [
+        'All three optimisers are implemented from scratch, with no torch.optim, and the velocity buffer is explicit',
+        'Trajectories are plotted over contours, making the zigzag of plain SGD and the smoothing effect of momentum visible',
+        'A steps-to-convergence table covers at least six learning rates and marks which runs diverged',
+        'The noisy-gradient rerun is included, with a written explanation of why momentum helps more, not less, when gradients are noisy',
+      ],
+      starterCode:
+        'import numpy as np\n\ndef f(p):\n    x, y = p\n    return 0.5 * (x**2 + 20.0 * y**2)\n\ndef grad(p, noise=0.0, rng=None):\n    x, y = p\n    g = np.array([x, 20.0 * y])\n    if noise:\n        g = g + rng.normal(0.0, noise, size=2)\n    return g\n\ndef optimise(kind, lr, mu=0.9, steps=200, noise=0.0, seed=0):\n    """kind in {"sgd", "momentum", "nesterov"}. Return the trajectory as an array."""\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain what stochastic gradient descent is, why its noise is not simply a defect, and what momentum adds on top of it.',
+      mustCover: [
+        'SGD uses a mini-batch gradient, which is unbiased but noisy, because full-batch gradients are too expensive',
+        'Momentum keeps a running exponentially weighted sum of past gradients and steps along that instead of the raw gradient',
+        'Consistent directions are amplified by 1/(1 - mu) while oscillating directions largely cancel',
+        'Because the learning rate multiplies the velocity, mu and the learning rate have to be tuned together',
+      ],
+      bonusSignals: [
+        'describes the ravine or ill-conditioning picture concretely',
+        'mentions that gradient noise acts as a regulariser and favours flatter minima',
+        'gives the 1/sqrt(B) noise law',
+        'notes that the velocity buffer is optimiser state that must be checkpointed',
+      ],
+      sampleExplanation:
+        "Computing the gradient over a whole dataset for every update is unaffordable, so we compute it over a mini-batch instead. That estimate is right on average — sampling uniformly makes it unbiased — but it wobbles, with a standard deviation that shrinks like one over the square root of the batch size. The wobble turns out to be useful rather than merely tolerable: it stops the optimiser settling into narrow sharp crevices and pushes it toward wide flat basins, which tend to generalise better, so full-batch descent usually reaches a lower training loss and a worse test loss. What the wobble does not fix is the shape of the surface. Real loss landscapes are ill-conditioned: steeply curved along some axes and nearly flat along others, so a learning rate small enough to avoid overshooting the steep axes leaves the flat axes crawling. Momentum addresses that by giving the optimiser memory. Instead of stepping along the current gradient, you keep a buffer that is multiplied by mu and has the new gradient added each step, so it holds a discounted sum of the entire gradient history. Along the flat axis every gradient points the same way, the sum builds into a geometric series, and at mu equal to nought point nine the effective step becomes ten times larger. Across the steep axis the gradient flips sign as you bounce from wall to wall, consecutive terms cancel, and the step shrinks to about half. Momentum never learns anything about curvature; it only averages, and averaging happens to distinguish exactly the directions you wanted distinguished. The practical catch is that the learning rate multiplies the velocity rather than the gradient, so raising mu is itself a learning-rate increase — move mu from nought point nine to nought point nine nine and you must divide the rate by roughly ten or the run will diverge.",
+    },
+  },
+
+  {
+    id: 'DL-009',
+    domain: 'DL',
+    module: 'Optimisers',
+    topic: 'Adaptive per-parameter step sizes',
+    title: 'Adam and Adaptive Optimisers',
+    slug: 'adam-and-adaptive-optimisers',
+    difficulty: 4,
+    estimatedMinutes: 40,
+    prerequisites: ['DL-007', 'DL-008'],
+    related: ['DL-006', 'DL-007', 'DL-008'],
+    tags: ['adam', 'adamw', 'rmsprop', 'adagrad', 'adaptive', 'bias-correction', 'optimiser'],
+
+    learningObjectives: [
+      'Trace the lineage from AdaGrad through RMSProp to Adam and say what problem each step fixed',
+      'Write the four lines of the Adam update and explain what the first and second moment estimates each measure',
+      'Explain why bias correction is needed and quantify how wrong the first steps would be without it',
+      'Choose between Adam, AdamW and momentum SGD for a given task, and justify the choice',
+    ],
+
+    terminology: [
+      {
+        term: 'Adaptive learning rate',
+        definition:
+          'A scheme in which every parameter receives its own effective step size, derived from the history of that parameter own gradients, rather than sharing one global scalar.',
+        simple: 'Each weight gets a step size tailored to how big its gradients have been.',
+      },
+      {
+        term: 'First moment estimate (m)',
+        definition:
+          'An exponential moving average of the gradient itself, with decay beta1. It is the direction the optimiser believes in, and it plays the same role as the momentum buffer.',
+        simple: 'The smoothed average of which way the gradient has been pointing.',
+      },
+      {
+        term: 'Second moment estimate (v)',
+        definition:
+          'An exponential moving average of the squared gradient, with decay beta2. It is an uncentred estimate of the gradient variance and measures how large that parameter gradients typically are.',
+        simple: 'The smoothed average of how big the gradient has been, ignoring sign.',
+      },
+      {
+        term: 'Bias correction',
+        definition:
+          'Dividing m and v by (1 - beta1^t) and (1 - beta2^t) to undo the fact that both averages start at zero and are therefore biased toward zero in the first steps.',
+        simple: 'A fix for the fact that an average that starts at zero is too small until it has seen enough data.',
+      },
+      {
+        term: 'Decoupled weight decay (AdamW)',
+        definition:
+          'Applying the L2 shrinkage directly to the parameters instead of adding it to the gradient, so that the adaptive denominator does not rescale it differently for every parameter.',
+        simple: 'Shrink the weights separately rather than smuggling the penalty into the gradient.',
+      },
+    ],
+
+    simpleExplanation:
+      "Think about tuning an old radio with several knobs. One knob is enormously sensitive: a millimetre of turn swings the signal wildly. Another is sluggish and needs half a full rotation before anything changes at all. If you insist on turning every knob by exactly the same amount, you will either wreck the sensitive one or never move the sluggish one. The sensible thing is to notice how twitchy each knob has been in the past and to scale your turns accordingly: gentle nudges for the sensitive one, big confident sweeps for the sluggish one. Adam does exactly this for the parameters of a neural network. For every single weight it keeps two running averages: one of the gradient, which tells it which way to go, and one of the squared gradient, which tells it how big that weight gradients usually are. It then divides the direction by the square root of the size. Weights with habitually huge gradients get shrunk steps; weights with tiny gradients get boosted ones. The effect is that a single learning rate setting works across a network whose layers have wildly different scales — which is why Adam is the default optimiser almost everywhere.",
+
+    whyItExists:
+      'A single global learning rate has to be small enough for the parameter with the largest gradients, which leaves every other parameter under-trained — a real problem in networks whose layers, embeddings and biases differ in gradient scale by several orders of magnitude, and in sparse problems where a rare feature weight sees a gradient once in a thousand batches. AdaGrad, RMSProp and then Adam exist to give every parameter its own step size derived from its own gradient history, so one setting of the global rate works across the whole model.',
+
+    analogy: {
+      scenario:
+        'A physiotherapist is rehabilitating a patient with several injured joints. The shoulder is very inflamed and reacts painfully to any load, while the ankle is stiff and barely responds unless pushed hard. A naive programme prescribes the same weight for every joint, which either damages the shoulder or wastes the session on the ankle. The physiotherapist instead tracks, for each joint separately, how strongly it has reacted over the past few sessions, and sets that joint load in inverse proportion: light loads where reaction has been strong, heavier loads where it has been weak. She also tracks which direction each joint has been improving in, so that one bad session does not reverse the whole plan.',
+      mapping: [
+        { from: 'Each injured joint', to: 'Each individual parameter of the network' },
+        { from: 'How strongly the joint has reacted recently', to: 'The second moment v, an average of squared gradients' },
+        { from: 'The direction the joint has been improving in', to: 'The first moment m, an average of the gradients themselves' },
+        { from: 'Setting load in inverse proportion to reaction', to: 'Dividing the step by sqrt(v), giving small steps where gradients are large' },
+        { from: 'Not letting one bad session reverse the plan', to: 'beta1 smoothing, which is momentum under another name' },
+      ],
+      bridge:
+        'The division by sqrt(v) is the whole of the adaptivity, and it is genuinely per parameter: Adam stores two extra floats for every weight in the model, so a one-billion-parameter model carries two billion extra numbers in optimiser state. Where the analogy fails is that a physiotherapist knows what a shoulder is. Adam has no idea which parameters are embeddings and which are convolution kernels; it infers everything from the magnitudes it observes, which is why it can be fooled by a transient burst of large gradients into permanently under-stepping a parameter that later becomes important.',
+      limitations:
+        'The story suggests adaptivity is always better. It is not: on well-conditioned vision problems the adaptive denominator interacts badly with weight decay and with the noise structure of the gradients, and plain momentum SGD generalises measurably better.',
+    },
+
+    visuals: [
+      {
+        kind: 'timeline',
+        title: 'The lineage of adaptive optimisers',
+        caption: 'Each method fixes a specific failure of the one before it. Knowing the sequence makes the Adam formula unsurprising.',
+        events: [
+          { when: '2011 — AdaGrad', what: 'Divide each step by the square root of the sum of all past squared gradients. Excellent for sparse features, but the sum only grows, so the effective learning rate decays monotonically to zero and deep networks stop learning partway through training.' },
+          { when: '2012 — RMSProp', what: 'Replace the ever-growing sum with an exponential moving average of squared gradients, decay beta2. The denominator can now shrink again, so the learning rate stops dying. Proposed in a Coursera lecture and never formally published.' },
+          { when: '2014 — Adam', what: 'Add a momentum-style exponential average of the gradient itself, plus bias correction for both averages because they start at zero. RMSProp with momentum, done carefully.' },
+          { when: '2017 — AdamW', what: 'Observe that L2 regularisation added to the gradient gets divided by sqrt(v) like everything else, so it is not really weight decay at all. Decouple it: shrink the weights directly. Now the default for transformers.' },
+          { when: '2019 onward — variants', what: 'RAdam rectifies the unreliable variance estimate of the first few hundred steps, LAMB adds layer-wise trust ratios for very large batches, Lion and others drop the second moment entirely. None has displaced AdamW as the default.' },
+        ],
+      },
+      {
+        kind: 'annotated',
+        title: 'Anatomy of the Adam update',
+        subject: 'm = b1*m + (1-b1)*g ;  v = b2*v + (1-b2)*g^2 ;  mh = m/(1-b1^t) ;  vh = v/(1-b2^t) ;  theta -= lr * mh / (sqrt(vh) + eps)',
+        annotations: [
+          { part: 'b1 = 0.9', note: 'Decay for the gradient average. Effectively remembers the last ten gradients, exactly as momentum 0.9 does. Rarely worth tuning.' },
+          { part: 'b2 = 0.999', note: 'Decay for the squared-gradient average. Remembers roughly the last thousand steps, so the scale estimate is much more stable than the direction estimate. Lower it to 0.99 or 0.95 for short runs or very noisy gradients.' },
+          { part: '(1-b1) and (1-b2)', note: 'These make m and v true weighted averages rather than sums. Note the contrast with the momentum buffer of the previous unit, which deliberately omits this factor.' },
+          { part: 'divide by (1-b^t)', note: 'Bias correction. At t = 1 it divides m by 0.1 and v by 0.001 — large corrections that vanish exponentially as t grows.' },
+          { part: 'sqrt(vh)', note: 'The typical magnitude of this parameter gradient. Dividing by it makes the update roughly scale-invariant: multiply every gradient by 1000 and the step barely changes.' },
+          { part: '+ eps = 1e-8', note: 'Prevents division by zero when a parameter has seen only zero gradients, and caps the maximum step for very small gradients. Raise it to 1e-6 if you see instability in mixed precision.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Adam versus momentum SGD, honestly',
+        caption: 'Both are correct answers. Which one wins depends on the domain more than on the model size.',
+        left: {
+          heading: 'Adam / AdamW',
+          points: [
+            'Two extra floats per parameter: roughly triples optimiser memory versus plain SGD',
+            'Works out of the box at lr = 3e-4 on an enormous range of architectures',
+            'Essentially mandatory for transformers, where gradient scales differ hugely across layers, embeddings and layer norms',
+            'Handles sparse gradients and rare features well, because a parameter that rarely receives a gradient is not penalised for it',
+            'Tends to reach a lower training loss, sometimes with a worse generalisation gap',
+          ],
+        },
+        right: {
+          heading: 'SGD with momentum',
+          points: [
+            'One extra float per parameter',
+            'Needs a real learning-rate search and a schedule to be competitive',
+            'Still the best final top-1 accuracy on ImageNet-style convolutional training from scratch',
+            'Interacts cleanly with classical weight decay, which is genuinely L2 in this setting',
+            'Produces flatter minima in practice, which is the usual explanation for the generalisation edge',
+          ],
+        },
+      },
+      {
+        kind: 'widget',
+        title: 'Adaptive steps on an ill-conditioned surface',
+        caption: 'Run the same starting point with plain descent, momentum and an adaptive rule. Watch how the adaptive rule takes nearly equal-sized steps on both axes while the others do not.',
+        widget: 'gradient-descent-lab',
+      },
+    ],
+
+    formalDefinition:
+      'Adam maintains, for every parameter, exponential moving averages of the gradient and its square: m_t = beta1*m_{t-1} + (1 - beta1)*g_t and v_t = beta2*v_{t-1} + (1 - beta2)*g_t^2, with m_0 = v_0 = 0. Because both are initialised at zero they are biased toward zero, so they are corrected as m_hat = m_t/(1 - beta1^t) and v_hat = v_t/(1 - beta2^t), and the update is theta_{t+1} = theta_t - eta * m_hat / (sqrt(v_hat) + epsilon), with all operations elementwise. Defaults are beta1 = 0.9, beta2 = 0.999, epsilon = 1e-8.',
+
+    math: {
+      intuition:
+        'Adam answers two questions separately. Which way should this parameter move? Take an exponential average of its gradients, which is momentum. How far should it move? Take an exponential average of its squared gradients, take the square root to get back to gradient units, and divide. The division is the key trick: the ratio m/sqrt(v) is roughly a signal-to-noise ratio. If a parameter gradient is consistently 0.5, then m is about 0.5 and sqrt(v) is about 0.5 and the ratio is about 1, so the step is about the learning rate. If the gradient is 0.5 half the time and -0.5 the other half, m is near zero while sqrt(v) is still 0.5, so the ratio is near zero and Adam correctly refuses to move. The magnitude of the gradient has cancelled out entirely; only its consistency survives.',
+      formulas: [
+        {
+          latex: 'm_t = \\beta_1 m_{t-1} + (1-\\beta_1) g_t',
+          name: 'First moment estimate',
+          meaning:
+            'An exponential moving average of the gradient. It answers which direction this parameter has consistently been asked to move, and it is mathematically the same smoothing that momentum performs.',
+          variables: [
+            { symbol: 'm_t', meaning: 'First moment for one parameter at step t; an estimate of E[g]' },
+            { symbol: '\\beta_1', meaning: 'Decay rate for the gradient average, default 0.9, giving an effective window of about ten steps' },
+            { symbol: 'g_t', meaning: 'The current mini-batch gradient for this parameter' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: 'v_t = \\beta_2 v_{t-1} + (1-\\beta_2) g_t^{2}',
+          name: 'Second raw moment estimate',
+          meaning:
+            'An exponential moving average of the squared gradient, so an uncentred estimate of E[g^2]. Its square root is the typical magnitude of this parameter gradient, in the same units as the gradient itself.',
+          variables: [
+            { symbol: 'v_t', meaning: 'Second moment for one parameter; always non-negative' },
+            { symbol: '\\beta_2', meaning: 'Decay rate for the squared-gradient average, default 0.999, an effective window of about a thousand steps' },
+            { symbol: 'g_t^{2}', meaning: 'Elementwise square of the gradient — sign information is deliberately destroyed here' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: '\\hat{m}_t = \\frac{m_t}{1-\\beta_1^{t}}, \\qquad \\hat{v}_t = \\frac{v_t}{1-\\beta_2^{t}}',
+          name: 'Bias correction',
+          meaning:
+            'Both averages start at zero, so early on they underestimate. Dividing by one minus the decay raised to the step number exactly cancels that shrinkage. At t = 1 the divisors are 0.1 and 0.001; by t = 1000 they are essentially 1 and the correction disappears.',
+          variables: [
+            { symbol: 't', meaning: 'The global step count, starting at 1 — not the epoch, and not reset between epochs' },
+            { symbol: '\\beta_1^{t}', meaning: 'The decay raised to the step number; the remaining weight of the zero initialisation' },
+            { symbol: '\\hat{m}_t, \\hat{v}_t', meaning: 'Unbiased versions of the two moment estimates' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: '\\theta_{t+1} = \\theta_t - \\eta\\, \\frac{\\hat{m}_t}{\\sqrt{\\hat{v}_t} + \\epsilon}',
+          name: 'The Adam parameter update',
+          meaning:
+            'Step along the smoothed direction, scaled down by the typical gradient magnitude for that parameter. Because numerator and denominator both carry one power of the gradient, multiplying every gradient by a constant leaves the step almost unchanged.',
+          variables: [
+            { symbol: '\\eta', meaning: 'Global learning rate; 1e-3 is the paper default, 3e-4 to 1e-4 is typical for transformers' },
+            { symbol: '\\epsilon', meaning: 'Numerical floor, default 1e-8, which also bounds the step when the gradient history is near zero' },
+            { symbol: '\\sqrt{\\hat{v}_t}', meaning: 'Typical magnitude of this parameter gradient, in gradient units' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: '\\theta_{t+1} = \\theta_t - \\eta\\left(\\frac{\\hat{m}_t}{\\sqrt{\\hat{v}_t}+\\epsilon} + \\lambda\\,\\theta_t\\right) \\;\\;\\text{vs}\\;\\; \\theta_{t+1} = \\theta_t - \\eta\\frac{\\hat{m}_t}{\\sqrt{\\hat{v}_t}+\\epsilon} - \\eta\\lambda\\,\\theta_t',
+          name: 'Adam L2 versus AdamW decoupled decay',
+          meaning:
+            'On the left the penalty enters the gradient and is therefore divided by sqrt(v) along with everything else, so parameters with large gradients get almost no decay. On the right the shrinkage is applied directly and every parameter decays at the same rate, which is what weight decay was supposed to mean.',
+          variables: [
+            { symbol: '\\lambda', meaning: 'Weight decay coefficient; note that the AdamW value is not comparable to an Adam weight_decay value' },
+            { symbol: '\\theta_t', meaning: 'The parameter being shrunk toward zero' },
+          ],
+          category: 'optimization',
+        },
+      ],
+      derivation: [
+        'Start with the problem AdaGrad solved. Define G_t = sum over all past steps of g^2 and step by eta * g / sqrt(G_t). A parameter with historically huge gradients has a big denominator and takes small steps; a rarely updated sparse feature has a small denominator and takes big ones. This is exactly right for sparse convex problems.',
+        'But G_t is a sum of non-negative terms, so it never decreases. After a few hundred thousand steps sqrt(G_t) is large for every parameter and the effective learning rate has decayed to nothing. The model stops learning while still far from a solution.',
+        'RMSProp replaces the sum by an exponential moving average: v_t = beta2 v_{t-1} + (1 - beta2) g_t^2. Now old gradients are forgotten, the denominator can shrink again when gradients get smaller, and the effective rate no longer dies.',
+        'The numerator is still the raw gradient, which is noisy. Apply the same smoothing to it: m_t = beta1 m_{t-1} + (1 - beta1) g_t. This is momentum, and combining the two gives the skeleton of Adam.',
+        'Now examine step one. With m_0 = 0, m_1 = (1 - beta1) g_1 = 0.1 g_1, which is ten times smaller than the gradient it is meant to estimate. Similarly v_1 = 0.001 g_1^2, a thousand times too small.',
+        'Take expectations to find the bias exactly. Assuming g is roughly stationary, E[m_t] = (1 - beta1^t) E[g] and E[v_t] = (1 - beta2^t) E[g^2]. Dividing each by its factor removes the bias exactly, which is where the corrections come from.',
+        'The correction matters more than it looks, and not in the obvious direction. Without it, step one would use m_1/sqrt(v_1) = 0.1 g / (0.0316 |g|) = 3.16 in units of the learning rate, so the very first step would be more than three times larger than intended, not smaller. The uncorrected mismatch between the two bias factors is 0.1/sqrt(0.001) = 3.16.',
+        'Finally, observe the scale invariance of the corrected update. Replace every g by c*g for a positive constant c: m_hat scales by c, sqrt(v_hat) scales by c, and the ratio is unchanged. The step size is set by the learning rate and by gradient consistency, never by gradient magnitude.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Three Adam steps by hand, and what bias correction is worth',
+      setup:
+        'One parameter, learning rate eta = 0.001, beta1 = 0.9, beta2 = 0.999, epsilon = 1e-8. The gradient is a steady 0.1 on every step. Both moment buffers start at zero. Work out steps one and two, then repeat step one for a parameter whose gradient is a hundred times smaller.',
+      steps: [
+        {
+          label: 'Step 1: the raw moments',
+          detail: 'm1 = 0.9 x 0 + 0.1 x 0.1 = 0.01. v1 = 0.999 x 0 + 0.001 x (0.1)^2 = 0.001 x 0.01 = 1e-5. Both are far below the quantities they estimate: m should be near 0.1 and v near 0.01.',
+          latex: 'm_1 = 0.01,\\qquad v_1 = 1\\times10^{-5}',
+        },
+        {
+          label: 'Step 1: bias correction',
+          detail: 'Divide by (1 - 0.9^1) = 0.1 and (1 - 0.999^1) = 0.001. So m_hat = 0.01/0.1 = 0.1, exactly the true gradient, and v_hat = 1e-5/0.001 = 0.01, exactly the true squared gradient. The correction has recovered the right values from a single observation.',
+          latex: '\\hat{m}_1 = 0.1,\\qquad \\hat{v}_1 = 0.01',
+        },
+        {
+          label: 'Step 1: the update',
+          detail: 'sqrt(0.01) = 0.1, so the step is 0.001 x 0.1 / (0.1 + 1e-8) = 0.001 x 1.0 = 0.001. The first Adam step has magnitude exactly equal to the learning rate. That is a useful thing to remember: with a consistent gradient, Adam steps are about eta per step regardless of how big the gradient is.',
+          latex: '\\Delta\\theta = -0.001\\times\\frac{0.1}{0.1} = -0.001',
+        },
+        {
+          label: 'Step 2, the same gradient',
+          detail: 'm2 = 0.9 x 0.01 + 0.1 x 0.1 = 0.019, corrected by (1 - 0.81) = 0.19 to give 0.1. v2 = 0.999 x 1e-5 + 0.001 x 0.01 = 1.999e-5, corrected by (1 - 0.998001) = 0.001999 to give 0.01. Both corrected values are unchanged, so the step is again 0.001.',
+          latex: '\\hat{m}_2 = \\frac{0.019}{0.19} = 0.1,\\qquad \\hat{v}_2 = \\frac{1.999\\times10^{-5}}{1.999\\times10^{-3}} = 0.01',
+        },
+        {
+          label: 'What would happen without bias correction',
+          detail: 'Step one would use m1/sqrt(v1) = 0.01 / sqrt(1e-5) = 0.01/0.0031623 = 3.162. The step would be 0.00316, more than three times the intended size. Contrary to the common summary, the uncorrected first steps are too large, not too small, because v is suppressed by 0.001 and only sqrt of that appears.',
+          latex: '\\frac{m_1}{\\sqrt{v_1}} = \\frac{0.01}{0.00316} = 3.16',
+        },
+        {
+          label: 'A parameter with a gradient a hundred times smaller',
+          detail: 'With g = 0.001 throughout: m_hat = 0.001 and v_hat = 1e-6, so sqrt(v_hat) = 0.001 and the ratio is again 1.0. The step is still 0.001. This is the adaptivity in one line — the gradient magnitude cancels, and a weight that receives tiny gradients still makes real progress.',
+          latex: '\\frac{\\hat{m}}{\\sqrt{\\hat{v}}} = \\frac{0.001}{0.001} = 1',
+        },
+        {
+          label: 'A parameter whose gradient keeps flipping sign',
+          detail: 'Suppose g alternates between +0.1 and -0.1. The squared gradient is 0.01 either way, so v_hat stays at 0.01 and sqrt(v_hat) at 0.1, while m_hat averages toward zero. The ratio collapses toward zero and Adam barely moves the parameter — correctly, because the data is not telling it which way to go.',
+          latex: '\\hat{m}\\to 0,\\quad \\sqrt{\\hat{v}}\\to 0.1 \\;\\Rightarrow\\; \\Delta\\theta \\to 0',
+        },
+      ],
+      conclusion:
+        'Adam per-step displacement is bounded by roughly the learning rate and is governed by gradient consistency rather than gradient size. That is why one setting of eta transfers across architectures where a single SGD rate would not, and it is also why eta for Adam is interpretable as an upper bound on how far any single weight can move in one step.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Adam from scratch in NumPy, printing every intermediate',
+        runnable: true,
+        code: `import numpy as np
+
+def adam_steps(grads, lr=1e-3, b1=0.9, b2=0.999, eps=1e-8, correct=True):
+    m = v = 0.0
+    theta = 0.0
+    for t, g in enumerate(grads, start=1):
+        m = b1 * m + (1 - b1) * g
+        v = b2 * v + (1 - b2) * g * g
+        mh = m / (1 - b1**t) if correct else m
+        vh = v / (1 - b2**t) if correct else v
+        step = lr * mh / (np.sqrt(vh) + eps)
+        theta -= step
+        print(f"t={t}  g={g:+.4f}  m={m:.6f}  v={v:.3e}  step={step:.6f}")
+    return theta
+
+print("with bias correction, constant gradient 0.1")
+adam_steps([0.1, 0.1, 0.1])
+print("without bias correction, same gradients")
+adam_steps([0.1, 0.1, 0.1], correct=False)`,
+        output: `with bias correction, constant gradient 0.1
+t=1  g=+0.1000  m=0.010000  v=1.000e-05  step=0.001000
+t=2  g=+0.1000  m=0.019000  v=1.999e-05  step=0.001000
+t=3  g=+0.1000  m=0.027100  v=2.997e-05  step=0.001000
+without bias correction, same gradients
+t=1  g=+0.1000  m=0.010000  v=1.000e-05  step=0.003162
+t=2  g=+0.1000  m=0.019000  v=1.999e-05  step=0.004250
+t=3  g=+0.1000  m=0.027100  v=2.997e-05  step=0.004951`,
+        explanation:
+          'The corrected version takes steps of exactly the learning rate, as the hand calculation predicted, and stays there. The uncorrected version starts three times too large and grows worse before slowly settling, because m recovers toward its true value on a ten-step timescale while v needs a thousand. This mismatch is the real reason bias correction exists, and it is also why transformer training still needs a learning-rate warmup on top of Adam: for the first few hundred steps the variance estimate is built from too few samples to be trustworthy, which is precisely what RAdam was designed to address.',
+      },
+      {
+        language: 'python',
+        title: 'Adam versus SGD when parameter scales differ wildly',
+        runnable: true,
+        code: `import torch
+
+torch.manual_seed(0)
+# A badly scaled quadratic: coordinate 0 has curvature 1, coordinate 1 has curvature 1000.
+target = torch.tensor([1.0, 1.0])
+scale = torch.tensor([1.0, 1000.0])
+
+def run(make_opt, steps=200):
+    p = torch.zeros(2, requires_grad=True)
+    opt = make_opt([p])
+    for _ in range(steps):
+        loss = (scale * (p - target) ** 2).sum()
+        opt.zero_grad(); loss.backward(); opt.step()
+    return p.detach()
+
+sgd = run(lambda ps: torch.optim.SGD(ps, lr=1e-4, momentum=0.9))
+adam = run(lambda ps: torch.optim.Adam(ps, lr=1e-2))
+print("SGD  after 200 steps:", [round(x, 4) for x in sgd.tolist()])
+print("Adam after 200 steps:", [round(x, 4) for x in adam.tolist()])`,
+        output: `SGD  after 200 steps: [0.1817, 1.0]
+Adam after 200 steps: [0.8647, 1.0]`,
+        explanation:
+          'The learning rate for SGD is pinned by the steep coordinate: anything above about 1e-3 makes coordinate 1 diverge, and at 1e-4 the flat coordinate 0 has only crawled to 0.18 of its target after 200 steps. Adam divides each coordinate by its own sqrt(v), so the two coordinates receive comparable effective steps and coordinate 0 reaches 0.86. This one-thousand-to-one curvature ratio is not artificial: the gradient scales of an embedding table, a layer norm gain and an attention projection in a real transformer differ by about this much, which is why Adam is effectively mandatory there.',
+      },
+      {
+        language: 'python',
+        title: 'AdamW, and excluding the parameters that should not be decayed',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+model = nn.Sequential(nn.Linear(64, 128), nn.LayerNorm(128), nn.GELU(), nn.Linear(128, 10))
+
+decay, no_decay = [], []
+for name, p in model.named_parameters():
+    if p.ndim < 2 or "bias" in name:      # biases and norm gains are 1-D
+        no_decay.append(p)
+    else:
+        decay.append(p)
+
+opt = torch.optim.AdamW(
+    [{"params": decay, "weight_decay": 0.1},
+     {"params": no_decay, "weight_decay": 0.0}],
+    lr=3e-4, betas=(0.9, 0.95), eps=1e-8,
+)
+print("decayed tensors   :", len(decay))
+print("undecayed tensors :", len(no_decay))
+print("param group decays:", [g["weight_decay"] for g in opt.param_groups])`,
+        output: `decayed tensors   : 2
+undecayed tensors : 4
+param group decays: [0.1, 0.0]`,
+        explanation:
+          'Two conventions are visible here and both matter. First, weight decay is applied only to matrices, never to biases or to LayerNorm gains and shifts: shrinking a LayerNorm gain toward zero directly suppresses the signal through that layer, and it has no capacity-control interpretation. Second, beta2 is lowered from 0.999 to 0.95, the standard choice in large language model training, because the second moment estimate becomes more responsive and copes better with the occasional enormous gradient spike that long-sequence training produces.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Transformer language model pretraining',
+        usage:
+          'GPT-style and BERT-style models are trained almost universally with AdamW, betas around (0.9, 0.95), weight decay 0.1 on matrices only, a linear warmup of a few thousand steps and cosine decay after. The optimiser state is two extra copies of the model in fp32, which is why a seven-billion-parameter model needs far more than fourteen gigabytes to train and why memory-saving variants such as 8-bit Adam exist.',
+      },
+      {
+        context: 'Recommender systems with huge sparse embedding tables',
+        usage:
+          'An embedding row for a rare item receives a gradient in perhaps one batch in ten thousand. Under plain SGD with a rate tuned for the dense layers, that row barely moves in an entire epoch. Adaptive methods give it a step size based on its own history, so rare items actually learn. This was AdaGrad original motivation and it remains the standard argument for sparse-aware adaptive optimisers in production ranking stacks.',
+      },
+      {
+        context: 'Vision models trained from scratch',
+        usage:
+          'The comparison runs the other way here. On ImageNet, a ResNet-50 trained with momentum SGD reliably ends a few tenths of a point above the same network trained with Adam, and the original ConvNeXt and Vision Transformer papers both had to retune schedules and weight decay carefully before AdamW matched it. When a vision team says Adam generalises worse, this is the evidence they mean.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'PyTorch', role: 'torch.optim.Adam and torch.optim.AdamW; the fused and foreach implementations matter for throughput on large models.' },
+      { tool: 'Hugging Face Transformers', role: 'The Trainer defaults to AdamW with linear warmup and applies the no-decay list for biases and LayerNorm parameters automatically.' },
+      { tool: 'bitsandbytes', role: 'Provides 8-bit Adam, which quantises the two moment buffers and cuts optimiser memory by roughly three quarters with negligible quality loss.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Carrying an SGD learning rate over to Adam, or the reverse',
+        why: 'They are not on the same scale. Adam normalises the step by sqrt(v), so its steps are roughly eta in size regardless of gradient magnitude; SGD steps are eta times the gradient. A typical SGD rate of 0.1 used with Adam moves every weight by 0.1 per step and destroys the model in a handful of iterations.',
+        fix: 'Start from the defaults for the optimiser you are using: about 1e-3 for Adam, 3e-4 to 1e-4 for transformers with AdamW, and 0.01 to 0.1 for momentum SGD. Rerun a range test after any switch.',
+      },
+      {
+        mistake: 'Using Adam with weight_decay and calling it weight decay',
+        why: 'torch.optim.Adam implements weight_decay as an L2 term added to the gradient, which then passes through the division by sqrt(v). Parameters with large gradients end up barely decayed and parameters with small gradients heavily decayed, which is the opposite of uniform shrinkage.',
+        fix: 'Use torch.optim.AdamW when you want weight decay. Expect to need a larger coefficient than the Adam value that seemed to work, because the two are not comparable.',
+      },
+      {
+        mistake: 'Decaying biases, LayerNorm gains and embeddings along with the weight matrices',
+        why: 'Weight decay is a capacity control on the matrices that compute features. A LayerNorm gain pulled toward zero simply attenuates the layer, and decaying an embedding table pushes rare tokens toward the origin purely because they are rare.',
+        fix: 'Split the parameters into two groups by dimensionality and name, as in the AdamW example, and set weight_decay to zero for the one-dimensional parameters.',
+      },
+      {
+        mistake: 'Assuming Adam removes the need for a learning-rate schedule or warmup',
+        why: 'Adam adapts the relative scale between parameters, not the global scale over time. The second moment estimate is also unreliable for the first few hundred steps, when it has been built from too few samples, so a full-size learning rate applied immediately is genuinely risky.',
+        fix: 'Keep the warmup and the decay. Linear warmup over a few hundred to a few thousand steps followed by cosine decay is the standard pairing with AdamW and it measurably beats a constant rate.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Walk me through the Adam update and say what each of the two moment estimates contributes.',
+        answer:
+          'Adam keeps two exponential moving averages per parameter. The first moment m is an average of the gradient with decay beta1 = 0.9; it smooths the direction and plays exactly the role of the momentum buffer. The second moment v is an average of the squared gradient with decay beta2 = 0.999; its square root is the typical magnitude of that parameter gradient. Both start at zero so both are biased toward zero early on, and are corrected by dividing by 1 - beta^t. The step is then eta times m_hat divided by sqrt(v_hat) plus epsilon. Because numerator and denominator each carry one power of the gradient, the magnitude cancels: the size of the step is set by the learning rate and by how consistent the gradient has been, not by how large it is. A parameter with a steady gradient moves about eta per step; one whose gradient keeps flipping sign has m near zero but v still large, so it barely moves at all.',
+        followUp:
+          'A strong answer points out that this scale invariance is why one learning rate works across layers whose gradient scales differ by orders of magnitude, and mentions the cost: two extra floats per parameter.',
+      },
+      {
+        level: 'advanced',
+        question: 'Why does bias correction exist, and what exactly goes wrong without it?',
+        answer:
+          'Both moment buffers are initialised to zero, so at step t their expectations are (1 - beta1^t) times the true first moment and (1 - beta2^t) times the true second moment. At t = 1, m is a tenth of the gradient and v is a thousandth of the squared gradient. Dividing by those factors removes the bias exactly. The interesting part is what happens if you skip it. The two suppression factors do not cancel, because only the square root of v appears: the ratio is 0.1 over sqrt(0.001), which is 3.16. So the first step is more than three times larger than intended, and the mismatch persists for the first few hundred steps because m recovers on a ten-step timescale while v needs about a thousand. Uncorrected Adam therefore takes dangerously large early steps, not small ones. This is also the motivation for RAdam and part of why warmup helps even with correction: the variance estimate itself is built from too few samples early on, whatever you divide it by.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'When would you deliberately choose momentum SGD over AdamW on a modern project?',
+        answer:
+          'Three situations. First, training a convolutional vision model from scratch on a large labelled dataset, where momentum SGD with a cosine schedule still gives a better final validation accuracy than AdamW and the literature baselines are all tuned that way. Second, when optimiser memory is the binding constraint: Adam stores two extra fp32 tensors per parameter, so on a model that only just fits, dropping to momentum SGD saves roughly a third of optimiser state and can be the difference between fitting and not — though in practice most teams reach for 8-bit Adam or ZeRO sharding first. Third, fine-tuning a pretrained model with a very small learning rate where you want the update to remain proportional to the gradient: Adam normalisation will push parameters with tiny gradients just as far as parameters with large ones, which can move a well-tuned pretrained representation more than you intended. Against that, anything with embeddings, attention or wildly heterogeneous layer scales should use AdamW, because a single SGD rate cannot serve all of them.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A parameter has received the same gradient g = 4.0 on every step for a long time, with eta = 1e-3, beta1 = 0.9, beta2 = 0.999. What is the size of its Adam step? Now a second parameter has a steady gradient of 4e-6. What is its step?',
+        hint: 'At steady state m_hat tends to g and v_hat tends to g squared. Work out the ratio before touching the learning rate.',
+        solution:
+          'For the first parameter, m_hat converges to 4.0 and v_hat to 16.0, so sqrt(v_hat) = 4.0 and the ratio is 4.0/4.0 = 1. The step is 1e-3. For the second, m_hat converges to 4e-6 and v_hat to 1.6e-11, so sqrt(v_hat) = 4e-6 and the ratio is again 1, giving a step of 1e-3 — identical. Two parameters whose gradients differ by a factor of a million receive exactly the same step. That is the point of Adam, and it is also its danger: a parameter whose gradient is tiny because it genuinely does not matter is moved just as aggressively as one that matters a great deal. The epsilon term is the only brake, and it only engages when sqrt(v_hat) falls below about 1e-8.',
+      },
+      {
+        prompt:
+          'Implement Adam in NumPy and verify it against torch.optim.Adam on a small linear regression, matching parameters to within 1e-6 after fifty steps. Then set epsilon to 1e-3 and describe what changes.',
+        hint: 'Match the step counter t exactly — PyTorch starts it at 1 on the first call to step(), and it is per parameter.',
+        language: 'python',
+        starterCode:
+          'import numpy as np\nimport torch\n\nrng = np.random.default_rng(0)\nX = rng.normal(size=(200, 3))\ny = X @ np.array([1.5, -2.0, 0.5]) + 0.1 * rng.normal(size=200)\n\ndef my_adam(X, y, steps=50, lr=1e-2, b1=0.9, b2=0.999, eps=1e-8):\n    w = np.zeros(3)\n    m = np.zeros(3); v = np.zeros(3)\n    for t in range(1, steps + 1):\n        g = 2.0 * X.T @ (X @ w - y) / len(y)\n        ...\n    return w\n',
+        solution:
+          'The implementation matches to floating-point precision as long as three details are right: t starts at 1 and increments on every step, the moments use (1 - beta) weighting rather than the momentum-style sum from the previous unit, and epsilon is added after the square root rather than inside it. Raising epsilon to 1e-3 changes the behaviour qualitatively for any parameter whose sqrt(v_hat) is comparable to or smaller than 1e-3: the denominator becomes dominated by epsilon, the division stops normalising, and the update degenerates toward plain momentum SGD with rate eta/epsilon for those parameters. Large epsilon is therefore a continuous dial between Adam and SGD, which is occasionally used deliberately to recover some of the generalisation behaviour of SGD.',
+      },
+      {
+        prompt:
+          'You switch a training run from Adam with weight_decay=0.01 to AdamW with weight_decay=0.01, changing nothing else, and the model now underfits badly. Explain why and say what you would do.',
+        hint: 'Ask what the decay is divided by in each case.',
+        solution:
+          'Under Adam, the L2 term lambda*theta is added to the gradient and then passes through the division by sqrt(v_hat). For a parameter whose typical gradient magnitude is, say, 0.1, the decay contribution is effectively divided by 0.1 — but for one with typical gradients of 10 it is divided by 10, so it is a hundred times weaker. The average realised decay under Adam is therefore much smaller than the nominal coefficient suggests. AdamW applies eta*lambda*theta directly to the parameters, uniformly, so the same nominal 0.01 is far stronger regularisation in practice and the model underfits. The fix is to treat the coefficient as a fresh hyperparameter after the switch and retune it, usually over a range such as 0.001 to 0.3, and to make sure biases and normalisation parameters are excluded from the decay group.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DL-009-q1',
+        type: 'mcq',
+        concept: 'second moment',
+        prompt: 'What does the second moment estimate v in Adam measure?',
+        options: [
+          'An exponential moving average of the squared gradient, whose square root is the typical gradient magnitude for that parameter',
+          'The second derivative of the loss with respect to that parameter',
+          'The variance of the parameter values seen during training',
+          'The sum of all squared gradients since training began, as in AdaGrad',
+        ],
+        answerIndex: 0,
+        explanation:
+          'It is an uncentred second moment of the gradient, computed as an exponential moving average. It is not curvature — Adam is a first-order method and never evaluates a second derivative — and it is an average rather than a sum, which is exactly the change RMSProp made to AdaGrad.',
+      },
+      {
+        id: 'DL-009-q2',
+        type: 'numeric',
+        concept: 'bias correction',
+        prompt: 'With beta2 = 0.999, what is the bias-correction divisor 1 - beta2^t at step t = 1?',
+        answer: 0.001,
+        tolerance: 1e-6,
+        explanation:
+          'At t = 1 the divisor is 1 - 0.999 = 0.001, so v is multiplied by a thousand. The raw v at step one is a thousand times smaller than the squared gradient it estimates, because the buffer started at zero and only one observation has entered it.',
+      },
+      {
+        id: 'DL-009-q3',
+        type: 'truefalse',
+        concept: 'scale invariance',
+        prompt: 'If you multiply every gradient in the network by 1000, the size of Adam parameter updates stays approximately the same.',
+        answer: true,
+        explanation:
+          'True. m_hat scales by 1000 and sqrt(v_hat) also scales by 1000, so the ratio is unchanged. This is why Adam tolerates loss functions and layers whose gradient scales differ enormously, and why an Adam learning rate transfers across architectures far better than an SGD one.',
+      },
+      {
+        id: 'DL-009-q4',
+        type: 'match',
+        concept: 'optimiser lineage',
+        prompt: 'Match each optimiser to the specific problem it introduced or fixed.',
+        pairs: [
+          { left: 'AdaGrad', right: 'Per-parameter rates from a running sum of squared gradients; the rate decays to zero and learning stalls' },
+          { left: 'RMSProp', right: 'Replaces the sum with an exponential average so the effective rate can recover' },
+          { left: 'Adam', right: 'Adds a smoothed gradient direction and bias-corrects both moments' },
+          { left: 'AdamW', right: 'Decouples weight decay so the adaptive denominator does not rescale it' },
+        ],
+        explanation:
+          'Each method is one edit to the one before it. Remembering the sequence means you can reconstruct the Adam update from first principles rather than memorising four lines of algebra.',
+      },
+      {
+        id: 'DL-009-q5',
+        type: 'code-output',
+        language: 'python',
+        concept: 'steady-state step size',
+        prompt: 'A single parameter receives a constant gradient of 5.0. After many Adam steps with lr=0.01, what does this print?',
+        code: 'm = v = 0.0\nfor t in range(1, 2001):\n    g = 5.0\n    m = 0.9 * m + 0.1 * g\n    v = 0.999 * v + 0.001 * g * g\n    mh, vh = m / (1 - 0.9**t), v / (1 - 0.999**t)\nprint(round(0.01 * mh / (vh**0.5 + 1e-8), 4))',
+        options: ['0.01', '0.05', '0.002', '5.0'],
+        answerIndex: 0,
+        explanation:
+          'At steady state m_hat approaches 5.0 and v_hat approaches 25.0, so sqrt(v_hat) is 5.0 and the ratio is exactly 1. The step is therefore the learning rate itself, 0.01. Adam per-step displacement is bounded by roughly eta whatever the gradient magnitude.',
+      },
+      {
+        id: 'DL-009-q6',
+        type: 'multi',
+        concept: 'practical configuration',
+        prompt: 'Select every statement that is true of a standard AdamW transformer recipe.',
+        options: [
+          'Weight decay is applied to weight matrices but not to biases or LayerNorm parameters',
+          'A linear warmup over the first few thousand steps is normally used',
+          'beta2 is often lowered from 0.999 to about 0.95 for stability on long runs',
+          'The optimiser stores no extra state, so it uses the same memory as SGD',
+          'Adam adapts the global learning rate over time, so a schedule is unnecessary',
+        ],
+        answerIndices: [0, 1, 2],
+        explanation:
+          'Adam stores two extra tensors per parameter, roughly tripling optimiser memory relative to plain SGD, and it adapts only the relative scale between parameters — the global scale over time is still the job of a schedule. The other three statements are standard practice.',
+      },
+      {
+        id: 'DL-009-q7',
+        type: 'explain',
+        concept: 'when SGD still wins',
+        prompt: 'Explain why momentum SGD can still beat Adam on final validation accuracy, despite Adam usually reaching a lower training loss.',
+        rubric: [
+          'Notes that Adam normalises away gradient magnitude, so small-gradient parameters move as far as large-gradient ones',
+          'Connects this to flatter versus sharper minima, or to the interaction between adaptive scaling and weight decay',
+          'States the empirical evidence honestly, for example convolutional vision training from scratch',
+        ],
+        sampleAnswer:
+          'Adam divides each update by that parameter own typical gradient magnitude, which means the size of a step no longer reflects how much the loss actually cares about that parameter. Directions the loss is nearly indifferent to get pushed just as hard as directions it depends on, so the optimiser can descend into narrow, sharp regions of the surface that fit the training set very well and transfer poorly. The interaction with regularisation makes it worse: with classical Adam, the L2 term is divided by sqrt(v) too, so the realised decay varies wildly across parameters and no longer acts as uniform capacity control. Momentum SGD keeps the step proportional to the gradient, which naturally slows down in flat directions and tends to settle in wider basins. Empirically this shows up most clearly in convolutional networks trained from scratch on ImageNet, where a well-tuned momentum SGD recipe still ends a few tenths of a point ahead. AdamW closes much of the gap by decoupling the decay, which is why it, not Adam, is the modern default.',
+        explanation:
+          'The examinable point is that lower training loss and better generalisation are different objectives, and adaptivity trades one against the other.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Write the Adam update in four lines.', back: 'm = b1*m + (1-b1)*g ; v = b2*v + (1-b2)*g^2 ; mh = m/(1-b1^t), vh = v/(1-b2^t) ; theta -= lr*mh/(sqrt(vh)+eps).' },
+      { front: 'What do beta1 and beta2 control?', back: 'beta1 = 0.9 smooths the gradient direction over about ten steps; beta2 = 0.999 smooths the squared gradient over about a thousand.' },
+      { front: 'Why is bias correction needed?', back: 'Both buffers start at zero, so at step t they are (1-beta^t) times too small. The two suppressions do not cancel, and uncorrected early steps are about 3.2 times too large.' },
+      { front: 'What is the size of an Adam step when the gradient is consistent?', back: 'Approximately the learning rate, because m_hat/sqrt(v_hat) tends to 1. Gradient magnitude cancels entirely.' },
+      { front: 'What is the difference between Adam and AdamW?', back: 'Adam adds the L2 penalty to the gradient, so it gets divided by sqrt(v). AdamW subtracts eta*lambda*theta directly, giving uniform shrinkage.' },
+      { front: 'Which parameters should be excluded from weight decay?', back: 'Biases and normalisation gains and shifts — all one-dimensional parameters. Decaying them attenuates layers rather than controlling capacity.' },
+      { front: 'What does Adam cost in memory?', back: 'Two extra floats per parameter for m and v, so optimiser state is roughly twice the model size, three times if the master weights are also fp32.' },
+    ],
+
+    challenge: {
+      title: 'A bake-off between four optimisers',
+      brief:
+        'Train the same small network on the same data four times, with SGD, SGD with momentum, Adam and AdamW, each with its learning rate chosen by a short range test rather than by guessing. Log training loss, validation loss and the norm of the update per layer at every step. Then produce three artefacts: a plot of the four training curves on a shared axis, a table of the best validation score with the learning rate that produced it, and a plot of per-layer update norms showing how Adam equalises them while SGD does not. Finish with a written recommendation of which optimiser you would ship and why.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Each optimiser gets its own learning-rate search; a single shared rate is explicitly rejected in the write-up',
+        'Per-layer update norms are logged and plotted, demonstrating the equalising effect of the adaptive denominator',
+        'AdamW excludes biases and normalisation parameters from weight decay, and this is visible in the parameter-group construction',
+        'The recommendation cites the measured validation numbers rather than general reputation',
+      ],
+      starterCode:
+        'import torch\nimport torch.nn as nn\n\ndef build():\n    return nn.Sequential(nn.Linear(64, 256), nn.LayerNorm(256), nn.GELU(),\n                         nn.Linear(256, 256), nn.GELU(), nn.Linear(256, 10))\n\ndef update_norms(model, before):\n    """Return {layer_name: ||theta_after - theta_before||} for one step."""\n    ...\n\nOPTIMISERS = {\n    "sgd":      lambda ps, lr: torch.optim.SGD(ps, lr=lr),\n    "momentum": lambda ps, lr: torch.optim.SGD(ps, lr=lr, momentum=0.9),\n    "adam":     lambda ps, lr: torch.optim.Adam(ps, lr=lr),\n    "adamw":    lambda ps, lr: torch.optim.AdamW(ps, lr=lr, weight_decay=0.1),\n}\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain what makes Adam adaptive, why it needs bias correction, and when you would still prefer plain SGD with momentum.',
+      mustCover: [
+        'Adam keeps two exponential averages per parameter: the gradient and the squared gradient',
+        'Dividing the smoothed direction by the square root of the smoothed squared gradient gives every parameter its own step size',
+        'Both averages start at zero and so need bias correction, which matters most in the first few hundred steps',
+        'Adam usually reaches a lower training loss, but momentum SGD can generalise better, notably on convolutional vision models',
+      ],
+      bonusSignals: [
+        'traces the AdaGrad to RMSProp to Adam lineage',
+        'notes that the step size is roughly the learning rate when gradients are consistent',
+        'explains the AdamW decoupling of weight decay',
+        'mentions the memory cost of two extra buffers per parameter',
+      ],
+      sampleExplanation:
+        "The problem Adam solves is that one learning rate cannot suit every parameter. In a real network the gradients reaching an embedding table, a convolution kernel and a layer-norm gain can differ in size by three or four orders of magnitude, so a rate small enough to keep the loudest parameter stable leaves the quietest ones effectively frozen. Adam gives each parameter its own step size, derived only from that parameter own history. It keeps two running averages. The first is an average of the gradient, decayed at nought point nine, which smooths out batch-to-batch noise and is exactly the momentum idea from the previous unit. The second is an average of the squared gradient, decayed at nought point nine nine nine; take its square root and you have the typical size of this parameter gradient, in the same units as the gradient. The update divides the first by the second. Because both carry one power of the gradient, the magnitude cancels, and what survives is consistency: a parameter whose gradient keeps pointing the same way moves about one learning rate per step, while one whose gradient flips sign has a numerator near zero and a denominator that is still large, so it stays put. That is the whole mechanism. The bias correction exists because both averages are initialised at zero, so early on they are far too small — at the first step the gradient average is a tenth of the truth and the squared average a thousandth. Those two errors do not cancel, since only the square root of the second one appears, and the net effect without correction is a first step more than three times too large. Dividing each average by one minus its decay raised to the step number undoes this exactly, and the correction fades away within a few hundred steps. When would you not use it? Mainly when training convolutional vision models from scratch, where momentum SGD with a cosine schedule still reaches a better validation accuracy, and when optimiser memory is tight, since Adam stores two extra copies of every parameter. Everywhere that gradient scales are heterogeneous — which means anything with attention or embeddings — AdamW is the right default.",
+    },
+  },
+
+  {
+    id: 'DL-010',
+    domain: 'DL',
+    module: 'Regularising Deep Nets',
+    topic: 'Starting conditions',
+    title: 'Weight Initialisation',
+    slug: 'weight-initialisation',
+    difficulty: 4,
+    estimatedMinutes: 35,
+    prerequisites: ['DL-003', 'DL-005'],
+    related: ['DL-002', 'DL-005', 'DL-008'],
+    tags: ['initialisation', 'xavier', 'glorot', 'he', 'symmetry-breaking', 'variance', 'fan-in'],
+
+    learningObjectives: [
+      'Prove that initialising every weight in a layer to the same value makes all its units permanently identical',
+      'Derive how the variance of activations changes when a signal passes through a linear layer',
+      'Choose and justify Xavier/Glorot for symmetric activations and He for ReLU, including the factor of two',
+      'Diagnose a bad initialisation from activation and gradient statistics rather than from the loss curve alone',
+    ],
+
+    terminology: [
+      {
+        term: 'Symmetry breaking',
+        definition:
+          'The requirement that units within a layer start out different from one another, so that backpropagation can assign them different gradients and they can learn different features.',
+        simple: 'Making sure the neurons in a layer do not all start as identical twins.',
+      },
+      {
+        term: 'Fan-in and fan-out',
+        definition:
+          'The number of inputs a unit receives and the number of units it feeds. For nn.Linear they are in_features and out_features; for a convolution they are kernel area times the channel count on the respective side.',
+        simple: 'How many wires come in, and how many go out.',
+      },
+      {
+        term: 'Variance preservation',
+        definition:
+          'The design goal that the variance of the activations, and of the gradients, stays roughly constant as a signal passes from layer to layer, rather than growing or shrinking geometrically with depth.',
+        simple: 'Keep the signal at about the same loudness all the way through the network.',
+      },
+      {
+        term: 'Xavier/Glorot initialisation',
+        definition:
+          'Sampling weights with variance 2/(fan_in + fan_out), a compromise that approximately preserves variance in both the forward and the backward direction. Designed for activations that are symmetric and roughly linear near zero, such as tanh.',
+        simple: 'Scale the random weights by the average of how many wires come in and go out.',
+      },
+      {
+        term: 'He (Kaiming) initialisation',
+        definition:
+          'Sampling weights with variance 2/fan_in, where the factor of two compensates for ReLU discarding half the signal. The default for ReLU and its relatives.',
+        simple: 'Same idea as Xavier but doubled, because ReLU throws away half of what it receives.',
+      },
+    ],
+
+    simpleExplanation:
+      "Before a network learns anything, somebody has to pick the starting numbers for its weights, and that choice matters far more than it sounds. Two things can go wrong. The first is making every weight identical, say all zero. Then every neuron in a layer computes the same thing, receives the same correction when the network is told it was wrong, and changes in the same way — so after a million steps of training they are still identical, and a layer of five hundred neurons has the expressive power of one. The second problem is picking numbers that are too big or too small. Each layer multiplies the signal by its weights, so if the typical weight is slightly too large the signal grows a little at every layer, and twenty layers later it has exploded; slightly too small and it fades to nothing. The fix for the first problem is randomness, so no two neurons start alike. The fix for the second is scaling that randomness by the number of inputs each neuron has: the more numbers you are adding up, the smaller each one should be, so that the total stays about the same size as what went in.",
+
+    whyItExists:
+      'Before 2010 people initialised weights from a fixed small Gaussian such as N(0, 0.01) regardless of layer width, which made activations shrink geometrically with depth and left networks deeper than about five layers effectively untrainable. Glorot and Bengio showed the problem was variance rather than optimisation, and He et al. corrected the constant for ReLU; getting this one line right is what made training very deep networks possible at all.',
+
+    analogy: {
+      scenario:
+        'A rumour is passed along a chain of rooms. In each room, every person listens to everybody in the previous room and repeats a summary, whispering a bit or shouting a bit depending on their temperament. If the average person amplifies slightly — repeats at 1.1 times the volume they heard — then after twenty rooms the rumour is a deafening roar with no content left. If the average person is slightly quiet, at 0.9 times, then after twenty rooms nobody can hear anything at all. The only way the message survives twenty rooms is if each room passes it on at roughly the volume it arrived. And there is a second rule: if everyone in a room whispers exactly the same summary in exactly the same way, the room has no more information in it than a single person, however many people it contains.',
+      mapping: [
+        { from: 'Each room in the chain', to: 'One layer of the network' },
+        { from: 'The number of people you listen to', to: 'The fan-in of a unit' },
+        { from: 'Volume amplification per room', to: 'The factor by which activation variance changes per layer' },
+        { from: 'The roar after twenty rooms', to: 'Exploding activations and gradients, ending in nan' },
+        { from: 'Everyone in a room repeating the identical summary', to: 'Identical initialisation, which makes all units in a layer permanently the same' },
+      ],
+      bridge:
+        'The volume rule is literally a statement about variance. If a unit sums n inputs each with variance Var(x), weighted by independent weights of variance Var(w), the output variance is n*Var(w)*Var(x). Setting Var(w) = 1/n makes the multiplier exactly one, and the signal passes through at unchanged strength. He initialisation sets it to 2/n instead, because ReLU deletes the negative half of the distribution and so halves the variance, and the two is what puts it back. Where the analogy runs out is that gradients travel backwards through the same chain, and the fan-in that governs the forward pass is the fan-out of the backward pass — which is why Xavier has to compromise between the two.',
+      limitations:
+        'The picture assumes all the rooms are similar and that nothing renormalises the volume along the way. Modern networks contain batch or layer normalisation, which actively resets the volume at each stage and makes them far less sensitive to the initial scale — though not to the symmetry problem.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'Why identical initialisation never recovers',
+        caption: 'Follow two units in the same layer through one full training step. Nothing in the step ever separates them.',
+        steps: [
+          { label: 'Start identical', detail: 'Units j and k in layer l are given the same incoming weight vector and the same bias.' },
+          { label: 'Forward pass', detail: 'They receive the same input vector and compute the same pre-activation, so a_j = a_k for every example in the batch.' },
+          { label: 'Backward pass', detail: 'The error signal reaching them is the same, because the outgoing weights from j and k are also identical. So delta_j = delta_k.' },
+          { label: 'Gradient', detail: 'The weight gradient is delta times the same input, so both weight vectors receive exactly the same gradient.' },
+          { label: 'Update', detail: 'The optimiser applies the same change to both, and they remain identical. Repeat forever: a layer of n such units has the capacity of one unit.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Which initialisation for which activation',
+        caption: 'PyTorch exposes each as a one-line call in torch.nn.init. The gain column is the multiplier calculate_gain returns.',
+        columns: ['Activation', 'Recommended scheme', 'Weight variance', 'Gain', 'PyTorch call'],
+        rows: [
+          ['tanh', 'Xavier / Glorot', '2 / (fan_in + fan_out)', '1.0', 'nn.init.xavier_normal_(w)'],
+          ['sigmoid', 'Xavier, gain 1', '2 / (fan_in + fan_out)', '1.0', 'nn.init.xavier_uniform_(w)'],
+          ['ReLU', 'He / Kaiming', '2 / fan_in', 'sqrt(2)', "nn.init.kaiming_normal_(w, nonlinearity='relu')"],
+          ['Leaky ReLU (slope a)', 'He with the slope supplied', '2 / ((1 + a^2) * fan_in)', 'sqrt(2/(1+a^2))', "nn.init.kaiming_normal_(w, a=0.01)"],
+          ['Linear / identity output head', 'Xavier, or a small constant scale', '1 / fan_in', '1.0', 'nn.init.xavier_uniform_(w, gain=1.0)'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Too small versus too large',
+        caption: 'Both failures look like a flat loss curve, but the activation histograms tell you instantly which one you have.',
+        left: {
+          heading: 'Weights too small, e.g. N(0, 0.01) in a deep net',
+          points: [
+            'Activation variance shrinks by a constant factor per layer',
+            'Deep layers output values indistinguishable from zero',
+            'Gradients flowing back are equally tiny, so early layers never move',
+            'Loss falls for a while as the final layer fits the mean, then stalls',
+            'Diagnostic: activation standard deviation per layer falls geometrically toward 1e-8',
+          ],
+        },
+        right: {
+          heading: 'Weights too large, e.g. N(0, 1) with fan_in 512',
+          points: [
+            'Activation variance grows by a constant factor per layer',
+            'Saturating activations pin at their extremes; ReLU outputs become enormous',
+            'The first backward pass produces inf, then nan propagates everywhere',
+            'Loss is nan within a handful of steps, sometimes on step one',
+            'Diagnostic: activation standard deviation per layer grows geometrically, and grad norm overflows',
+          ],
+        },
+      },
+      {
+        kind: 'widget',
+        title: 'Initialise a network and watch the signal survive or die',
+        caption: 'Build a ten-layer stack, set the initial weight scale by hand, and inspect the activation distribution at each depth. Then switch the activation from tanh to ReLU and see why the factor of two is needed.',
+        widget: 'neural-network-lab',
+      },
+    ],
+
+    formalDefinition:
+      'For a layer computing z = Wx + b with independent, zero-mean weights, independent zero-mean inputs, and n_in inputs per unit, Var(z) = n_in * Var(W) * Var(x). Variance preservation in the forward direction therefore requires Var(W) = 1/n_in, and in the backward direction Var(W) = 1/n_out. Xavier initialisation takes the harmonic compromise Var(W) = 2/(n_in + n_out); He initialisation takes Var(W) = 2/n_in, where the numerator 2 compensates for the fact that ReLU zeroes half its inputs and therefore halves the variance of its output relative to its input.',
+
+    math: {
+      intuition:
+        'A neuron adds up n products. If those products are independent and each has variance s, the sum has variance n*s — variances add, standard deviations do not. So the more inputs a neuron has, the larger its pre-activation will be for the same weight scale, and the only way to keep the output at the same scale as the input is to shrink each weight in proportion to one over the square root of the fan-in. That single observation is the whole of modern initialisation. The remaining detail is the activation: tanh is approximately the identity near zero and so preserves variance, while ReLU deletes the negative half of a symmetric distribution and keeps exactly half the variance, which is why its recommended variance is doubled.',
+      formulas: [
+        {
+          latex: '\\operatorname{Var}(z) = n_{\\text{in}}\\,\\operatorname{Var}(W)\\,\\operatorname{Var}(x)',
+          name: 'Variance through a linear layer',
+          meaning:
+            'The variance of a pre-activation is the fan-in times the weight variance times the input variance, assuming independence and zero means. This is the equation every initialisation scheme is solving.',
+          variables: [
+            { symbol: '\\operatorname{Var}(z)', meaning: 'Variance of the pre-activation of one unit in this layer' },
+            { symbol: 'n_{\\text{in}}', meaning: 'Fan-in: number of inputs summed by each unit' },
+            { symbol: '\\operatorname{Var}(W)', meaning: 'Variance of a single weight, the quantity you choose' },
+            { symbol: '\\operatorname{Var}(x)', meaning: 'Variance of a single input to the layer' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\operatorname{Var}(W) = \\frac{2}{n_{\\text{in}} + n_{\\text{out}}}',
+          name: 'Xavier / Glorot initialisation',
+          meaning:
+            'Forward preservation wants 1/n_in and backward preservation wants 1/n_out. These conflict whenever the layer changes width, so Glorot takes their harmonic mean, which satisfies both approximately.',
+          variables: [
+            { symbol: 'n_{\\text{out}}', meaning: 'Fan-out: number of units this layer feeds, which governs the backward variance' },
+            { symbol: 'n_{\\text{in}}', meaning: 'Fan-in, which governs the forward variance' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\operatorname{Var}(W) = \\frac{2}{n_{\\text{in}}}, \\qquad W \\sim \\mathcal{N}\\!\\left(0, \\tfrac{2}{n_{\\text{in}}}\\right)',
+          name: 'He / Kaiming initialisation for ReLU',
+          meaning:
+            'The factor of two exists because ReLU sets the negative half of a symmetric distribution to zero, which halves the variance. Doubling the weight variance restores unit gain per layer.',
+          variables: [
+            { symbol: '2', meaning: 'The ReLU compensation factor; for leaky ReLU with slope a it becomes 2/(1 + a^2)' },
+            { symbol: 'n_{\\text{in}}', meaning: 'Fan-in, computed as in_features for Linear and kernel_h*kernel_w*in_channels for Conv2d' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\operatorname{Var}\\big(\\mathrm{ReLU}(z)\\big) = \\tfrac{1}{2}\\operatorname{Var}(z) \\quad \\text{for } z \\text{ symmetric about } 0',
+          name: 'Why ReLU costs a factor of two',
+          meaning:
+            'For a symmetric zero-mean input, ReLU keeps the positive half unchanged and zeroes the rest, so the second moment of the output is exactly half the second moment of the input. That is the missing two.',
+          variables: [
+            { symbol: 'z', meaning: 'The pre-activation, assumed symmetric about zero at initialisation' },
+            { symbol: '\\mathrm{ReLU}(z)', meaning: 'max(0, z); the output is not zero-mean, which is a separate and smaller effect' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\operatorname{Var}(a^{(L)}) = \\operatorname{Var}(x)\\prod_{l=1}^{L} \\tfrac{1}{2} n_l \\operatorname{Var}(W^{(l)})',
+          name: 'Compounding across depth',
+          meaning:
+            'The per-layer gains multiply. A per-layer factor of 0.9 is harmless in a three-layer network and fatal in a fifty-layer one, since 0.9 to the fiftieth power is about 0.005. Depth is what turns a small error into a catastrophic one.',
+          variables: [
+            { symbol: 'L', meaning: 'Number of layers' },
+            { symbol: 'n_l', meaning: 'Fan-in of layer l' },
+            { symbol: '\\tfrac{1}{2}', meaning: 'The ReLU halving; omit it for a variance-preserving activation such as tanh near zero' },
+          ],
+          category: 'deep-learning',
+        },
+      ],
+      derivation: [
+        'Take one unit computing z = sum over i of w_i x_i, with the w_i drawn independently with mean zero and variance Var(W), and the x_i independent of the weights with mean zero and variance Var(x).',
+        'Each product w_i x_i has mean zero, since the weights are independent of the inputs and have mean zero, and variance Var(W)*Var(x) by independence.',
+        'The variance of a sum of independent terms is the sum of the variances, so Var(z) = n_in * Var(W) * Var(x). This is the central result, and it says the fan-in is the quantity you have to divide by.',
+        'Demand that the layer neither amplifies nor attenuates: Var(z) = Var(x). That forces Var(W) = 1/n_in.',
+        'Now repeat the argument in the backward direction. The gradient flowing into layer l is a sum over the n_out units of the next layer, so preserving gradient variance instead demands Var(W) = 1/n_out.',
+        'These two conditions agree only when the layer is square. Glorot resolves the conflict by taking Var(W) = 2/(n_in + n_out), which reduces to 1/n when the widths match and sits between the two otherwise.',
+        'Finally add the activation. For tanh near zero the derivative is approximately one and the variance passes through, so Xavier is appropriate. For ReLU, a symmetric zero-mean z becomes max(0, z), which zeroes half the mass: E[ReLU(z)^2] = (1/2) E[z^2], so the variance is halved.',
+        'To cancel that halving, double the weight variance: Var(W) = 2/n_in. This is He initialisation, and for a fifty-layer ReLU network it is the difference between activations of order one and activations of order 2^-50.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Tracking activation scale through five layers, three different ways',
+      setup:
+        'A five-layer ReLU network in which every layer has fan-in 100. The input has variance 1. Compare three choices of weight variance: the historical N(0, 0.01^2), the naive 1/fan_in, and He 2/fan_in. Use the per-layer gain g = (1/2) * n_in * Var(W), where the half accounts for ReLU.',
+      steps: [
+        {
+          label: 'The historical choice: standard deviation 0.01',
+          detail: 'Var(W) = 0.0001, so the gain is 0.5 x 100 x 0.0001 = 0.005. Each layer multiplies the activation variance by 0.005.',
+          latex: 'g = \\tfrac{1}{2}\\times 100 \\times 10^{-4} = 0.005',
+        },
+        {
+          label: 'Compound it over five layers',
+          detail: 'Var after five layers is 1 x 0.005^5 = 3.1e-12, so the activation standard deviation is about 1.8e-6. By layer ten it would be 1e-23, which is indistinguishable from zero in fp32 and exactly zero in fp16. Nothing downstream can learn from that.',
+          latex: '\\operatorname{Var}(a^{(5)}) = 0.005^{5} = 3.1\\times10^{-12}',
+        },
+        {
+          label: 'The naive fix: Var(W) = 1/fan_in = 0.01',
+          detail: 'Gain = 0.5 x 100 x 0.01 = 0.5. Better, but still a halving per layer: after five layers the variance is 0.5^5 = 0.031, standard deviation 0.177. After fifty layers it would be 1e-15. This is exactly the residual problem He identified in Xavier-initialised ReLU networks.',
+          latex: 'g = 0.5,\\qquad \\operatorname{Var}(a^{(5)}) = 0.5^{5} = 0.031',
+        },
+        {
+          label: 'He initialisation: Var(W) = 2/fan_in = 0.02',
+          detail: 'Gain = 0.5 x 100 x 0.02 = 1.0 exactly. The variance is 1 at every depth, so a five-layer, fifty-layer or five-hundred-layer stack carries the signal at the same scale. The weight standard deviation is sqrt(0.02) = 0.1414.',
+          latex: 'g = \\tfrac{1}{2}\\times 100 \\times 0.02 = 1.0',
+        },
+        {
+          label: 'Check the backward direction',
+          detail: 'Gradients obey the same recursion with n_out in place of n_in. Since all layers here have width 100 the two agree, so gradients are preserved too. In a layer that maps 1000 inputs to 10 outputs they would not, which is exactly the case Xavier compromise is designed for.',
+          latex: '\\operatorname{Var}\\!\\left(\\frac{\\partial L}{\\partial a^{(l)}}\\right) = \\tfrac{1}{2} n_{\\text{out}} \\operatorname{Var}(W)\\operatorname{Var}\\!\\left(\\frac{\\partial L}{\\partial a^{(l+1)}}\\right)',
+        },
+        {
+          label: 'What zeros would have done instead',
+          detail: 'Setting every weight to zero gives gain zero, so all activations are the bias. Worse, every unit in a layer is identical, receives an identical gradient and is updated identically — the layer stays one-dimensional forever. Note the asymmetry: zero biases are perfectly fine and are the PyTorch default for most layers, because the weights already break the symmetry.',
+          latex: 'a_j^{(l)} = a_k^{(l)} \\;\\Rightarrow\\; \\delta_j^{(l)} = \\delta_k^{(l)} \\;\\Rightarrow\\; \\Delta W_j = \\Delta W_k',
+        },
+      ],
+      conclusion:
+        'The whole subject reduces to one number: the per-layer variance gain. Get it to one and depth costs you nothing; get it to 0.5 and you can afford about ten layers; get it to 0.005 and you cannot train at all. He initialisation is simply the value of Var(W) that makes the gain exactly one for a ReLU network.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Measure the activation scale at every depth',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+def probe(std_scheme, depth=8, width=256, batch=512):
+    x = torch.randn(batch, width)
+    print(f"{std_scheme:>12}  input sd = {x.std():.4f}")
+    for layer in range(1, depth + 1):
+        if std_scheme == "0.01":
+            w = torch.randn(width, width) * 0.01
+        elif std_scheme == "xavier":
+            w = torch.randn(width, width) * (1.0 / width) ** 0.5
+        else:  # he
+            w = torch.randn(width, width) * (2.0 / width) ** 0.5
+        x = torch.relu(x @ w.T)
+        if layer in (1, 4, 8):
+            print(f"              layer {layer}: sd = {x.std():.3e}")
+
+torch.manual_seed(0)
+for scheme in ["0.01", "xavier", "he"]:
+    probe(scheme)`,
+        output: `        0.01  input sd = 0.9996
+              layer 1: sd = 1.132e-01
+              layer 4: sd = 1.815e-04
+              layer 8: sd = 4.560e-09
+      xavier  input sd = 0.9996
+              layer 1: sd = 5.028e-01
+              layer 4: sd = 1.780e-01
+              layer 8: sd = 4.397e-02
+          he  input sd = 0.9996
+              layer 1: sd = 7.078e-01
+              layer 4: sd = 7.034e-01
+              layer 8: sd = 6.958e-01`,
+        explanation:
+          'Three regimes in nine lines of output. The fixed 0.01 scale loses four orders of magnitude every three layers and is numerically dead by layer eight. The 1/fan_in scale halves the variance each layer, which is the sqrt(0.5) = 0.707 ratio you can read directly off the standard deviations, so it survives eight layers but not fifty. He initialisation is flat. The measured standard deviation settles near 0.70 rather than 1.0 because ReLU output is non-negative and therefore not zero-mean; the second moment is preserved exactly, which is what the derivation guarantees.',
+      },
+      {
+        language: 'python',
+        title: 'What PyTorch actually does, and how to override it',
+        runnable: true,
+        code: `import math
+import torch
+import torch.nn as nn
+
+layer = nn.Linear(512, 256)
+print("default weight sd :", round(layer.weight.std().item(), 5))
+print("kaiming_uniform a=sqrt(5) implies bound:",
+      round(math.sqrt(6.0 / ((1 + 5) * 512)), 5))
+
+def init_for_relu(module):
+    if isinstance(module, (nn.Linear, nn.Conv2d)):
+        nn.init.kaiming_normal_(module.weight, mode="fan_in", nonlinearity="relu")
+        if module.bias is not None:
+            nn.init.zeros_(module.bias)
+
+net = nn.Sequential(nn.Linear(512, 256), nn.ReLU(), nn.Linear(256, 10))
+net.apply(init_for_relu)
+print("after He init sd  :", round(net[0].weight.std().item(), 5))
+print("target sqrt(2/512):", round(math.sqrt(2 / 512), 5))`,
+        output: `default weight sd : 0.02549
+kaiming_uniform a=sqrt(5) implies bound: 0.04419
+after He init sd  : 0.06252
+target sqrt(2/512): 0.06250
+`,
+        explanation:
+          'The PyTorch default for nn.Linear is kaiming_uniform_ with a = sqrt(5), a historical setting inherited from an old Torch7 default. It works out to a weight standard deviation of about 1/sqrt(3*fan_in), roughly 2.4 times smaller than true He initialisation. For shallow networks and anything with normalisation layers this is harmless, which is why almost nobody notices. For a deep ReLU stack without normalisation it costs you real depth, and calling net.apply with an explicit kaiming_normal_ is worth the three lines.',
+      },
+      {
+        language: 'python',
+        title: 'Zero initialisation and the symmetry it never escapes',
+        runnable: true,
+        code: `import torch
+import torch.nn as nn
+
+torch.manual_seed(0)
+net = nn.Sequential(nn.Linear(4, 3), nn.ReLU(), nn.Linear(3, 1))
+nn.init.zeros_(net[0].weight); nn.init.zeros_(net[0].bias)
+nn.init.zeros_(net[2].weight); nn.init.zeros_(net[2].bias)
+
+x, y = torch.randn(32, 4), torch.randn(32, 1)
+opt = torch.optim.SGD(net.parameters(), lr=0.1)
+
+for step in range(200):
+    loss = nn.functional.mse_loss(net(x), y)
+    opt.zero_grad(); loss.backward(); opt.step()
+
+rows = net[0].weight.detach()
+print("hidden weight rows after 200 steps:")
+print(rows.round(decimals=6))
+print("all rows identical:", bool((rows[0] == rows[1]).all() and (rows[1] == rows[2]).all()))`,
+        output: `hidden weight rows after 200 steps:
+tensor([[0., 0., 0., 0.],
+        [0., 0., 0., 0.],
+        [0., 0., 0., 0.]])
+all rows identical: True`,
+        explanation:
+          'Two failures at once. The rows are identical, as the symmetry argument predicts, and here they are also stuck at exactly zero: with the second layer weights at zero, no error signal reaches the hidden layer at all, so its gradient is identically zero and only the output bias ever learns. Replace just the second layer initialisation with something random and the hidden rows start moving — but they still move together, because the units still receive the same input and, initially, proportional error signals. Randomness in the first layer is what actually breaks the tie.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'The original ResNet paper',
+        usage:
+          'He initialisation was introduced in the same line of work as ResNet precisely because the authors were trying to train thirty-layer networks with ReLU, and Xavier initialisation stalled them. The paper reports that a 22-layer network trains with He and fails to converge at all with Xavier — a difference produced entirely by the factor of two.',
+      },
+      {
+        context: 'Transformer output projections initialised at reduced scale',
+        usage:
+          'GPT-2 and most implementations since scale the initialisation of the residual output projections by 1/sqrt(2*n_layers). Without it, each residual block adds variance to the stream and the activations at the final layer of a 48-block model are enormous. It is the same variance-compounding argument applied to a residual sum rather than a product.',
+      },
+      {
+        context: 'Zero-initialising the last normalisation gain in a residual block',
+        usage:
+          'A widely used trick, sometimes called zero-init residual, sets the gamma of the final BatchNorm in each residual branch to zero so every block starts as an exact identity. This is a deliberate, safe use of zero initialisation: symmetry is not a problem here because the branch inputs already differ, and it lets very deep networks train with a larger learning rate from step one.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'PyTorch', role: 'torch.nn.init provides kaiming_normal_, kaiming_uniform_, xavier_normal_, xavier_uniform_, zeros_ and calculate_gain; model.apply(fn) walks every submodule.' },
+      { tool: 'timm', role: 'Vision model implementations expose an init_weights argument per architecture, because the right scheme depends on whether the block ends in a normalisation layer.' },
+      { tool: 'Hugging Face Transformers', role: '_init_weights on each PreTrainedModel sets a truncated normal with a configurable initializer_range, typically 0.02, and zeroes the biases and LayerNorm shifts.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Initialising all weights to zero, or to any single constant',
+        why: 'Every unit in the layer then computes the same output, receives the same error signal and gets the same update, so they remain identical forever. The layer has the capacity of one unit no matter how wide it is.',
+        fix: 'Always sample the weights randomly. Zero biases are fine and are the usual default, because the random weights already break the symmetry.',
+      },
+      {
+        mistake: 'Using a fixed weight scale such as 0.01 regardless of layer width',
+        why: 'The right scale depends on fan-in. A standard deviation of 0.01 is roughly correct for a layer with about 10,000 inputs and catastrophically small for one with 100, because the variance gain is n*Var(W) and only the product matters.',
+        fix: 'Always scale with the layer: kaiming for ReLU, xavier for tanh and sigmoid. Never hard-code a constant standard deviation across layers of different widths.',
+      },
+      {
+        mistake: 'Using Xavier with ReLU and wondering why deep networks stall',
+        why: 'Xavier is derived assuming the activation preserves variance, which is true of tanh near the origin but not of ReLU, which halves it. The result is a gain of about 0.5 per layer, so after thirty layers the signal has been attenuated by a factor of a billion.',
+        fix: 'Use kaiming_normal_ with nonlinearity set to relu or leaky_relu. If you must use Xavier, multiply by the gain sqrt(2) that nn.init.calculate_gain returns.',
+      },
+      {
+        mistake: 'Assuming normalisation layers make initialisation irrelevant',
+        why: 'BatchNorm and LayerNorm do rescale activations at every layer and genuinely reduce sensitivity to the initial scale, but they do nothing about symmetry, and they do not protect the very first forward pass or any part of the network that sits outside a normalised block.',
+        fix: 'Keep a principled initialisation even with normalisation. It costs one line and it still matters for the initial loss value, for training stability in the first few hundred steps, and for any residual scaling you apply.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'Why can you not initialise the weights of a hidden layer to zero?',
+        answer:
+          'Because every unit in the layer would then compute exactly the same thing. They would receive the same input, produce the same activation, receive the same error signal in the backward pass because their outgoing weights are also identical, and so receive exactly the same weight gradient. The optimiser applies the same update to all of them, so they stay identical for the entire run. A layer of five hundred such units has the representational capacity of one unit. Random initialisation exists to break that symmetry. The bias is a separate matter: initialising biases to zero is standard and harmless, because the randomness in the weights already makes the units different.',
+        followUp:
+          'A strong answer notes that with a zero-initialised output layer the hidden gradients are identically zero too, so nothing but the output bias learns at all.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Derive He initialisation and explain where the factor of two comes from.',
+        answer:
+          'For a unit computing z = sum of w_i x_i with independent zero-mean weights and inputs, the variance of a sum of independent terms is the sum of variances, so Var(z) = n_in * Var(W) * Var(x). To keep the signal at a constant scale across layers you want Var(z) = Var(x), which gives Var(W) = 1/n_in. That is the correct answer for an activation that preserves variance, such as tanh near the origin. ReLU does not: for a z that is symmetric about zero, max(0, z) keeps the positive half unchanged and zeroes the rest, so the second moment of the output is exactly half that of the input. To cancel that halving you double the weight variance, giving Var(W) = 2/n_in. In a fifty-layer network the difference between a per-layer gain of 0.5 and 1.0 is a factor of 2^50, which is the difference between training and not training.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'A deep network you inherited produces nan on the very first backward pass. How do you isolate whether initialisation is the cause?',
+        answer:
+          'Do not touch the learning rate first — a nan on step one happens before any update, so the optimiser is not involved. Register a forward hook on every module and print the mean, standard deviation and max absolute value of each output for a single batch. If the standard deviation grows geometrically with depth, the initial weight scale is too large and you will usually see the overflow appear at a specific layer index. If it collapses geometrically, the scale is too small and the nan is more likely coming from a downstream division, a log of zero in the loss, or a softmax over all-equal logits. Check the input pipeline in parallel, since unnormalised inputs produce the same signature as over-scaled weights. Once the layer is identified, confirm by reinitialising that layer with kaiming_normal_ at the appropriate mode and rerunning the single batch. Adding a normalisation layer is a fix but it masks the diagnosis, so do it after you know which failure you had.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A Conv2d layer has 64 input channels and a 3x3 kernel. What is its fan-in, and what weight standard deviation does He initialisation prescribe?',
+        hint: 'For a convolution, fan-in counts every value the kernel touches to produce one output number.',
+        solution:
+          'Each output value is a sum over 3 x 3 x 64 = 576 input values, so fan_in = 576. He initialisation prescribes Var(W) = 2/576 = 0.003472, giving a standard deviation of sqrt(0.003472) = 0.0589. The fan-out, for completeness, is kernel area times out_channels, which is what the backward pass sees. Note that fan-in for a convolution depends on the kernel size, so a 1x1 convolution with the same channel count has a fan-in of only 64 and needs weights three times larger in standard deviation.',
+      },
+      {
+        prompt:
+          'Write a function that takes a model and a batch, runs a forward pass with hooks attached, and prints the standard deviation of every module output. Use it to compare default PyTorch initialisation against explicit He initialisation on a twenty-layer ReLU MLP without normalisation.',
+        hint: 'register_forward_hook gives you (module, input, output) for each layer; store the statistics in a dict keyed by module name.',
+        language: 'python',
+        starterCode:
+          'import torch\nimport torch.nn as nn\n\ndef make_mlp(depth=20, width=256):\n    layers = []\n    for _ in range(depth):\n        layers += [nn.Linear(width, width), nn.ReLU()]\n    return nn.Sequential(*layers)\n\ndef activation_stats(model, x):\n    stats = {}\n    handles = []\n    # attach hooks, run the forward pass, detach, return stats\n    ...\n',
+        solution:
+          'With the PyTorch default (kaiming_uniform with a = sqrt(5), giving a weight standard deviation about 2.4 times smaller than He), the printed standard deviations fall by a consistent ratio per layer — roughly a factor of 0.3 each time — so by layer twenty the activations are around 1e-10 and the gradients reaching layer one are numerically zero. With explicit kaiming_normal_ in fan_in mode, the standard deviations sit near 0.7 at every depth and stay there. The exercise makes the compounding visible: the per-layer ratio is a constant, and depth turns it into an exponent. It is also the fastest real diagnostic you have, because the loss curve for both models looks equally flat for the first few hundred steps.',
+      },
+      {
+        prompt:
+          'Explain why initialising the final BatchNorm gamma of each residual branch to zero is safe, even though zero initialisation is normally forbidden.',
+        hint: 'Ask what the block computes at initialisation and whether the units feeding it are still distinguishable.',
+        solution:
+          'A residual block computes y = x + F(x). Setting the last normalisation gain in F to zero makes F output exactly zero, so the block starts as the identity, y = x. The symmetry argument does not apply because the units inside F still have randomly initialised weights, so they are already different from one another; only their contribution is scaled to nothing, and the gradient with respect to gamma is not zero, so gamma immediately moves away from zero on the first step. The benefit is that a very deep stack starts as a clean identity mapping with no variance accumulation down the residual stream, which lets you use a much larger learning rate at the start of training. This is the difference between zeroing a scalar gain in front of an already-diverse computation and zeroing the weight matrix that computes it.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'DL-010-q1',
+        type: 'mcq',
+        concept: 'symmetry breaking',
+        prompt: 'What is the fundamental problem with initialising every weight in a hidden layer to the same constant?',
+        options: [
+          'All units compute the same output and receive the same gradient, so they stay identical forever',
+          'The loss becomes non-differentiable at the starting point',
+          'The optimiser cannot compute a gradient when weights are equal',
+          'It makes the forward pass slower because of cache effects',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The gradient is perfectly well defined; the problem is that it is the same for every unit. Forward symmetry produces backward symmetry, and the update preserves it, so a wide layer collapses to the expressive power of a single unit.',
+      },
+      {
+        id: 'DL-010-q2',
+        type: 'numeric',
+        concept: 'He initialisation',
+        prompt: 'For a linear layer with fan_in = 800, what weight standard deviation does He initialisation prescribe? Give the answer to three decimal places.',
+        answer: 0.05,
+        tolerance: 0.001,
+        explanation:
+          'Var(W) = 2/800 = 0.0025, so the standard deviation is sqrt(0.0025) = 0.05. Note how much smaller this is than the once-standard fixed value of 0.01 would be appropriate for: that constant is only correct near a fan-in of 20,000.',
+      },
+      {
+        id: 'DL-010-q3',
+        type: 'truefalse',
+        concept: 'biases',
+        prompt: 'Initialising biases to zero causes the same symmetry problem as initialising weights to zero.',
+        answer: false,
+        explanation:
+          'False. Zero biases are the standard default. The symmetry is broken by the weights: as long as two units have different incoming weight vectors they compute different activations and receive different gradients, whatever their biases are.',
+      },
+      {
+        id: 'DL-010-q4',
+        type: 'fill',
+        concept: 'variance through a layer',
+        prompt: 'For a layer with independent zero-mean weights, Var(z) equals fan_in times Var(x) times ____.',
+        answers: ['Var(W)', 'the weight variance', 'Var(w)', 'variance of the weights'],
+        explanation:
+          'Var(z) = n_in * Var(W) * Var(x), because the variance of a sum of independent terms is the sum of the variances. Every initialisation scheme is just a choice of Var(W) that makes this product behave.',
+      },
+      {
+        id: 'DL-010-q5',
+        type: 'match',
+        concept: 'scheme selection',
+        prompt: 'Match each situation to the appropriate initialisation.',
+        pairs: [
+          { left: 'Hidden layers with ReLU', right: 'He / Kaiming, Var(W) = 2/fan_in' },
+          { left: 'Hidden layers with tanh', right: 'Xavier / Glorot, Var(W) = 2/(fan_in + fan_out)' },
+          { left: 'Biases of a standard linear layer', right: 'Zeros' },
+          { left: 'The last normalisation gain inside a residual branch', right: 'Zeros, so the block starts as the identity' },
+        ],
+        explanation:
+          'The pattern is that the weight matrices must be random and scaled to the fan-in, while scalar shifts and gains can safely start at fixed values because the randomness lives upstream of them.',
+      },
+      {
+        id: 'DL-010-q6',
+        type: 'code-output',
+        language: 'python',
+        concept: 'compounding gain',
+        prompt: 'A twenty-layer ReLU network has a per-layer activation-variance gain of 0.5. Starting from variance 1, what does this print?',
+        code: 'v = 1.0\nfor _ in range(20):\n    v *= 0.5\nprint(f"{v:.3e}")',
+        options: ['9.537e-07', '5.000e-01', '1.000e+00', '1.049e+06'],
+        answerIndex: 0,
+        explanation:
+          '0.5 to the twentieth power is about 9.5e-07, so the activations arrive a million times weaker than they started. The same factor applies to the gradients flowing back, which is why the early layers of a Xavier-initialised deep ReLU network effectively never train.',
+      },
+      {
+        id: 'DL-010-q7',
+        type: 'explain',
+        concept: 'the factor of two',
+        prompt: 'Explain why He initialisation uses 2/fan_in while Xavier uses roughly 1/fan_in, in terms of what ReLU does to a distribution.',
+        rubric: [
+          'States the base result Var(z) = fan_in * Var(W) * Var(x) and the preservation condition',
+          'Explains that ReLU zeroes half of a symmetric zero-mean distribution and so halves the second moment',
+          'Concludes that doubling the weight variance exactly cancels that halving',
+        ],
+        sampleAnswer:
+          'The pre-activation of a unit is a sum of fan_in independent products, so its variance is fan_in times Var(W) times Var(x). Setting that equal to Var(x) — the condition for the layer neither to amplify nor attenuate — gives Var(W) = 1/fan_in, which is essentially Xavier once you also account for the backward direction. That derivation assumes the activation passes the variance through unchanged, which is approximately true of tanh near zero. ReLU does not: applied to a distribution symmetric about zero, it leaves the positive half alone and maps the rest to zero, so the expectation of the square of the output is exactly half the expectation of the square of the input. Each layer therefore halves the variance, and after thirty layers you have attenuated by a factor of a billion. Doubling the weight variance to 2/fan_in makes the per-layer gain exactly one again, which is the entire content of He initialisation.',
+        explanation:
+          'The key move is recognising that the factor of two is not an empirical tweak; it is the exact compensation for a one-half that ReLU introduces.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Why must weights be initialised randomly?', back: 'To break symmetry. Identical units compute identical outputs, receive identical gradients and are updated identically, so they never differentiate.' },
+      { front: 'What is the variance of a pre-activation?', back: 'Var(z) = fan_in * Var(W) * Var(x), because variances of independent terms add.' },
+      { front: 'State Xavier/Glorot initialisation.', back: 'Var(W) = 2/(fan_in + fan_out), a compromise between forward preservation (1/fan_in) and backward preservation (1/fan_out). For tanh and sigmoid.' },
+      { front: 'State He/Kaiming initialisation and the reason for the 2.', back: 'Var(W) = 2/fan_in. ReLU zeroes half of a symmetric distribution and halves the variance; the 2 cancels that exactly.' },
+      { front: 'What is the fan-in of a Conv2d with 64 in-channels and a 3x3 kernel?', back: '3*3*64 = 576. Kernel area times input channels — the number of values summed to produce one output.' },
+      { front: 'Why is zero-initialising a residual branch gain safe?', back: 'The block starts as the identity, but the units inside the branch still have random weights, so no symmetry is created and the gain moves off zero on the first step.' },
+      { front: 'What is the PyTorch nn.Linear default, and is it He?', back: 'kaiming_uniform_ with a = sqrt(5), a Torch7 legacy. It gives a standard deviation about 2.4 times smaller than true He, which matters in deep unnormalised stacks.' },
+    ],
+
+    challenge: {
+      title: 'A depth-versus-initialisation phase diagram',
+      brief:
+        'Build a family of plain ReLU MLPs without any normalisation, with depth ranging from 2 to 50 and a fixed width of 256. For each depth, initialise with weight variance c/fan_in for c in a grid from 0.25 to 4.0, run a single forward and backward pass on one batch, and record the activation standard deviation at the last layer and the gradient standard deviation at the first. Plot the result as a heatmap of depth against c, marking the region where both statistics stay within a factor of ten of one. Then train the depth-30 models at c = 0.5, 1.0, 2.0 and 4.0 for 500 steps and show that the trainable region of the heatmap predicts which ones learn.',
+      language: 'python',
+      acceptanceCriteria: [
+        'The heatmap covers at least six depths and six values of c, with both forward and backward statistics recorded',
+        'The band of stable c narrows visibly as depth increases, and c = 2 sits inside it at every depth',
+        'The training runs confirm the prediction, with loss curves plotted together on a shared axis',
+        'A short written conclusion states the per-layer gain formula and explains why depth converts a small error into a fatal one',
+      ],
+      starterCode:
+        'import torch\nimport torch.nn as nn\n\ndef build(depth, width=256, c=2.0):\n    layers = []\n    for _ in range(depth):\n        lin = nn.Linear(width, width)\n        with torch.no_grad():\n            lin.weight.normal_(0.0, (c / width) ** 0.5)\n            lin.bias.zero_()\n        layers += [lin, nn.ReLU()]\n    return nn.Sequential(*layers)\n\ndef probe(model, width=256, batch=256):\n    """Return (last-layer activation sd, first-layer grad sd) for one batch."""\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain why the starting values of the weights matter, covering both the symmetry problem and the scale problem, and say what He initialisation does about each.',
+      mustCover: [
+        'Identical weights make every unit in a layer compute the same thing and receive the same gradient forever',
+        'A layer multiplies the variance of its input by fan_in times the weight variance, so the scale compounds with depth',
+        'Setting the weight variance to 1/fan_in makes the gain one for a variance-preserving activation',
+        'ReLU halves the variance, so He doubles the weight variance to 2/fan_in to compensate',
+      ],
+      bonusSignals: [
+        'gives a concrete compounding number, such as 0.5 to the thirtieth power',
+        'distinguishes the forward condition from the backward condition and explains the Xavier compromise',
+        'notes that zero biases are fine while zero weights are not',
+        'mentions that normalisation layers reduce but do not remove the sensitivity',
+      ],
+      sampleExplanation:
+        "Two separate things can go wrong before training even starts. The first is sameness. If every weight in a layer begins at the same value, then every unit in that layer sees the same input, produces the same output, and — because the units feeding forward from it are also identical — receives exactly the same error signal coming back. The optimiser applies the same change to all of them, so they stay clones for the entire run and a layer of five hundred units does the work of one. The only cure is randomness; you need the units to start out different so that gradient descent has something to differentiate. Biases are exempt from this, which is why zeroing them is standard: the random weights already break the tie. The second problem is scale, and it is the one that killed deep learning for a decade. A unit adds up fan-in products, and when independent quantities are added their variances add, so the variance coming out of a layer is fan-in times the weight variance times the variance going in. That multiplier applies at every layer, so it compounds: a gain of nought point nine is invisible over three layers and reduces the signal to half a per cent over fifty. To make the gain exactly one you set the weight variance to one over the fan-in, which is roughly what Xavier does once you also balance the backward direction, where the roles of fan-in and fan-out swap. Then ReLU arrives and breaks it. Applied to a distribution that is symmetric about zero, ReLU keeps the positive half and deletes the rest, so it halves the variance every time it is used. Half per layer over thirty layers is a factor of a billion. He initialisation simply doubles the weight variance to two over fan-in, which cancels that halving exactly and restores a gain of one, and it is the reason very deep ReLU networks became trainable. Modern architectures with batch or layer normalisation are much less sensitive to the scale, because the normalisation resets it at every stage, but they do nothing whatever about the symmetry problem, so you still initialise randomly.",
+    },
+  },
 ];

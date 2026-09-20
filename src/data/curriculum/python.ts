@@ -8687,4 +8687,2310 @@ j survived: 2
         "A comprehension is a way of describing a collection instead of assembling one. The loop version of doubling a list takes four lines: make an empty list, walk the original, work out the new value, append it. The comprehension says the same thing in one — `[x * 2 for x in numbers]` — and you can read it left to right as 'x times two, for each x in numbers'. The same work is happening underneath; what has gone is the bookkeeping, and with it the chance of forgetting to append on one branch or accidentally rebinding the accumulator. You can put a condition in either of two places, and they do completely different jobs. On the end, `[x for x in xs if x > 0]`, it decides who gets in, so the result can be shorter than the input. At the front, `[x if x > 0 else 0 for x in xs]`, it decides what each one turns into, so the result always has exactly as many items as you started with — and the `else` there is compulsory, because an expression has to produce something for every item. Swap the braces and you get a dictionary or a set instead of a list. The one thing worth saying about restraint: a comprehension is better than a loop while you can still read it in one go. Once it needs two loops and two conditions, or needs to catch an exception, or is only there for its side effects, the plain loop is the better code and nobody will be impressed by the one-liner.",
     },
   },
+
+  {
+    id: 'PY-018',
+    domain: 'PY',
+    module: 'Pythonic Patterns',
+    topic: 'Lazy iteration',
+    title: 'Iterators and Generators',
+    slug: 'iterators-and-generators',
+    difficulty: 4,
+    estimatedMinutes: 35,
+    prerequisites: ['PY-011', 'PY-017'],
+    related: ['PY-006', 'PY-012', 'PY-015'],
+    tags: ['iterator', 'generator', 'yield', 'lazy', 'itertools', 'memory', 'streaming'],
+
+    learningObjectives: [
+      'Explain what the iterator protocol is and what a `for` loop is really doing underneath',
+      'Write a generator function with `yield` and describe how execution suspends and resumes',
+      'Choose between a list comprehension and a generator expression based on memory and reuse',
+      'Use `itertools` building blocks such as `islice`, `chain`, `groupby` and `count` on real streams',
+      'Diagnose the two classic generator bugs: a one-shot iterator consumed twice, and a generator whose body never runs',
+    ],
+
+    terminology: [
+      {
+        term: 'Iterable',
+        definition:
+          'Any object that can produce an iterator when passed to `iter()`. Lists, strings, dicts, files and generators are all iterables.',
+        simple: 'Anything you are allowed to put after `for x in`.',
+      },
+      {
+        term: 'Iterator',
+        definition:
+          'An object with a `__next__` method that hands back one item at a time and raises `StopIteration` when exhausted. It also has `__iter__`, which returns itself.',
+        simple: 'A bookmark that remembers where you had got to.',
+      },
+      {
+        term: 'Generator function',
+        definition:
+          'A function containing at least one `yield`. Calling it does not run the body; it returns a generator object, which is an iterator whose state is the paused function frame.',
+        simple: 'A function that hands back one result at a time and pauses in between.',
+      },
+      {
+        term: 'Generator expression',
+        definition:
+          'Comprehension syntax written with parentheses, `(x * 2 for x in xs)`, producing a lazy iterator rather than a materialised list.',
+        simple: 'A comprehension that computes items only as you ask for them.',
+      },
+      {
+        term: 'Laziness',
+        definition:
+          'The property of computing each value only at the moment it is requested, so that work you never consume is never performed and values you have passed are free to be collected.',
+        simple: 'Do the work only when someone actually asks for the answer.',
+      },
+      {
+        term: 'Exhaustion',
+        definition:
+          'The one-way end state of an iterator. Once `StopIteration` has been raised, every further `next()` also raises it; iterators cannot be rewound.',
+        simple: 'Once you have read to the end, there is nothing left to read.',
+      },
+    ],
+
+    simpleExplanation:
+      "Imagine someone asks you to read out every word in a very long book. One way is to copy the whole book onto cards first, one word per card, then read the cards. That works for a short book and runs out of table space for a long one. The other way is simply to read, keeping a finger on the page so you always know where you are, and say one word at a time. Python has both. A list is the pile of cards: every item exists at once, taking up memory, and you can flip back to any of them. An iterator is the finger on the page: it knows only where you are and how to get the next word, and nothing else exists yet. A generator is how you write your own finger-on-the-page reader. You write what looks like an ordinary function, but instead of `return` you use `yield`, which means hand this value back and freeze right here. When the next value is wanted, the function unfreezes exactly where it stopped, with all its variables intact, and carries on.",
+
+    whyItExists:
+      'Real data outgrows memory long before it outgrows disk: a 40 GB log file, a database cursor, an infinite sensor stream. Iterators exist so that a single uniform loop syntax can walk any of these without ever holding all of it at once, and generators exist so that writing such a producer costs four lines rather than a class with two dunder methods and hand-managed state.',
+
+    analogy: {
+      scenario:
+        'A restaurant kitchen can serve a tasting menu in two ways. The banquet approach cooks all twelve courses first and lines them up on a huge pass; you need an enormous kitchen, the later courses go cold, and if the guest leaves after course three you have wasted nine dishes. The tasting approach cooks a course only when the previous plate comes back. The chef keeps a ticket showing which course is next, the kitchen stays small, and if the guest leaves early the remaining courses are never cooked at all.',
+      mapping: [
+        { from: 'Cooking all twelve courses up front', to: 'Building a list — every element computed and stored immediately' },
+        { from: 'Cooking one course on demand', to: 'A generator yielding one item per `next()` call' },
+        { from: 'The ticket showing which course is next', to: 'The iterator’s internal position, the frozen function frame' },
+        { from: 'The guest leaving after course three', to: 'Breaking out of a loop early, so the remaining items are never computed' },
+        { from: 'The kitchen being small regardless of menu length', to: 'Constant memory use, independent of how many items flow through' },
+        { from: 'Not being able to re-serve a course already eaten', to: 'Iterator exhaustion — you cannot rewind' },
+      ],
+      bridge:
+        'The mapping is mechanically accurate: a generator really does hold a suspended stack frame the way the ticket holds the chef’s place, and it really does perform no work for items nobody requests. This is also why the memory argument is about peak usage rather than total work — the same twelve courses get cooked either way if the guest eats them all; only the number sitting on the pass at once differs.',
+      limitations:
+        'The analogy undersells one cost. A list can be measured, sorted, indexed and walked twice; a generator can do none of these. Length is unknowable without consuming it, and consuming it destroys it. Laziness buys memory and pays in flexibility.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'What `for item in thing:` actually does',
+        caption: 'The loop you have written a hundred times expands into four steps.',
+        steps: [
+          { label: 'Call `iter(thing)`', detail: 'Python asks the iterable for a fresh iterator. A list hands back a new list_iterator; a generator hands back itself.' },
+          { label: 'Call `next(it)`', detail: 'Ask for one item. For a generator this resumes the frozen function body until the next `yield`.' },
+          { label: 'Bind and run the body', detail: 'The yielded value is bound to `item` and the loop body executes once.' },
+          { label: 'Repeat until `StopIteration`', detail: 'The iterator signals exhaustion by raising `StopIteration`, which the `for` statement catches silently.' },
+          { label: 'Loop ends', detail: 'Control moves to the `else` clause if present, then past the loop. Nothing is rewound.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'List comprehension versus generator expression',
+        caption: 'Same syntax, one bracket apart, very different runtime behaviour.',
+        left: {
+          heading: '[x for x in src]  — list',
+          points: [
+            'All items computed before the next line runs',
+            'Memory grows with the number of items',
+            'Can be indexed, sliced, len()-ed, sorted',
+            'Can be iterated any number of times',
+            'Right when the data is small or needed more than once',
+          ],
+        },
+        right: {
+          heading: '(x for x in src)  — generator',
+          points: [
+            'Nothing computed until something asks',
+            'Memory is one item plus the frame, whatever the length',
+            'No indexing, no len(), no slicing',
+            'Single use — a second loop sees nothing',
+            'Right for large or infinite streams consumed once',
+          ],
+        },
+      },
+      {
+        kind: 'annotated',
+        title: 'Anatomy of a generator function',
+        subject: 'def countdown(n):\n    while n > 0:\n        yield n\n        n -= 1',
+        annotations: [
+          { part: 'def countdown(n)', note: 'Looks like any function. The presence of `yield` anywhere in the body is what makes it a generator function.' },
+          { part: 'calling countdown(3)', note: 'Runs none of the body. It returns a generator object and the function is left paused before its first line.' },
+          { part: 'yield n', note: 'Hands `n` to the caller and freezes the frame here, keeping `n` and the loop position alive.' },
+          { part: 'n -= 1', note: 'Runs only when `next()` is called again — execution resumes on the line after the `yield`.' },
+          { part: 'falling off the end', note: 'When the function returns, Python raises `StopIteration` automatically. The generator is now exhausted forever.' },
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Trace a generator step by step',
+        caption: 'Run a generator and a list version side by side and watch when each value is actually computed.',
+        widget: 'code-playground',
+      },
+    ],
+
+    formalDefinition:
+      'An iterable is an object implementing `__iter__`, which returns an iterator. An iterator implements `__next__`, returning the next value or raising `StopIteration`, and `__iter__` returning itself. A generator function is a function whose body contains `yield`; calling it constructs a generator object that implements the iterator protocol, where each `__next__` resumes the suspended frame until the next `yield` and each `yield` suspends it again, preserving all local state.',
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'The protocol, by hand and then with yield',
+        runnable: true,
+        code: `# 1. The protocol, written out explicitly.
+class Countdown:
+    def __init__(self, n):
+        self.n = n
+
+    def __iter__(self):
+        return self                 # I am my own iterator
+
+    def __next__(self):
+        if self.n <= 0:
+            raise StopIteration     # the agreed "nothing left" signal
+        self.n -= 1
+        return self.n + 1
+
+# 2. Exactly the same behaviour, four lines instead of eleven.
+def countdown(n):
+    while n > 0:
+        yield n
+        n -= 1
+
+print(list(Countdown(3)))
+print(list(countdown(3)))
+
+# A for loop is just sugar for the protocol:
+it = iter(countdown(2))
+print(next(it), next(it))
+try:
+    next(it)
+except StopIteration:
+    print("exhausted")`,
+        output: `[3, 2, 1]
+[3, 2, 1]
+2 1
+exhausted`,
+        explanation:
+          'The class version shows what the protocol demands: `__iter__` to hand back an iterator and `__next__` to produce one value or raise `StopIteration`. The generator version produces an object satisfying exactly the same protocol, but Python writes the state machine for you — `n` and the position inside the `while` loop are kept alive in the suspended frame instead of in attributes you maintain by hand.',
+      },
+      {
+        language: 'python',
+        title: 'Laziness is a memory argument, and you can measure it',
+        runnable: true,
+        code: `import sys
+
+n = 1_000_000
+as_list = [x * x for x in range(n)]
+as_gen = (x * x for x in range(n))
+
+print("list bytes:", sys.getsizeof(as_list))
+print("gen bytes: ", sys.getsizeof(as_gen))
+print("same total:", sum(as_list) == sum(x * x for x in range(n)))
+
+# Laziness also means unconsumed work is never done at all.
+calls = 0
+def expensive(x):
+    global calls
+    calls += 1
+    return x * x
+
+first_three = [expensive(x) for x in range(1000)][:3]
+print("eager calls:", calls)
+
+calls = 0
+lazy = (expensive(x) for x in range(1000))
+first_three = [next(lazy) for _ in range(3)]
+print("lazy calls: ", calls)`,
+        output: `list bytes: 8448728
+gen bytes:  200
+same total: True
+eager calls: 1000
+lazy calls:  3`,
+        explanation:
+          'The list holds a million integers and costs about eight megabytes; the generator holds a paused frame and costs two hundred bytes regardless of length. The second half makes the sharper point: the eager version called `expensive` a thousand times to throw away 997 results, while the lazy version called it three times. Laziness saves memory *and* the work you never consume — which is why slicing a generator with `itertools.islice` is not the same thing as slicing a list.',
+      },
+      {
+        language: 'python',
+        title: 'Streaming a file that does not fit in memory',
+        runnable: true,
+        code: `import itertools, json
+
+def read_events(path):
+    """Yield one parsed record per line. Memory stays constant at any file size."""
+    with open(path, encoding="utf-8") as f:
+        for line_no, line in enumerate(f, start=1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                yield json.loads(line)
+            except json.JSONDecodeError:
+                print(f"skipping malformed line {line_no}")
+
+def only_errors(events):
+    for e in events:
+        if e.get("level") == "ERROR":
+            yield e
+
+# A pipeline: each stage is lazy, so one record flows through all of them at a time.
+events = read_events("app.log")
+errors = only_errors(events)
+messages = (e["msg"] for e in errors)
+
+for msg in itertools.islice(messages, 5):
+    print(msg)`,
+        output: `skipping malformed line 3
+disk quota exceeded
+connection reset by peer
+model checkpoint not found
+token budget exhausted
+upstream 504`,
+        explanation:
+          'This is the pattern that makes generators worth learning. A file object is already an iterator over lines, so nothing is read until the loop asks. Each stage is itself a generator, so the three stages compose into a pipeline where exactly one record is in flight at any moment. `islice` stops after five, and because everything upstream is lazy, the rest of the file is never read, parsed or filtered — the program can finish having touched a few kilobytes of a forty-gigabyte file.',
+      },
+      {
+        language: 'python',
+        title: 'The itertools tools worth memorising',
+        runnable: true,
+        code: `from itertools import count, islice, chain, groupby, tee, accumulate
+
+# count: an infinite counter — safe only because islice stops it
+squares = (x * x for x in count(1))
+print(list(islice(squares, 5)))
+
+# chain: treat several iterables as one stream, without concatenating them
+print(list(chain([1, 2], (3, 4), "56")))
+
+# accumulate: running totals, useful for cumulative metrics
+print(list(accumulate([3, 1, 4, 1, 5])))
+
+# groupby: groups CONSECUTIVE equal keys — sort first or be surprised
+rows = [("eng", "ada"), ("eng", "bob"), ("ops", "cy"), ("eng", "dee")]
+for dept, group in groupby(rows, key=lambda r: r[0]):
+    print(dept, [name for _, name in group])
+
+# tee: two independent readers over one source, at the cost of buffering
+a, b = tee(iter([1, 2, 3]))
+print(sum(a), max(b))`,
+        output: `[1, 4, 9, 16, 25]
+[1, 2, 3, 4, '5', '6']
+[3, 4, 8, 9, 14]
+eng ['ada', 'bob']
+ops ['cy']
+eng ['dee']
+3 3`,
+        explanation:
+          '`count` shows that infinite streams are ordinary objects as long as something downstream stops them. `chain` avoids building a concatenated copy. `accumulate` gives running totals in one pass. The `groupby` output is the one to burn into memory: `eng` appears twice because `groupby` only ever groups *adjacent* equal keys, so the standard usage is `groupby(sorted(rows, key=k), key=k)`. `tee` buys you a second pass, but it must buffer everything consumed by the faster branch, so it silently reintroduces the memory cost you used a generator to avoid.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Training a model on data larger than RAM',
+        usage:
+          'A PyTorch `IterableDataset` or a Keras data generator yields batches one at a time from disk or from a remote store. Nothing else in the training loop changes — the loop still says `for batch in loader` — but the dataset can be a terabyte on a machine with 32 GB.',
+      },
+      {
+        context: 'Paginated API clients',
+        usage:
+          'Every mature SDK exposes a paginator as a generator: `for issue in repo.iter_issues()` fetches page one, yields its 30 items, and only requests page two when item 31 is asked for. If you `break` after the first match, the remaining HTTP calls never happen.',
+      },
+      {
+        context: 'Streaming LLM responses',
+        usage:
+          'A chat completion with `stream=True` returns a generator of token chunks. The user interface consumes it with a plain `for chunk in stream`, rendering text as it arrives rather than waiting for the full response, and can stop generation early by abandoning the iterator.',
+      },
+      {
+        context: 'Log and event processing',
+        usage:
+          'Pipelines that parse, filter and aggregate nightly logs are written as chained generators so that memory is flat and a malformed line can be skipped without aborting the run.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'PyTorch DataLoader', role: 'Iterates a dataset lazily, yielding batches; the iterator protocol is what makes custom datasets pluggable.' },
+      { tool: 'pandas', role: '`pd.read_csv(..., chunksize=100_000)` returns an iterator of DataFrames, the standard trick for files bigger than memory.' },
+      { tool: 'itertools', role: 'Standard-library toolkit of composable lazy operators used across data engineering code.' },
+      { tool: 'Hugging Face datasets', role: '`load_dataset(..., streaming=True)` gives an iterable dataset over remote shards, never downloading the whole corpus.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Iterating the same generator twice and getting nothing the second time',
+        why: 'A generator is an iterator, and iterators are one-shot. After the first loop drains it, every further `next()` raises `StopIteration` immediately, so the second loop body simply never runs — silently, with no error.',
+        fix: 'If you need two passes, materialise once with `data = list(gen)` and loop over the list, or build a fresh generator by calling the generator function again. A useful habit: pass generator *functions* around, not generator objects.',
+      },
+      {
+        mistake: 'Calling `len()` on a generator, or indexing it',
+        why: 'Length would require consuming the whole stream, and indexing would require remembering everything already passed. Neither is possible for a lazy one-shot iterator, so you get `TypeError: object of type \'generator\' has no len()`.',
+        fix: 'Use `sum(1 for _ in gen)` if you truly need a count and are willing to destroy the stream, or `itertools.islice(gen, i, i + 1)` for positional access. If you need both repeatedly, you wanted a list.',
+      },
+      {
+        mistake: 'Expecting the generator body to run when you call the function',
+        why: 'Calling a generator function only builds the object. A `print`, a validation check or an `open()` at the top of the body does not execute until the first `next()`, so errors surface far from the call site and resources are acquired later than you think.',
+        fix: 'Validate arguments in a plain wrapper function that then returns the generator, so the checks run eagerly: `def read(path): _check(path); return _read_impl(path)`.',
+      },
+      {
+        mistake: 'Returning a value from a generator and expecting to receive it',
+        why: '`return x` inside a generator does not produce an item; it ends iteration and attaches `x` to the `StopIteration` exception, where almost nobody looks.',
+        fix: 'Yield the final value instead, or if you genuinely need a return value, capture it with `value = yield from inner()` in a delegating generator.',
+      },
+      {
+        mistake: 'Using `groupby` on unsorted data',
+        why: '`itertools.groupby` groups only runs of consecutive equal keys, so an unsorted input produces the same key several times in separate groups and aggregates come out wrong.',
+        fix: 'Sort by the same key function first: `groupby(sorted(rows, key=k), key=k)`. If sorting is too expensive, use a `collections.defaultdict(list)` instead.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What is the difference between an iterable and an iterator?',
+        answer:
+          'An iterable is anything that can give you an iterator: it implements `__iter__`. An iterator is the thing that actually produces values: it implements `__next__` and raises `StopIteration` when done, and its `__iter__` returns itself. The practical consequence is reusability. A list is an iterable but not an iterator, so `iter(my_list)` gives a fresh cursor each time and you can loop over it repeatedly. A generator is both, and `iter()` on it returns the same exhausted object, which is exactly why looping over a generator twice gives you nothing the second time.',
+        followUp:
+          'A strong answer notes that this distinction is why a file object behaves like a generator — it is its own iterator — and why `for line in f` a second time yields nothing unless you `f.seek(0)`.',
+      },
+      {
+        level: 'intermediate',
+        question: 'When would you choose a generator over a list, and when is a list the right answer?',
+        answer:
+          'Choose a generator when the data may be large or unbounded, when it is consumed exactly once, and when you want to compose stages into a pipeline so that only one item is in flight — streaming a log file, paginating an API, feeding training batches. Choose a list when the data is small enough that memory is irrelevant, when you need it more than once, or when you need length, indexing, slicing or sorting, all of which require the whole collection. The honest summary is that generators trade random access and reuse for flat memory and early exit; if you are not getting one of those two benefits, a list is simpler and usually slightly faster.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Your training script loads a 60 GB dataset with a list comprehension and the process is killed by the OOM killer. Walk me through the fix.',
+        answer:
+          'The comprehension materialises every example before training starts, so peak memory is the whole dataset plus the model. I would convert the loader into a generator that yields one example, or one batch, per iteration — reading from disk lazily so that memory is proportional to batch size rather than dataset size. In practice that means an `IterableDataset` or `pd.read_csv(chunksize=...)` rather than a list. Two things need care: shuffling can no longer be a global permutation, so you use a shuffle buffer of a few thousand examples; and the loader must be re-creatable, because each epoch needs a fresh iterator rather than the exhausted one from the previous epoch. I would also check that the preprocessing inside the generator is cheap enough not to starve the GPU, and use worker processes with prefetching if it is not.',
+        followUp:
+          'Mentioning that a generator cannot report `len()`, so epoch progress bars need an explicit `steps_per_epoch`, signals real experience.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Write a generator `moving_average(stream, k)` that yields the mean of the last k values seen, producing nothing until it has seen k values. It must work on an infinite stream in constant memory.',
+        hint: 'A `collections.deque(maxlen=k)` discards the oldest item automatically when it is full. Keep a running sum instead of re-summing the window.',
+        language: 'python',
+        starterCode: 'from collections import deque\n\ndef moving_average(stream, k):\n    ...\n',
+        solution:
+          'from collections import deque\n\ndef moving_average(stream, k):\n    window = deque(maxlen=k)\n    total = 0.0\n    for x in stream:\n        if len(window) == k:\n            total -= window[0]        # the value about to be evicted\n        window.append(x)\n        total += x\n        if len(window) == k:\n            yield total / k\n\nThe deque caps itself at k items, so memory is O(k) no matter how long the stream is, and the running total makes each output O(1) rather than O(k). The guard `if len(window) == k` is what suppresses output for the first k − 1 values. Test it against an infinite source to prove laziness: `list(islice(moving_average(count(1), 3), 4))` gives `[2.0, 3.0, 4.0, 5.0]`.',
+      },
+      {
+        prompt:
+          'Predict the output of this program, then explain the surprise:\n\n    g = (x * 2 for x in [1, 2, 3])\n    print(sum(g))\n    print(sum(g))\n    print(list(g))',
+        hint: 'How many times can one iterator be drained?',
+        solution:
+          'The output is 12, then 0, then []. The first `sum` drains the generator completely. The generator is now exhausted, so the second `sum` receives no items at all and returns its start value of 0 — note that it does not raise, which is precisely why this bug is so hard to spot. `list(g)` likewise sees nothing and returns an empty list. The fix depends on intent: `values = [x * 2 for x in [1, 2, 3]]` if you need it more than once, or rebuild the generator expression before each use.',
+      },
+      {
+        prompt:
+          'A colleague writes `def load(path): print("loading", path); with open(path) as f: for line in f: yield line`. They report that "loading" never prints when they call `load("data.txt")`. Explain why, and restructure the function so that a missing file raises immediately at the call site.',
+        hint: 'What does calling a generator function actually execute?',
+        solution:
+          'Calling a generator function runs none of the body — it only constructs a generator object — so the `print` and the `open` are deferred until the first `next()`. If the path is wrong, the `FileNotFoundError` surfaces inside whatever loop eventually consumes the generator, often in an unrelated part of the program. The fix is to split eager from lazy:\n\n    def load(path):\n        f = open(path, encoding="utf-8")   # fails here, at the call site\n        print("loading", path)\n        return _iter_lines(f)\n\n    def _iter_lines(f):\n        with f:\n            for line in f:\n                yield line\n\nThe outer function is a normal function, so its body runs immediately; it returns the generator produced by the inner one. Keeping the `with` inside the generator ensures the file still closes when iteration finishes or the generator is closed.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'PY-018-q1',
+        type: 'mcq',
+        concept: 'generator call semantics',
+        prompt: 'What does calling a generator function actually do?',
+        options: [
+          'Returns a generator object without executing any of the function body',
+          'Runs the body to completion and returns a list of all yielded values',
+          'Runs the body until the first `yield` and returns that value',
+          'Raises `StopIteration` if the body contains no `return`',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The call only constructs the generator object; the frame is created but suspended before the first line. The body starts running at the first `next()`, which is why side effects and argument validation inside a generator happen later than authors expect.',
+      },
+      {
+        id: 'PY-018-q2',
+        type: 'code-output',
+        language: 'python',
+        concept: 'iterator exhaustion',
+        prompt: 'What does this print?',
+        code: 'g = (n for n in range(4))\nprint(sum(g), sum(g))',
+        options: ['6 0', '6 6', '0 6', 'TypeError'],
+        answerIndex: 0,
+        explanation:
+          'The first `sum` drains the generator, giving 0+1+2+3 = 6. The generator is then exhausted, so the second `sum` sees no items and returns its start value, 0. It fails silently rather than raising, which makes this one of the hardest generator bugs to notice.',
+      },
+      {
+        id: 'PY-018-q3',
+        type: 'truefalse',
+        concept: 'memory behaviour',
+        prompt: 'A generator over ten million items uses roughly the same memory as a generator over ten items.',
+        answer: true,
+        explanation:
+          'True. A generator stores one suspended frame — its local variables and instruction pointer — not the items. Memory depends on what the body holds, not on how many values flow through it, which is exactly why generators solve the larger-than-memory problem.',
+      },
+      {
+        id: 'PY-018-q4',
+        type: 'fill',
+        concept: 'the protocol',
+        prompt: 'Which exception does an iterator raise to signal that it has no more items?',
+        answers: ['StopIteration', 'stopiteration', 'StopIteration exception'],
+        explanation:
+          '`StopIteration` is the agreed end-of-stream signal. A `for` loop catches it and exits quietly, which is why you never normally see it — but `next()` called directly will propagate it unless you pass a default.',
+      },
+      {
+        id: 'PY-018-q5',
+        type: 'debug',
+        language: 'python',
+        concept: 'groupby semantics',
+        prompt: 'This aggregation reports the "eng" department twice. What is wrong?',
+        code: 'from itertools import groupby\nrows = [("eng", 3), ("ops", 1), ("eng", 5)]\nfor dept, g in groupby(rows, key=lambda r: r[0]):\n    print(dept, sum(v for _, v in g))',
+        options: [
+          '`groupby` only groups consecutive equal keys, so the input must be sorted by the same key first',
+          '`groupby` needs the key function passed positionally, not as a keyword',
+          'The inner generator must be converted to a list before summing',
+          '`groupby` cannot accept tuples, only dictionaries',
+        ],
+        answerIndex: 0,
+        explanation:
+          '`itertools.groupby` groups runs of adjacent equal keys, exactly like the Unix `uniq` command. Unsorted input therefore produces a key more than once. The standard fix is `groupby(sorted(rows, key=k), key=k)`, using the identical key function in both places.',
+      },
+      {
+        id: 'PY-018-q6',
+        type: 'match',
+        concept: 'itertools vocabulary',
+        prompt: 'Match each itertools function to what it does.',
+        pairs: [
+          { left: 'islice', right: 'Takes a slice of a stream without materialising the rest' },
+          { left: 'chain', right: 'Presents several iterables as one continuous stream' },
+          { left: 'count', right: 'Produces an unbounded sequence of increasing numbers' },
+          { left: 'accumulate', right: 'Yields running totals as it consumes the input' },
+          { left: 'tee', right: 'Splits one iterator into several, buffering as needed' },
+        ],
+        explanation:
+          'These five cover most practical stream work. The one with a hidden cost is `tee`: it must buffer every item consumed by the fastest branch, so it can quietly reintroduce the memory usage a generator was meant to avoid.',
+      },
+      {
+        id: 'PY-018-q7',
+        type: 'explain',
+        concept: 'laziness',
+        prompt:
+          'A colleague says "generators are just a faster way to write list comprehensions". Explain what is wrong with that and state the real trade-off.',
+        rubric: [
+          'Corrects the speed claim: per-item work is the same, the saving is peak memory and unconsumed work',
+          'Names what you give up: length, indexing, slicing, and repeated iteration',
+          'Gives a concrete situation where each is the right choice',
+        ],
+        sampleAnswer:
+          'Generators are not faster at producing the same set of values — the same expression runs per item either way, and for small collections a list is often marginally quicker because it avoids repeated frame suspension. What changes is *when* the work happens and how much exists at once. A list computes everything up front and holds all of it; a generator computes one item per request and holds one. That gives two real wins: peak memory becomes independent of stream length, and any items you never consume are never computed, so breaking out of a loop after three of a million items does three items of work. The price is that a generator has no length, cannot be indexed or sliced, and is exhausted after one pass, failing silently on the second. So: generator for a 40 GB log file you filter once, list for a few thousand rows you need to sort and iterate twice.',
+        explanation:
+          'The examinable point is that laziness is a memory-and-early-exit optimisation with a real cost in flexibility, not a general speed-up.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Iterable versus iterator?', back: 'An iterable implements `__iter__` and can produce fresh iterators. An iterator implements `__next__`, raises `StopIteration` when done, and returns itself from `__iter__`.' },
+      { front: 'What does calling a generator function do?', back: 'Nothing in the body. It builds a generator object whose frame is suspended before the first line; the body starts at the first `next()`.' },
+      { front: 'How much memory does a generator use?', back: 'One suspended frame — independent of how many items pass through it. That is the whole point.' },
+      { front: 'Why did my second loop over a generator do nothing?', back: 'Generators are one-shot. The first loop exhausted it, and further `next()` calls raise `StopIteration` immediately — silently, with no error.' },
+      { front: '`[x for x in xs]` versus `(x for x in xs)`?', back: 'Square brackets build a list eagerly; parentheses build a lazy generator. Identical syntax otherwise.' },
+      { front: 'Why must you sort before `itertools.groupby`?', back: 'It groups only consecutive equal keys, like Unix `uniq`, so unsorted input yields the same key in several separate groups.' },
+      { front: 'What does `yield from` do?', back: 'Delegates to another iterable, yielding all of its items, and captures its return value as the result of the expression.' },
+    ],
+
+    challenge: {
+      title: 'A lazy log pipeline that never grows',
+      brief:
+        'Build a processing pipeline over a large line-delimited JSON log using only generators. Stage one parses lines and skips malformed ones with a counted warning. Stage two filters to a level passed in. Stage three attaches a rolling five-minute error rate using a deque. Stage four batches records into lists of 500 for downstream writing. Prove the pipeline is lazy by feeding it an infinite synthetic stream and taking two batches, and prove it is flat in memory by reporting peak usage with `tracemalloc` for a 10,000-line and a 1,000,000-line input.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Every stage is a generator function; no stage builds a list of the whole stream',
+        'The pipeline terminates on an infinite input when the consumer stops after two batches',
+        'Peak memory measured by tracemalloc is within a small constant factor between the two input sizes',
+        'Malformed lines are counted and reported without aborting the run',
+        'The batching stage emits a final partial batch rather than discarding it',
+      ],
+      starterCode:
+        'import json, tracemalloc\nfrom collections import deque\nfrom itertools import islice\n\ndef parse(lines):\n    ...\n\ndef by_level(records, level="ERROR"):\n    ...\n\ndef batched(records, size=500):\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone who is comfortable with lists and loops what an iterator is, what `yield` does to a function, and why any of this matters.',
+      mustCover: [
+        'A `for` loop calls `iter()` then `next()` repeatedly until `StopIteration`',
+        '`yield` suspends the function, preserving all local state, and resumes on the next request',
+        'Generators use memory proportional to one item, not to the length of the stream',
+        'The cost of laziness: one-shot, no length, no indexing',
+      ],
+      bonusSignals: ['gives a concrete larger-than-memory example', 'mentions that unconsumed items are never computed', 'distinguishes generator functions from generator objects'],
+      sampleExplanation:
+        'Start with what a `for` loop really does, because it is not magic. When you write `for x in thing`, Python first asks `thing` for an iterator — a small object whose only job is to remember where you are. Then it asks that iterator for one value at a time, and when the iterator has nothing left it raises a special signal called `StopIteration`, which the loop catches and treats as "we are done". Any object that can play that game can appear in a `for` loop, which is why the same syntax works on a list, a dictionary, a file and a database cursor. Now `yield`. If you put `yield` anywhere in a function, the function stops being an ordinary function. Calling it no longer runs the body at all — it hands you back a generator object with the body frozen before its first line. The first time someone asks for a value, the body starts running until it reaches a `yield`, at which point it hands that value over and freezes again, right there, with every local variable still alive. Ask for another value and it carries on from the line after the `yield`. So you are writing a producer that naturally suspends and resumes, and Python is keeping your place for you. The reason this matters is memory. A list of ten million numbers is ten million numbers sitting in RAM. A generator over ten million numbers is one paused function, a couple of hundred bytes, no matter how many values eventually flow through it. That is what lets you filter a forty-gigabyte log file on a laptop, or feed a training loop from a dataset far larger than memory, without changing the shape of the code at all. There is a price, and it is worth stating plainly: a generator can only be walked once, it has no length, and you cannot index into it. Ask for a second pass and you get nothing back — not an error, just silence. So when the data is small and you need it twice, use a list; when it is large and you need it once, use a generator.',
+    },
+  },
+  {
+    id: 'PY-019',
+    domain: 'PY',
+    module: 'Pythonic Patterns',
+    topic: 'Functions as values',
+    title: 'Lambdas, Functional Tools and Decorators',
+    slug: 'lambdas-and-decorators',
+    difficulty: 4,
+    estimatedMinutes: 40,
+    prerequisites: ['PY-012', 'PY-013', 'PY-018'],
+    related: ['PY-017', 'PY-014', 'PY-015'],
+    tags: ['lambda', 'map', 'filter', 'reduce', 'closure', 'decorator', 'functools', 'wraps', 'caching'],
+
+    learningObjectives: [
+      'Explain what it means for a function to be a first-class object and pass one as an argument',
+      'Write a lambda where it genuinely helps and recognise the cases where a `def` is clearer',
+      'Use `map`, `filter` and `functools.reduce`, and say honestly when a comprehension beats all three',
+      'Describe a closure precisely: what is captured, when it is captured, and what stays alive',
+      'Build a decorator from first principles, preserve metadata with `functools.wraps`, and write a decorator that takes arguments',
+      'Implement a practical timing decorator and a caching decorator, and know when caching is unsafe',
+    ],
+
+    terminology: [
+      {
+        term: 'First-class function',
+        definition:
+          'A function that can be treated like any other value: assigned to a name, stored in a list or dict, passed as an argument and returned from another function.',
+        simple: 'A function you can hand around like a number or a string.',
+      },
+      {
+        term: 'Lambda',
+        definition:
+          'An anonymous function written as a single expression, `lambda x: x * 2`. It has no name, no statements and no docstring; its value is whatever the expression evaluates to.',
+        simple: 'A tiny throwaway function written inline.',
+      },
+      {
+        term: 'Higher-order function',
+        definition:
+          'A function that takes a function as an argument, returns one, or both. `map`, `sorted(key=...)` and every decorator are higher-order functions.',
+        simple: 'A function whose input or output is itself a function.',
+      },
+      {
+        term: 'Closure',
+        definition:
+          'An inner function together with the enclosing-scope variables it references. Those variables stay alive after the outer call has returned, bound by reference rather than copied at definition time.',
+        simple: 'An inner function that remembers the variables it grew up around.',
+      },
+      {
+        term: 'Decorator',
+        definition:
+          'A callable that takes a function and returns a replacement function, normally applied with `@name` above a `def`. It is pure syntax sugar for `f = decorator(f)`.',
+        simple: 'A wrapper you put around a function to add behaviour without editing it.',
+      },
+      {
+        term: 'functools.wraps',
+        definition:
+          'A decorator applied to the inner wrapper that copies `__name__`, `__doc__`, `__module__`, `__qualname__` and `__wrapped__` from the original function onto it.',
+        simple: 'The line that stops your decorated function from forgetting its own name.',
+      },
+      {
+        term: 'Memoisation',
+        definition:
+          'Caching a function’s return values by its arguments so that a repeated call with the same inputs returns the stored result instead of recomputing.',
+        simple: 'Remember the answer so you do not work it out twice.',
+      },
+    ],
+
+    simpleExplanation:
+      "In Python a function is not a special kind of thing that lives apart from your data. It is a value, just like the number 7 or the string \"hello\". You can put a function in a list, store it in a dictionary, hand it to another function as an argument, or write a function whose job is to build and return a brand new function. Once you accept that, a whole family of useful patterns opens up. A lambda is just a very short function written on the spot, when naming it would be more ceremony than it is worth. Tools like `map` and `filter` take your function and apply it across a collection for you. And a decorator — which sounds intimidating and is not — is simply a function that takes your function, wraps it inside a slightly bigger function that does something extra before and after, and hands the wrapper back under the original name. That is the entire mechanism behind `@app.route`, `@pytest.fixture`, `@torch.no_grad` and every other `@` you will meet.",
+
+    whyItExists:
+      'Two problems keep recurring: parameterising behaviour, and adding cross-cutting concerns. Passing functions solves the first — one `sorted` handles every ordering because you supply the key. Decorators solve the second: timing, caching, retries, authentication and logging are needed by dozens of functions and belong in none of them, so they are factored out into wrappers applied with one line.',
+
+    analogy: {
+      scenario:
+        'Think of a parcel arriving at a busy office. The parcel itself is your function: it knows how to do one job. Before it reaches the recipient it may pass through the post room, which stamps the time of arrival, weighs it, and writes the details in a ledger; then through security, which checks whether this sender is allowed; then through reception, which keeps a copy of frequently requested documents so that the next identical request can be answered from the shelf without troubling the recipient at all. Every layer hands the parcel on, unopened and unmodified, and each layer can be added or removed independently of the parcel and of the other layers.',
+      mapping: [
+        { from: 'The parcel and what it contains', to: 'The original function and what it computes' },
+        { from: 'The post room stamping arrival and departure', to: 'A timing decorator recording elapsed time around the call' },
+        { from: 'Security checking the sender', to: 'An authorisation decorator that may refuse to call the function at all' },
+        { from: 'Reception keeping copies of common requests', to: 'A caching decorator returning a stored result for repeated arguments' },
+        { from: 'Stacking the three desks in a fixed order', to: 'Stacking `@` lines — the one nearest the `def` wraps first and runs innermost' },
+        { from: 'The recipient still seeing an ordinary parcel', to: 'The caller still calling `f(x)` with no idea a wrapper exists' },
+      ],
+      bridge:
+        'The office layers are what a decorator literally is: each one receives the callable beneath it and returns a new callable with the same interface, which is why they compose in any combination. The order detail is real and examinable — decorators apply bottom-up, so the closest `@` to the `def` is the innermost wrapper and therefore the last to see the call on the way in.',
+      limitations:
+        'The analogy hides the identity problem. A real parcel keeps its label through the post room; a naive Python wrapper does not, and the decorated function starts reporting its name as `wrapper` and loses its docstring. That is precisely the gap `functools.wraps` exists to close.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'Building a decorator from first principles',
+        caption: 'Five steps from "functions are values" to `@timed`.',
+        steps: [
+          { label: 'Functions are values', detail: '`f = my_func` binds the same function object to a second name. No call happens — there are no parentheses.' },
+          { label: 'A function can take a function', detail: '`def twice(fn, x): return fn(fn(x))`. The behaviour is now a parameter.' },
+          { label: 'A function can return a function', detail: 'An inner `def` closed over the outer argument is returned, not called. This is a closure.' },
+          { label: 'Return a wrapper with the same signature', detail: '`def wrapper(*args, **kwargs): ...; return fn(*args, **kwargs)` accepts anything the original accepts.' },
+          { label: 'Rebind the original name', detail: '`f = decorator(f)` replaces the name. `@decorator` above the `def` is exactly this line, written above instead of below.' },
+          { label: 'Restore the identity', detail: '`@functools.wraps(fn)` on the wrapper copies name, docstring and module across so tooling still works.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Which tool for the job',
+        caption: 'All four transform a collection; they differ in readability and in what they return.',
+        columns: ['Task', 'Functional form', 'Comprehension form', 'Which to prefer'],
+        rows: [
+          ['Transform every item', 'map(f, xs)', '[f(x) for x in xs]', 'Comprehension, unless f already exists by name and you want laziness'],
+          ['Keep some items', 'filter(pred, xs)', '[x for x in xs if pred(x)]', 'Comprehension — reads closer to the sentence you would say'],
+          ['Both at once', 'map(f, filter(p, xs))', '[f(x) for x in xs if p(x)]', 'Comprehension, decisively — the nesting inverts reading order'],
+          ['Collapse to one value', 'reduce(op, xs, init)', 'a loop, or sum/min/max/any', 'Built-in if one exists; reduce only for genuinely custom folds'],
+          ['Order by a computed key', 'sorted(xs, key=f)', 'no equivalent', 'The functional form — this is where passing functions shines'],
+        ],
+      },
+      {
+        kind: 'annotated',
+        title: 'Anatomy of a decorator with arguments',
+        subject: '@retry(times=3)\ndef fetch(url): ...',
+        annotations: [
+          { part: 'retry(times=3)', note: 'This is a call, evaluated first. It returns the actual decorator — so `retry` is a decorator *factory*, one level deeper than a plain decorator.' },
+          { part: 'the returned decorator', note: 'Receives `fetch` and returns a wrapper, exactly as a no-argument decorator would.' },
+          { part: 'the wrapper', note: 'Closes over both `fetch` and `times`, which is how the configuration survives after `retry(times=3)` has returned.' },
+          { part: '@wraps(fn)', note: 'Applied to the wrapper so `fetch.__name__` is still "fetch" and `help(fetch)` still shows its docstring.' },
+          { part: 'fetch', note: 'After the `def` completes, the name `fetch` is bound to the wrapper, not the original. The original survives as `fetch.__wrapped__`.' },
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Experiment with wrappers',
+        caption: 'Write a decorator, stack two of them, and watch the order in which they run.',
+        widget: 'code-playground',
+      },
+    ],
+
+    formalDefinition:
+      'Python functions are first-class objects of type `function`, so they may be bound to names, stored in containers, passed and returned. A closure is a function object carrying a `__closure__` tuple of cells referencing free variables from an enclosing scope, resolved by reference at call time rather than by value at definition time. A decorator is any callable taking a callable and returning a callable; the syntax `@d` immediately above `def f` is defined to mean `f = d(f)` evaluated after the function object is created, and stacked decorators apply bottom-up.',
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Functions are values, and lambdas are small functions',
+        runnable: true,
+        code: `def shout(s): return s.upper() + "!"
+
+speak = shout                      # no parentheses: bind, do not call
+print(speak("hello"))
+
+# Functions in a data structure — a dispatch table, which replaces long if/elif chains
+OPS = {"double": lambda x: x * 2, "square": lambda x: x ** 2, "neg": lambda x: -x}
+print([OPS[name](5) for name in ("double", "square", "neg")])
+
+# Where lambda genuinely earns its place: a one-off key function
+people = [("Ada", 36), ("Grace", 45), ("Alan", 41)]
+print(sorted(people, key=lambda p: p[1], reverse=True))
+print(max(people, key=lambda p: len(p[0])))
+
+# Where it does not: naming it is clearer and gives you a docstring
+double = lambda x: x * 2           # a def would be better here
+print(double.__name__)`,
+        output: `HELLO!
+[10, 25, -5]
+[('Grace', 45), ('Alan', 41), ('Ada', 36)]
+('Grace', 45)
+<lambda>`,
+        explanation:
+          'The dispatch table shows the real value of first-class functions: behaviour selected by data instead of by a chain of `if`s. The `sorted` and `max` calls show where lambda is idiomatic — a tiny key function used once, at the point of use. The last line shows why assigning a lambda to a name is a style error flagged by linters: the function’s `__name__` is `<lambda>`, so every traceback and profiler report loses the name you carefully chose.',
+      },
+      {
+        language: 'python',
+        title: 'map, filter, reduce — and the comprehension that usually wins',
+        runnable: true,
+        code: `from functools import reduce
+import operator
+
+nums = [1, 2, 3, 4, 5, 6]
+
+# map and filter return lazy iterators, not lists
+print(list(map(str.upper, ["a", "b"])))
+print(list(filter(lambda n: n % 2 == 0, nums)))
+
+# Nested, the functional form reads inside-out
+functional = list(map(lambda n: n * n, filter(lambda n: n % 2 == 0, nums)))
+comprehension = [n * n for n in nums if n % 2 == 0]
+print(functional == comprehension, comprehension)
+
+# reduce folds a sequence into one value
+print(reduce(operator.mul, nums, 1))             # 720 — a product
+print(reduce(lambda a, b: a if a > b else b, nums))
+
+# but prefer the built-in whenever one exists
+print(sum(nums), max(nums))`,
+        output: `['A', 'B']
+[2, 4, 6]
+True [4, 16, 36]
+720
+6
+21 6`,
+        explanation:
+          '`map(str.upper, ...)` is the case where the functional form is cleanest: the function already exists by name, so there is no lambda noise. The nested example is the case where it loses — you must read `map(..., filter(...))` from the inside out, while the comprehension reads left to right in the order the work happens. `reduce` is genuinely useful only for custom folds such as a product or a dictionary merge; when a built-in like `sum` or `max` exists, it is faster, clearer and does not need an import.',
+      },
+      {
+        language: 'python',
+        title: 'Closures: what is captured, and the late-binding trap',
+        runnable: true,
+        code: `def make_multiplier(factor):
+    def multiply(x):
+        return x * factor          # 'factor' is a free variable, captured by reference
+    return multiply                # returned, not called
+
+triple = make_multiplier(3)
+print(triple(10), triple.__closure__[0].cell_contents)
+
+# The classic trap: all three closures share ONE variable, read at call time
+bad = [lambda: i for i in range(3)]
+print([f() for f in bad])          # not [0, 1, 2]
+
+# Fix 1: bind the current value as a default argument, evaluated at def time
+good = [lambda i=i: i for i in range(3)]
+print([f() for f in good])
+
+# Fix 2: an explicit factory, which is clearer about intent
+def const(i): return lambda: i
+best = [const(i) for i in range(3)]
+print([f() for f in best])`,
+        output: `30 3
+[2, 2, 2]
+[0, 1, 2]
+[0, 1, 2]`,
+        explanation:
+          'The first half is the useful behaviour: `multiply` keeps `factor` alive after `make_multiplier` has returned, which you can see directly in `__closure__`. The second half is the bug that follows from it. A closure captures the *variable*, not its value at the moment of definition, so all three lambdas refer to the same `i` and read it when called — by which time the comprehension has finished and `i` is 2. The default-argument fix works because default values are evaluated once, when the `lambda` is created. This exact bug appears constantly in loops that build callbacks, event handlers or partially applied functions.',
+      },
+      {
+        language: 'python',
+        title: 'A decorator built up, then made production-ready',
+        runnable: true,
+        code: `import functools, time
+
+# Step 1: the minimum viable decorator.
+def timed(fn):
+    @functools.wraps(fn)                       # without this, name/doc are lost
+    def wrapper(*args, **kwargs):              # accepts whatever fn accepts
+        start = time.perf_counter()
+        try:
+            return fn(*args, **kwargs)
+        finally:                               # runs even if fn raises
+            elapsed = time.perf_counter() - start
+            print(f"{fn.__name__} took {elapsed * 1000:.1f} ms")
+    return wrapper
+
+# Step 2: a decorator that takes arguments needs one more layer.
+def retry(times=3, delay=0.0, exceptions=(ConnectionError,)):
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            for attempt in range(1, times + 1):
+                try:
+                    return fn(*args, **kwargs)
+                except exceptions as exc:
+                    if attempt == times:
+                        raise
+                    print(f"attempt {attempt} failed ({exc}); retrying")
+                    time.sleep(delay)
+        return wrapper
+    return decorator
+
+calls = 0
+
+@retry(times=3)
+@timed
+def flaky(n):
+    """Fails twice, then succeeds."""
+    global calls
+    calls += 1
+    if calls < 3:
+        raise ConnectionError("upstream reset")
+    return n * 2
+
+print(flaky(21))
+print(flaky.__name__, "|", flaky.__doc__)`,
+        output: `flaky took 0.0 ms
+attempt 1 failed (upstream reset); retrying
+flaky took 0.0 ms
+attempt 2 failed (upstream reset); retrying
+flaky took 0.0 ms
+42
+flaky | Fails twice, then succeeds.`,
+        explanation:
+          'Three details carry the weight. `*args, **kwargs` lets one wrapper decorate any signature. The `finally` guarantees the timing is recorded even when the function raises, which is exactly when you most want to know. And `@functools.wraps` is why the last line still prints `flaky` and its real docstring instead of `wrapper` and `None` — without it, `help()`, Sphinx, pytest fixture discovery and `pickle` all break. The stacking order is worth tracing: `@timed` is nearest the `def`, so it wraps first and is the inner layer, which is why you see three timing lines, one per attempt, from inside `retry`.',
+      },
+      {
+        language: 'python',
+        title: 'Caching: the decorator that pays for itself, and when it is wrong',
+        runnable: true,
+        code: `import functools, time
+
+@functools.lru_cache(maxsize=None)
+def fib(n):
+    return n if n < 2 else fib(n - 1) + fib(n - 2)
+
+t = time.perf_counter()
+print(fib(35), f"{time.perf_counter() - t:.4f}s")
+print(fib.cache_info())
+
+# Rolling your own shows there is no magic in it.
+def memoize(fn):
+    cache = {}                                  # lives in the closure, one per decorated fn
+    @functools.wraps(fn)
+    def wrapper(*args):
+        if args not in cache:                   # args must be hashable
+            cache[args] = fn(*args)
+        return cache[args]
+    wrapper.cache = cache
+    return wrapper
+
+@memoize
+def slow_square(n):
+    time.sleep(0.05)
+    return n * n
+
+print(slow_square(4), slow_square(4), len(slow_square.cache))`,
+        output: `9227465 0.0121s
+CacheInfo(hits=33, misses=36, currsize=36)
+16 16 1`,
+        explanation:
+          'Naive recursive Fibonacci is exponential because it recomputes the same subproblems; one cache line makes it linear, and `cache_info()` shows 33 hits against 36 misses proving it. The hand-rolled version shows the mechanism — a dictionary living in the closure, keyed by the argument tuple. It also exposes the three conditions under which caching is safe and which `lru_cache` silently assumes: arguments must be hashable, so a list or a DataFrame raises `TypeError: unhashable type`; the function must be pure, so caching anything that reads a file, a clock or a database will serve stale answers; and `maxsize=None` on a method keeps every `self` alive forever, which is a genuine and common memory leak.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Web frameworks',
+        usage:
+          'Flask’s `@app.route("/predict")` and FastAPI’s `@app.post(...)` are decorator factories: the call registers your function in a routing table and returns it, so one line turns an ordinary function into an HTTP endpoint.',
+      },
+      {
+        context: 'PyTorch and training loops',
+        usage:
+          '`@torch.no_grad()` wraps a function so autograd stops recording, cutting memory during evaluation. `@staticmethod`, `@classmethod` and `@property` are decorators you use in every class you write.',
+      },
+      {
+        context: 'Testing',
+        usage:
+          '`@pytest.fixture` and `@pytest.mark.parametrize` are decorators that attach metadata for the test runner to discover. This is also why a missing `functools.wraps` in your own decorators breaks test collection in confusing ways.',
+      },
+      {
+        context: 'Data pipelines and expensive features',
+        usage:
+          '`@lru_cache` on a geocoding or tokenisation lookup turns a repeated network or CPU cost into a dictionary hit, often the single cheapest speed-up available in a feature-engineering script.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'functools', role: '`wraps`, `lru_cache`, `partial` and `reduce` — the standard-library toolkit for this entire unit.' },
+      { tool: 'FastAPI', role: 'Route registration, dependency injection and background tasks are all expressed as decorators.' },
+      { tool: 'pandas', role: '`df.apply(lambda row: ...)` and `groupby().agg(...)` take functions as arguments; the same first-class-function idea.' },
+      { tool: 'scikit-learn', role: '`make_scorer(f)` and custom `FunctionTransformer(f)` parameterise pipeline steps with functions you supply.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Writing a decorator without `functools.wraps`',
+        why: 'The returned wrapper is a different function object, so `__name__` becomes "wrapper", the docstring disappears, and the signature reported by introspection is `(*args, **kwargs)`. Anything that relies on those — `help()`, pytest fixture discovery, Sphinx, `pickle`, FastAPI’s signature-based dependency injection — misbehaves, and the error message never mentions your decorator.',
+        fix: 'Put `@functools.wraps(fn)` on every wrapper you write. It costs one import and one line and is never wrong.',
+      },
+      {
+        mistake: 'Accidentally calling the function instead of decorating it',
+        why: 'Writing `@timed()` when `timed` takes a function, not arguments, calls `timed()` with no function and then applies its return value. The usual result is `TypeError: timed() missing 1 required positional argument`, or a mysterious `NoneType object is not callable` at first use.',
+        fix: 'A plain decorator is applied as `@timed`; a decorator factory is applied as `@retry(times=3)`. If you want both forms, detect it: `if fn is not None and callable(fn)` at the top of the factory.',
+      },
+      {
+        mistake: 'Late binding in loops that build functions',
+        why: 'A closure captures the variable, not its value, so every function built inside a loop shares the loop variable and reads its final value when eventually called. `[lambda: i for i in range(3)]` gives three functions all returning 2.',
+        fix: 'Bind at definition time with a default argument, `lambda i=i: i`, or use `functools.partial(f, i)`, or return the lambda from a small factory function.',
+      },
+      {
+        mistake: 'Caching an impure function',
+        why: '`lru_cache` assumes the same arguments always give the same result. Put it on something that reads a file, queries a database or depends on the current time and you get stale answers indefinitely, with no error and nothing in the logs.',
+        fix: 'Cache pure computations only. If the underlying data can change, add a version or timestamp to the arguments, or call `fn.cache_clear()` on a defined invalidation event.',
+      },
+      {
+        mistake: 'Assigning a lambda to a name instead of using `def`',
+        why: 'You get all the restrictions of a lambda — one expression, no statements, no docstring — plus none of the benefit, and the function reports itself as `<lambda>` in every traceback and profile.',
+        fix: 'Use `def` whenever the function gets a name. Reserve lambda for the inline argument position: a `key=`, a small `map`, a dispatch-table value.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What is a decorator, and what does the `@` syntax actually do?',
+        answer:
+          'A decorator is a callable that takes a function and returns a replacement callable, normally one that wraps the original with extra behaviour. The `@` syntax is pure sugar: writing `@d` above `def f(): ...` is defined to mean that after the function object is created, the name `f` is rebound to `d(f)`. Nothing else is special about it — you can equally write `f = d(f)` by hand, and a decorator can be any expression that evaluates to a callable, which is why `@retry(times=3)` works: the call is evaluated first and its return value is the decorator. Stacked decorators apply bottom-up, so the one closest to the `def` wraps first and ends up innermost.',
+        followUp:
+          'A strong answer adds that the wrapper should use `*args, **kwargs` and `functools.wraps`, and can explain what breaks without the latter.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Explain closures and why `[lambda: i for i in range(3)]` does not give you three different functions.',
+        answer:
+          'A closure is an inner function plus the enclosing-scope variables it refers to; Python keeps those alive in cells attached to the function object. The crucial detail is that a closure captures the *variable* by reference, not a snapshot of its value at definition time, and the value is read when the inner function is finally called. In that comprehension all three lambdas close over the same `i`, and by the time any of them is called the loop has finished with `i` equal to 2, so all three return 2. The fixes work by forcing an early binding: a default argument `lambda i=i: i` is evaluated once at definition, and `functools.partial(f, i)` stores the current value as an argument.',
+        followUp:
+          'Mentioning that this is the same mechanism behind a decorator remembering its configuration shows the candidate sees closures and decorators as one idea.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'You add `@lru_cache` to a feature function and inference latency drops, but the model starts making stale predictions in production. What happened, and how would you have caught it?',
+        answer:
+          'The cached function was not pure. `lru_cache` keys on arguments alone, so if the function also depends on something not in its arguments — a feature-store lookup, a file on disk, a configuration object, the current date — then the first result is served forever for those arguments no matter how the underlying data changes. The classic version of this is a user-features function keyed on `user_id`: the id never changes, so the features never refresh. I would have caught it by asking one question before adding the cache: is the return value a function of the arguments alone? The fixes are to move the changing input into the argument list so it becomes part of the cache key, for example passing a snapshot timestamp or data version; to use a TTL cache instead of an unbounded one; or to call `cache_clear()` on a refresh event. I would also note that `maxsize=None` on a method caches `self`, which keeps every object ever passed alive and leaks memory.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Write a decorator `count_calls` that records how many times the decorated function has been called, exposes the count as an attribute on the wrapper, and preserves the function’s name and docstring. Demonstrate it on a recursive function.',
+        hint: 'Keep the counter in the closure or directly on the wrapper object. Remember that a recursive call goes through the decorated name, so it will be counted too.',
+        language: 'python',
+        starterCode: 'import functools\n\ndef count_calls(fn):\n    ...\n',
+        solution:
+          'import functools\n\ndef count_calls(fn):\n    @functools.wraps(fn)\n    def wrapper(*args, **kwargs):\n        wrapper.calls += 1\n        return fn(*args, **kwargs)\n    wrapper.calls = 0\n    return wrapper\n\n@count_calls\ndef fib(n):\n    """Naive Fibonacci."""\n    return n if n < 2 else fib(n - 1) + fib(n - 2)\n\nfib(10)\nprint(fib.calls, fib.__name__, fib.__doc__)   # 177 fib Naive Fibonacci.\n\nStoring the counter on `wrapper` rather than in a closure variable avoids needing `nonlocal` and makes it readable from outside. The count is 177 rather than 11 because the recursive calls resolve the global name `fib`, which is bound to the wrapper, so every internal call is counted too — which is exactly what makes this decorator a good demonstration of why memoisation matters.',
+      },
+      {
+        prompt:
+          'Rewrite `list(map(lambda r: r["score"] * 100, filter(lambda r: r["score"] is not None, rows)))` as a comprehension, and say in one sentence why the comprehension is easier to read.',
+        hint: 'Which part of the functional version do you have to read first, and where is it written?',
+        solution:
+          '[r["score"] * 100 for r in rows if r["score"] is not None]\n\nThe functional version must be read inside-out: the `filter` is written last but happens first, so your eye has to travel to the right-hand end, come back to the `map`, and then out to `list`. The comprehension is written in the order the work happens — source, condition, transformation — and needs no lambdas, so there is less punctuation between you and the intent. The one thing the functional version keeps is laziness, which the `list()` call here throws away anyway; if you wanted that, a generator expression with round brackets gives it without the inversion.',
+      },
+      {
+        prompt:
+          'A colleague writes a `@cached` decorator that stores results in a dict keyed by `args`. It works until someone calls `f([1, 2, 3])` and gets `TypeError: unhashable type: \'list\'`. Explain the cause, and give two different ways to handle list arguments.',
+        hint: 'What does a dictionary require of its keys, and what makes a list different from a tuple?',
+        solution:
+          'Dictionary keys must be hashable, which in practice means immutable, because a mutable key could change after insertion and become unfindable. Lists are mutable and therefore unhashable, so using the argument tuple as a cache key fails as soon as one argument is a list — the same reason `lru_cache` raises on a list, a dict, a set or a DataFrame.\n\nOption one: normalise at the boundary. Convert to a hashable form before keying, for example `key = tuple(map(tuple, args))` for a list of lists, or serialise with `json.dumps(args, sort_keys=True)` when the structure is arbitrary. This is correct but costs a conversion on every call and can be slower than the function for cheap functions.\n\nOption two: do not cache that function. Keep the cached function pure and hashable-only, and have the caller convert the list to a tuple once at the point where the data enters — `f(tuple(items))`. This is usually the better design, because it makes the hashability requirement visible in the signature rather than hiding it inside the decorator.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'PY-019-q1',
+        type: 'mcq',
+        concept: 'decorator syntax',
+        prompt: 'What is `@decorator` above `def f(): ...` equivalent to?',
+        options: [
+          'f = decorator(f), evaluated immediately after the def',
+          'f = decorator(f()), evaluated immediately after the def',
+          'decorator(f) called every time f is called',
+          'A type annotation that has no effect at run time',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The decorator runs once, at definition time, and rebinds the name to whatever it returns. That is the whole mechanism — the function itself is not called, and nothing extra happens at each later call except whatever the wrapper does.',
+      },
+      {
+        id: 'PY-019-q2',
+        type: 'code-output',
+        language: 'python',
+        concept: 'late binding in closures',
+        prompt: 'What does this print?',
+        code: 'fns = [lambda: i for i in range(3)]\nprint([f() for f in fns])',
+        options: ['[2, 2, 2]', '[0, 1, 2]', '[3, 3, 3]', '[0, 0, 0]'],
+        answerIndex: 0,
+        explanation:
+          'All three lambdas close over the same variable `i` and read it when called, not when defined. By then the comprehension has finished and `i` holds 2. Binding early with `lambda i=i: i` gives the expected [0, 1, 2].',
+      },
+      {
+        id: 'PY-019-q3',
+        type: 'truefalse',
+        concept: 'functools.wraps',
+        prompt: 'Omitting `functools.wraps` in a decorator changes what the decorated function computes.',
+        answer: false,
+        explanation:
+          'False — the computation is identical. What changes is the wrapper’s metadata: `__name__`, `__doc__`, `__module__` and the introspectable signature. That matters because tooling such as pytest, Sphinx, `pickle` and signature-based dependency injection reads exactly those attributes.',
+      },
+      {
+        id: 'PY-019-q4',
+        type: 'fill',
+        concept: 'functional tools',
+        prompt: 'Which `functools` function folds a sequence into a single value by repeatedly applying a two-argument function?',
+        answers: ['reduce', 'functools.reduce', 'reduce()'],
+        explanation:
+          '`functools.reduce(op, xs, initial)` applies `op` cumulatively left to right. It moved out of builtins in Python 3 deliberately, because `sum`, `max`, `min`, `any` and `all` cover most real folds more clearly.',
+      },
+      {
+        id: 'PY-019-q5',
+        type: 'debug',
+        language: 'python',
+        concept: 'caching pitfalls',
+        prompt: 'This function is decorated with `@lru_cache` and starts returning stale results in production. What is the root cause?',
+        code: 'from functools import lru_cache\n\n@lru_cache(maxsize=None)\ndef user_features(user_id):\n    return db.fetch_features(user_id)   # data changes hourly',
+        options: [
+          'The function is impure: its result depends on database state that is not part of the cache key',
+          '`maxsize=None` is invalid and silently disables the cache',
+          '`lru_cache` cannot decorate functions that perform input/output and raises at import time',
+          'The user_id argument is unhashable, so every call is a cache miss',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The cache keys on `user_id` alone, but the answer also depends on the database contents, which change. The first result is therefore served forever. Fixes are to include a data version or timestamp in the arguments, use a TTL cache, or call `cache_clear()` on refresh.',
+      },
+      {
+        id: 'PY-019-q6',
+        type: 'order',
+        concept: 'building a decorator',
+        prompt: 'Put these steps in the order that builds a correct, production-ready decorator.',
+        items: [
+          'Define an outer function that accepts the function to be decorated',
+          'Define an inner wrapper taking *args and **kwargs',
+          'Apply @functools.wraps(fn) to the wrapper so metadata survives',
+          'Do the extra work, calling fn(*args, **kwargs) and returning its result',
+          'Return the wrapper from the outer function, without calling it',
+        ],
+        explanation:
+          'The shape is always the same: take a function, define a wrapper that forwards everything, preserve metadata, return the wrapper uncalled. Returning `wrapper()` instead of `wrapper` is the single most common slip and produces `NoneType object is not callable`.',
+      },
+      {
+        id: 'PY-019-q7',
+        type: 'explain',
+        concept: 'closures and decorators as one idea',
+        prompt:
+          'Explain how a decorator that takes arguments, such as `@retry(times=3)`, remembers the value 3 long after `retry(times=3)` has finished executing.',
+        rubric: [
+          'Identifies that `retry(times=3)` is called first and returns the actual decorator',
+          'Explains that the wrapper is a closure over `times` and over the decorated function',
+          'Notes that closure cells keep enclosing-scope variables alive after the outer call returns',
+        ],
+        sampleAnswer:
+          'There are three layers rather than two. `retry(times=3)` is an ordinary call, evaluated before any decoration happens; it returns a decorator, and it is that returned decorator which receives the function. Inside it, the wrapper refers to two names it did not define itself: `fn`, from the decorator layer, and `times`, from the factory layer. Python notices these free variables and attaches closure cells to the wrapper holding references to them, so when `retry(times=3)` returns and its frame is discarded, the cell holding `times` survives because the wrapper still references it. That is why the configuration is still there on a call made hours later. It is also why the decorated name now refers to the wrapper — the original function is reachable only through `__wrapped__`, which is one of the things `functools.wraps` sets for you.',
+        explanation:
+          'The examinable insight is that decorators are not a separate feature: they are closures plus one piece of syntax, and the three-layer shape falls straight out of needing somewhere to store the configuration.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does `@d` above a `def` mean?', back: '`f = d(f)`, evaluated once at definition time. The name is rebound to whatever the decorator returns.' },
+      { front: 'Why `functools.wraps`?', back: 'It copies `__name__`, `__doc__`, `__module__`, `__qualname__` and `__wrapped__` onto the wrapper, so introspection, help(), pytest and pickle keep working.' },
+      { front: 'What does a closure capture?', back: 'The variable, by reference, not a snapshot of its value — and it reads it at call time. Hence the late-binding trap in loops.' },
+      { front: 'Why does `[lambda: i for i in range(3)]` give [2, 2, 2]?', back: 'All three share one `i`, read when called, after the loop has finished. Fix with `lambda i=i: i`.' },
+      { front: 'In what order do stacked decorators apply?', back: 'Bottom-up. The `@` nearest the `def` wraps first and is the innermost layer; the topmost runs first on the way in.' },
+      { front: 'When is `lru_cache` unsafe?', back: 'When the function is impure, when arguments are unhashable, or on a method with maxsize=None, which keeps every `self` alive forever.' },
+      { front: 'lambda or def?', back: 'Lambda only inline as an argument — a `key=`, a dispatch-table value. If it gets a name, use `def`.' },
+    ],
+
+    challenge: {
+      title: 'A small decorator library',
+      brief:
+        'Write four decorators that compose cleanly: `timed`, which records wall-clock time to a module-level registry rather than printing; `retry(times, delay, exceptions)`, with exponential backoff; `validate(**types)`, which checks argument types against the declared mapping and raises a clear `TypeError` naming the offending parameter; and `cached(ttl)`, a time-limited cache that stores results with an expiry and evicts on read. Apply all four to one function and prove, with a test, that the stacking order produces the behaviour you claim it does.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Every decorator uses functools.wraps and forwards *args and **kwargs unchanged',
+        'retry re-raises the original exception after the final attempt rather than swallowing it or raising its own',
+        'validate reports the parameter name, the expected type and the type actually received',
+        'cached expires entries by wall-clock TTL and never returns a stale value',
+        'A test demonstrates the effect of swapping two decorators in the stack and explains the difference',
+      ],
+      starterCode:
+        'import functools, time\n\nTIMINGS: dict[str, list[float]] = {}\n\ndef timed(fn):\n    ...\n\ndef retry(times=3, delay=0.1, exceptions=(Exception,)):\n    ...\n\ndef validate(**types):\n    ...\n\ndef cached(ttl=60.0):\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone who writes ordinary functions confidently what it means for functions to be values, and build them up to understanding a decorator without them ever feeling lost.',
+      mustCover: [
+        'A function is an object: it can be named, stored, passed and returned',
+        'A closure is an inner function that keeps the enclosing variables it uses alive',
+        'A decorator takes a function, returns a wrapper, and `@` rebinds the name',
+        'functools.wraps exists because the wrapper otherwise loses the original identity',
+      ],
+      bonusSignals: ['builds up in steps rather than showing the finished decorator', 'explains *args/**kwargs in the wrapper', 'mentions the extra layer needed for decorator arguments'],
+      sampleExplanation:
+        'Start with something small that is easy to accept: in Python, a function is just another value. When you write `def shout(s): ...` you have created an object and given it the name `shout`, exactly as `x = 7` creates an object and gives it a name. So you can write `speak = shout` — no parentheses, because parentheses mean "call it" — and now both names refer to the same function. You can put functions in a list, or in a dictionary, which is how you replace a long chain of `if` statements with a lookup table of behaviours. Next step: if functions are values, a function can take one as an argument. You already use this: `sorted(people, key=...)` works for every possible ordering because you supply the rule. And a function can return one. If I write an outer function that defines an inner function and returns it, the inner function keeps hold of the outer function’s variables, even after the outer call has finished. That is called a closure, and it is how `make_multiplier(3)` can hand you back a function that still remembers the 3. Now the decorator, which is just those two moves used together. Write a function that accepts a function. Inside, define a wrapper that takes `*args, **kwargs` — which means "whatever arguments anybody passes" — does something extra, calls the original, does something else, and returns the result. Then return the wrapper. Finally, rebind the name: `flaky = timed(flaky)`. Writing `@timed` on the line above the `def` means precisely that one assignment and nothing more. Once you see it that way, `@app.route`, `@pytest.fixture` and `@torch.no_grad` stop being framework magic and become ordinary functions doing ordinary things. Two practical notes to finish. Always put `@functools.wraps(fn)` on your wrapper, or the decorated function forgets its own name and docstring and half your tooling breaks in ways that never mention your decorator. And if your decorator needs configuration, like `@retry(times=3)`, you need one more layer: the outermost call receives the settings and returns the decorator, which then receives the function.',
+    },
+  },
+  {
+    id: 'PY-020',
+    domain: 'PY',
+    module: 'Working Like an Engineer',
+    topic: 'Failing well and persisting data',
+    title: 'Errors, Exceptions and Files',
+    slug: 'errors-exceptions-and-files',
+    difficulty: 3,
+    estimatedMinutes: 40,
+    prerequisites: ['PY-012', 'PY-016'],
+    related: ['PY-004', 'PY-008', 'PY-015'],
+    tags: ['exception', 'try', 'except', 'finally', 'raise', 'context-manager', 'file-io', 'csv', 'json', 'encoding'],
+
+    learningObjectives: [
+      'Distinguish a syntax error from an exception, and read a traceback from the bottom up',
+      'Use `try`/`except`/`else`/`finally` correctly, and explain what each clause is for',
+      'Catch specific exception types rather than bare `except`, and justify why that matters',
+      'Raise exceptions deliberately and design a small custom exception class with useful context',
+      'Read and write text, CSV and JSON with `with open(...)`, and explain what a context manager guarantees',
+      'Diagnose and prevent the encoding failures that ruin real data work',
+    ],
+
+    terminology: [
+      {
+        term: 'Exception',
+        definition:
+          'An object raised during execution to signal that normal flow cannot continue. It propagates up the call stack until something catches it or the program terminates with a traceback.',
+        simple: 'Python’s way of saying "I cannot do this" and passing the problem upwards.',
+      },
+      {
+        term: 'Traceback',
+        definition:
+          'The printed call stack at the moment an exception was raised, listing each frame from the outermost call inwards, with the exception type and message on the last line.',
+        simple: 'The breadcrumb trail showing which calls led to the failure.',
+      },
+      {
+        term: 'Exception hierarchy',
+        definition:
+          'The inheritance tree of exception classes, rooted at `BaseException`, with `Exception` as the base for ordinary errors. `except` matches a class and all of its subclasses.',
+        simple: 'A family tree of error types, so catching a parent catches its children.',
+      },
+      {
+        term: 'Context manager',
+        definition:
+          'An object defining `__enter__` and `__exit__`, used with `with`, whose `__exit__` runs on every exit path including an exception — guaranteeing cleanup such as closing a file or releasing a lock.',
+        simple: 'A block that promises to tidy up after itself no matter how it ends.',
+      },
+      {
+        term: 'Encoding',
+        definition:
+          'The mapping between characters and the bytes stored on disk. UTF-8 is the modern default; files written with another encoding must be read with that same one or the bytes are misinterpreted.',
+        simple: 'The code book that turns letters into bytes and back again.',
+      },
+      {
+        term: 'Mojibake',
+        definition:
+          'Text that decoded without raising but produced wrong characters, such as "café" appearing as "cafÃ©", because the reader assumed a different encoding from the writer.',
+        simple: 'Garbled characters caused by reading bytes with the wrong code book.',
+      },
+    ],
+
+    simpleExplanation:
+      "Things go wrong. A file is missing, a user types \"abc\" where a number was expected, a network drops. Python handles this with exceptions: when a line cannot do its job, it stops and throws an object describing the problem, which travels up through whatever called it until somebody catches it or the program gives up and prints a traceback. Your job is to decide, for each kind of failure, whether you can sensibly do something about it. If you can — skip a bad row, retry, fall back to a default — you catch that specific type and handle it. If you cannot, you let it through, because a program that crashes loudly is far better than one that carries on with wrong data. Files are the other half of this unit, and for the same reason: opening a file is a promise to close it again, and `with open(...)` is how you keep that promise even when the code inside the block explodes.",
+
+    whyItExists:
+      'Without exceptions, every function would have to return an error code and every caller would have to check it, so the error-handling logic would drown the real logic and a single unchecked return would corrupt everything downstream. Exceptions separate the two: the happy path reads cleanly, failures travel upwards automatically, and each layer handles only what it genuinely can.',
+
+    analogy: {
+      scenario:
+        'Picture a hospital with a strict escalation rule. A nurse who meets a problem they are trained for — a dressing needs changing, a patient is thirsty — deals with it and says nothing further. A problem they are not trained for is passed immediately to a registrar, and if the registrar cannot handle it either, it goes to the consultant. Nobody in the chain pretends to have fixed something they did not understand, because a quietly mishandled problem is far more dangerous than one that reaches the top. And whatever happens, the theatre gets cleaned and the instruments counted before the next patient enters, whether the operation succeeded or not.',
+      mapping: [
+        { from: 'A problem the nurse is trained for', to: 'An exception type you catch and genuinely handle' },
+        { from: 'Escalating to the registrar', to: 'Letting the exception propagate up the call stack' },
+        { from: 'The consultant of last resort', to: 'The top-level handler, or the interpreter printing a traceback' },
+        { from: 'Pretending to have fixed something you did not understand', to: 'A bare `except: pass`, which hides the failure and corrupts what follows' },
+        { from: 'Cleaning the theatre whatever the outcome', to: '`finally`, and the `__exit__` of a context manager' },
+        { from: 'The incident note describing exactly what happened', to: 'The exception message and the traceback' },
+      ],
+      bridge:
+        'The escalation rule is the design principle for exception handling: catch a type only at a level that can actually do something useful about it, and let everything else rise. That is why `except Exception: pass` around a whole function is the cardinal sin — it is the nurse quietly deciding the consultant need not be troubled, and it converts a loud, diagnosable failure into silently wrong results that surface weeks later.',
+      limitations:
+        'The hospital image suggests handling is always about recovery. Often it is about context instead: you catch an exception, add information the lower layer could not know — which file, which row, which user — and re-raise. That translation step has no clean parallel in the story.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'What happens when an exception is raised',
+        caption: 'The path an exception takes, and where each clause gets its turn.',
+        steps: [
+          { label: 'A line fails', detail: 'Python constructs an exception object — for example `ValueError("invalid literal for int()")` — and stops executing the current block.' },
+          { label: 'Look for a matching `except` in this frame', detail: 'Handlers are tested top to bottom; the first whose class matches the exception or one of its base classes wins.' },
+          { label: 'No match? Unwind one frame', detail: 'The current function exits and the search continues in its caller, recording each frame in the traceback as it goes.' },
+          { label: 'Run any `finally` blocks on the way out', detail: 'Cleanup runs during unwinding, which is why `with` closes files even when nothing catches the error.' },
+          { label: 'Handled, or reach the top', detail: 'A matching handler resumes normal execution after its block. Reaching the top prints the traceback and exits with status 1.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'The four clauses, and what each is actually for',
+        caption: 'Most people use two of these. The other two remove real bugs.',
+        columns: ['Clause', 'Runs when', 'Put here', 'Do not put here'],
+        rows: [
+          ['try', 'Always', 'The smallest piece of code that can fail', 'Fifty lines, so you cannot tell what raised'],
+          ['except X', 'X or a subclass was raised', 'Handling, logging with context, or a re-raise', 'A bare `except:` or a silent `pass`'],
+          ['else', 'The try block finished with no exception', 'Code that must not be protected by the handler', 'Anything that can itself raise X and be caught by mistake'],
+          ['finally', 'Always, on every exit path', 'Cleanup: close, release, restore state', '`return`, which silently discards a propagating exception'],
+        ],
+      },
+      {
+        kind: 'annotated',
+        title: 'Reading a traceback',
+        subject: 'Traceback (most recent call last):\n  File "train.py", line 42, in <module>\n    run(config)\n  File "train.py", line 28, in run\n    rows = load(path)\n  File "train.py", line 15, in load\n    return int(line)\nValueError: invalid literal for int() with base 10: \'n/a\'',
+        annotations: [
+          { part: '"most recent call last"', note: 'Read from the bottom. The last frame is where it actually broke; the ones above are how you got there.' },
+          { part: 'ValueError', note: 'The type. This is what you would name in an `except` clause, and it tells you which family of problem this is.' },
+          { part: "invalid literal for int() with base 10: 'n/a'", note: 'The message, including the offending value. The value is usually the single most useful thing on the screen.' },
+          { part: 'File "train.py", line 15, in load', note: 'The failing line. Start here, then walk upward to find which caller supplied the bad input.' },
+          { part: 'run(config) at line 42', note: 'The outermost frame: the entry point. Useful for reproducing, less useful for diagnosing.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Catching broadly versus catching specifically',
+        caption: 'The difference between a script you can debug and one you cannot.',
+        left: {
+          heading: 'except Exception: pass',
+          points: [
+            'Hides typos — a NameError looks like a handled failure',
+            'Swallows KeyboardInterrupt in older patterns and blocks Ctrl-C',
+            'Produces wrong results silently instead of stopping',
+            'Leaves no record of what went wrong or how often',
+            'The bug surfaces weeks later in a downstream number',
+          ],
+        },
+        right: {
+          heading: 'except ValueError as exc:',
+          points: [
+            'States exactly which failure you anticipated',
+            'Anything unanticipated still crashes loudly, as it should',
+            'The bound `exc` carries the offending value for the log',
+            'Can re-raise with added context: `raise ParseError(...) from exc`',
+            'Readers can see your assumptions in the code',
+          ],
+        },
+      },
+      {
+        kind: 'widget',
+        title: 'Break it on purpose',
+        caption: 'Trigger each exception type, then add handlers one at a time and watch the control flow change.',
+        widget: 'code-playground',
+      },
+    ],
+
+    formalDefinition:
+      'An exception is an instance of a class deriving from `BaseException`; `raise` instantiates and propagates it, unwinding the call stack frame by frame until a `try` statement in some frame has an `except` clause whose class matches the exception or one of its ancestors. `finally` clauses and context-manager `__exit__` methods execute during unwinding, guaranteeing cleanup on every exit path. A `with` statement binds `__enter__` and arranges `__exit__` to be called with the exception details, where returning true suppresses propagation.',
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'The four clauses, each doing its own job',
+        runnable: true,
+        code: `def parse_age(raw):
+    try:
+        value = int(raw)              # the one line that can fail
+    except ValueError:
+        print(f"  not a number: {raw!r}")
+        return None
+    except TypeError as exc:
+        print(f"  wrong type: {exc}")
+        return None
+    else:
+        # Runs only if the try block succeeded. Not protected by the handlers,
+        # so a bug in here is not mistaken for a parsing failure.
+        if not 0 <= value <= 130:
+            raise ValueError(f"age {value} is outside the plausible range")
+        return value
+    finally:
+        print(f"  done with {raw!r}")
+
+for raw in ["34", "n/a", None]:
+    print("input:", raw)
+    print("  ->", parse_age(raw))`,
+        output: `input: 34
+  done with '34'
+  -> 34
+input: n/a
+  not a number: 'n/a'
+  done with 'n/a'
+  -> None
+input: None
+  wrong type: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+  done with None
+  -> None`,
+        explanation:
+          'Each clause earns its place. The `try` holds one line, so when it fails there is no doubt what failed. Two separate `except` clauses distinguish "the text was not a number" from "you passed the wrong type entirely", which deserve different messages. The `else` holds the range check: if it lived inside `try`, its own `ValueError` would be caught by the handler above and reported as a parsing failure, which would be a lie. And `finally` runs on all three paths — including the `return` inside the handler — which is what makes it the right place for cleanup.',
+      },
+      {
+        language: 'python',
+        title: 'Raising well, and a custom exception that carries context',
+        runnable: true,
+        code: `class DataQualityError(Exception):
+    """Raised when input data violates an assumption the pipeline depends on."""
+
+class RowParseError(DataQualityError):
+    def __init__(self, line_no, raw, reason):
+        super().__init__(f"line {line_no}: {reason} in {raw!r}")
+        self.line_no = line_no        # structured fields, not just a message
+        self.raw = raw
+        self.reason = reason
+
+def parse_row(line_no, raw):
+    parts = raw.split(",")
+    if len(parts) != 3:
+        raise RowParseError(line_no, raw, f"expected 3 fields, got {len(parts)}")
+    name, score, dept = parts
+    try:
+        score = float(score)
+    except ValueError as exc:
+        # Chain: keep the original cause visible in the traceback
+        raise RowParseError(line_no, raw, "score is not numeric") from exc
+    return {"name": name, "score": score, "dept": dept}
+
+for i, line in enumerate(["ada,92,eng", "bob,n/a,ops", "broken"], start=1):
+    try:
+        print(parse_row(i, line))
+    except RowParseError as exc:
+        print(f"skipped {exc}  (fields: line_no={exc.line_no})")`,
+        output: `{'name': 'ada', 'score': 92.0, 'dept': 'eng'}
+skipped line 2: score is not numeric in 'bob,n/a,ops'  (fields: line_no=2)
+skipped line 3: expected 3 fields, got 1 in 'broken'  (fields: line_no=3)`,
+        explanation:
+          'Three things make this production-grade rather than decorative. The custom classes form a hierarchy, so a caller can catch `DataQualityError` to mean "bad input of any kind" or `RowParseError` to mean one specific case. The exception carries structured attributes as well as a message, so a handler can count failures per line without parsing strings. And `raise ... from exc` sets `__cause__`, so the traceback shows "The above exception was the direct cause of the following exception" with the original `ValueError` still visible — without `from`, you lose the detail of what actually went wrong underneath.',
+      },
+      {
+        language: 'python',
+        title: 'Files: what `with` guarantees, and writing your own context manager',
+        runnable: true,
+        code: `from contextlib import contextmanager
+import time
+
+# The guarantee: __exit__ runs on every path out of the block.
+with open("notes.txt", "w", encoding="utf-8") as f:
+    f.write("first line\\n")
+    f.writelines([f"line {i}\\n" for i in range(2, 4)])
+# file is closed here, even if the block had raised
+
+with open("notes.txt", encoding="utf-8") as f:
+    for line_no, line in enumerate(f, start=1):     # streams; never loads it all
+        print(line_no, line.rstrip())
+
+# Proof that cleanup survives an exception:
+try:
+    with open("notes.txt", encoding="utf-8") as f:
+        raise RuntimeError("boom")
+except RuntimeError:
+    print("closed?", f.closed)
+
+# Your own context manager, in five lines.
+@contextmanager
+def timer(label):
+    start = time.perf_counter()
+    try:
+        yield                       # the body of the with-block runs here
+    finally:
+        print(f"{label}: {time.perf_counter() - start:.3f}s")
+
+with timer("load"):
+    sum(range(1_000_00))`,
+        output: `1 first line
+2 line 2
+3 line 3
+closed? True
+load: 0.002s`,
+        explanation:
+          'The `closed? True` line is the whole argument for `with`: the exception escaped the block, and the file was still closed on the way out. Without it you need `try/finally` by hand, and every path that forgets one leaks a file handle until the process hits its limit. Iterating the file object rather than calling `.read()` streams line by line, so a ten-gigabyte log costs the same memory as a ten-line one. The `@contextmanager` version shows there is no magic in it: everything before the `yield` is `__enter__`, everything in the `finally` is `__exit__`, and putting it in a `finally` is what makes it exception-safe.',
+      },
+      {
+        language: 'python',
+        title: 'CSV and JSON, done properly',
+        runnable: true,
+        code: `import csv, json
+
+rows = [
+    {"name": "Ada, L", "score": 92, "note": 'said "yes"'},
+    {"name": "Bob", "score": 78, "note": "café"},
+]
+
+# CSV: newline="" is required, not optional — it stops blank rows on Windows.
+with open("scores.csv", "w", newline="", encoding="utf-8") as f:
+    writer = csv.DictWriter(f, fieldnames=["name", "score", "note"])
+    writer.writeheader()
+    writer.writerows(rows)
+
+with open("scores.csv", newline="", encoding="utf-8") as f:
+    for row in csv.DictReader(f):
+        print(row["name"], "|", row["score"], type(row["score"]).__name__)
+
+# JSON: keeps types, and ensure_ascii=False keeps text readable on disk.
+with open("scores.json", "w", encoding="utf-8") as f:
+    json.dump(rows, f, indent=2, ensure_ascii=False)
+
+with open("scores.json", encoding="utf-8") as f:
+    loaded = json.load(f)
+print(loaded[1]["note"], type(loaded[1]["score"]).__name__)`,
+        output: `Ada, L | 92 str
+Bob | 78 str
+café int`,
+        explanation:
+          'Two lessons hide in that output. First, never split CSV on commas yourself: the `csv` module quotes "Ada, L" and the embedded double quotes correctly, and unquotes them on the way back. Second, CSV has no types — every field returns as a string, which is why `92` prints as `str` and why forgetting to convert is the most common silent bug in data scripts. JSON does preserve types, so the score comes back as an `int`. The two flags that look cosmetic are not: `newline=""` prevents doubled line endings on Windows, and `ensure_ascii=False` writes `café` rather than `caf\\u00e9`, which matters the moment a human has to read the file.',
+      },
+      {
+        language: 'python',
+        title: 'Encoding failures, and how to survive them',
+        runnable: true,
+        code: `data = "naïve café — 90% done"
+
+with open("utf8.txt", "w", encoding="utf-8") as f:
+    f.write(data)
+
+# 1. Loud failure: the bytes are not valid in this encoding.
+try:
+    with open("utf8.txt", encoding="ascii") as f:
+        f.read()
+except UnicodeDecodeError as exc:
+    print("UnicodeDecodeError:", exc.reason, "at byte", exc.start)
+
+# 2. Silent corruption: latin-1 decodes ANY byte, so it never raises.
+with open("utf8.txt", encoding="latin-1") as f:
+    print("mojibake:", f.read()[:12])
+
+# 3. What to do with genuinely dirty input you cannot re-export.
+with open("utf8.txt", encoding="ascii", errors="replace") as f:
+    print("replaced:", f.read()[:12])
+
+print("bytes on disk:", open("utf8.txt", "rb").read()[:8])`,
+        output: `UnicodeDecodeError: ordinal not in range(128) at byte 2
+mojibake: naÃ¯ve cafÃ
+replaced: na??ve caf?
+bytes on disk: b'na\\xc3\\xafve c'`,
+        explanation:
+          'Case 1 is the good outcome: a clear exception naming the byte position, so you know the encoding assumption was wrong. Case 2 is the dangerous one and the reason `latin-1` is a trap — it maps every one of the 256 possible bytes to a character, so it can never raise, and you get `cafÃ©` in your database with no error anywhere in the logs. Case 3 shows `errors="replace"` as a deliberate last resort for input you cannot fix at source; it loses information, so it belongs behind a logged warning, not as a default. The rule that prevents nearly all of this: always pass `encoding="utf-8"` explicitly, because the default depends on the machine’s locale and your laptop is not your production container.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'A nightly ingestion job',
+        usage:
+          'Parsing ten million rows where roughly fifty are malformed. The job catches a specific `ValueError` per row, increments a counter, logs the line number, and fails the whole run only if the bad-row rate exceeds a threshold — so one typo does not lose a night, and a broken upstream schema still stops the pipeline.',
+      },
+      {
+        context: 'Serving a model behind an API',
+        usage:
+          'The request handler catches `ValidationError` and returns HTTP 400, catches a timeout from the feature store and returns 503, and deliberately does not catch anything else, so genuine bugs reach the error tracker with a full traceback instead of being reported as a client error.',
+      },
+      {
+        context: 'Checkpointing during training',
+        usage:
+          'A `try/finally` around the training loop writes a checkpoint on the way out, so a crash at epoch 40 of 50 costs minutes rather than a day. The same pattern releases the GPU and closes the run in the tracking server.',
+      },
+      {
+        context: 'Reading files from other people',
+        usage:
+          'Exports from spreadsheets routinely arrive as cp1252 or UTF-8 with a byte-order mark. Detecting the encoding once, converting to UTF-8 at the boundary, and reading everything downstream as UTF-8 is what stops "café" turning into "cafÃ©" three tables later.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'logging', role: '`logger.exception(...)` inside an `except` block records the message and full traceback — the production replacement for printing.' },
+      { tool: 'pandas', role: '`read_csv(..., encoding=..., on_bad_lines=...)` wraps exactly these concerns; knowing the underlying failure modes is what lets you choose the flags.' },
+      { tool: 'pytest', role: '`pytest.raises(ValueError, match="...")` asserts that failures happen for the right reason, which is how you test error paths.' },
+      { tool: 'FastAPI', role: 'Exception handlers map custom exception classes to HTTP status codes, so a well-designed hierarchy becomes the API contract.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Using a bare `except:` or `except Exception: pass`',
+        why: 'A bare `except` also catches `KeyboardInterrupt` and `SystemExit`, so Ctrl-C stops working. Worse, both forms catch your own typos: a `NameError` from a misspelled variable is reported as a handled data problem, and the program continues with wrong results and no record of anything.',
+        fix: 'Name the exceptions you actually expect. If you truly must catch broadly at a top-level boundary, log it with `logger.exception(...)` and re-raise or exit non-zero — never `pass`.',
+      },
+      {
+        mistake: 'Wrapping a huge block in one `try`',
+        why: 'With forty lines in the `try`, a `KeyError` could have come from any of six dictionary lookups, and the handler cannot know which. It also makes it easy to accidentally catch an exception raised by your own handling logic.',
+        fix: 'Keep the `try` down to the statements that can genuinely fail, and move follow-up work into `else`.',
+      },
+      {
+        mistake: 'Opening a file without `with`, or without `encoding`',
+        why: 'Without `with`, an exception between `open` and `close` leaks the handle, and on CPython you may not notice until you hit the operating system limit. Without `encoding`, Python uses a locale-dependent default, so code that works on your machine produces `UnicodeDecodeError` or mojibake in a container with a different locale.',
+        fix: 'Always `with open(path, encoding="utf-8") as f:`. Pass `newline=""` as well for CSV.',
+      },
+      {
+        mistake: 'Returning from inside `finally`',
+        why: 'A `return` in a `finally` block discards any exception that was propagating, so a real failure vanishes and the function quietly returns a value as if nothing happened. The same applies to `break` and `continue`.',
+        fix: 'Use `finally` only for cleanup. Put the return value in the `try` or `else`.',
+      },
+      {
+        mistake: 'Catching an exception and raising a new one without `from`',
+        why: 'The original traceback is replaced, and the message that actually identified the problem — the offending value, the missing key — is lost. Debugging then starts from a message that only describes the symptom.',
+        fix: 'Use `raise MyError("context") from exc` to chain, or a bare `raise` to re-raise the original after logging.',
+      },
+      {
+        mistake: 'Using exceptions for ordinary control flow',
+        why: 'Raising `StopProcessing` to break out of two loops, or relying on `KeyError` where `dict.get` would do, makes the normal path harder to read and hides the cases that are genuinely exceptional.',
+        fix: 'Reserve exceptions for conditions the immediate code cannot handle. Use return values, `in`, `.get()` and loop control for expected outcomes.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'What is the difference between `except`, `else` and `finally`, and why would you ever use `else`?',
+        answer:
+          '`except` runs when a matching exception was raised in the `try`. `else` runs only when the `try` completed with no exception at all. `finally` runs on every path out — success, handled exception, unhandled exception, even an early `return` — which is why it is the right place for cleanup. The reason `else` earns its place is scope of protection: code in `else` is not covered by the handlers, so if it raises the same exception type, it is not silently mistaken for the failure you were guarding against. A classic example is parsing a value in the `try` and validating it in the `else`, so a validation `ValueError` is not reported as a parse failure. It also keeps the `try` block small, which is the single most useful habit in exception handling.',
+        followUp:
+          'A strong candidate adds that `return` inside `finally` swallows a propagating exception, which is a real and hard-to-find bug.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Why is `except Exception: pass` considered dangerous, and when is catching broadly acceptable?',
+        answer:
+          'Because it converts every failure — including bugs you did not anticipate, such as a `NameError` from a typo or an `AttributeError` from a `None` you did not expect — into silence. The program keeps running with wrong or missing data, and the symptom shows up somewhere unrelated days later with no traceback to work from. It also makes the code lie about your assumptions: a reader cannot tell what you expected to go wrong. Broad catching is legitimate at exactly one kind of place: a process boundary where you must not crash, such as the top of a request handler, a worker consuming a queue, or a per-item loop over a large batch. Even there the rule is log the full traceback with `logger.exception`, record a metric, and then either re-raise or fail that one item explicitly — never `pass`.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'A training script silently produced a model with terrible accuracy. You find `except Exception: continue` inside the data-loading loop. Walk me through what likely happened and how you would restructure it.',
+        answer:
+          'The handler almost certainly swallowed a large fraction of the dataset. Any failure per row — a schema change, a missing column, an encoding error, a `None` where a float was expected — was caught and skipped, so the loop completed normally and the model trained on whatever survived, which could be a small and heavily biased subset. Nothing in the logs would say so, because `continue` leaves no trace. To restructure it I would catch only the specific exceptions I am prepared to tolerate, such as `ValueError` from a numeric conversion; count skips and log the first few with the row identifier; and enforce a threshold, so if more than some small percentage of rows are dropped the run fails rather than producing a quietly broken model. I would also emit the accepted and rejected counts as metrics alongside the training run so the ratio is visible in the experiment tracker, and add a test that feeds a deliberately malformed row and asserts it raises rather than passes.',
+        followUp:
+          'Mentioning that the same reasoning applies to `errors="replace"` when decoding — tolerated corruption must be counted and surfaced — shows the principle is understood rather than memorised.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Write `load_config(path)` that reads a JSON file and returns a dict. It must raise `FileNotFoundError` unchanged if the file is missing, raise a custom `ConfigError` with the file path and the JSON parser’s message if the contents are invalid, and always log that the attempt happened.',
+        hint: 'Catch `json.JSONDecodeError` specifically, and chain the original with `from exc`. Use `finally` for the log line so it runs on all paths.',
+        language: 'python',
+        starterCode: 'import json\n\nclass ConfigError(Exception):\n    ...\n\ndef load_config(path):\n    ...\n',
+        solution:
+          'import json\n\nclass ConfigError(Exception):\n    """Raised when a config file exists but cannot be understood."""\n\ndef load_config(path):\n    try:\n        with open(path, encoding="utf-8") as f:\n            return json.load(f)\n    except json.JSONDecodeError as exc:\n        raise ConfigError(f"{path} is not valid JSON: {exc.msg} at line {exc.lineno}") from exc\n    finally:\n        print(f"attempted to load {path}")\n\nThe `FileNotFoundError` is not caught at all, so it propagates unchanged — that is the correct behaviour, because a missing config file is a deployment problem the caller must see. `JSONDecodeError` is caught specifically and translated into a domain exception that names the file, which the low-level parser could not know. `from exc` preserves the original traceback. The `finally` runs whether the load succeeded, raised, or the file was missing entirely.',
+      },
+      {
+        prompt:
+          'Explain precisely what this function returns for `f()` and why, then say what is wrong with it:\n\n    def f():\n        try:\n            raise ValueError("bad")\n        finally:\n            return "ok"',
+        hint: 'What does a `return` inside `finally` do to an exception that is currently propagating?',
+        solution:
+          'It returns the string "ok", and the `ValueError` disappears entirely — no traceback, no log, nothing. When an exception is propagating and a `finally` block executes a `return`, the return takes priority and the in-flight exception is discarded. The caller therefore sees a perfectly normal return value from a function that actually failed.\n\nThis is wrong because it destroys information the caller needs, and it does so invisibly. The same applies to `break` and `continue` inside `finally`. The rule is that `finally` should only perform cleanup — closing, releasing, restoring — and should never contain a statement that changes control flow. If you genuinely want to convert the failure into a value, do it in an `except` clause where the intent is explicit and the exception can be logged first.',
+      },
+      {
+        prompt:
+          'A CSV exported from a spreadsheet raises `UnicodeDecodeError: \'utf-8\' codec can\'t decode byte 0x92 in position 417`. Describe how you would diagnose it, and give the fix you would ship — including why `errors="ignore"` is the wrong answer.',
+        hint: 'Which encodings use 0x92 as a printable character, and where does the conversion belong in the pipeline?',
+        solution:
+          'First, look at the bytes rather than guessing: `open(path, "rb").read()[410:425]` shows the context. Byte 0x92 is not valid UTF-8, but in cp1252 — the default on Windows spreadsheets — it is the right single quotation mark, which is what a spreadsheet inserts when it autocorrects an apostrophe. That identifies the source encoding with reasonable confidence, and `open(path, encoding="cp1252")` will then read it cleanly. Confirm by checking that the decoded text reads sensibly around position 417.\n\nThe fix I would ship converts at the boundary: read with the detected encoding once, write out as UTF-8, and have every downstream stage assume UTF-8. If the source is under your control, fix the export instead. If encodings vary between files, detect per file with a library such as charset-normalizer and log which encoding was chosen, so a surprise is visible.\n\n`errors="ignore"` is wrong because it deletes the offending bytes silently. The file appears to load, the apostrophes vanish, and nobody learns that the pipeline is now quietly dropping characters — which also makes the data non-reproducible, since the loss is invisible in the output. If you truly cannot identify the encoding, `errors="replace"` at least leaves a visible marker, and it belongs behind a logged warning with a count.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'PY-020-q1',
+        type: 'mcq',
+        concept: 'clause semantics',
+        prompt: 'When does the `else` clause of a `try` statement run?',
+        options: [
+          'Only if the `try` block completed without raising an exception',
+          'Only if an exception was raised and handled',
+          'Always, after the `try` block, like `finally`',
+          'Only if no `except` clause matched the exception',
+        ],
+        answerIndex: 0,
+        explanation:
+          '`else` is the success path. Its value is that code placed there is outside the handlers’ protection, so an exception it raises is not silently mistaken for the failure you were guarding against — and it keeps the `try` block small.',
+      },
+      {
+        id: 'PY-020-q2',
+        type: 'code-output',
+        language: 'python',
+        concept: 'finally and return',
+        prompt: 'What does this print?',
+        code: 'def f():\n    try:\n        return "try"\n    finally:\n        print("finally")\n\nprint(f())',
+        options: ['finally\ntry', 'try\nfinally', 'try', 'finally'],
+        answerIndex: 0,
+        explanation:
+          'The return value is computed, then `finally` runs before the function actually returns, so "finally" is printed first and "try" second. This is also why a `return` inside `finally` would replace that value — and would discard a propagating exception.',
+      },
+      {
+        id: 'PY-020-q3',
+        type: 'truefalse',
+        concept: 'context managers',
+        prompt: 'If an exception is raised inside a `with open(...)` block and nothing catches it, the file is left open.',
+        answer: false,
+        explanation:
+          'False. `__exit__` runs during stack unwinding, so the file is closed before the exception continues upwards. That guarantee is the entire reason `with` exists, and it holds for locks, database sessions and network connections too.',
+      },
+      {
+        id: 'PY-020-q4',
+        type: 'fill',
+        concept: 'encoding',
+        prompt: 'Which keyword argument should you always pass to `open()` so that behaviour does not depend on the machine’s locale?',
+        answers: ['encoding', 'encoding=', 'encoding="utf-8"', "encoding='utf-8'"],
+        explanation:
+          'Without an explicit `encoding`, Python uses a locale-dependent default, so the same code can work on a developer laptop and raise `UnicodeDecodeError` or produce mojibake in a container. `encoding="utf-8"` makes it deterministic.',
+      },
+      {
+        id: 'PY-020-q5',
+        type: 'debug',
+        language: 'python',
+        concept: 'catching too broadly',
+        prompt: 'This loop silently drops most of the dataset and nobody notices. What is the primary flaw?',
+        code: 'rows = []\nfor line in lines:\n    try:\n        rows.append(parse(line))\n    except Exception:\n        continue',
+        options: [
+          'It catches every exception, including bugs, and leaves no record of how many rows were dropped',
+          '`continue` is not allowed inside an except block',
+          'The list should be built with a comprehension for correctness',
+          '`parse` must be wrapped in a context manager to be safe',
+        ],
+        answerIndex: 0,
+        explanation:
+          'A `NameError` from a typo or an `AttributeError` from an unexpected `None` is indistinguishable from a bad row here, and nothing is counted or logged. Catch the specific expected exception, count the skips, log a sample, and fail if the drop rate exceeds a threshold.',
+      },
+      {
+        id: 'PY-020-q6',
+        type: 'match',
+        concept: 'exception vocabulary',
+        prompt: 'Match each exception type to the situation that raises it.',
+        pairs: [
+          { left: 'ValueError', right: 'Right type, unusable value — int("n/a")' },
+          { left: 'TypeError', right: 'Wrong type entirely — len(5)' },
+          { left: 'KeyError', right: 'A dictionary key that is not present' },
+          { left: 'FileNotFoundError', right: 'open() on a path that does not exist' },
+          { left: 'UnicodeDecodeError', right: 'Bytes on disk are not valid in the encoding you asked for' },
+        ],
+        explanation:
+          'The `ValueError` versus `TypeError` distinction is the one worth internalising: `TypeError` means the argument was the wrong kind of thing, `ValueError` means it was the right kind but an unacceptable value. Catching the right one is what makes a handler honest.',
+      },
+      {
+        id: 'PY-020-q7',
+        type: 'explain',
+        concept: 'error-handling design',
+        prompt:
+          'A colleague proposes wrapping every function body in `try/except Exception` so the service "never crashes". Explain why this is a bad idea and describe the policy you would propose instead.',
+        rubric: [
+          'Explains that catching everything hides bugs and produces silently wrong results',
+          'Distinguishes failures you can genuinely handle from those you cannot',
+          'Proposes a boundary where broad catching is legitimate, with logging and metrics rather than silence',
+        ],
+        sampleAnswer:
+          'Not crashing is not the same as working. If every function catches everything, a typo, a schema change and a genuinely bad row all look identical, and the service keeps returning answers computed from incomplete or wrong data. That is worse than a crash, because a crash is loud, has a traceback and stops the damage, whereas silent corruption spreads downstream and is discovered weeks later in a number nobody can explain. The policy I would propose has three parts. Inside the code, catch only what you can genuinely do something about, and catch it as specifically as possible, so the handler documents the assumption. At exactly one boundary per process — the request handler, the queue worker, the per-item loop of a batch job — catch broadly so one bad item cannot kill the process, but log the full traceback with `logger.exception`, increment an error metric, and fail that item explicitly rather than pretending it succeeded. And set thresholds: if the error rate for a batch exceeds a small percentage, fail the whole run, because at that point the problem is systematic and continuing just produces a broken artefact with a green tick next to it.',
+        explanation:
+          'The examinable judgement is that error handling is about who can act on a failure, and that "never crash" without visibility converts loud failures into silent ones.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'How do you read a traceback?', back: 'Bottom-up. The last line gives the exception type and message; the frame just above it is where it broke; the frames above that show how you got there.' },
+      { front: 'What does `finally` guarantee?', back: 'It runs on every exit path — success, handled exception, unhandled exception, or an early return. Use it only for cleanup, never for `return`.' },
+      { front: 'Why use `else` in a try statement?', back: 'Code there runs only on success and is not protected by the handlers, so its own exceptions are not mistaken for the failure you were catching.' },
+      { front: 'Why is `except Exception: pass` dangerous?', back: 'It swallows your own bugs as well as expected failures, leaves no record, and lets the program continue with wrong data.' },
+      { front: 'What does `raise X("...") from exc` do?', back: 'Chains the exceptions, setting `__cause__`, so the traceback shows the original error as the direct cause of the new one.' },
+      { front: 'What does `with open(...)` guarantee?', back: 'That `__exit__` — here, closing the file — runs on every path out of the block, including an uncaught exception.' },
+      { front: 'Why is decoding with latin-1 dangerous?', back: 'It maps all 256 byte values to characters, so it never raises. You get silent mojibake instead of a `UnicodeDecodeError` telling you the encoding was wrong.' },
+      { front: 'Why pass `newline=""` when opening a CSV?', back: 'The csv module handles line endings itself; without it you get blank rows between records on Windows.' },
+    ],
+
+    challenge: {
+      title: 'A loader that fails honestly',
+      brief:
+        'Write `load_records(path, max_bad_ratio=0.01)` that reads a line-delimited JSON file and returns a list of validated records. Define an exception hierarchy with a base `IngestError` and specific `RowParseError` and `SchemaError` subclasses carrying the line number and the raw text. Skip and count individual bad rows, log the first five with their line numbers, and raise `IngestError` if the proportion of bad rows exceeds `max_bad_ratio`. Read with an explicit encoding, handle a `UnicodeDecodeError` by reporting the byte offset, and guarantee the file is closed on every path. Write tests covering: a clean file, a file with two bad rows, a file that is entirely malformed, a missing file and a cp1252-encoded file.',
+      language: 'python',
+      acceptanceCriteria: [
+        'A custom exception hierarchy is defined, with structured attributes rather than message-only exceptions',
+        'Bad rows are counted and sampled in the log, never silently dropped',
+        'The bad-row threshold causes a raise, and the message states the observed ratio',
+        'FileNotFoundError propagates unchanged rather than being converted or swallowed',
+        'Every open uses `with` and an explicit encoding, and a decode failure reports the byte position',
+        'Tests use pytest.raises with a match pattern for each failure mode',
+      ],
+      starterCode:
+        'import json\n\nclass IngestError(Exception):\n    """Base class for anything wrong with an input file."""\n\nclass RowParseError(IngestError):\n    ...\n\nclass SchemaError(IngestError):\n    ...\n\ndef load_records(path, max_bad_ratio=0.01):\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone who writes working scripts but panics at red text how exceptions work, how to decide what to catch, and why files should always be opened with `with`.',
+      mustCover: [
+        'An exception propagates up the call stack until something catches it or the program stops',
+        'A traceback is read from the bottom up: type and message last, failing line just above',
+        'Catch specific types you can act on; let everything else through',
+        '`with` guarantees cleanup on every exit path, including an exception',
+      ],
+      bonusSignals: ['explains why bare except hides bugs', 'mentions the else clause and why it exists', 'mentions passing encoding explicitly'],
+      sampleExplanation:
+        'The first thing to say is that a traceback is not a telling-off, it is the most useful output your program ever produces. When a line cannot do its job — converting "n/a" to a number, opening a file that is not there — Python creates an object describing the problem and stops. That object travels back up through whatever called that line, and at each level Python asks: is there a handler here that matches this kind of problem? If nothing matches all the way to the top, the interpreter prints the trail it took and exits. Read that trail from the bottom. The last line names the type, like `ValueError`, and the message, which usually contains the exact value that caused the trouble. The lines above it show the path of calls, innermost last, so the second-to-last block is the line that actually broke and the ones above show who asked for it. Now the judgement, which is the part that separates working code from code you can operate. Catching an exception is a claim that you know what went wrong and can do something sensible about it. Skipping a malformed row, retrying a dropped connection, falling back to a default — those are real handling. So you name the specific type: `except ValueError`. What you must not do is write `except Exception: pass`, because that also catches your own typos and your own wrong assumptions, and turns them into silence. A program that stops with a traceback has told you exactly what is wrong; a program that quietly continues with half its data has told you nothing, and you will find out a fortnight later from a number that makes no sense. There are two more clauses worth knowing. `finally` runs no matter how the block ends, so it is where cleanup goes. And `else` runs only when nothing went wrong, which lets you keep the risky line by itself in the `try` and put the follow-up work somewhere it will not be mistaken for a failure. Finally, files. Opening a file is a promise to close it, and `with open(path, encoding="utf-8") as f:` keeps that promise for you even if the code inside the block raises. Add the encoding explicitly every single time, because the default depends on the machine, and the machine your code runs on in production is not the one on your desk.',
+    },
+  },
+  {
+    id: 'PY-021',
+    domain: 'PY',
+    module: 'Working Like an Engineer',
+    topic: 'Shipping code other people can run',
+    title: 'Modules, Environments, Testing and Clean Code',
+    slug: 'modules-environments-and-testing',
+    difficulty: 3,
+    estimatedMinutes: 45,
+    prerequisites: ['PY-012', 'PY-020'],
+    related: ['PY-013', 'PY-015', 'PY-017'],
+    tags: ['modules', 'packages', 'imports', 'virtualenv', 'pip', 'pyproject', 'pinning', 'pytest', 'pdb', 'pep8'],
+
+    learningObjectives: [
+      'Explain what a module and a package are, and trace how `import` finds and caches them',
+      'Use `if __name__ == "__main__"` correctly and say what problem it solves',
+      'Create and use a virtual environment, and explain why global installs break projects',
+      'Distinguish a loose dependency specification from a pinned lock, and say when each belongs in a project',
+      'Debug with a traceback first and `pdb` or `breakpoint()` second, rather than scattering prints',
+      'Write pytest tests including a parametrised one, and structure a test so a failure identifies the cause',
+      'State what PEP 8 does and does not cover, and what "clean code" means concretely in Python',
+    ],
+
+    terminology: [
+      {
+        term: 'Module',
+        definition:
+          'A single `.py` file, which becomes an object with a namespace when imported. Its top-level code runs exactly once per interpreter session, the first time it is imported.',
+        simple: 'One Python file, used from another Python file.',
+      },
+      {
+        term: 'Package',
+        definition:
+          'A directory of modules that can be imported as a unit, conventionally containing `__init__.py`. Dotted names such as `sklearn.metrics` reflect the directory structure.',
+        simple: 'A folder of modules with a name of its own.',
+      },
+      {
+        term: 'sys.path',
+        definition:
+          'The ordered list of directories Python searches for a module, starting with the script’s own directory and ending with the environment’s `site-packages`. The first match wins.',
+        simple: 'The list of places Python looks when you write `import`.',
+      },
+      {
+        term: 'Virtual environment',
+        definition:
+          'A self-contained directory holding its own interpreter link and `site-packages`, so that a project’s dependencies are isolated from every other project and from the system Python.',
+        simple: 'A private box of libraries belonging to one project.',
+      },
+      {
+        term: 'Pinning',
+        definition:
+          'Recording exact versions of every installed package, direct and transitive, so an install is reproducible. Distinct from declaring the loose ranges your project is compatible with.',
+        simple: 'Writing down the exact versions so the install is the same next time.',
+      },
+      {
+        term: 'Fixture',
+        definition:
+          'In pytest, a function marked `@pytest.fixture` that prepares state and is requested by name as a test argument, giving setup and teardown without inheritance or boilerplate.',
+        simple: 'Reusable setup a test asks for by naming it.',
+      },
+      {
+        term: 'PEP 8',
+        definition:
+          'The style guide for Python code: naming conventions, whitespace, line length and layout. It governs appearance, not design, and is largely automated by formatters such as Black and linters such as Ruff.',
+        simple: 'The agreed house style for how Python should look.',
+      },
+    ],
+
+    simpleExplanation:
+      "Up to now your Python has probably lived in one file that you run yourself. This unit is about everything that has to be true before somebody else — a colleague, a server, or you in six months — can run it and get the same result. It has four parts, and they are all the same idea from different angles. Split code into modules so each file has one job and can be imported rather than copied. Give every project its own virtual environment, so installing a library for one project cannot silently break another. Write tests, so that when you change something you find out immediately whether you broke it, instead of finding out from a user. And keep the code tidy in the specific senses that matter: good names, small functions, no surprises. None of this is bureaucracy. Each piece exists because a particular kind of painful afternoon kept happening to people until they invented a way to stop it.",
+
+    whyItExists:
+      'Code that works once on one machine is worth very little. Modules exist because a single growing file becomes unreadable and unreusable; virtual environments because two projects needing different versions of the same library would otherwise be mutually exclusive; tests because manual checking does not scale and regressions are invisible; and style conventions because most of a codebase’s life is spent being read.',
+
+    analogy: {
+      scenario:
+        'Think about a professional kitchen versus cooking at home. At home everything lives in one drawer, you taste as you go, and if it works tonight that is enough. A professional kitchen has stations, each with its own labelled tools that never migrate. Every dish has a written recipe with exact quantities, so the same plate comes out whichever chef is on shift. There is a checklist run before service so problems are found before a customer sees them. And there is a house convention for how everything is labelled and stacked, so anyone can find anything without asking.',
+      mapping: [
+        { from: 'Separate stations with their own tools', to: 'Modules and packages, each with one clear responsibility' },
+        { from: 'Tools that never migrate between stations', to: 'A virtual environment per project, so dependencies cannot leak' },
+        { from: 'Exact quantities in the written recipe', to: 'A pinned lock file, so the install is reproducible' },
+        { from: 'The checklist run before service', to: 'The test suite run before merging' },
+        { from: 'House labelling conventions', to: 'PEP 8 and an automated formatter' },
+        { from: 'Tasting as you go at home', to: 'Scattering `print()` calls instead of reading the traceback or using a debugger' },
+      ],
+      bridge:
+        'The mapping holds because both are answers to the same question: how do you get the same result reliably when more than one person, or more than one moment in time, is involved? Each practice converts something held in one person’s head — where the tools are, which versions worked, whether it still runs — into something written down and checkable.',
+      limitations:
+        'The kitchen image makes all of this sound like discipline for its own sake. In practice the effort must match the stakes: a twenty-line exploration in a notebook genuinely does not need a package layout and a test suite, and pretending otherwise is how people learn to resent good practice.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'What `import pandas` actually does',
+        caption: 'Five steps, and each one explains a common import failure.',
+        steps: [
+          { label: 'Check `sys.modules`', detail: 'Already imported in this process? Return the cached module object immediately — which is why top-level code runs only once.' },
+          { label: 'Search `sys.path` in order', detail: 'The script’s own directory comes first. This is why a file called `random.py` next to your script shadows the standard library.' },
+          { label: 'Load and execute the module', detail: 'Every top-level statement in the file runs, top to bottom, in a fresh namespace.' },
+          { label: 'Cache it in `sys.modules`', detail: 'Subsequent imports anywhere in the process reuse this same object — modules are effectively singletons.' },
+          { label: 'Bind the name locally', detail: '`import x` binds `x`; `from x import y` binds only `y`, but still executes all of `x` first.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Declaring dependencies versus pinning them',
+        caption: 'Two different jobs that people routinely confuse, and the confusion is what breaks builds.',
+        left: {
+          heading: 'Declare — pyproject.toml',
+          points: [
+            'States what your project is compatible with: `pandas>=2.0,<3`',
+            'Lists direct dependencies only',
+            'Hand-written and reviewed as an intentional decision',
+            'Lets a resolver pick the best combination on install',
+            'The right thing to publish for a library',
+          ],
+        },
+        right: {
+          heading: 'Pin — lock file / pip freeze',
+          points: [
+            'States what was actually installed: `pandas==2.2.1`',
+            'Includes every transitive dependency too',
+            'Generated, never hand-edited',
+            'Guarantees the same bytes on every machine',
+            'The right thing to deploy for an application',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Debugging tools, in the order you should reach for them',
+        caption: 'Most people skip straight to the last row and wonder why debugging is slow.',
+        columns: ['Tool', 'Best for', 'Cost', 'When it is the wrong choice'],
+        rows: [
+          ['Read the traceback', 'Almost everything — the type, message and failing line are usually enough', 'Seconds', 'Never; this is always step one'],
+          ['pytest -x --lf', 'Reproducing a failure in isolation and re-running only it', 'Seconds', 'When the bug only appears in a long-running process'],
+          ['breakpoint()', 'Inspecting live state: what is this variable really holding here?', 'Minutes', 'In code running unattended in production'],
+          ['logging at DEBUG', 'Intermittent or production-only problems you cannot reproduce locally', 'Some setup', 'For a bug you can reproduce in one command'],
+          ['Scattered print()', 'A quick look in a script you are actively writing', 'Cheap, then expensive', 'Once there are more than two or three; they get committed and rot'],
+        ],
+      },
+      {
+        kind: 'annotated',
+        title: 'A project layout that does not fight you',
+        subject: 'myproject/\n  pyproject.toml\n  src/mypkg/__init__.py\n  src/mypkg/data.py\n  src/mypkg/model.py\n  tests/test_data.py\n  .venv/',
+        annotations: [
+          { part: 'pyproject.toml', note: 'Declares the project name, its dependencies and the configuration for Ruff, Black, mypy and pytest. One file, one source of truth.' },
+          { part: 'src/mypkg/', note: 'The importable package. Putting it under `src/` forces you to install the project, so tests exercise the installed package rather than accidentally importing loose files.' },
+          { part: '__init__.py', note: 'Marks the directory as a package and defines what `import mypkg` exposes. Keep it thin; heavy imports here slow every entry point.' },
+          { part: 'tests/', note: 'Outside the package, so tests are not shipped to users. Files named `test_*.py` are discovered automatically.' },
+          { part: '.venv/', note: 'The virtual environment. Always in `.gitignore` — it is a build artefact of the lock file, not source.' },
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'Write a test and watch it fail',
+        caption: 'Write a small function, parametrise a test over several inputs, and read the assertion output.',
+        widget: 'code-playground',
+      },
+    ],
+
+    formalDefinition:
+      'A module is a namespace object produced by executing a Python source file once and caching it in `sys.modules`; a package is a module whose `__path__` allows submodule resolution. Import resolves a dotted name against `sys.path` in order, executing and caching each component. A virtual environment is a directory providing an isolated `site-packages` and interpreter link that takes precedence on `sys.path`, so that dependency resolution is scoped to one project rather than to the system installation.',
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Modules, imports and the main guard',
+        runnable: true,
+        code: `# ---- file: metrics.py -------------------------------------------------
+"""Scoring helpers. Importable without side effects."""
+
+def accuracy(y_true, y_pred):
+    correct = sum(a == b for a, b in zip(y_true, y_pred))
+    return correct / len(y_true)
+
+print("metrics.py top level ran")      # runs once, on first import only
+
+def _demo():
+    print("accuracy:", accuracy([1, 0, 1], [1, 1, 1]))
+
+if __name__ == "__main__":
+    # Runs only when executed as \`python metrics.py\`, not when imported.
+    _demo()
+
+# ---- file: main.py ----------------------------------------------------
+import metrics                          # executes metrics.py once
+import metrics as m2                    # cached: does NOT execute it again
+from metrics import accuracy            # still executes the whole module first
+
+print(metrics is m2, metrics.__name__)
+print(accuracy([1, 0], [1, 0]))`,
+        output: `metrics.py top level ran
+True metrics
+1.0`,
+        explanation:
+          '"metrics.py top level ran" appears once even though the module is imported three ways, because after the first import the module object is cached in `sys.modules` and every later import binds a name to that same object. The `if __name__ == "__main__"` guard is what stops `_demo()` from running when someone imports the file: `__name__` is `"__main__"` only for the file you launched, and the module’s own name otherwise. Without the guard, importing `metrics` would print demo output, and a script with a training loop at the top level would start training the moment anyone imported it.',
+      },
+      {
+        language: 'bash',
+        title: 'A reproducible environment, from nothing to a locked install',
+        code: `# One environment per project, created inside the project directory.
+python -m venv .venv
+source .venv/bin/activate          # Windows: .venv\\Scripts\\activate
+python -m pip install --upgrade pip
+
+# Confirm you are inside it before installing anything.
+which python                       # .../myproject/.venv/bin/python
+python -c "import sys; print(sys.prefix)"
+
+# Declare compatibility ranges in pyproject.toml, then install the project.
+python -m pip install -e ".[dev]"
+
+# Freeze what was ACTUALLY installed, transitive dependencies included.
+python -m pip freeze --exclude-editable > requirements.lock
+
+# On any other machine, or in CI, reproduce it exactly.
+python -m pip install -r requirements.lock
+python -m pip check                # verify no conflicting requirements`,
+        output: `/home/user/myproject/.venv/bin/python
+/home/user/myproject/.venv
+Successfully installed mypkg-0.1.0 numpy-2.1.3 pandas-2.2.3 pytest-8.3.3
+No broken requirements found.`,
+        explanation:
+          'The sequence matters. Creating the environment inside the project keeps it disposable — delete `.venv` and rebuild from the lock file at any time. Checking `which python` before installing is the habit that prevents the single most common mistake, installing into the system Python because the environment was never activated. `pip install -e .` installs your own package in editable mode so `import mypkg` works from anywhere without path manipulation. And `pip freeze` produces the lock: `pyproject.toml` says what you are compatible with, the lock says what you tested, and only the lock makes CI reproduce your machine.',
+      },
+      {
+        language: 'python',
+        title: 'pytest: assertions, a parametrised test, and a fixture',
+        runnable: true,
+        code: `# ---- file: tests/test_metrics.py --------------------------------------
+import pytest
+from mypkg.metrics import accuracy, normalise
+
+def test_perfect_prediction():
+    assert accuracy([1, 0, 1], [1, 0, 1]) == 1.0   # plain assert, rich output
+
+@pytest.mark.parametrize(
+    "y_true, y_pred, expected",
+    [
+        ([1, 1], [1, 1], 1.0),
+        ([1, 1], [0, 0], 0.0),
+        ([1, 0, 1, 0], [1, 0, 0, 0], 0.75),
+        pytest.param([], [], 0.0, marks=pytest.mark.xfail(reason="empty input divides by zero")),
+    ],
+    ids=["all-correct", "all-wrong", "three-quarters", "empty"],
+)
+def test_accuracy_cases(y_true, y_pred, expected):
+    assert accuracy(y_true, y_pred) == pytest.approx(expected)
+
+def test_mismatched_lengths_raise():
+    with pytest.raises(ValueError, match="same length"):
+        accuracy([1, 0, 1], [1, 0])
+
+@pytest.fixture
+def sample_rows(tmp_path):
+    path = tmp_path / "rows.csv"             # a real temp dir, cleaned up for you
+    path.write_text("name,score\\nada,92\\nbob,78\\n", encoding="utf-8")
+    return path
+
+def test_normalise_reads_file(sample_rows):
+    assert normalise(sample_rows) == [("ada", 0.92), ("bob", 0.78)]`,
+        output: `tests/test_metrics.py::test_perfect_prediction PASSED
+tests/test_metrics.py::test_accuracy_cases[all-correct] PASSED
+tests/test_metrics.py::test_accuracy_cases[all-wrong] PASSED
+tests/test_metrics.py::test_accuracy_cases[three-quarters] PASSED
+tests/test_metrics.py::test_accuracy_cases[empty] XFAIL
+tests/test_metrics.py::test_mismatched_lengths_raise PASSED
+tests/test_metrics.py::test_normalise_reads_file PASSED
+
+6 passed, 1 xfailed in 0.06s`,
+        explanation:
+          'Four things to take from this. Plain `assert` is enough — pytest rewrites it so a failure shows both operands, which is why nobody writes `assertEqual` any more. `parametrize` turns one test body into four independently reported cases, so a failure names which input broke rather than stopping at the first; the `ids` make that output readable. `pytest.raises(..., match=...)` tests the error path, which is where bugs actually hide, and asserting on the message stops it passing for the wrong reason. And `tmp_path` is a built-in fixture giving a real directory that is created and removed for you, so tests touching files stay isolated and can run in parallel.',
+      },
+      {
+        language: 'python',
+        title: 'Debugging with pdb rather than print archaeology',
+        runnable: true,
+        code: `def normalise(rows):
+    total = sum(score for _, score in rows)
+    return [(name, score / total) for name, score in rows]
+
+def main():
+    rows = [("ada", 92), ("bob", 78), ("cy", 0)]
+    breakpoint()                  # Python 3.7+; equivalent to import pdb; pdb.set_trace()
+    return normalise(rows)
+
+main()
+
+# (Pdb) p rows                 -> [('ada', 92), ('bob', 78), ('cy', 0)]
+# (Pdb) p sum(s for _, s in rows)
+# 170
+# (Pdb) n                      -> step over the next line
+# (Pdb) s                      -> step INTO normalise
+# (Pdb) l                      -> list source around the current line
+# (Pdb) w                      -> print the stack: where am I and who called me
+# (Pdb) p score, total          -> inspect any expression in this frame
+# (Pdb) c                      -> continue until the next breakpoint or the end`,
+        output: `> example.py(9)main()
+-> return normalise(rows)
+(Pdb)`,
+        explanation:
+          'A debugger answers a question `print` cannot: what is true *here*, in this frame, right now, including expressions you did not think to print. The commands worth memorising are `n` (next line), `s` (step into a call), `l` (list source), `w` (where am I in the stack), `p` (print an expression) and `c` (continue). Two practical notes: `pytest --pdb` drops you into exactly this prompt at the point a test failed, with all the local state intact, which is usually faster than reproducing the failure by hand; and `breakpoint()` respects the `PYTHONBREAKPOINT` environment variable, so setting it to `0` disables every breakpoint without editing code.',
+      },
+      {
+        language: 'text',
+        title: 'One configuration file for the whole toolchain',
+        code: `[project]
+name = "mypkg"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+  "pandas>=2.0,<3",          # a compatible RANGE, not a pin
+  "scikit-learn>=1.4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]   # errors, pyflakes, import order, upgrades, bugbear
+
+[tool.pytest.ini_options]
+addopts = "-q --strict-markers"
+testpaths = ["tests"]`,
+        explanation:
+          'This single file replaces `setup.py`, `setup.cfg`, `requirements-dev.txt`, `.flake8` and `pytest.ini`. The important distinction is in `dependencies`: these are ranges describing compatibility, which is what a library should publish, while the exact versions live in a generated lock file used for deployment. The Ruff rule selection is worth copying — `F` catches genuine bugs such as unused names and undefined variables, `I` keeps imports sorted so diffs stay small, and `B` flags real traps like a mutable default argument. `--strict-markers` makes a typo in a `@pytest.mark` name an error rather than a silently skipped test.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'The notebook that cannot be rerun',
+        usage:
+          'A model trained in a notebook six months ago now fails to load because the pickle was written by an older scikit-learn. A pinned lock file committed alongside the artefact is what would have made it reproducible, and is why serious teams record the environment with every trained model.',
+      },
+      {
+        context: 'CI on every pull request',
+        usage:
+          'A GitHub Actions workflow creates a fresh virtual environment, installs from the lock file, runs `ruff check`, `mypy` and `pytest`, and refuses to merge on failure. The value is not the tools; it is that the same commands run identically on everyone’s branch.',
+      },
+      {
+        context: 'A shared library inside a company',
+        usage:
+          'Feature engineering lives in an installable package imported by the training job, the batch scorer and the API, so a fix lands in all three. Without the package they drift, and training and serving quietly compute different features.',
+      },
+      {
+        context: 'A dependency conflict on a laptop',
+        usage:
+          'Project A needs numpy 1.26 for an old model, project B needs numpy 2.x. Installed globally these are mutually exclusive and `pip install` for one silently breaks the other; with one virtual environment each, both work and neither is aware of the other.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'venv / uv', role: 'Creates the isolated environment. `uv` does the same job substantially faster and resolves and locks in one step.' },
+      { tool: 'pytest', role: 'The de facto test runner: plain asserts, fixtures, parametrisation and a large plugin ecosystem.' },
+      { tool: 'Ruff', role: 'Linter and formatter in one, fast enough to run on every save; replaces flake8, isort and Black in most projects.' },
+      { tool: 'Docker', role: 'Copies the lock file and installs from it, which is how the reproducibility you built locally survives into production.' },
+      { tool: 'pre-commit', role: 'Runs the formatter and linter before a commit is created, so style never appears in a code-review diff.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Installing packages globally, or into the wrong environment',
+        why: 'Two projects needing different versions of the same library become mutually exclusive, and `pip install` for one silently changes the other. The subtler version is forgetting to activate, so everything installs into the system Python and the project appears to work only on your machine.',
+        fix: 'Create `.venv` inside every project, activate it, and check `which python` before installing. Add `.venv/` to `.gitignore`.',
+      },
+      {
+        mistake: 'Naming a file after a standard-library or installed module',
+        why: 'The script’s own directory is first on `sys.path`, so a local `random.py`, `json.py` or `email.py` shadows the real one for the whole process. The error usually appears inside a third-party library and mentions a missing attribute, never your file.',
+        fix: 'Avoid standard-library names. When an import error makes no sense, check for a shadowing file and a stale `__pycache__` next to it.',
+      },
+      {
+        mistake: 'Putting work at the top level of an importable module',
+        why: 'Module top-level code runs on import, so importing a training script starts training, and importing a module that opens a database connection opens one in every process that touches it — including your test collector.',
+        fix: 'Put executable behaviour in functions and call it under `if __name__ == "__main__":`.',
+      },
+      {
+        mistake: 'Confusing `pyproject.toml` ranges with a lock file',
+        why: 'Deploying from loose ranges means a transitive dependency can release a new version overnight and change behaviour with no commit on your side. Conversely, pinning exact versions in a published library makes it uninstallable alongside anything else.',
+        fix: 'Declare ranges for what you are compatible with, generate a lock for what you deploy, and commit both.',
+      },
+      {
+        mistake: 'Tests that assert nothing, or assert everything at once',
+        why: 'A test that only calls the function and checks it does not raise passes for a function returning nonsense. A test with twelve assertions stops at the first failure, so you fix one thing and discover the next on the following run.',
+        fix: 'Assert on a specific expected value, and split cases with `parametrize` so each is reported separately.',
+      },
+      {
+        mistake: 'Treating PEP 8 as the whole of clean code',
+        why: 'Correct spacing and 79-character lines say nothing about whether a function does one thing, whether names reveal intent, or whether the data flow is obvious. Perfectly formatted code can be unreadable.',
+        fix: 'Automate formatting entirely with Ruff or Black so it never costs attention, and spend the attention you save on naming, function size and removing hidden state.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'What does `if __name__ == "__main__":` do, and why is it needed?',
+        answer:
+          'Python sets the module-level variable `__name__` to `"__main__"` for the file you actually launched, and to the module’s own dotted name for anything imported. Guarding code with that comparison therefore means "run this only when this file is the entry point". It matters because importing a module executes all of its top-level code, so without the guard, importing a script would run its demo, start its training loop, or open its database connection as a side effect — including when a test runner imports it for collection. The pattern that follows from this is to keep modules import-safe: define functions and classes at the top level, and put the actual invocation inside the guard, usually as a one-line call to a `main()` function.',
+      },
+      {
+        level: 'intermediate',
+        question: 'Explain the difference between `requirements.txt`, a lock file and the dependencies in `pyproject.toml`.',
+        answer:
+          'They answer two different questions that people routinely conflate. `pyproject.toml` dependencies declare what your project is compatible with, as ranges such as `pandas>=2.0,<3`, listing direct dependencies only. That is what you publish, because pinning exact versions in a library makes it impossible to install alongside anything else. A lock file — produced by `pip freeze`, `pip-compile`, `uv lock` or Poetry — records what was actually installed, every transitive dependency included, at exact versions and ideally with hashes. That is what you deploy and what CI installs, because it is the only thing that makes two machines identical. A plain `requirements.txt` is used for both jobs in different projects, which is precisely why it causes confusion; the useful discipline is to treat it as a lock, generate it rather than hand-edit it, and keep the human-authored ranges in `pyproject.toml`.',
+        followUp:
+          'Strong answers mention hashes for supply-chain safety, and that the lock must be regenerated deliberately rather than drifting.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'How would you test a machine-learning pipeline, given that model quality is not deterministic?',
+        answer:
+          'By separating the parts that are deterministic from the part that is not, and testing them very differently. The deterministic majority — feature engineering, data validation, splitting, encoding, serialisation, the inference wrapper — is ordinary code and gets ordinary unit tests with fixed inputs and exact expected outputs; that is also where most real bugs live. For the training itself I would write behavioural tests rather than accuracy assertions: that the pipeline runs end to end on a tiny fixture dataset, that a fixed seed reproduces identical weights, that the loss decreases over a handful of steps, that shapes and dtypes are what the next stage expects, and that the model can be saved and reloaded to give identical predictions. Model quality belongs in a separate evaluation stage with a threshold on a held-out set, treated as a gate on a pipeline run rather than as a unit test, because it is slow and legitimately noisy. I would also add a test that training and serving compute identical features for the same input, since training-serving skew is the failure that unit tests most often miss.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A colleague reports that `import requests` fails with `AttributeError: partially initialized module ... has circular import` in a directory containing their own `requests.py`. Explain the mechanism, and describe how you would confirm the diagnosis in one command.',
+        hint: 'Which directory is first on `sys.path`, and what does `module.__file__` tell you?',
+        solution:
+          'The script’s own directory is placed first on `sys.path`, so `import requests` finds their local `requests.py` before the installed library. Their file then presumably imports something that imports `requests` again, and because the half-executed module is already cached in `sys.modules`, the second import returns an incomplete object — hence "partially initialized".\n\nConfirm it in one command: `python -c "import requests; print(requests.__file__)"` run from that directory. If the path points into the project rather than into `site-packages`, the diagnosis is certain. The fix is to rename the file, and to delete the neighbouring `__pycache__` directory, because a stale `requests.pyc` can keep shadowing even after the source is renamed. The general rule is never to name a module after anything you also import.',
+      },
+      {
+        prompt:
+          'Write a parametrised pytest test for a function `split_name(full)` that returns `(first, last)`. Cover a normal two-part name, a single-word name where last should be an empty string, a name with a middle part, and leading or trailing whitespace. Give each case a readable id.',
+        hint: 'One `@pytest.mark.parametrize` with a list of tuples and an `ids` list. Decide the expected behaviour for each case before writing the assertion.',
+        language: 'python',
+        starterCode: 'import pytest\nfrom mypkg.names import split_name\n\n@pytest.mark.parametrize(...)\ndef test_split_name(full, expected):\n    ...\n',
+        solution:
+          'import pytest\nfrom mypkg.names import split_name\n\n@pytest.mark.parametrize(\n    "full, expected",\n    [\n        ("Ada Lovelace", ("Ada", "Lovelace")),\n        ("Grace", ("Grace", "")),\n        ("Ada King Lovelace", ("Ada", "King Lovelace")),\n        ("  Alan Turing  ", ("Alan", "Turing")),\n    ],\n    ids=["two-parts", "single-word", "middle-name", "surrounding-whitespace"],\n)\ndef test_split_name(full, expected):\n    assert split_name(full) == expected\n\nEach case is reported independently, so a failure prints `test_split_name[single-word]` and you know immediately which behaviour broke, rather than the whole test stopping at the first bad input. Writing the expectations down first is the real exercise: deciding that a single word yields an empty surname, and that a three-part name keeps the middle with the surname, are design decisions, and a parametrised test is where they get recorded so the next person does not have to guess.',
+      },
+      {
+        prompt:
+          'A script works on your laptop and fails in CI with `ModuleNotFoundError: No module named \'mypkg\'`. List the three most likely causes and the check that distinguishes each.',
+        hint: 'Think about what is on `sys.path` in each place, and what was installed.',
+        solution:
+          'Cause one: the package was never installed into the CI environment, and on your laptop it imports only because you run from the project root where the directory happens to be on `sys.path`. Check with `python -c "import sys; print(sys.path)"` in CI and look for the project root, and with `pip list | grep mypkg`. Fix by adding `pip install -e .` to the CI setup and adopting a `src/` layout, which removes the accidental local import so the problem cannot hide.\n\nCause two: CI is using a different interpreter from the one the packages were installed into — a common result of installing with `pip` but running with `python3`, or of a setup step that activates the environment in one shell step and runs tests in another where the activation has been lost. Check by printing `sys.executable` at both the install and the run step and comparing.\n\nCause three: the package directory is missing from the built artefact — no `__init__.py`, or a packaging configuration that does not include it, so `pip install` succeeds but installs nothing importable. Check with `pip show -f mypkg`, which lists the files actually installed.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'PY-021-q1',
+        type: 'mcq',
+        concept: 'main guard',
+        prompt: 'What is the value of `__name__` inside a module that has been imported by another file?',
+        options: [
+          'The module’s own name, such as "metrics"',
+          'Always "__main__"',
+          'The name of the file that imported it',
+          'An empty string until the module finishes executing',
+        ],
+        answerIndex: 0,
+        explanation:
+          '`__name__` is `"__main__"` only in the file you launched directly. Everywhere else it is the module’s own dotted name, which is exactly what makes the `if __name__ == "__main__":` guard able to distinguish "run" from "import".',
+      },
+      {
+        id: 'PY-021-q2',
+        type: 'truefalse',
+        concept: 'import caching',
+        prompt: 'Importing the same module twice in one process executes its top-level code twice.',
+        answer: false,
+        explanation:
+          'False. After the first import the module object is cached in `sys.modules`, and later imports bind a name to that same object without re-executing it. This is also why editing a module mid-session in a notebook has no effect until you reload or restart.',
+      },
+      {
+        id: 'PY-021-q3',
+        type: 'mcq',
+        concept: 'dependency management',
+        prompt: 'You are deploying an application to production. Which should the container install from?',
+        options: [
+          'A generated lock file with exact pinned versions of every direct and transitive dependency',
+          'The loose ranges declared in pyproject.toml, so it always gets the latest compatible versions',
+          'Whatever is already installed in the base image',
+          'A hand-edited requirements.txt listing only the direct dependencies',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Only a full lock makes the install reproducible. Loose ranges mean a transitive dependency can publish a release overnight and change your behaviour with no commit on your side — the classic "it worked yesterday" deployment failure.',
+      },
+      {
+        id: 'PY-021-q4',
+        type: 'fill',
+        concept: 'pytest',
+        prompt: 'Which pytest decorator runs one test function repeatedly over several sets of inputs?',
+        answers: ['pytest.mark.parametrize', 'parametrize', '@pytest.mark.parametrize', 'mark.parametrize'],
+        explanation:
+          '`@pytest.mark.parametrize` reports each case as its own test, so a failure names the specific input that broke rather than stopping the whole function at the first bad case.',
+      },
+      {
+        id: 'PY-021-q5',
+        type: 'debug',
+        language: 'python',
+        concept: 'import shadowing',
+        prompt: 'A file `random.py` sits next to this script, and it fails with `AttributeError: module \'random\' has no attribute \'randint\'`. Why?',
+        code: 'import random\nprint(random.randint(1, 6))',
+        options: [
+          'The local random.py shadows the standard library because the script directory is first on sys.path',
+          '`randint` was removed from the standard library and renamed to `randrange`',
+          'The import needs to be `from random import randint` to reach the standard library',
+          'A virtual environment must be activated before the standard library can be imported',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Python searches the script’s own directory first, so a local file wins over the standard library for the whole process. Rename the file and delete the neighbouring `__pycache__`, since a stale `.pyc` can keep shadowing after the rename.',
+      },
+      {
+        id: 'PY-021-q6',
+        type: 'multi',
+        concept: 'clean code',
+        prompt: 'Which of these are genuinely part of "clean code" in Python, as opposed to style a formatter can settle for you?',
+        options: [
+          'Names that state what a value is, so comments explaining them become unnecessary',
+          'Functions small enough to describe in one sentence without the word "and"',
+          'Four-space indentation rather than tabs',
+          'Avoiding hidden state, such as functions that mutate their arguments without saying so',
+          'Lines wrapped at exactly 79 characters',
+          'Raising specific exceptions so callers can handle the case they care about',
+        ],
+        answerIndices: [0, 1, 3, 5],
+        explanation:
+          'Indentation and line length are formatting: real decisions, but ones Ruff or Black should make once and never ask you about again. Naming, function size, avoiding hidden mutation and honest error signalling are design choices no tool can make, and they are what determine whether the next person can change the code safely.',
+      },
+      {
+        id: 'PY-021-q7',
+        type: 'explain',
+        concept: 'reproducibility',
+        prompt:
+          'A model trained eight months ago cannot be reproduced: the script runs but the metrics differ. Explain what was probably not captured, and what you would put in place so this cannot happen again.',
+        rubric: [
+          'Identifies that code alone is not enough: the environment, data version and seeds are part of the result',
+          'Distinguishes declared ranges from a pinned lock and explains why the lock is what reproduces',
+          'Proposes concrete artefacts recorded alongside the model',
+        ],
+        sampleAnswer:
+          'The script was captured and everything else around it was not. A result is produced by four things together: the code, the exact versions of every library beneath it, the exact data, and the sources of randomness. If dependencies were installed from loose ranges, then some transitive package has since published a new version — a different default in a scikit-learn estimator, a changed floating-point path in numpy — and the same code now computes something slightly different. If the data lives at a path that gets overwritten, the input itself may have changed. And if seeds were never fixed, shuffling and initialisation differ on every run regardless. To make it reproducible I would record, alongside every trained model, a pinned lock file of the full environment including transitive dependencies, the git commit of the training code, a content hash or version identifier for the dataset, the resolved configuration, and the seeds used. In practice that means an experiment tracker capturing these automatically, training inside a container built from the lock file so the environment is the artefact rather than a description of one, and a test that trains on a small fixture with a fixed seed and asserts identical weights, so that the day reproducibility breaks is the day someone sees a red test rather than eight months later.',
+        explanation:
+          'The examinable insight is that the environment and the data are part of the result, so reproducibility is an artefact you record deliberately rather than a property code has by default.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does `if __name__ == "__main__":` do?', back: 'Runs the block only when the file is executed directly, not when it is imported. `__name__` is `"__main__"` only for the entry-point file.' },
+      { front: 'Why does a module’s top-level code run only once?', back: 'The module object is cached in `sys.modules` on first import; later imports reuse it without re-executing.' },
+      { front: 'Why one virtual environment per project?', back: 'So two projects can need different versions of the same library without one install breaking the other, and so the environment is disposable and rebuildable.' },
+      { front: 'Declared ranges versus a lock file?', back: 'Ranges in pyproject.toml say what you are compatible with, for publishing. A generated lock says what was actually installed, including transitive deps, for deploying.' },
+      { front: 'Why did `import random` find the wrong module?', back: 'The script’s own directory is first on `sys.path`, so a local `random.py` shadows the standard library for the whole process.' },
+      { front: 'What does `@pytest.mark.parametrize` give you?', back: 'One test body run over many inputs, each reported as a separate case, so a failure names the exact input that broke.' },
+      { front: 'What is `breakpoint()`?', back: 'Drops into pdb at that line. Useful commands: n (next), s (step in), l (list), w (where), p (print expression), c (continue).' },
+      { front: 'What does PEP 8 not cover?', back: 'Design. Naming quality, function size, hidden state and honest error signalling are what make code clean; formatting should be automated and forgotten.' },
+    ],
+
+    challenge: {
+      title: 'Turn a script into a project',
+      brief:
+        'Take a single 200-line analysis script and convert it into a real project. Split it into a `src/` package with at least three modules that each have one responsibility, and a thin command-line entry point guarded by `if __name__ == "__main__":`. Add a pyproject.toml declaring dependency ranges and configuring Ruff and pytest, create a virtual environment, install the project editable, and generate a committed lock file. Write a test suite with at least one parametrised test, one test asserting an exception with a message match, and one using `tmp_path` for file input. Make `ruff check`, `ruff format --check` and `pytest` all pass, then write a short README section a new colleague could follow from a clean clone to a passing test run.',
+      language: 'bash',
+      acceptanceCriteria: [
+        'No module executes work on import; all behaviour is in functions invoked from a guarded entry point',
+        'pyproject.toml declares ranges, and a separately generated lock file pins the full transitive set',
+        'The test suite includes a parametrised test with readable ids and a pytest.raises test with a match pattern',
+        'Tests touching the filesystem use tmp_path rather than writing into the repository',
+        'ruff check, ruff format --check and pytest all exit zero',
+        'The README instructions work from a clean clone with no undocumented steps',
+      ],
+      starterCode:
+        '# From a clean clone, these commands must work:\npython -m venv .venv\nsource .venv/bin/activate\npython -m pip install -e ".[dev]"\nruff check .\npytest -q\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain to someone who writes working single-file scripts why modules, virtual environments, tests and style conventions exist, and what each one prevents. Make them want to use these rather than feel nagged into it.',
+      mustCover: [
+        'A module is a file that can be imported, and import runs its top-level code once',
+        'A virtual environment isolates one project’s dependencies from every other project',
+        'Pinned versions are what make an install reproducible on another machine',
+        'Tests catch regressions automatically, and a parametrised test reports which input failed',
+      ],
+      bonusSignals: ['explains the main guard as import-safety rather than ceremony', 'distinguishes formatting from design in "clean code"', 'matches the effort to the stakes'],
+      sampleExplanation:
+        'Every one of these practices exists because of a specific bad afternoon that kept repeating until somebody invented a way to stop it, so it is worth hearing them as solutions rather than as rules. Start with modules. A module is just a Python file you can import from another file, and the thing to know is that importing it runs everything at its top level, once, and then caches it. That single fact explains the `if __name__ == "__main__":` line you keep seeing: it means "only do this when someone runs this file directly". Without it, importing your training script would start training, and importing your data module would open a database connection — including when the test runner imports the file just to look inside it. So the habit is: modules define things, and the doing goes inside the guard. Next, environments. Install a library and by default it goes into one shared place, so project A and project B are forced to agree about every version forever. They will not. A virtual environment gives each project its own private folder of libraries, so they never meet. It costs one command and it eliminates a whole class of afternoon. The companion idea is pinning. Your project file says roughly what you are compatible with — pandas 2-something — but for anything you actually deploy you want a generated lock file recording the exact version of every library, including the ones your libraries pulled in that you have never heard of. That file is the difference between "works on my machine" and "works". Then tests. The honest argument for testing is not correctness in the abstract, it is that you will change this code later and you need to know within ten seconds whether you broke something, instead of finding out from a user. With pytest a test is a function whose name starts with `test_` containing a plain `assert`, and if you need the same check over several inputs, `@pytest.mark.parametrize` runs the body once per input and tells you exactly which one failed. Start with the two or three cases you already check by hand each time; you are simply writing them down. Also learn to debug rather than to guess: read the traceback from the bottom, and when you need to see live state, put `breakpoint()` in and look around instead of adding twenty prints you will later have to remove. Finally, clean code. Some of it is formatting — spacing, line length, import order — and the right answer there is to let Ruff or Black decide so it never costs you a thought. The part that matters is the part no tool can do: names that say what a thing is, functions small enough to describe without the word "and", no quiet mutation of things you were handed, and errors that say what actually went wrong. Match the effort to the stakes, though. A twenty-line exploration does not need a package layout and a test suite, and pretending it does is how people learn to resent all of this.',
+    },
+  },
 ];
