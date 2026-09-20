@@ -1,0 +1,114 @@
+# Production deployment.
+#
+# This exists because the environment the application is developed in has no
+# outbound internet beyond GitHub and npm — every hosting API is refused at the
+# gateway — while a GitHub runner has ordinary network access. So the deploy
+# happens here, where it can actually reach the provider, and the same job then
+# smoke-tests the URL it just produced. A deploy that is not smoke-tested is a
+# deploy that reports success for a site nobody has opened.
+#
+# It is manual on purpose. Nothing about this repository should deploy itself
+# because a commit landed.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   VERCEL_TOKEN       a Vercel access token
+#   VERCEL_ORG_ID      from .vercel/project.json after `vercel link`
+#   VERCEL_PROJECT_ID  likewise
+#   DATABASE_URL       the production postgresql:// connection string
+#
+# Everything the running application needs at runtime — DATABASE_URL,
+# DATABASE_PROVIDER, AUTH_SECRET, APP_URL and optionally RESEND_API_KEY and
+# ANTHROPIC_API_KEY — is set on the Vercel project itself, not here. This
+# workflow needs DATABASE_URL only to create the schema before the first
+# request arrives.
+
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which Vercel environment to deploy
+        type: choice
+        options: [production, preview]
+        default: production
+      run_schema_push:
+        description: Create or update the database schema before deploying
+        type: boolean
+        default: true
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # The schema has to exist before the first request, and `db push` is
+      # idempotent: on an empty database it creates everything, and on one
+      # already in step it is a no-op. It is deliberately not `--accept-data-loss`
+      # — if this schema change would drop data, the deploy should stop and a
+      # human should look at it.
+      - name: Create or update the production schema
+        if: ${{ inputs.run_schema_push }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_PROVIDER: postgresql
+        run: |
+          node scripts/db-provider.mjs postgresql
+          npx prisma db push --skip-generate
+
+      - name: Install the Vercel CLI
+        run: npm i -g vercel@latest
+
+      - name: Pull the Vercel environment
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: vercel pull --yes --environment=${{ inputs.environment }} --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: vercel build ${{ inputs.environment == 'production' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy
+        id: deploy
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          url=$(vercel deploy --prebuilt ${{ inputs.environment == 'production' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Deployed to $url"
+
+      # The point of the whole job. A URL that has not been exercised is a
+      # claim, not a result.
+      - name: Smoke-test the deployment
+        run: node scripts/smoke-production.mjs "${{ steps.deploy.outputs.url }}"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Deployment"
+            echo
+            echo "- environment: \`${{ inputs.environment }}\`"
+            echo "- commit: \`${{ github.sha }}\`"
+            echo "- url: ${{ steps.deploy.outputs.url }}"
+            echo "- smoke test: ${{ job.status }}"
+          } >> "$GITHUB_STEP_SUMMARY"

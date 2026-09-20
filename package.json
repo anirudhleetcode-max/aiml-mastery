@@ -5,7 +5,7 @@
   "description": "AI/ML Mastery — a complete, adaptive learning platform covering 214 units from Python fundamentals to Generative AI and MLOps.",
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "node scripts/db-provider.mjs && prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
@@ -23,7 +23,8 @@
     "verify": "npm run typecheck && npm run lint && npm run check:contrast && npm run curriculum:verify && npm test",
     "perf": "node scripts/perf-audit.mjs",
     "check:contrast": "node scripts/check-contrast.mjs",
-    "test:e2e:dev": "E2E_DEV=1 playwright test"
+    "test:e2e:dev": "E2E_DEV=1 playwright test",
+    "db:provider": "node scripts/db-provider.mjs"
   },
   "dependencies": {
     "@prisma/client": "6.19.3",
