@@ -12,9 +12,14 @@ import { expect, test } from '@playwright/test';
  * 390 is in the list because it is the iPhone 12–15 width, which is the single
  * most common phone viewport in the world and sits awkwardly between the 375
  * and 412 that design systems usually test.
+ *
+ * 1280 is here because it is the most common laptop width, and because it is
+ * the first width at which the layout has finished expanding — a container
+ * capped below it and a grid that gains a column above it both show up here
+ * and nowhere else in this list.
  */
 
-const WIDTHS = [320, 375, 390, 412, 768, 1024, 1440];
+const WIDTHS = [320, 375, 390, 412, 768, 1024, 1280, 1440];
 
 const ROUTES = [
   { path: '/', auth: false },
