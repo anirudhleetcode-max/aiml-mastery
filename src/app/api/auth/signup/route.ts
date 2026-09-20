@@ -5,6 +5,9 @@ import { hashPassword, validatePassword } from '@/lib/auth/password';
 import { createSessionToken, setSessionCookie } from '@/lib/auth/session';
 import { clientKey, rateLimit, sameOrigin } from '@/lib/auth/rate-limit';
 import { newUserData } from '@/lib/auth/bootstrap';
+import { issueToken } from '@/lib/auth/tokens';
+import { sendEmail } from '@/lib/email/send';
+import { verificationEmail } from '@/lib/email/messages';
 
 export const runtime = 'nodejs';
 
@@ -54,5 +57,17 @@ export async function POST(req: Request) {
   });
 
   await setSessionCookie(await createSessionToken({ userId: user.id, sessionId: session.id, email: user.email }));
+
+  // The account is usable immediately and unverified. Blocking a new learner
+  // behind a mailbox round trip before they have seen anything is how you
+  // lose them; the banner and the gentle gate below do the work instead.
+  const { token } = await issueToken(user.id, 'email-verification');
+  const sent = await sendEmail(verificationEmail(user.email, name.trim(), token));
+  if (!sent.ok) {
+    // A provider outage must not fail a signup that otherwise succeeded —
+    // the learner can resend from the banner.
+    console.error('[email] verification send failed:', sent.error);
+  }
+
   return NextResponse.json({ ok: true, needsOnboarding: true });
 }

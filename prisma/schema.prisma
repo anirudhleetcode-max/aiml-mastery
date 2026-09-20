@@ -38,6 +38,10 @@ model User {
   flashcardReviews  FlashcardReview[]
   interviewAttempts InterviewAttempt[]
   labCompletions    LabCompletion[]
+  authTokens        AuthToken[]
+  /// Null until the address is confirmed. Gating on a timestamp rather than a
+  /// boolean records *when*, which an audit needs and a flag cannot give.
+  emailVerifiedAt   DateTime?
 }
 
 /// Server-side session records, so a token can be revoked rather than only expiring.
@@ -376,4 +380,28 @@ model RateLimit {
   updatedAt DateTime @updatedAt
 
   @@index([resetAt])
+}
+
+/// Single-use, expiring tokens for email verification and password reset.
+///
+/// Only a SHA-256 hash of the token is stored. A database dump therefore
+/// cannot be replayed against the endpoints, which is the same reasoning that
+/// puts a bcrypt hash in `passwordHash` rather than the password. The raw
+/// token exists only in the email link.
+model AuthToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// "email-verification" or "password-reset".
+  purpose   String
+  /// SHA-256 of the raw token, hex encoded. Unique so a lookup is a single
+  /// indexed read and so two tokens can never collide.
+  tokenHash String    @unique
+  expiresAt DateTime
+  /// Set the moment the token is spent, which is what makes it single-use.
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, purpose])
+  @@index([expiresAt])
 }

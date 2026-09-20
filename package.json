@@ -2,7 +2,7 @@
   "name": "aiml-mastery",
   "version": "1.0.0",
   "private": true,
-  "description": "AI/ML Mastery \u2014 a complete, adaptive learning platform covering 214 units from Python fundamentals to Generative AI and MLOps.",
+  "description": "AI/ML Mastery — a complete, adaptive learning platform covering 214 units from Python fundamentals to Generative AI and MLOps.",
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
@@ -38,6 +38,7 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "recharts": "^3.2.1",
+    "server-only": "^0.0.1",
     "tailwind-merge": "^3.3.1",
     "three": "^0.180.0",
     "zod": "^4.1.11",

@@ -8,6 +8,7 @@ import { Sidebar } from '@/components/layout/sidebar';
 import { Topbar } from '@/components/layout/topbar';
 import { Toaster } from '@/components/layout/toaster';
 import { BrowserNotifications } from '@/components/layout/browser-notifications';
+import { VerifyEmailBanner } from '@/components/layout/verify-email-banner';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
@@ -32,6 +33,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </aside>
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar />
+          {!user.emailVerifiedAt && <VerifyEmailBanner email={user.email} />}
           <main id="main" className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
             {children}
           </main>

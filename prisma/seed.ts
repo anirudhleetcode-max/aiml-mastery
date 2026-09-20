@@ -48,6 +48,10 @@ async function main() {
     data: {
       email: DEMO_EMAIL,
       passwordHash: await bcrypt.hash(DEMO_PASSWORD, 10),
+      // The demo address is confirmed by construction — it is ours. Seeding it
+      // unverified would show every fresh checkout a banner about an inbox
+      // nobody can open.
+      emailVerifiedAt: new Date(),
       profile: {
         create: {
           name: 'Demo Learner',

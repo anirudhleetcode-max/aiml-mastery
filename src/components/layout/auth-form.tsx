@@ -118,6 +118,14 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
           </div>
         </Field>
 
+        {!isSignup && (
+          <p className="-mt-1 text-right text-[12.5px]">
+            <Link href="/forgot-password" className="font-medium text-primary-ink underline-offset-2 hover:underline">
+              Forgot your password?
+            </Link>
+          </p>
+        )}
+
         {error && (
           <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger/25 bg-danger/8 p-3 text-[13px] text-danger">
             <AlertCircle size={15} className="mt-px shrink-0" />
