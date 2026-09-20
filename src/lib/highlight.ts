@@ -99,7 +99,10 @@ function highlightLine(
     // Numbers.
     const numberMatch = rest.match(/^\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b/);
     if (numberMatch) {
-      out += `<span class="${C.number}">${numberMatch[0]}</span>`;
+      // Escaped like every other branch. The regex above cannot match an
+      // HTML-special character today, but "safe because of a regex three
+      // lines up" is an invariant that quietly breaks when the regex changes.
+      out += `<span class="${C.number}">${escapeHtml(numberMatch[0])}</span>`;
       i += numberMatch[0].length;
       continue;
     }

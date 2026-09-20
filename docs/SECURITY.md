@@ -98,3 +98,17 @@ Prisma CLI.
   than one instance.
 - There is no email verification or password reset flow; both need an email
   provider, which this deployment does not have.
+- Quiz answers reach the browser for tests run in `immediate` mode, because
+  per-question feedback is the point of that mode and a round trip per
+  question would make it unusable. A learner willing to open devtools can
+  therefore read an answer before submitting it. This is deliberate and
+  bounded: the server still grades what was actually submitted, so the
+  recorded result reflects real answers, and the spec's requirement is that
+  completion cannot be marked *accidentally* — which evidence-based mastery
+  enforces. A learner determined to deceive their own study tool is not a
+  threat this design tries to stop.
+- The syntax highlighter and KaTeX render to HTML via
+  `dangerouslySetInnerHTML`. Both are fed curriculum source rather than
+  learner input, and both are safe independently of that: every highlighter
+  branch HTML-escapes its output, and KaTeX runs with `trust: false` so it
+  cannot emit `\href` to a `javascript:` URL.
