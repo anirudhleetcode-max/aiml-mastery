@@ -261,11 +261,14 @@ export interface NotificationPrefs {
   testTime: string;
   streakReminder: boolean;
   weeklySummary: boolean;
+  /** Notify when an achievement unlocks. */
+  achievementAlerts: boolean;
 }
 
 export type NotificationKind =
   | 'lesson-waiting'
   | 'test-due'
+  | 'revision-due'
   | 'streak-risk'
   | 'improvement'
   | 'mastery'

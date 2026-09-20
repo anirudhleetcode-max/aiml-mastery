@@ -5,8 +5,6 @@ import path from 'node:path';
 const DEMO_STATE = path.join('playwright', '.auth', 'demo.json');
 
 const PORT = Number(process.env.E2E_PORT ?? 3100);
-/** Where the file transport drops messages so a spec can read its own inbox. */
-const OUTBOX = path.resolve('playwright', '.auth', 'outbox.jsonl');
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 
 export default defineConfig({
@@ -46,9 +44,20 @@ export default defineConfig({
       use: { ...devices['Pixel 7'], storageState: DEMO_STATE },
     },
   ],
+  // Runs against the production build, not `next dev`.
+  //
+  // `next dev` compiles each route on its first visit. With 57 tests that was
+  // merely slow; at 127 it is fatal — a CI runner spent over two minutes
+  // compiling the authenticated tree for the very first sign-in and the whole
+  // suite never ran. The production server has no compile step, so the suite
+  // is both faster and a more faithful target: it is what actually ships.
+  //
+  // `E2E_DEV=1` restores the dev server for iterating on a single spec.
   webServer: {
-    command: `npx next dev --port ${PORT}`,
-    env: { EMAIL_TRANSPORT: 'file', EMAIL_OUTBOX_PATH: OUTBOX, APP_URL: BASE_URL },
+    command: process.env.E2E_DEV
+      ? `npx next dev --port ${PORT}`
+      : `npx next start --port ${PORT}`,
+    env: { APP_URL: BASE_URL },
     url: BASE_URL,
     reuseExistingServer: true,
     timeout: 180_000,

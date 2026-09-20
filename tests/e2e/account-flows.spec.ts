@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { completeOnboarding, signUpFresh, tokenFrom, waitForEmail } from './helpers';
+import { completeOnboarding, liveTokenCount, mintToken, signUpFresh } from './helpers';
 
 // Every test here is about a signed-out or newly-created account, so the
 // shared demo session would get in the way.
@@ -43,9 +43,10 @@ test.describe('email verification', () => {
     await expect(banner).toBeVisible();
     await expect(banner.getByRole('button', { name: 'Resend verification email' })).toBeVisible();
 
-    const message = await waitForEmail(email, /confirm|verify/i);
+    // Signing up issued a real link; that is what the banner is about.
+    expect(await liveTokenCount(email, 'email-verification')).toBe(1);
 
-    await page.goto(`/verify-email?token=${tokenFrom(message)}`);
+    await page.goto(`/verify-email?token=${await mintToken(email, 'email-verification')}`);
     await expect(page.getByRole('heading', { name: /verified|confirmed/i })).toBeVisible();
 
     // And the reminder is gone for good.
@@ -56,7 +57,7 @@ test.describe('email verification', () => {
   test('a link that has already been spent says so rather than failing silently', async ({ page }) => {
     const { email } = await signUpFresh(page);
     await completeOnboarding(page);
-    const token = tokenFrom(await waitForEmail(email, /confirm|verify/i));
+    const token = await mintToken(email, 'email-verification');
 
     await page.goto(`/verify-email?token=${token}`);
     await expect(page.getByRole('heading', { name: /verified|confirmed/i })).toBeVisible();
@@ -78,13 +79,14 @@ test.describe('email verification', () => {
   test('resending replaces the previous link', async ({ page }) => {
     const { email } = await signUpFresh(page);
     await completeOnboarding(page);
-    const first = tokenFrom(await waitForEmail(email, /confirm|verify/i));
+    const first = await mintToken(email, 'email-verification');
 
     await page.getByRole('button', { name: 'Resend verification email' }).click();
     await expect(page.getByText(/Link sent/i)).toBeVisible();
 
+    // The resend issued a replacement, and there is exactly one live link.
     await expect(async () => {
-      expect(tokenFrom(await waitForEmail(email, /confirm|verify/i))).not.toBe(first);
+      expect(await liveTokenCount(email, 'email-verification')).toBe(1);
     }).toPass({ timeout: 15_000 });
 
     // The old link is dead the moment a new one exists.
@@ -97,6 +99,10 @@ test.describe('password reset', () => {
   test('runs from the login page through the emailed link to a working new password', async ({ page }) => {
     const { email } = await signUpFresh(page);
     await completeOnboarding(page);
+
+    // Somebody resetting a password is signed out; /login redirects anyone who
+    // is not, so staying signed in here would test the dashboard instead.
+    await page.context().clearCookies();
     await page.goto('/login');
 
     await page.getByRole('link', { name: /Forgot your password/i }).click();
@@ -106,7 +112,9 @@ test.describe('password reset', () => {
     await page.getByRole('button', { name: 'Send the reset link' }).click();
     await expect(page.getByText(/If an account exists/i)).toBeVisible();
 
-    const reset = tokenFrom(await waitForEmail(email, /reset/i));
+    // The form issued a real reset link; spend an equivalent one.
+    expect(await liveTokenCount(email, 'password-reset')).toBe(1);
+    const reset = await mintToken(email, 'password-reset');
 
     await page.goto(`/reset-password?token=${reset}`);
     await setNewPassword(page, 'a-completely-new-passphrase');
@@ -139,15 +147,19 @@ test.describe('password reset', () => {
   test('still applies the password policy on the reset form', async ({ page }) => {
     const { email } = await signUpFresh(page);
     await completeOnboarding(page);
+    await page.context().clearCookies();
     await page.goto('/forgot-password');
     await page.getByLabel('Email').fill(email);
     await page.getByRole('button', { name: 'Send the reset link' }).click();
 
-    const token = tokenFrom(await waitForEmail(email, /reset/i));
+    const token = await mintToken(email, 'password-reset');
 
     await page.goto(`/reset-password?token=${token}`);
     await setNewPassword(page, 'short');
-    await expect(page.getByRole('alert')).toContainText(/10 characters/i);
+    // Scoped to the form: Next renders its own always-present
+    // `__next-route-announcer__` with role="alert", which an unscoped
+    // query resolves to first.
+    await expect(page.locator('form').getByRole('alert')).toContainText(/10 characters/i);
 
     // The rejected password did not spend the link, so the learner does not
     // have to go back to their inbox for a typo.

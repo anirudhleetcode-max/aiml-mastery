@@ -17,16 +17,16 @@ import { expect, test } from '@playwright/test';
 const WIDTHS = [320, 375, 390, 412, 768, 1024, 1440];
 
 const ROUTES = [
-  { path: '/', heading: /./, auth: false },
-  { path: '/login', heading: /Welcome back/, auth: false },
-  { path: '/signup', heading: /Create your account/, auth: false },
-  { path: '/forgot-password', heading: /password/i, auth: false },
-  { path: '/verify-email', heading: /./, auth: false },
-  { path: '/dashboard', heading: /./, auth: true },
-  { path: '/interview', heading: /./, auth: true },
-  { path: '/flashcards', heading: /./, auth: true },
-  { path: '/labs', heading: /./, auth: true },
-  { path: '/analytics', heading: /./, auth: true },
+  { path: '/', auth: false },
+  { path: '/login', auth: false },
+  { path: '/signup', auth: false },
+  { path: '/forgot-password', auth: false },
+  { path: '/verify-email', auth: false },
+  { path: '/dashboard', auth: true },
+  { path: '/interview', auth: true },
+  { path: '/flashcards', auth: true },
+  { path: '/labs', auth: true },
+  { path: '/analytics', auth: true },
 ];
 
 async function overflows(page: import('@playwright/test').Page) {
@@ -41,12 +41,28 @@ for (const width of WIDTHS) {
   test.describe(`at ${width}px`, () => {
     test.use({ viewport: { width, height: 900 } });
 
-    for (const route of ROUTES) {
+    for (const route of ROUTES.filter((r) => r.auth)) {
       test(`${route.path} fits and renders`, async ({ page }) => {
         await page.goto(route.path);
         await expect(page.getByRole('heading').first()).toBeVisible();
         expect(await overflows(page), `${route.path} scrolls horizontally at ${width}px`).toBe(false);
       });
     }
+
+    // The signed-out pages need a signed-out browser. `/login` and `/signup`
+    // redirect anyone who is not, so testing them in the shared demo session
+    // silently measured the dashboard instead — twice over, since the
+    // dashboard already has its own row above.
+    test.describe('signed out', () => {
+      test.use({ storageState: { cookies: [], origins: [] } });
+
+      for (const route of ROUTES.filter((r) => !r.auth)) {
+        test(`${route.path} fits and renders`, async ({ page }) => {
+          await page.goto(route.path);
+          await expect(page.getByRole('heading').first()).toBeVisible();
+          expect(await overflows(page), `${route.path} scrolls horizontally at ${width}px`).toBe(false);
+        });
+      }
+    });
   });
 }

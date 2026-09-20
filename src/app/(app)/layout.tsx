@@ -34,7 +34,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar />
           {!user.emailVerifiedAt && <VerifyEmailBanner email={user.email} />}
-          <main id="main" className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
+          {/* `px-3` on the narrowest phones: at 320px a 16px gutter each side
+              leaves too little for a dense dashboard card to fit. */}
+          <main id="main" className="flex-1 px-3 py-6 sm:px-6 lg:px-8">
             {children}
           </main>
         </div>

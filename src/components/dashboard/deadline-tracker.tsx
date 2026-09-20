@@ -38,7 +38,7 @@ export function DeadlineTracker({
   const completion = pace.totalUnits ? pace.completedUnits / pace.totalUnits : 0;
 
   return (
-    <section className="rounded-xl border border-line bg-surface p-5" aria-labelledby="deadline-heading">
+    <section className="min-w-0 rounded-xl border border-line bg-surface p-4 sm:p-5" aria-labelledby="deadline-heading">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
@@ -55,9 +55,13 @@ export function DeadlineTracker({
           </p>
         </div>
 
-        <div className={cn('flex items-center gap-2 rounded-lg border px-3 py-2', style.bg)}>
-          <Icon size={15} className={style.tone} />
-          <span className={cn('text-[12.5px] font-medium', style.tone)}>{pace.message}</span>
+        {/* `min-w-0` on both the badge and its text: the pace message is a
+            full sentence, and without these the flex default of
+            `min-width: auto` keeps it on one line and pushes the dashboard
+            wider than a phone. */}
+        <div className={cn('flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2', style.bg)}>
+          <Icon size={15} className={cn('shrink-0', style.tone)} />
+          <span className={cn('min-w-0 text-[12.5px] font-medium', style.tone)}>{pace.message}</span>
         </div>
       </div>
 
@@ -95,7 +99,13 @@ export function DeadlineTracker({
               if (!unit) return null;
               return (
                 <li key={p.unitId} className="flex items-baseline justify-between gap-3 text-[12.5px]">
-                  <Link href={`/learn/${unit.slug}`} className="truncate font-medium text-ink hover:text-primary-ink hover:underline">
+                  {/* `truncate` sets `white-space: nowrap`, which makes this
+                      flex item's automatic minimum the full title width — so
+                      it needs `min-w-0` to actually truncate. */}
+                  <Link
+                    href={`/learn/${unit.slug}`}
+                    className="min-w-0 truncate font-medium text-ink hover:text-primary-ink hover:underline"
+                  >
                     {unit.title}
                   </Link>
                   <span className="shrink-0 text-subtle">{p.reason}</span>

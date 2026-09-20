@@ -37,13 +37,15 @@ export interface EvaluationInput {
   /** Opt out of the model even where one is configured. */
   useAi?: boolean;
   /** Changes only the framing sentence; the rules are identical. */
-  mode?: 'interview' | 'flashcard';
+  mode?: 'interview' | 'flashcard' | 'teaching';
 }
 
-const SYSTEM_BY_MODE: Record<'interview' | 'flashcard', string> = {
+const SYSTEM_BY_MODE: Record<'interview' | 'flashcard' | 'teaching', string> = {
   interview: 'You are grading a single interview answer for a learner on an AI/ML study platform.',
   flashcard:
     'You are checking a single flashcard recall attempt for a learner on an AI/ML study platform. Recall answers are short by nature; judge whether the idea is right, not whether it is elegant.',
+  teaching:
+    'You are reading a learner explaining a concept in their own words, on an AI/ML study platform, to someone who does not know it. Judge whether the explanation would actually teach it: whether the mechanism is right, whether the order makes sense, and whether anything stated is wrong. Plain language is a strength here, not a weakness — do not reward jargon.',
 };
 
 const SYSTEM_RULES = [
@@ -65,7 +67,7 @@ const SYSTEM_RULES = [
   '"suggestedImprovement":string,"followUpQuestion":string,"summary":string}',
 ];
 
-function systemPrompt(mode: 'interview' | 'flashcard'): string {
+function systemPrompt(mode: 'interview' | 'flashcard' | 'teaching'): string {
   return [SYSTEM_BY_MODE[mode], '', ...SYSTEM_RULES].join('\n');
 }
 

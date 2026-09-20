@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db';
+import { ACHIEVEMENT_BY_ID } from '@/data/achievements';
 import type { Overview } from '@/features/progress/overview';
 import type { FullState } from '@/lib/sync/state';
 import { isStreakAtRisk } from '@/features/streak/streak';
@@ -139,6 +140,52 @@ export function computeDueNotifications(state: FullState, o: Overview): Candidat
     }
   }
 
+  /* ---- revision that has come due ---- */
+  if (!beforeStart && prefs.studyReminder && o.dueReviews.length > 0) {
+    const overdue = o.dueReviews.filter(
+      (r) => r.progress.nextReviewAt !== null && r.progress.nextReviewAt < today,
+    ).length;
+    const first = o.dueReviews[0]!;
+    out.push({
+      kind: 'revision-due',
+      title:
+        o.dueReviews.length === 1
+          ? `${first.unit.title} is due for review`
+          : `${o.dueReviews.length} units are due for review`,
+      body:
+        overdue > 0
+          ? `${overdue} of them are already overdue. Reviewing late is still reviewing, and the schedule adjusts to what you actually recall.`
+          : 'The interval was chosen to catch each one just before you would have forgotten it.',
+      href: '/tests/review',
+      dedupeKey: `revision-due-${today}`,
+    });
+  }
+
+  /* ---- something unlocked, worth a moment ---- */
+  if (prefs.achievementAlerts) {
+    const justUnlocked = state.achievements
+      .filter((a) => daysBetween(dateKey(new Date(a.unlockedAt)), today) === 0)
+      .map((a) => ACHIEVEMENT_BY_ID.get(a.id))
+      .filter((a): a is NonNullable<typeof a> => Boolean(a));
+
+    if (justUnlocked.length > 0) {
+      const first = justUnlocked[0]!;
+      out.push({
+        kind: 'achievement',
+        title:
+          justUnlocked.length === 1
+            ? `Unlocked: ${first.name}`
+            : `${justUnlocked.length} achievements unlocked today`,
+        body:
+          justUnlocked.length === 1
+            ? first.description
+            : `Starting with ${first.name} — ${first.description}`,
+        href: '/achievements',
+        dedupeKey: `achievement-${justUnlocked.map((a) => a.id).sort().join('-')}-${today}`.slice(0, 120),
+      });
+    }
+  }
+
   /* ---- behind schedule, with a plan rather than a scolding ---- */
   if (o.pace.status === 'behind') {
     out.push({
@@ -180,12 +227,14 @@ export async function refreshNotifications(userId: string, state: FullState, o: 
   const priority: NotificationKind[] = [
     'streak-risk',
     'test-due',
+    'revision-due',
     'weak-topic',
     'lesson-waiting',
     'schedule-recalculated',
     'weekly-summary',
     'improvement',
     'mastery',
+    'achievement',
   ];
   const ordered = [...candidates].sort(
     (a, b) => priority.indexOf(a.kind) - priority.indexOf(b.kind),

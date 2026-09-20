@@ -29,6 +29,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   testTime: '21:00',
   streakReminder: true,
   weeklySummary: true,
+  achievementAlerts: true,
 };
 
 export interface UISettings {

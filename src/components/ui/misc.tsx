@@ -101,9 +101,14 @@ export function Stat({
   );
 }
 
-export function Kbd({ children }: { children: React.ReactNode }) {
+export function Kbd({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <kbd className="rounded border border-line bg-surface-3 px-1.5 py-0.5 font-mono text-[11px] text-muted">
+    <kbd
+      className={cn(
+        'rounded border border-line bg-surface-3 px-1.5 py-0.5 font-mono text-[11px] text-muted',
+        className,
+      )}
+    >
       {children}
     </kbd>
   );

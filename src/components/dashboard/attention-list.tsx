@@ -57,7 +57,7 @@ function Panel({
   tone: 'warning' | 'info';
 }) {
   return (
-    <div className="rounded-xl border border-line bg-surface p-5">
+    <div className="min-w-0 rounded-xl border border-line bg-surface p-4 sm:p-5">
       <div className="flex items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 text-[14px] font-semibold text-ink">
           {icon}

@@ -2,7 +2,7 @@
   "name": "aiml-mastery",
   "version": "1.0.0",
   "private": true,
-  "description": "AI/ML Mastery \u2014 a complete, adaptive learning platform covering 214 units from Python fundamentals to Generative AI and MLOps.",
+  "description": "AI/ML Mastery — a complete, adaptive learning platform covering 214 units from Python fundamentals to Generative AI and MLOps.",
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
@@ -17,12 +17,13 @@
     "setup": "prisma generate && prisma db push && npm run db:seed",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
+    "test:e2e": "npm run build && playwright test",
     "curriculum:verify": "tsx scripts/verify-curriculum.ts",
     "test:a11y": "playwright test tests/e2e/accessibility.spec.ts",
     "verify": "npm run typecheck && npm run lint && npm run check:contrast && npm run curriculum:verify && npm test",
     "perf": "node scripts/perf-audit.mjs",
-    "check:contrast": "node scripts/check-contrast.mjs"
+    "check:contrast": "node scripts/check-contrast.mjs",
+    "test:e2e:dev": "E2E_DEV=1 playwright test"
   },
   "dependencies": {
     "@prisma/client": "6.19.3",

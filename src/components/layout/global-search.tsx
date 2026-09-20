@@ -98,11 +98,15 @@ export function GlobalSearch() {
           setOpen(true);
           setTimeout(() => inputRef.current?.focus(), 10);
         }}
-        className="flex h-9 w-full max-w-xs items-center gap-2 rounded-lg border border-line bg-surface-2 px-3 text-[13px] text-subtle transition-colors hover:border-line-strong hover:text-muted sm:max-w-sm"
+        // `min-w-0` is load-bearing: as a flex child this button's default
+        // `min-width: auto` is its content width, so without it the button
+        // refuses to shrink below "Search everything… ⌘K" and pushes the
+        // whole topbar past the viewport on a narrow phone.
+        className="flex h-9 w-full min-w-0 max-w-xs items-center gap-2 rounded-lg border border-line bg-surface-2 px-3 text-[13px] text-subtle transition-colors hover:border-line-strong hover:text-muted sm:max-w-sm"
       >
         <Search size={14} />
-        <span className="flex-1 text-left">Search everything…</span>
-        <Kbd>⌘K</Kbd>
+        <span className="flex-1 truncate text-left">Search everything…</span>
+        <Kbd className="hidden sm:inline-flex">⌘K</Kbd>
       </button>
 
       {open && (

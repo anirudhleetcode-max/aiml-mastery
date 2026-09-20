@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { AlertCircle, CircleCheck, Loader2, MailCheck } from 'lucide-react';
 
-type Status = 'checking' | 'verified' | 'already' | 'expired' | 'used' | 'invalid' | 'error';
+type Status = 'checking' | 'verified' | 'expired' | 'used' | 'invalid' | 'error';
 
 /**
  * Spends a verification token from an email link.
@@ -32,17 +32,23 @@ export function VerifyEmailView() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token }),
         });
-        const data = (await res.json()) as { status?: string };
+        // A dev-server restart or a proxy hiccup can truncate the body, and
+        // `res.json()` throws on an empty one. That is a transport problem,
+        // not a verdict about the token, so it reads as `error` rather than
+        // as `invalid` — which would wrongly tell the learner their link is bad.
+        const data = (await res.json().catch(() => null)) as { status?: string } | null;
         if (cancelled) return;
+        if (!data) {
+          setStatus('error');
+          return;
+        }
 
         switch (data.status) {
           case 'verified':
             setStatus('verified');
             break;
           case 'used':
-            // Clicking the link twice is the usual cause, and the honest
-            // reading is that the address is confirmed.
-            setStatus('already');
+            setStatus('used');
             break;
           case 'expired':
             setStatus('expired');
@@ -89,13 +95,6 @@ export function VerifyEmailView() {
       body: 'Your address is verified. Password resets and reminders will reach you.',
       action: { href: '/dashboard', label: 'Go to your dashboard' },
     },
-    already: {
-      tone: 'success',
-      icon: <MailCheck size={20} />,
-      title: 'Already confirmed',
-      body: 'This address was verified previously — the link works once, so nothing more is needed.',
-      action: { href: '/dashboard', label: 'Go to your dashboard' },
-    },
     expired: {
       tone: 'warning',
       icon: <AlertCircle size={20} />,
@@ -107,6 +106,8 @@ export function VerifyEmailView() {
       tone: 'success',
       icon: <MailCheck size={20} />,
       title: 'Already confirmed',
+      // Clicking the link twice is the usual cause, and saying *why* the page
+      // is showing this is more use than the bare fact that it is.
       body: 'This link has already been used, which means the address is verified.',
       action: { href: '/dashboard', label: 'Go to your dashboard' },
     },

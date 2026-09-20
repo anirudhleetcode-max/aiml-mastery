@@ -53,7 +53,6 @@ export async function POST(req: Request) {
   const { token } = await issueToken(user.id, 'email-verification');
 
   // Housekeeping, at most hourly per process, awaited by nobody.
-
   maybePrune();
   const result = await sendEmail(verificationEmail(row.email, row.profile?.name ?? '', token));
   if (!result.ok) {

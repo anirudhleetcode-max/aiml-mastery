@@ -12,7 +12,7 @@ import { formatMinutes, pct } from '@/lib/format';
  */
 export function DomainProgress({ domains }: { domains: DomainStat[] }) {
   return (
-    <section className="rounded-xl border border-line bg-surface p-5" aria-labelledby="domains-heading">
+    <section className="min-w-0 rounded-xl border border-line bg-surface p-4 sm:p-5" aria-labelledby="domains-heading">
       <div className="flex items-baseline justify-between gap-3">
         <h2 id="domains-heading" className="text-[14px] font-semibold text-ink">
           Progress by domain

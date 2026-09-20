@@ -170,8 +170,8 @@ What has been verified here, and what has not:
 | | Status |
 |---|---|
 | Production build (`npm run build`) | Verified — passes, and emits `.next/standalone`. |
-| Standalone server starts and serves | Verified — run with `npm start` and smoke-tested over HTTP. |
-| Full test suite | Verified — unit, integration, security and end-to-end. |
+| Standalone server starts and serves | Verified — `node .next/standalone/server.js` was run directly and smoke-tested: `/`, `/login` and `/signup` return 200; `/interview`, `/flashcards`, `/labs` and `/analytics` return 307 to `/login` for a signed-out request; a real signup wrote to the database and set a `Secure; HttpOnly; SameSite=lax` cookie; and all six security headers survived. Note that `next dev` overwrites `.next`, so a dev run between the build and the check destroys the standalone output — build immediately before verifying. |
+| Full test suite | Verified — unit, integration, security and end-to-end. The end-to-end suite runs against this same production server rather than `next dev`, so what it exercises is what deploys. |
 | `Dockerfile` builds | **Not verified.** No Docker daemon in this environment, so the image has never been built. The build it runs — `prisma generate && npm run build` — is verified, and the layout it copies from matches what that build produces, but treat the first `docker build` as a step to watch rather than a formality. |
 | Deployed to a public URL | **Not done.** Blocked as above. |
 
