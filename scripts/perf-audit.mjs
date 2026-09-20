@@ -23,7 +23,12 @@ const ROUTES = [
   { path: '/labs', name: 'Labs', auth: true },
 ];
 
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+// This repository's development sandbox ships a Chromium at a fixed path and
+// blocks the download Playwright would otherwise do; a CI runner installs its
+// own the usual way. Use the pinned one only when it is actually there, so the
+// same script runs in both places.
+const PINNED = '/opt/pw-browsers/chromium';
+const browser = await chromium.launch(existsSync(PINNED) ? { executablePath: PINNED } : {});
 
 // Reuse the session the e2e setup project saved, when there is one. The login
 // endpoint is rate limited to ten attempts per ten minutes, so a perf run
@@ -44,13 +49,29 @@ if (/\/login/.test(page.url())) {
   await page.waitForURL(/dashboard|onboarding/, { timeout: 30000 }).catch(() => {});
 }
 
+// A deployed instance has no seeded demo learner, so falling back to creating
+// one is what makes it possible to measure the signed-in routes anywhere other
+// than a development machine — which is the only measurement that says
+// anything about what a real user waits for.
+if (/\/login/.test(page.url())) {
+  const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+  await page.goto(`${BASE}/signup`);
+  await page.getByLabel('Your name').fill('Perf Audit');
+  await page.getByLabel('Email').fill(`perf-${stamp}@example.com`);
+  await page.getByLabel('Password', { exact: true }).fill('a-long-enough-perf-passphrase');
+  await page.getByRole('button', { name: /sign up|create account/i }).click();
+  await page.waitForURL(/dashboard|onboarding/, { timeout: 60000 }).catch(() => {});
+}
+
 // Measuring the login page seven times and calling it a perf report is worse
 // than reporting nothing, so refuse to continue rather than swallow this.
-if (/\/login/.test(page.url())) {
+if (/\/login|\/signup/.test(page.url())) {
   console.error(
     '\n  Could not authenticate — every signed-in route would measure the login\n' +
-      '  page instead. Seed the database (npm run db:reset) and, if the login\n' +
-      '  rate limiter has been tripped, wait for its window to clear.\n',
+      '  page instead. Against a local build, seed the database (npm run db:reset)\n' +
+      '  and let the login rate limiter\'s window clear. Against a deployment,\n' +
+      '  this means signup itself is failing, which is a fault worth chasing on\n' +
+      '  its own.\n',
   );
   await browser.close();
   process.exit(1);
