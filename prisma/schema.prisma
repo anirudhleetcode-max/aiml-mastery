@@ -7,6 +7,13 @@
 
 generator client {
   provider = "prisma-client-js"
+  // The deploy builds on a GitHub runner and uploads the result to Vercel, so
+  // the machine that runs `prisma generate` is not the machine that runs the
+  // query. "native" covers local development and the runner itself; the rhel
+  // target is Vercel's Lambda runtime (Amazon Linux). Without it the bundle
+  // ships an engine the runtime cannot load, and every query fails at request
+  // time while the build stays green.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {

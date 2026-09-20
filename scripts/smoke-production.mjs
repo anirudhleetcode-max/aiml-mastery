@@ -110,6 +110,17 @@ for (const path of ['/dashboard', '/interview', '/flashcards', '/labs', '/analyt
 }
 
 /* ---------------------------------------------- 5. the database really works */
+// Asked first, because every check below it fails the same opaque way when the
+// answer is no: a 500 that says nothing about which part of the deployment is
+// wrong. The classification comes from the deployment itself.
+const health = await get('/api/health');
+const healthBody = await health.json().catch(() => null);
+expect(
+  health.status === 200 && healthBody?.database === 'ok',
+  'the deployment can reach its database',
+  healthBody?.database ? `reported "${healthBody.database}"` : `got ${health.status}`,
+);
+
 const email = `smoke-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com`;
 const password = 'a-long-enough-smoke-passphrase';
 
