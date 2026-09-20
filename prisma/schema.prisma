@@ -360,3 +360,20 @@ model LabCompletion {
 
   @@unique([userId, labId])
 }
+
+/// Fixed-window rate-limit counters.
+///
+/// Shared rather than in-process, because an in-memory Map gives every
+/// instance its own budget: four instances behind a load balancer would allow
+/// four times the intended limit, which is the control quietly not working
+/// rather than the control failing loudly. One row per key, rewritten when its
+/// window expires, so the table stays proportional to active clients.
+model RateLimit {
+  key       String   @id
+  count     Int      @default(0)
+  /// Epoch milliseconds at which the current window ends.
+  resetAt   BigInt
+  updatedAt DateTime @updatedAt
+
+  @@index([resetAt])
+}

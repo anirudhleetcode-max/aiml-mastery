@@ -27,7 +27,7 @@ export async function POST(req: Request) {
   const user = await apiUser();
   if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
 
-  const limit = rateLimit(clientKey(req, `tutor:${user.id}`), 60, 60);
+  const limit = await rateLimit(clientKey(req, `tutor:${user.id}`), 60, 60);
   if (!limit.ok) {
     return NextResponse.json(
       { error: 'One question at a time — try again in a moment.' },

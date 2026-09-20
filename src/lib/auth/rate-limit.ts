@@ -1,17 +1,18 @@
-/**
- * A small fixed-window rate limiter for auth endpoints.
- *
- * In-process by design: this app runs as a single Node server, and reaching
- * for Redis here would be infrastructure without a purpose. The interface is
- * deliberately narrow so swapping in a shared store later is a one-file change.
- */
-interface Bucket {
-  count: number;
-  resetAt: number;
-}
+import { prisma } from '@/lib/db';
 
-const buckets = new Map<string, Bucket>();
-const MAX_KEYS = 10_000;
+/**
+ * A fixed-window rate limiter backed by the database.
+ *
+ * It was in-process, which is fine for one Node server and wrong the moment
+ * there are two: each instance keeps its own Map, so N instances behind a
+ * load balancer allow N times the intended limit. That is the control quietly
+ * not working rather than failing loudly, which is the worse of the two.
+ *
+ * The store is the database the app already has — no Redis, no new service.
+ * Each key is one row holding its window's end and a count, rewritten when
+ * the window expires, so the table stays proportional to active clients
+ * rather than to total requests.
+ */
 
 export interface RateLimitResult {
   ok: boolean;
@@ -19,27 +20,60 @@ export interface RateLimitResult {
   retryAfterSeconds: number;
 }
 
-export function rateLimit(key: string, limit: number, windowSeconds: number): RateLimitResult {
+/** Applied when the store is unreachable — see the note in `rateLimit`. */
+const ALLOW: RateLimitResult = { ok: true, remaining: 0, retryAfterSeconds: 0 };
+
+export async function rateLimit(key: string, limit: number, windowSeconds: number): Promise<RateLimitResult> {
   const now = Date.now();
   const windowMs = windowSeconds * 1000;
 
-  // Cheap eviction: drop expired entries once the map gets large.
-  if (buckets.size > MAX_KEYS) {
-    for (const [k, b] of buckets) if (b.resetAt <= now) buckets.delete(k);
-    if (buckets.size > MAX_KEYS) buckets.clear();
-  }
+  try {
+    const row = await prisma.rateLimit.findUnique({ where: { key } });
 
-  const existing = buckets.get(key);
-  if (!existing || existing.resetAt <= now) {
-    buckets.set(key, { count: 1, resetAt: now + windowMs });
-    return { ok: true, remaining: limit - 1, retryAfterSeconds: 0 };
-  }
+    // No row, or the window has passed: start a fresh one.
+    if (!row || Number(row.resetAt) <= now) {
+      const resetAt = BigInt(now + windowMs);
+      await prisma.rateLimit.upsert({
+        where: { key },
+        create: { key, count: 1, resetAt },
+        update: { count: 1, resetAt },
+      });
+      return { ok: true, remaining: limit - 1, retryAfterSeconds: 0 };
+    }
 
-  existing.count += 1;
-  if (existing.count > limit) {
-    return { ok: false, remaining: 0, retryAfterSeconds: Math.ceil((existing.resetAt - now) / 1000) };
+    const updated = await prisma.rateLimit.update({
+      where: { key },
+      data: { count: { increment: 1 } },
+      select: { count: true, resetAt: true },
+    });
+
+    if (updated.count > limit) {
+      return {
+        ok: false,
+        remaining: 0,
+        retryAfterSeconds: Math.max(1, Math.ceil((Number(updated.resetAt) - now) / 1000)),
+      };
+    }
+    return { ok: true, remaining: limit - updated.count, retryAfterSeconds: 0 };
+  } catch {
+    // Fail open. A limiter that rejects every request when its store hiccups
+    // is a denial of service on the application itself, and the endpoints
+    // behind it are already authenticated and validated. The trade is
+    // deliberate: availability over a brief window of unthrottled requests.
+    return ALLOW;
   }
-  return { ok: true, remaining: limit - existing.count, retryAfterSeconds: 0 };
+}
+
+/**
+ * Removes expired counters.
+ *
+ * Rows are rewritten in place while a key stays active, so this only clears
+ * keys that have gone quiet. Safe to call on any schedule, or never — the
+ * table grows with distinct clients rather than with requests.
+ */
+export async function pruneRateLimits(): Promise<number> {
+  const { count } = await prisma.rateLimit.deleteMany({ where: { resetAt: { lt: BigInt(Date.now()) } } });
+  return count;
 }
 
 /** Best-effort client identity for rate limiting. */

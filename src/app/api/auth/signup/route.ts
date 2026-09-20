@@ -17,7 +17,7 @@ const schema = z.object({
 export async function POST(req: Request) {
   if (!sameOrigin(req)) return NextResponse.json({ error: 'Cross-origin request rejected.' }, { status: 403 });
 
-  const limit = rateLimit(clientKey(req, 'signup'), 5, 60 * 15);
+  const limit = await rateLimit(clientKey(req, 'signup'), 5, 60 * 15);
   if (!limit.ok) {
     return NextResponse.json(
       { error: 'Too many sign-up attempts. Try again shortly.' },

@@ -21,7 +21,7 @@ export async function POST(req: Request) {
   const user = await apiUser();
   if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
 
-  const limit = rateLimit(`sync:${user.id}`, 120, 60);
+  const limit = await rateLimit(`sync:${user.id}`, 120, 60);
   if (!limit.ok) {
     return NextResponse.json(
       { error: 'Slow down a moment.' },

@@ -35,12 +35,25 @@ additionally checks that `Origin`, when present, matches `Host`.
 
 ## Rate limiting
 
-Fixed-window limits on sign-up (5 per 15 minutes per IP), login (10 per 10
-minutes per IP), sync (120 per minute per user) and the tutor (60 per minute
-per user). In-process by design — this runs as a single Node server, and
-reaching for Redis here would be infrastructure without a purpose. The
-interface is narrow enough that swapping in a shared store is a one-file
-change.
+Fixed-window, counted in the database rather than in process memory. The
+in-memory version was correct for a single Node server and wrong for two:
+each instance would keep its own Map, so N instances behind a load balancer
+allow N times the intended limit — the control quietly not working rather
+than failing loudly.
+
+The store is the database the app already has; no Redis, no new service.
+One row per key holds the window's end and a count, rewritten when the
+window expires, so the table is proportional to active clients rather than
+to total requests. `pruneRateLimits()` clears keys that have gone quiet and
+is safe to call on any schedule, or never.
+
+It fails open. If the store is unreachable the request is allowed, because a
+limiter that rejects everything when its backend hiccups is a denial of
+service on the application itself, and the endpoints behind it are already
+authenticated and input-validated. That trade is deliberate.
+
+Current limits: signup 5 per 15 minutes per client, login 10 per 10 minutes
+per client, sync 120 per minute per user, tutor 60 per minute per user.
 
 ## Input validation
 
@@ -94,8 +107,6 @@ Prisma CLI.
 
 ## Known limitations
 
-- Rate limiting is per-process, so it would need a shared store behind more
-  than one instance.
 - There is no email verification or password reset flow; both need an email
   provider, which this deployment does not have.
 - Quiz answers reach the browser for tests run in `immediate` mode, because

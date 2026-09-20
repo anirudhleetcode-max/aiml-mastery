@@ -33,6 +33,22 @@ enforce it:
 10. **Practice and test** — evidence, not a checkbox.
 11. **Teach it back** — the last step, because it is the real one.
 
+Beyond the lessons, four surfaces practise the same material in the forms an
+interview and a job actually demand:
+
+- **Interview preparation** — the curriculum's 660 questions as one bank,
+  filterable by seniority and domain, with sessions ordered by what you have
+  struggled with. The model answer stays hidden until you ask for it, because
+  recognising a good answer is not what an interview measures. Readiness is
+  computed from verdicts you recorded, so it starts at zero.
+- **Flashcards** — each verdict schedules the card on the same ladder unit
+  review uses; a card you could not recall comes back tomorrow.
+- **Labs** — 39 interactive instruments, each with an ordered investigation
+  naming a specific manipulation and the specific thing it should produce. A
+  lab closes only once every step is ticked, and the server re-checks the set.
+- **Teacher mode** — explain a unit in your own words and get per-point
+  feedback on what you covered and what you missed.
+
 ## Quick start
 
 ```bash
@@ -63,6 +79,11 @@ report has something real in it. Production users always start from zero.
 | `npm run test:e2e` | Playwright end-to-end tests |
 | `npm run curriculum:verify` | Curriculum integrity gate |
 | `npm run curriculum:verify -- --stats` | Per-domain curriculum statistics |
+| `npm run check:contrast` | WCAG AA gate on the UI design tokens |
+| `npm run test:a11y` | Playwright + axe accessibility checks |
+| `npm run perf` | Performance audit against a running build |
+| `npm run verify` | Typecheck, lint, contrast, curriculum, tests |
+| `./scripts/verify-all.sh --full` | The above, plus build and end-to-end |
 | `npm run db:reset` | Drop, recreate and reseed the database |
 
 ## Architecture

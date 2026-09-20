@@ -12,7 +12,7 @@ const schema = z.object({ email: z.string().email().max(200), password: z.string
 export async function POST(req: Request) {
   if (!sameOrigin(req)) return NextResponse.json({ error: 'Cross-origin request rejected.' }, { status: 403 });
 
-  const limit = rateLimit(clientKey(req, 'login'), 10, 60 * 10);
+  const limit = await rateLimit(clientKey(req, 'login'), 10, 60 * 10);
   if (!limit.ok) {
     return NextResponse.json(
       { error: 'Too many attempts. Try again in a few minutes.' },
