@@ -19,7 +19,8 @@
     "test:e2e": "playwright test",
     "curriculum:verify": "tsx scripts/verify-curriculum.ts",
     "test:a11y": "playwright test tests/e2e/accessibility.spec.ts",
-    "verify": "npm run typecheck && npm run lint && npm run curriculum:verify && npm test"
+    "verify": "npm run typecheck && npm run lint && npm run curriculum:verify && npm test",
+    "perf": "node scripts/perf-audit.mjs"
   },
   "dependencies": {
     "@prisma/client": "6.19.3",

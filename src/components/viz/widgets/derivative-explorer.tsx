@@ -193,8 +193,6 @@ export default function DerivativeExplorer({ props }: { props?: Record<string, u
   const secant = (curve.f(x1) - curve.f(x0)) / Math.max(1e-9, x1 - x0);
   const error = Math.abs(secant - slope);
 
-  const layout = React.useRef({ w: 0 });
-
   /** Shared x-mapping, so both canvases put the same x in the same column. */
   const makeX = (w: number) => (x: number) => PAD.l + ((x - lo) / (hi - lo)) * (w - PAD.l - PAD.r);
   const makeY = (hh: number, [a, b]: [number, number]) => (v: number) =>
@@ -228,14 +226,15 @@ export default function DerivativeExplorer({ props }: { props?: Record<string, u
         } else ctx.lineTo(X(x), Y(v));
       }
       ctx.stroke();
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     },
+    // makeX and makeY are pure functions of PAD and the domain, so the domain
+    // is the only dependency that matters here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [lo, hi],
   );
 
   const top = useResponsiveCanvas(
     (ctx, w, hh) => {
-      layout.current.w = w;
       const resolve = makeResolve();
       const grid = resolve('var(--viz-grid)', 'rgba(128,128,128,0.3)');
       const axis = resolve('var(--viz-axis)', '#8a8a8a');
@@ -418,24 +417,20 @@ export default function DerivativeExplorer({ props }: { props?: Record<string, u
 
   const slopeWord = Math.abs(slope) < 0.02 ? 'flat — a turning point' : slope > 0 ? 'rising' : 'falling';
 
+  const readoutItems: { label: string; value: string; tone?: 'default' | 'good' | 'warn' | 'bad' }[] = [
+    { label: 'x', value: x0.toFixed(2) },
+    { label: 'f(x)', value: curve.f(x0).toFixed(3) },
+    { label: "f'(x)", value: slope.toFixed(3), tone: Math.abs(slope) < 0.02 ? 'warn' : slope > 0 ? 'good' : 'bad' },
+  ];
+  if (showSecant) {
+    readoutItems.push({ label: 'secant', value: secant.toFixed(3) });
+    readoutItems.push({ label: 'error', value: error.toFixed(4), tone: error < 0.02 ? 'good' : 'default' });
+  }
+
   return (
     <WidgetShell
       takeaway="The bottom curve is the slope of the top one, plotted against the same x. Wherever the top curve turns over, the bottom curve crosses zero — that crossing is exactly what an optimiser is hunting for when it looks for a minimum."
-      readout={
-        <Readout
-          items={[
-            { label: 'x', value: x0.toFixed(2) },
-            { label: 'f(x)', value: curve.f(x0).toFixed(3) },
-            { label: "f'(x)", value: slope.toFixed(3), tone: Math.abs(slope) < 0.02 ? 'warn' : slope > 0 ? 'good' : 'bad' },
-            ...(showSecant
-              ? [
-                  { label: 'secant', value: secant.toFixed(3) as string },
-                  { label: 'error', value: error.toFixed(4) as string, tone: (error < 0.02 ? 'good' : 'default') as 'good' | 'default' },
-                ]
-              : []),
-          ]}
-        />
-      }
+      readout={<Readout items={readoutItems} />}
       controls={
         <>
           <Toggle

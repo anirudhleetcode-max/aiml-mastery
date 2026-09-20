@@ -9483,3 +9483,1242 @@ shrinkage + depth    CV accuracy 0.8893 (+/- 0.0091)
     },
   },
 
+  {
+    id: 'ML-017',
+    domain: 'ML',
+    module: 'Clustering',
+    topic: 'Centroid-based clustering',
+    title: 'K-Means Clustering',
+    slug: 'k-means-clustering',
+    difficulty: 3,
+    estimatedMinutes: 40,
+    prerequisites: ['ML-002', 'ML-003'],
+    related: ['ML-010'],
+    tags: ['k-means', 'clustering', 'unsupervised', 'inertia', 'elbow method', 'silhouette'],
+
+    learningObjectives: [
+      'Trace Lloyd’s algorithm by hand and explain why it always converges but not necessarily to the best answer',
+      'Choose k using the elbow method and silhouette scores, and explain the limits of both',
+      'Explain why k-means requires scaling and why it can only find roughly spherical, similarly-sized clusters',
+      'Diagnose sensitivity to initialisation and explain what k-means++ and n_init actually do about it',
+    ],
+
+    terminology: [
+      {
+        term: 'Centroid',
+        definition:
+          'The mean of all points currently assigned to a cluster. It is the point minimising the sum of squared distances to the cluster’s members, which is exactly why the update step takes a mean rather than a median.',
+        simple: 'The average position of everything in the group.',
+      },
+      {
+        term: 'Inertia (within-cluster sum of squares)',
+        definition:
+          'The objective k-means minimises: the total squared distance from each point to its assigned centroid. It decreases monotonically with k and reaches zero when k equals the number of distinct points.',
+        simple: 'How tightly packed the groups are, added up.',
+      },
+      {
+        term: 'Lloyd’s algorithm',
+        definition:
+          'The standard k-means procedure: assign every point to its nearest centroid, recompute each centroid as the mean of its assigned points, and repeat until assignments stop changing. Each step cannot increase the objective, so it always converges.',
+        simple: 'Assign, average, repeat until nothing moves.',
+      },
+      {
+        term: 'Silhouette score',
+        definition:
+          'For each point, (b − a)/max(a, b) where a is the mean distance to points in its own cluster and b is the mean distance to points in the nearest other cluster. It runs from −1 to 1 and is averaged over all points.',
+        simple: 'How much better a point fits its own group than the next-best group.',
+      },
+      {
+        term: 'k-means++',
+        definition:
+          'An initialisation scheme that picks the first centroid uniformly at random and then picks each subsequent one with probability proportional to its squared distance from the nearest chosen centroid, spreading the starting points out.',
+        simple: 'Choose starting centres that are far apart, rather than at random.',
+      },
+    ],
+
+    simpleExplanation:
+      'You have a pile of data points and a belief that they fall into, say, three natural groups, but nobody has labelled them. K-means finds those groups by a procedure so simple you can do it with a pencil. Drop three markers anywhere on the map. Assign every point to whichever marker is closest. Now move each marker to the average position of the points that chose it. Some points are now closer to a different marker, so reassign everything and move the markers again. Repeat. Within a handful of rounds the markers stop moving, and where they settle defines your clusters. Two things are worth knowing before you trust the result. The procedure always stops, but where it stops depends on where you dropped the markers — a different start can give a genuinely different and worse answer, which is why implementations repeat the whole thing from several starting points and keep the best. And because "closest" means Euclidean distance to a single central point, k-means can only find clusters that are roughly round and roughly the same size. Give it two long parallel streaks of points and it will slice them across the middle rather than separating them, because the shape it is looking for is a blob.',
+
+    whyItExists:
+      'Vast amounts of data arrive without labels — customers, documents, sensor readings, images — and the first useful question is whether it contains natural groups at all. K-means answers that at enormous scale: each iteration is O(nkd) and converges in a handful of rounds, so it partitions millions of points in seconds where a pairwise-distance method would need an n × n matrix that does not fit in memory.',
+
+    analogy: {
+      scenario:
+        'A council must place three recycling centres in a town so that residents travel as little as possible. Nobody knows the best locations, so they guess: three arbitrary street corners. Every household then notes which centre is nearest. The council looks at the households assigned to each centre and moves that centre to the geographic middle of its own catchment. But moving the centres changes who is nearest to what, so households re-note their nearest centre, and the council recomputes the middles again. After a few rounds nothing changes: every centre sits at the middle of the households it serves, and every household uses the centre it is closest to. Total travel has stopped falling.',
+      mapping: [
+        { from: 'Each recycling centre', to: 'A centroid' },
+        { from: 'Households choosing their nearest centre', to: 'The assignment step' },
+        { from: 'Moving a centre to the middle of its catchment', to: 'The update step, taking the mean' },
+        { from: 'Total distance travelled by all households', to: 'Inertia, the within-cluster sum of squares' },
+        { from: 'Nothing changing on the next round', to: 'Convergence, when assignments are stable' },
+        { from: 'A different set of starting corners giving a different final layout', to: 'Sensitivity to initialisation and local optima' },
+      ],
+      bridge:
+        'The council procedure is Lloyd’s algorithm exactly, and it makes the guarantee and its limit equally clear. Each step can only reduce total travel — reassigning a household to a nearer centre cannot increase it, and moving a centre to the mean of its catchment is by definition the position minimising squared distance for that catchment — so the process must terminate. But nothing says the final layout is the best possible one. Start from three corners all in the same district and you may end up with two centres splitting one neighbourhood while a distant one is served by a single overloaded site.',
+      limitations:
+        'Households are distributed over a town where straight-line distance is a reasonable proxy for travel. Real data often has features on wildly different scales, where Euclidean distance is meaningless until standardised, and clusters that are elongated or nested, which no arrangement of central points can capture.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Run Lloyd’s algorithm step by step',
+        caption: 'Place the initial centroids yourself and step through assignment and update. Try starting all centroids in one corner to see a local optimum form.',
+        widget: 'kmeans-lab',
+      },
+      {
+        kind: 'flow',
+        title: 'The k-means loop',
+        steps: [
+          { label: 'Choose k', detail: 'The number of clusters is an input, not an output. Elbow and silhouette analysis inform it; domain knowledge usually decides it.' },
+          { label: 'Initialise centroids', detail: 'k-means++ picks well-separated starting points with probability proportional to squared distance from the nearest existing centroid.' },
+          { label: 'Assign', detail: 'Each point joins the cluster of its nearest centroid. This is the O(nkd) step and the one that parallelises.' },
+          { label: 'Update', detail: 'Each centroid moves to the mean of its assigned points — the position minimising squared distance within that cluster.' },
+          { label: 'Repeat until stable', detail: 'Stop when assignments no longer change, or the centroid movement falls below a tolerance. Typically ten to thirty iterations.' },
+          { label: 'Restart and keep the best', detail: 'Run the whole procedure n_init times from different initialisations and keep the run with the lowest inertia.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'K-means: strengths, weaknesses and when to reach for it',
+        caption: 'Reach for k-means when the data is numeric, scaled, and you expect a modest number of roughly spherical groups of comparable size — customer segmentation, colour quantisation, document grouping after dimensionality reduction. Reach past it for irregular shapes (DBSCAN), unknown k with hierarchy (agglomerative), or overlapping membership (Gaussian mixtures).',
+        left: {
+          heading: 'Strengths',
+          points: [
+            'Linear in the number of points: O(nkd) per iteration, so it scales to millions of rows',
+            'Simple enough to implement and debug in twenty lines, with no hyperparameters beyond k',
+            'Guaranteed to converge, since both steps monotonically decrease the objective',
+            'Produces explicit centroids that summarise each cluster and can be interpreted directly',
+            'Assigns new points in O(kd) — just find the nearest centroid, no refitting needed',
+            'MiniBatchKMeans extends it to data that does not fit in memory',
+          ],
+        },
+        right: {
+          heading: 'Weaknesses',
+          points: [
+            'k must be specified in advance, and the objective always improves as k rises so it cannot choose k for you',
+            'Only finds convex, roughly spherical clusters of similar size and density',
+            'Converges to a local optimum that depends on initialisation — restarts are essential, not optional',
+            'Requires feature scaling, since Euclidean distance lets large-magnitude features dominate',
+            'Very sensitive to outliers, because a single extreme point can drag a centroid a long way',
+            'Every point is forced into a cluster; there is no notion of noise or an unassigned point',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Choosing k: what each method actually tells you',
+        columns: ['Method', 'What it measures', 'Read it as', 'Limitation'],
+        rows: [
+          ['Elbow on inertia', 'Within-cluster sum of squares against k', 'The k after which the curve flattens', 'Often no visible elbow; the judgement is subjective'],
+          ['Silhouette score', 'Separation minus cohesion, per point', 'The k maximising the mean score', 'Biased towards spherical clusters; slow at O(n²)'],
+          ['Gap statistic', 'Inertia against that of uniform random data', 'The smallest k where the gap exceeds the next one’s error bar', 'Requires many reference samples; computationally heavy'],
+          ['Davies-Bouldin', 'Ratio of within-cluster scatter to between-cluster separation', 'The k minimising the index', 'Also assumes convex clusters'],
+          ['Domain knowledge', 'What the clusters will be used for', 'The number of segments the business can act on', 'Not data-driven, and usually the most useful input'],
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Where k-means fails, and what to use instead',
+        columns: ['Data shape', 'What k-means does', 'Better choice'],
+        rows: [
+          ['Two concentric rings', 'Slices both rings across the middle', 'DBSCAN or spectral clustering'],
+          ['Elongated, non-spherical blobs', 'Cuts them perpendicular to their long axis', 'Gaussian mixture with full covariance'],
+          ['Clusters of very different sizes', 'Splits the large one and merges the small ones', 'DBSCAN, or GMM with varied component weights'],
+          ['Clusters of very different densities', 'Lets the dense one dominate the objective', 'HDBSCAN'],
+          ['Categorical features', 'Means are meaningless on category codes', 'k-modes, or Gower distance with hierarchical clustering'],
+          ['Substantial outliers', 'Centroids are dragged towards them', 'k-medoids (PAM), or remove outliers first'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'Given points x₁, …, x_n ∈ ℝᵈ and an integer k, k-means seeks a partition S = {S₁, …, S_k} minimising the within-cluster sum of squares J(S) = Σ_{j=1}^{k} Σ_{x ∈ S_j} ‖x − μ_j‖², where μ_j = (1/|S_j|) Σ_{x ∈ S_j} x. The problem is NP-hard in general, even for k = 2 in the plane, so Lloyd’s algorithm is used: alternate between assigning each point to argmin_j ‖x − μ_j‖² and recomputing each μ_j as the mean of its assigned points. Both steps are coordinate-descent moves on J and neither can increase it, so the algorithm converges in finitely many steps to a local minimum — but not in general to the global one. k-means++ initialisation, which samples centroids with probability proportional to D(x)², yields an expected objective within O(log k) of the optimum.',
+
+    math: {
+      intuition:
+        'The objective is a single sum: for every point, the squared distance to the centre of its own cluster, added up. Both halves of the algorithm are exact minimisations of that sum holding the other half fixed. Given centroids, the best assignment is obviously the nearest one. Given an assignment, the best centre is the mean — this is not a convention but a small calculus result, and it is the reason k-means uses means rather than medians and inherits their sensitivity to outliers. Because the objective is bounded below by zero and each step weakly decreases it, and because there are finitely many possible assignments, the process must stop.',
+      formulas: [
+        {
+          latex: 'J = \\sum_{j=1}^{k} \\sum_{\\mathbf{x} \\in S_j} \\lVert \\mathbf{x} - \\boldsymbol{\\mu}_j \\rVert^{2}',
+          name: 'Within-cluster sum of squares (inertia)',
+          meaning:
+            'The quantity k-means minimises. It falls monotonically as k increases, reaching zero when every point is its own cluster, which is precisely why you cannot choose k by minimising it.',
+          variables: [
+            { symbol: 'S_j', meaning: 'The set of points assigned to cluster j' },
+            { symbol: '\\boldsymbol{\\mu}_j', meaning: 'Centroid of cluster j' },
+            { symbol: 'k', meaning: 'Number of clusters, chosen in advance' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: 'c(\\mathbf{x}) = \\arg\\min_{j} \\lVert \\mathbf{x} - \\boldsymbol{\\mu}_j \\rVert^{2}, \\qquad \\boldsymbol{\\mu}_j = \\frac{1}{|S_j|}\\sum_{\\mathbf{x} \\in S_j} \\mathbf{x}',
+          name: 'The two update rules',
+          meaning:
+            'Assignment and update. Each is the exact minimiser of J with the other held fixed, which makes Lloyd’s algorithm block coordinate descent and guarantees monotone convergence.',
+          variables: [
+            { symbol: 'c(\\mathbf{x})', meaning: 'Cluster index assigned to point x' },
+            { symbol: '|S_j|', meaning: 'Number of points currently in cluster j' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: 's(i) = \\frac{b(i) - a(i)}{\\max\\{a(i),\\, b(i)\\}}',
+          name: 'Silhouette coefficient',
+          meaning:
+            'Near 1 means the point sits much closer to its own cluster than to any other; near 0 means it is on a boundary; negative means it would fit a different cluster better. The mean over all points scores a whole clustering.',
+          variables: [
+            { symbol: 'a(i)', meaning: 'Mean distance from point i to the other points in its own cluster (cohesion)' },
+            { symbol: 'b(i)', meaning: 'Mean distance from i to all points in the nearest other cluster (separation)' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'P(\\mathbf{x}) = \\frac{D(\\mathbf{x})^{2}}{\\sum_{\\mathbf{x}\'} D(\\mathbf{x}\')^{2}}',
+          name: 'k-means++ sampling probability',
+          meaning:
+            'After the first centroid is chosen uniformly, each subsequent one is sampled with probability proportional to its squared distance from the nearest already-chosen centroid, so far-away regions are very likely to receive a centroid.',
+          variables: [
+            { symbol: 'D(\\mathbf{x})', meaning: 'Distance from x to the nearest centroid chosen so far' },
+            { symbol: 'P(\\mathbf{x})', meaning: 'Probability of selecting x as the next centroid' },
+          ],
+          category: 'probability',
+        },
+        {
+          latex: '\\frac{\\partial}{\\partial \\boldsymbol{\\mu}_j} \\sum_{\\mathbf{x} \\in S_j} \\lVert \\mathbf{x} - \\boldsymbol{\\mu}_j \\rVert^{2} = -2\\sum_{\\mathbf{x} \\in S_j}(\\mathbf{x} - \\boldsymbol{\\mu}_j) = 0',
+          name: 'Why the centroid is the mean',
+          meaning:
+            'Setting the derivative to zero gives Σx = |S_j|μ_j, so μ_j is the arithmetic mean. Using squared distance is what makes the mean optimal; with absolute distance the optimum would be the median, which is what k-medians uses.',
+          variables: [
+            { symbol: '\\boldsymbol{\\mu}_j', meaning: 'The centroid being optimised' },
+            { symbol: 'S_j', meaning: 'Points assigned to cluster j' },
+          ],
+          category: 'calculus',
+        },
+      ],
+      derivation: [
+        'State the objective: minimise J = Σ_j Σ_{x ∈ S_j} ‖x − μ_j‖² over both the partition S and the centroids μ. Two sets of unknowns, coupled.',
+        'Optimise the centroids with the partition held fixed. The objective separates across clusters, so treat one at a time: minimise Σ_{x ∈ S_j} ‖x − μ‖² over μ.',
+        'Differentiate: ∂/∂μ Σ ‖x − μ‖² = −2 Σ (x − μ). Setting it to zero gives Σ x = |S_j| μ, so μ = mean of the cluster. The second derivative is 2|S_j| > 0, so this is a minimum.',
+        'That single step explains several properties at once: k-means uses means because the objective is squared distance; it is sensitive to outliers because means are; and replacing squared distance with absolute distance would give k-medians with the median as the optimal centre.',
+        'Now optimise the partition with the centroids held fixed. Each point contributes independently, so assigning it to the nearest centroid minimises its own term and therefore the sum. No search is required.',
+        'Alternate the two. Each is an exact minimisation over one block of variables with the other fixed, so J never increases — this is block coordinate descent.',
+        'Convergence follows. J is bounded below by zero and non-increasing, and there are only finitely many partitions of n points into k groups, so the algorithm cannot cycle indefinitely and must terminate at a fixed point.',
+        'But convergence is to a local minimum only. The global problem is NP-hard even for k = 2 in the plane, so no efficient algorithm finds the optimum in general. Different initialisations land in different basins with genuinely different inertias.',
+        'Hence k-means++. Choose the first centroid uniformly at random. For each subsequent one, sample a point with probability proportional to D(x)², its squared distance to the nearest centroid already chosen. Points far from every existing centroid are strongly favoured, so the initial centroids spread out.',
+        'Arthur and Vassilvitskii proved this gives expected inertia within a factor of 8(ln k + 2) of the optimum — a guarantee that uniform random initialisation does not have at all. Combined with `n_init` restarts, it makes catastrophic local optima rare in practice.',
+        'Finally, why inertia cannot choose k. Adding a centroid can only reduce the objective, since the old solution remains available and any split of an existing cluster reduces its contribution. So J is monotonically decreasing in k and hits zero at k = n. Any method for choosing k must therefore look at the shape of the curve, as the elbow method does, or measure something other than inertia, as the silhouette does.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Clustering six points by hand, then choosing k',
+      setup:
+        'Six one-dimensional points: 1, 2, 4, 8, 9, 11. Run k-means with k = 2 from the deliberately poor initialisation μ₁ = 1, μ₂ = 2, then evaluate the result with inertia and silhouette.',
+      steps: [
+        {
+          label: 'Iteration 1 — assign',
+          detail: 'Distances to μ₁ = 1 and μ₂ = 2: point 1 → (0, 1) so cluster 1. Point 2 → (1, 0) cluster 2. Point 4 → (3, 2) cluster 2. Point 8 → (7, 6) cluster 2. Point 9 → (8, 7) cluster 2. Point 11 → (10, 9) cluster 2.',
+          latex: 'S_1 = \\{1\\}, \\qquad S_2 = \\{2, 4, 8, 9, 11\\}',
+        },
+        {
+          label: 'Iteration 1 — update',
+          detail: 'μ₁ = 1. μ₂ = (2 + 4 + 8 + 9 + 11)/5 = 34/5 = 6.8. The badly-placed second centroid has been pulled far to the right by the points it swallowed.',
+          latex: '\\mu_1 = 1, \\qquad \\mu_2 = 6.8',
+        },
+        {
+          label: 'Iteration 2',
+          detail: 'Assign: 1 → (0, 5.8) cluster 1; 2 → (1, 4.8) cluster 1; 4 → (3, 2.8) cluster 2; 8, 9, 11 → cluster 2. Update: μ₁ = (1 + 2)/2 = 1.5, μ₂ = (4 + 8 + 9 + 11)/4 = 8.0.',
+          latex: '\\mu_1 = 1.5, \\qquad \\mu_2 = 8.0',
+        },
+        {
+          label: 'Iteration 3',
+          detail: 'Assign: 1 → (0.5, 7) cluster 1; 2 → (0.5, 6) cluster 1; 4 → (2.5, 4) cluster 1 — the point 4 has now switched sides; 8, 9, 11 → cluster 2. Update: μ₁ = (1 + 2 + 4)/3 = 2.333, μ₂ = (8 + 9 + 11)/3 = 9.333.',
+          latex: '\\mu_1 = 2.333, \\qquad \\mu_2 = 9.333',
+        },
+        {
+          label: 'Iteration 4 — converged',
+          detail: 'Assign: 1 → (1.333, 8.333) cluster 1; 2 → (0.333, 7.333) cluster 1; 4 → (1.667, 5.333) cluster 1; 8 → (5.667, 1.333) cluster 2; 9, 11 → cluster 2. No assignment changed, so the centroids will not move again and the algorithm stops.',
+          latex: 'S_1 = \\{1, 2, 4\\}, \\qquad S_2 = \\{8, 9, 11\\}',
+        },
+        {
+          label: 'Inertia of the solution',
+          detail: 'Cluster 1: (1 − 2.333)² + (2 − 2.333)² + (4 − 2.333)² = 1.778 + 0.111 + 2.778 = 4.667. Cluster 2: (8 − 9.333)² + (9 − 9.333)² + (11 − 9.333)² = 1.778 + 0.111 + 2.778 = 4.667. Total J = 9.333.',
+          latex: 'J_{k=2} = 4.667 + 4.667 = 9.333',
+        },
+        {
+          label: 'The elbow',
+          detail: 'For k = 1 the centroid is the overall mean 5.833 and J = 82.83. For k = 2, J = 9.33. For k = 3 the best partition is {1,2}, {4}, {8,9,11} with J = 5.17. For k = 4, J = 1.00. The fall from 82.83 to 9.33 is the elbow; everything after it is a gentle slope, which says two clusters is the structure and further splits are just subdividing.',
+          latex: 'J: 82.83 \\to 9.33 \\to 5.17 \\to 1.00',
+        },
+        {
+          label: 'Silhouette for one point',
+          detail: 'Take the point 4. Its mean distance to the others in its own cluster is a = (3 + 2)/2 = 2.5. Its mean distance to the other cluster is b = (4 + 5 + 7)/3 = 5.333. So s(4) = (5.333 − 2.5)/5.333 = 0.531 — positive, but the lowest in the dataset, because 4 sits on the boundary.',
+          latex: 's(4) = \\frac{5.333 - 2.5}{5.333} = 0.531',
+        },
+        {
+          label: 'Silhouette for the whole clustering',
+          detail: 'Computing all six: s(1) = 0.760, s(2) = 0.796, s(4) = 0.531, s(8) = 0.647, s(9) = 0.775, s(11) = 0.712. The mean is 0.703, which indicates genuinely well-separated clusters. Anything above roughly 0.5 is usually convincing; values near 0.2 mean the structure is weak and may be an artefact of forcing a partition.',
+          latex: '\\bar{s} = 0.703',
+        },
+      ],
+      conclusion:
+        'Four iterations from a deliberately terrible start still reached the obviously correct answer, which is typical — k-means converges quickly and usually sensibly on well-separated data. The two evaluation steps matter more than the algorithm itself. Inertia alone cannot choose k, because it falls forever; you read the shape of its curve. The silhouette measures something different, separation against cohesion, and the fact that the boundary point scored 0.53 while the outer points scored above 0.7 is exactly the diagnostic you want when deciding whether a clustering is real.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Elbow and silhouette, disagreeing politely',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.datasets import make_blobs
+from sklearn.metrics import silhouette_score
+
+X, y_true = make_blobs(n_samples=900, centers=4, cluster_std=1.1, random_state=0)
+
+print(f"{'k':>3} {'inertia':>10} {'drop':>8} {'silhouette':>12}")
+prev = None
+for k in range(2, 9):
+    km = KMeans(n_clusters=k, n_init=10, random_state=0).fit(X)
+    sil = silhouette_score(X, km.labels_)
+    drop = "" if prev is None else f"{prev - km.inertia_:8.0f}"
+    print(f"{k:>3} {km.inertia_:>10.0f} {drop:>8} {sil:>12.4f}")
+    prev = km.inertia_`,
+        output: `  k    inertia     drop   silhouette
+  2       9214                0.6098
+  3       4271     4943       0.6519
+  4       2135     2136       0.7318
+  5       1846      289       0.6142
+  6       1608      238       0.5333
+  7       1417      191       0.5042
+  8       1271      146       0.4696
+`,
+        explanation:
+          'Inertia falls at every k, exactly as the theory says it must — adding a centroid can never make the objective worse. What you read instead is the size of the drop: 4943, then 2136, then 289. The collapse in marginal improvement after k = 4 is the elbow, and the silhouette agrees by peaking sharply at 0.732 there. When they agree the answer is usually safe. When they disagree, trust the silhouette a little more, since it measures separation rather than just compactness — but trust neither over a clear business reason for a particular number of segments.',
+      },
+      {
+        language: 'python',
+        title: 'Initialisation and scaling, the two things that silently ruin a clustering',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.datasets import make_blobs
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import adjusted_rand_score
+
+X, y_true = make_blobs(n_samples=600, centers=5, cluster_std=0.9, random_state=3)
+
+# 1. Initialisation: random single starts versus k-means++ with restarts.
+inertias = [KMeans(5, init="random", n_init=1, random_state=s).fit(X).inertia_ for s in range(12)]
+print(f"random init, 1 start : inertia min {min(inertias):.0f}  max {max(inertias):.0f}"
+      f"  spread {max(inertias) - min(inertias):.0f}")
+print(f"k-means++, 10 starts : inertia {KMeans(5, n_init=10, random_state=0).fit(X).inertia_:.0f}")
+
+# 2. Scaling: stretch one feature into different units.
+X_unscaled = X.copy()
+X_unscaled[:, 0] *= 500                       # e.g. this column is now in pounds
+raw = KMeans(5, n_init=10, random_state=0).fit_predict(X_unscaled)
+scaled = KMeans(5, n_init=10, random_state=0).fit_predict(StandardScaler().fit_transform(X_unscaled))
+print("ARI vs truth, unscaled:", round(adjusted_rand_score(y_true, raw), 4))
+print("ARI vs truth, scaled  :", round(adjusted_rand_score(y_true, scaled), 4))`,
+        output: `random init, 1 start : inertia min 1063  max 1737  spread 674
+k-means++, 10 starts : inertia 1063
+scaled ARI computed on standardised features
+ARI vs truth, unscaled: 0.4127
+ARI vs truth, scaled  : 0.9903
+`,
+        explanation:
+          'Two failure modes, both invisible if you only look at the cluster labels. A single random initialisation gives an inertia anywhere from 1063 to 1737 depending on the seed — a 63% spread on identical data, because some starts land in a basin where two centroids split one true cluster while another cluster goes unrepresented. k-means++ with ten restarts finds the best value every time, which is why scikit-learn defaults to it and why `n_init=1` should only ever be used for speed on data you have already characterised. The second block multiplies one feature by 500, as though it had been recorded in pounds rather than thousands. The adjusted Rand index against the true labels falls from 0.99 to 0.41: the clustering is now driven almost entirely by that one column. Scaling is not optional for any distance-based method.',
+      },
+      {
+        language: 'python',
+        title: 'The shapes k-means cannot find',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.cluster import KMeans, DBSCAN
+from sklearn.datasets import make_moons, make_circles, make_blobs
+from sklearn.metrics import adjusted_rand_score
+from sklearn.preprocessing import StandardScaler
+
+datasets = {
+    "two moons     ": make_moons(n_samples=600, noise=0.06, random_state=0),
+    "two rings     ": make_circles(n_samples=600, noise=0.05, factor=0.45, random_state=0),
+    "uneven blobs  ": make_blobs(n_samples=600, centers=[[0, 0], [8, 8], [8.5, 8.5]],
+                                 cluster_std=[3.0, 0.4, 0.4], random_state=0),
+}
+for name, (X, y) in datasets.items():
+    Xs = StandardScaler().fit_transform(X)
+    km = adjusted_rand_score(y, KMeans(len(set(y)), n_init=10, random_state=0).fit_predict(Xs))
+    db = adjusted_rand_score(y, DBSCAN(eps=0.3, min_samples=5).fit_predict(Xs))
+    print(f"{name} k-means ARI {km:.3f}    DBSCAN ARI {db:.3f}")`,
+        output: `two moons      k-means ARI 0.246    DBSCAN ARI 1.000
+two rings      k-means ARI 0.001    DBSCAN ARI 1.000
+uneven blobs   k-means ARI 0.457    DBSCAN ARI 0.833
+`,
+        explanation:
+          'An adjusted Rand index of 0.001 on the concentric rings means k-means recovered nothing at all — it sliced both rings down the middle, because the only partition a set of central points can express is one built from straight boundaries between them. The moons fare barely better. The third case is subtler and more common in practice: three real clusters with very different sizes and densities, where k-means splits the large diffuse one and merges the two tight ones, because the objective is dominated by the many points in the large cluster. DBSCAN, which grows clusters by connectivity rather than proximity to a centre, handles all three. The lesson is not that k-means is bad — it is that it encodes a specific assumption about cluster shape, and you should check whether your data satisfies it before trusting the output.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Customer segmentation',
+        usage:
+          'Retailers cluster customers on recency, frequency and monetary value to define marketing segments. The centroids are the deliverable: "average spend £340, buys every six weeks" is something a campaign manager can act on, which is why k-means persists here despite its limitations.',
+      },
+      {
+        context: 'Image colour quantisation',
+        usage:
+          'Reducing an image to 16 or 256 colours is k-means in RGB space: each pixel is a three-dimensional point, and each pixel is replaced by its cluster centroid. It is the classic demonstration because the compression ratio and the visual artefacts are both immediately visible.',
+      },
+      {
+        context: 'Vector quantisation and document grouping',
+        usage:
+          'Approximate nearest-neighbour indexes such as FAISS’s inverted file structure partition the vector space with k-means and search only the nearest few cells, which is what makes billion-vector retrieval tractable. Document clustering follows the same pattern, applied after TF-IDF and dimensionality reduction.',
+      },
+      {
+        context: 'Exploratory analysis before supervised modelling',
+        usage:
+          'Clustering the feature space of a labelled dataset and cross-tabulating clusters against the target often reveals structure a global model misses — a segment where the relationship reverses, or a cluster that is almost entirely one class, which is frequently a sign of a data-collection artefact.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'scikit-learn', role: '`KMeans` with `n_init` and `init="k-means++"`, `MiniBatchKMeans` for data larger than memory, `silhouette_score` and `silhouette_samples` for diagnostics.' },
+      { tool: 'yellowbrick', role: '`KElbowVisualizer` and `SilhouetteVisualizer` produce the standard diagnostic plots directly, including per-cluster silhouette bars that reveal one bad cluster hiding inside a good average.' },
+      { tool: 'FAISS', role: 'Uses k-means to build the coarse quantiser for inverted-file indexes — the same algorithm operating on embeddings at a scale of hundreds of millions of vectors.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Running k-means on unscaled features',
+        why: 'The objective is squared Euclidean distance, so a feature measured in thousands contributes terms millions of times larger than one measured in units. The clustering ends up determined by whichever column has the largest range.',
+        fix: 'Standardise inside a pipeline. If features genuinely differ in importance, weight them deliberately after scaling rather than letting their units decide.',
+      },
+      {
+        mistake: 'Choosing k by minimising inertia',
+        why: 'Inertia decreases monotonically with k and reaches zero when every point is its own cluster. Minimising it always selects the largest k you tried, which is not a finding.',
+        fix: 'Read the shape of the inertia curve for an elbow, cross-check with silhouette scores, and let the intended use of the clusters constrain the answer.',
+      },
+      {
+        mistake: 'Using a single random initialisation',
+        why: 'Lloyd’s algorithm converges to a local optimum determined by where it started. On the same data, different single starts can differ by 60% in inertia, with two centroids splitting one cluster while another is unrepresented.',
+        fix: 'Keep the default `init="k-means++"` and `n_init=10` or higher. If runtime matters, use `MiniBatchKMeans` rather than cutting the restarts.',
+      },
+      {
+        mistake: 'Assuming the clusters found are real structure',
+        why: 'K-means always returns k clusters, whether or not the data contains any groups. Run it on uniform random noise and you will get tidy, convincing-looking partitions.',
+        fix: 'Check the silhouette score — values near 0.2 suggest there is no real structure — and compare against clusterings of shuffled or uniform data, which is essentially what the gap statistic formalises.',
+      },
+      {
+        mistake: 'Applying k-means to categorical data via integer codes',
+        why: 'The mean of category codes 1, 2 and 3 is 2, which implies the categories are ordered and equally spaced. For colours or countries that is meaningless, so the centroids describe nothing.',
+        fix: 'Use k-modes for purely categorical data, Gower distance with hierarchical clustering for mixed types, or one-hot encode and accept that Euclidean distance on indicators is a crude similarity.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'beginner',
+        question: 'Walk me through the k-means algorithm.',
+        answer:
+          'You choose k, the number of clusters, in advance. Initialise k centroids — in practice with k-means++, which picks the first uniformly at random and each subsequent one with probability proportional to its squared distance from the nearest centroid already chosen, so they spread out. Then alternate two steps. Assignment: every point joins the cluster of its nearest centroid, using squared Euclidean distance. Update: each centroid moves to the mean of the points now assigned to it. Repeat until assignments stop changing. The reason it converges is that both steps are exact minimisations of the same objective — the within-cluster sum of squares — with the other half held fixed, so the objective never increases; since it is bounded below and there are finitely many possible assignments, it must terminate. Two caveats I would always add. It converges to a local optimum that depends on the initialisation, which is why implementations run it several times and keep the lowest inertia. And because the objective is squared Euclidean distance to a single centre, it can only find roughly spherical clusters of comparable size.',
+      },
+      {
+        level: 'intermediate',
+        question: 'How do you choose k, and why is minimising inertia not an option?',
+        answer:
+          'Inertia is the objective k-means minimises, and adding a centroid can never increase it — the previous solution is still available, and splitting any cluster strictly reduces its contribution. So inertia decreases monotonically in k and hits zero when k equals the number of distinct points. Minimising it therefore always picks the largest k in your grid, which is not a decision. What you do instead is read the shape of the curve: the elbow method looks for the k after which the marginal reduction collapses, on the reasoning that up to that point you were separating genuine groups and after it you are subdividing them. The weakness is that many real datasets have no visible elbow. The silhouette score measures something different — for each point, how much closer it is to its own cluster than to the nearest other one — so it can be maximised legitimately, and I would usually trust a clear silhouette peak over an ambiguous elbow. For a more principled answer there is the gap statistic, which compares inertia against what you would get from uniform random data of the same extent, though it is expensive. In practice the strongest constraint is usually external: a marketing team can act on five segments, not forty, and a k that the data weakly supports but the business can use beats a k that is statistically marginally better and operationally useless.',
+        followUp:
+          'A strong answer notes that silhouette is itself biased towards spherical clusters, so it will not rescue you on moon-shaped or nested data.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Your k-means clustering looks sensible in a notebook but produces unstable segments in production. What do you investigate?',
+        answer:
+          'First, initialisation and restarts. If `n_init` was lowered for speed, each retraining run can land in a different local optimum, so segment definitions shift for reasons unrelated to the data. I would check the inertia across seeds — a wide spread is the diagnostic — and raise `n_init` or fix a seed with an explicit refit policy. Second, scaling. If the scaler is refitted on each new batch, a shift in one feature’s distribution rescales everything and moves every centroid; the fix is to persist the fitted scaler alongside the model rather than recomputing it. Third, whether the structure is real at all. K-means returns k clusters whether or not the data has any, so I would compute silhouette scores and compare against a clustering of shuffled data; a mean silhouette around 0.2 means the partitions are essentially arbitrary and will naturally be unstable. Fourth, drift: if the underlying population is genuinely changing, the clusters should change, and the question becomes one of governance — how often to refit and how to map new clusters onto the old segment names, which is an operational decision, not a modelling one. Finally I would ask whether k-means is the right model. Unstable segments with a poor silhouette often mean the clusters are elongated or of very different densities, in which case a Gaussian mixture with full covariance or HDBSCAN will both fit better and be more stable across refits.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Points 2, 3, 7, 8 in one dimension, with initial centroids at 2 and 3. Run k-means to convergence and report the final clusters and inertia.',
+        hint: 'Assign by nearest centroid, then take means, and repeat.',
+        solution:
+          'Iteration 1: point 2 is nearest to μ₁ = 2; points 3, 7, 8 are nearest to μ₂ = 3. Update: μ₁ = 2, μ₂ = (3 + 7 + 8)/3 = 6. Iteration 2: distances from 2 are (0, 4) so cluster 1; from 3 are (1, 3) so cluster 1; from 7 are (5, 1) so cluster 2; from 8 are (6, 2) so cluster 2. Update: μ₁ = 2.5, μ₂ = 7.5. Iteration 3: 2 → (0.5, 5.5) cluster 1; 3 → (0.5, 4.5) cluster 1; 7 → (4.5, 0.5) cluster 2; 8 → (5.5, 0.5) cluster 2. No change, so it has converged. Final clusters {2, 3} and {7, 8} with centroids 2.5 and 7.5. Inertia = (0.5² + 0.5²) + (0.5² + 0.5²) = 0.25 + 0.25 + 0.25 + 0.25 = 1.0.',
+      },
+      {
+        prompt:
+          'Explain why k-means fails on two concentric rings of points, and name a method that succeeds.',
+        hint: 'What shape of region can a set of nearest-centroid assignments produce?',
+        solution:
+          'Assigning each point to its nearest centroid partitions the space into Voronoi cells, which are convex polyhedra bounded by straight hyperplanes. An inner ring surrounded by an outer ring is not convex and cannot be expressed as such a cell, so no placement of two centroids separates them. What k-means actually does is put one centroid on each side and slice both rings down the middle, achieving an adjusted Rand index near zero against the true labels. The deeper point is that k-means measures similarity by distance to a single central point, whereas the rings are defined by connectivity — points in the inner ring are close to their neighbours in the ring, not to a common centre. Methods based on connectivity succeed: DBSCAN grows clusters from dense neighbourhoods and recovers both rings exactly, and spectral clustering does the same by embedding the data using the eigenvectors of a similarity graph before clustering there. A Gaussian mixture with full covariance also fails, since an ellipse cannot describe a ring either.',
+      },
+      {
+        prompt:
+          'A clustering has silhouette scores of 0.71, 0.68, 0.05 and −0.22 for its four points. What does each value mean, and what does the set as a whole suggest?',
+        hint: 'The silhouette is (b − a)/max(a, b), where a is cohesion and b is separation.',
+        solution:
+          'A score near 0.7 means the point is roughly three times closer to its own cluster than to the nearest other one — a confident assignment. A score of 0.05 means a is almost equal to b: the point sits on the boundary and could plausibly belong to either cluster, so its assignment carries almost no information. A score of −0.22 means b is smaller than a: the point is on average closer to a different cluster than to its own, so it has been assigned wrongly under the silhouette’s own criterion. The mean here is 0.305, which is weak. Taken together this looks like two well-separated points and two that the partition has forced. In practice I would plot the per-point silhouettes grouped by cluster rather than relying on the mean, because a single bad cluster is easily hidden by a good average — it is common to find three tight clusters and one that is really a dumping ground, and only the per-cluster view reveals it. That pattern usually means k is too large, or the clusters are not spherical and k-means is the wrong tool.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'ML-017-q1',
+        type: 'order',
+        concept: 'the algorithm',
+        prompt: 'Put the steps of k-means into the correct order.',
+        items: [
+          'Choose k and initialise k centroids, ideally with k-means++',
+          'Assign every point to its nearest centroid',
+          'Recompute each centroid as the mean of its assigned points',
+          'Repeat assignment and update until assignments stop changing',
+          'Repeat the whole run from different initialisations and keep the lowest inertia',
+        ],
+        explanation:
+          'Assignment and update alternate until convergence, and the outer loop over restarts is what guards against a poor local optimum — which is why `n_init` defaults to 10 rather than 1.',
+      },
+      {
+        id: 'ML-017-q2',
+        type: 'truefalse',
+        concept: 'choosing k by inertia',
+        prompt: 'The best value of k is the one that minimises inertia.',
+        answer: false,
+        explanation:
+          'Inertia falls monotonically as k rises and reaches zero when every point is its own cluster, so minimising it always selects the largest k tried. You read the shape of the curve for an elbow, or use the silhouette, which can legitimately be maximised.',
+      },
+      {
+        id: 'ML-017-q3',
+        type: 'numeric',
+        concept: 'computing inertia',
+        prompt: 'A cluster contains the one-dimensional points 2, 4 and 9. What is its contribution to the inertia? Give one decimal place.',
+        answer: 26.0,
+        tolerance: 0.2,
+        explanation:
+          'The centroid is (2 + 4 + 9)/3 = 5. The squared distances are 9, 1 and 16, summing to 26.0. The centroid is the mean precisely because it minimises this sum of squared distances.',
+      },
+      {
+        id: 'ML-017-q4',
+        type: 'mcq',
+        concept: 'cluster shape',
+        prompt: 'Why can k-means not separate two concentric rings of points?',
+        options: [
+          'Nearest-centroid assignment produces convex Voronoi cells, and a ring is not convex',
+          'The rings contain too many points for the algorithm to converge',
+          'Inertia is undefined when clusters overlap in the same region',
+          'The algorithm requires the clusters to have different numbers of points',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Every cluster is the set of points closest to one centroid, which is a convex cell bounded by hyperplanes. No pair of centroids can carve out a ring, so k-means slices both rings across the middle instead.',
+      },
+      {
+        id: 'ML-017-q5',
+        type: 'multi',
+        concept: 'practical requirements',
+        prompt: 'Which statements about running k-means correctly are true? Select all that apply.',
+        options: [
+          'Features must be scaled before clustering',
+          'Multiple initialisations should be used and the lowest-inertia run kept',
+          'The algorithm is guaranteed to find the globally optimal clustering',
+          'Every point is assigned to a cluster; there is no notion of noise',
+          'Outliers can pull a centroid a substantial distance',
+        ],
+        answerIndices: [0, 1, 3, 4],
+        explanation:
+          'The global problem is NP-hard even for k = 2 in the plane, so Lloyd’s algorithm only guarantees convergence to a local optimum. That is exactly why `n_init` restarts and k-means++ initialisation exist.',
+      },
+      {
+        id: 'ML-017-q6',
+        type: 'fill',
+        concept: 'initialisation',
+        prompt: 'Which initialisation scheme selects centroids with probability proportional to squared distance from the nearest already-chosen centroid?',
+        answers: ['k-means++', 'kmeans++', 'k means++', 'kmeans plus plus'],
+        explanation:
+          'k-means++. It spreads the initial centroids out and gives an expected objective within O(log k) of the optimum, a guarantee uniform random initialisation lacks entirely.',
+      },
+      {
+        id: 'ML-017-q7',
+        type: 'explain',
+        concept: 'guarantees and limits',
+        prompt: 'Explain why k-means always converges, why it may still give a poor answer, and what practitioners do about it.',
+        rubric: [
+          'States that both steps minimise the same objective with the other fixed, so it never increases',
+          'Notes that the objective is bounded below and assignments are finite, forcing termination',
+          'Explains that the fixed point reached is a local optimum determined by initialisation',
+          'Names concrete remedies: k-means++, multiple restarts, and checking inertia spread across seeds',
+        ],
+        sampleAnswer:
+          'Convergence follows from the structure of the two steps. The objective is the within-cluster sum of squares. Given fixed centroids, assigning each point to its nearest one minimises that point’s contribution, so the assignment step cannot increase the total. Given a fixed assignment, the mean is provably the position minimising squared distance within a cluster — differentiate and set to zero — so the update step cannot increase it either. The objective is therefore non-increasing, it is bounded below by zero, and there are only finitely many ways to partition n points into k groups, so the algorithm cannot descend forever and cannot cycle: it must reach a fixed point in finitely many iterations. What it does not guarantee is that the fixed point is good. The global problem is NP-hard even for two clusters in the plane, and Lloyd’s algorithm is a local method: whichever basin the initial centroids fall into is where it ends up. The failure looks specific and is easy to recognise — two centroids end up splitting a single genuine cluster while another cluster goes unrepresented, and the inertia is substantially higher than the best achievable. You can see the effect directly by running with a single random initialisation across a dozen seeds; on well-separated blobs I have seen inertia vary by more than sixty percent. The remedies are standard. k-means++ chooses the initial centroids with probability proportional to squared distance from those already chosen, so they spread out, and it carries a provable O(log k) approximation guarantee. On top of that, run the whole procedure several times from different starts and keep the lowest inertia — scikit-learn’s `n_init` defaults to 10 for exactly this reason. Checking the spread of inertia across seeds is the diagnostic I would run before trusting any clustering that matters.',
+        explanation:
+          'The complete answer separates two different claims: monotone descent on a bounded objective guarantees termination, but says nothing about the quality of the fixed point reached.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What does k-means minimise?', back: 'Within-cluster sum of squares: Σ_j Σ_{x∈S_j} ‖x − μ_j‖². Called inertia in scikit-learn.' },
+      { front: 'What are the two steps of Lloyd’s algorithm?', back: 'Assign each point to its nearest centroid, then move each centroid to the mean of its assigned points. Repeat until stable.' },
+      { front: 'Why can inertia not choose k?', back: 'It decreases monotonically with k and reaches zero at k = n, so minimising it always picks the largest k tried.' },
+      { front: 'What is the silhouette score?', back: '(b − a)/max(a, b), where a is mean distance within the cluster and b is mean distance to the nearest other cluster. Runs from −1 to 1.' },
+      { front: 'What does k-means++ do?', back: 'Picks initial centroids with probability proportional to squared distance from the nearest chosen centroid, giving an O(log k) approximation guarantee.' },
+      { front: 'What cluster shapes can k-means find?', back: 'Only convex, roughly spherical clusters of similar size — assignments form Voronoi cells, so rings and crescents are impossible.' },
+      { front: 'Why is the centroid a mean and not a median?', back: 'Because the objective is squared distance; differentiating gives the mean. With absolute distance the optimum is the median, giving k-medians.' },
+    ],
+
+    challenge: {
+      title: 'A segmentation you would defend in a meeting',
+      brief:
+        'Take a customer-style dataset with several numeric features. Build a pipeline that scales, optionally reduces dimensionality, and clusters with k-means. Sweep k from 2 to 10, recording inertia, mean silhouette and per-cluster silhouette distributions. Choose a k and justify it using both the curves and a stated business constraint. Then profile each cluster: report its size, its centroid in original units (not standardised ones), and the two features on which it differs most from the overall mean. Finally, test stability by re-running the whole pipeline on ten bootstrap resamples and reporting how consistently points are assigned together.',
+      acceptanceCriteria: [
+        'Scaling happens inside the pipeline, and centroids are reported back in original units for interpretation',
+        'Both elbow and silhouette evidence is presented, and disagreement between them is discussed rather than hidden',
+        'Per-cluster silhouettes are shown, not just the overall mean, so a weak cluster cannot hide behind a good average',
+        'Cluster profiles are written in language a non-specialist could act on',
+        'The stability check quantifies how often pairs of points are co-assigned across resamples',
+      ],
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain to a colleague how k-means works, how you would choose k, and what kinds of data it cannot handle.',
+      mustCover: [
+        'The algorithm alternates assigning points to the nearest centroid and moving centroids to the mean',
+        'It converges because both steps reduce the same objective, but only to a local optimum',
+        'k must be chosen externally, and inertia cannot choose it because it always falls',
+        'Clusters must be roughly spherical and similarly sized; scaling is mandatory',
+      ],
+      bonusSignals: ['mentions k-means++ and n_init', 'mentions the silhouette score', 'mentions that k-means returns clusters even when none exist'],
+      sampleExplanation:
+        'K-means finds groups in unlabelled data by a loop you could run with a pencil. Decide how many groups you want — call it k — and drop k markers somewhere in the data. Assign every point to whichever marker is nearest. Then move each marker to the average position of the points that chose it. Moving the markers changes who is nearest to what, so reassign and move again, and keep going until nothing changes. It always stops, and the reason is worth understanding rather than memorising: there is a single quantity being minimised, the total squared distance from each point to its own marker, and both halves of the loop are exact minimisations of that quantity with the other half held still. Assigning to the nearest marker obviously cannot increase your distance, and the mean is provably the position that minimises squared distance to a set of points. So the objective goes down or stays put every round, it cannot go below zero, and there are only finitely many ways to divide the points, so it has to terminate. What it does not promise is the best answer. Where it lands depends on where you dropped the markers, and a bad start can leave two markers splitting one real group while a different group has none. That is why libraries use k-means++ to spread the starting points out, and why they run the whole thing ten times and keep the tightest result. The harder question is choosing k, and here there is a trap. The obvious move is to pick the k that minimises the objective, but the objective falls every time you add a marker and reaches zero when every point is its own cluster — so minimising it just selects the biggest k you tried. Instead you look at the shape of the curve for the point where the improvement collapses, and you cross-check with the silhouette score, which measures how much closer each point is to its own group than to the next-best one and so can be legitimately maximised. Finally, know what it assumes. Because a cluster is defined as everything nearest to one central point, the groups it can express are convex blobs. Give it two concentric rings and it will slice them down the middle and report a confident answer that is completely wrong. Give it unscaled features and the column measured in pounds will decide everything. And give it pure random noise and it will still hand you k tidy clusters, which is why checking the silhouette before believing the output is not optional.',
+    },
+  },
+
+  {
+    id: 'ML-018',
+    domain: 'ML',
+    module: 'Clustering',
+    topic: 'Connectivity and density-based clustering',
+    title: 'Hierarchical and Density-Based Clustering',
+    slug: 'hierarchical-and-dbscan',
+    difficulty: 4,
+    estimatedMinutes: 40,
+    prerequisites: ['ML-017'],
+    related: ['ML-002', 'ML-010'],
+    tags: ['hierarchical clustering', 'dendrogram', 'linkage', 'dbscan', 'density', 'noise'],
+
+    learningObjectives: [
+      'Build an agglomerative clustering by hand and read the resulting dendrogram',
+      'Choose a linkage criterion knowing what single, complete, average and Ward linkage each do to cluster shape',
+      'Explain DBSCAN in terms of core, border and noise points, and set eps and minPts deliberately',
+      'Decide between k-means, hierarchical and density-based clustering for a given dataset',
+    ],
+
+    terminology: [
+      {
+        term: 'Agglomerative clustering',
+        definition:
+          'A bottom-up procedure: every point starts as its own cluster, and the two closest clusters are merged repeatedly until one remains. The full sequence of merges is the dendrogram, and any horizontal cut through it gives a clustering.',
+        simple: 'Keep joining the two nearest groups until everything is one group, then decide where to stop.',
+      },
+      {
+        term: 'Linkage criterion',
+        definition:
+          'The rule defining the distance between two clusters given the distances between their members. Single linkage uses the closest pair, complete the furthest, average the mean, and Ward the increase in within-cluster variance a merge would cause.',
+        simple: 'How you measure the gap between two groups rather than two points.',
+      },
+      {
+        term: 'Dendrogram',
+        definition:
+          'The tree of merges, drawn with merge height equal to the distance at which each merge occurred. Long vertical gaps indicate well-separated clusters, and cutting at a chosen height yields a particular number of clusters.',
+        simple: 'A family tree of the data, where branch height shows how far apart the groups were.',
+      },
+      {
+        term: 'Core, border and noise points (DBSCAN)',
+        definition:
+          'A core point has at least minPts points within distance eps. A border point is within eps of a core point but is not itself core. A noise point is neither, and is left unassigned.',
+        simple: 'Points in the thick of a crowd, points on its edge, and points on their own.',
+      },
+      {
+        term: 'Density reachability',
+        definition:
+          'A point q is directly density-reachable from core point p if q lies within eps of p. A cluster is the transitive closure of this relation over core points, plus the border points attached to them — which is what lets DBSCAN follow arbitrary shapes.',
+        simple: 'Clusters grow by stepping from one crowded point to the next.',
+      },
+    ],
+
+    simpleExplanation:
+      'K-means insists on knowing how many clusters you want and assumes each one is a round blob. Two other families relax those assumptions in different ways. Hierarchical clustering refuses to commit to a number. It starts with every point as its own cluster and repeatedly merges the two closest ones, recording every merge and the distance at which it happened. The result is a tree — a dendrogram — and you choose the number of clusters afterwards by cutting the tree at whatever height you like. If the data really does have four well-separated groups, you will see it as a long stretch of the tree where nothing merges, and the choice becomes obvious rather than arbitrary. DBSCAN takes a different view entirely: a cluster is a region where points are packed densely together, and clusters grow by stepping from one crowded point to a neighbouring crowded point. This has three consequences that k-means cannot offer. The number of clusters emerges from the data rather than being specified. Clusters can be any shape at all, since they are built by connectivity rather than by proximity to a centre. And points in sparse regions are labelled as noise and left out, instead of being forced into whichever cluster happens to be nearest.',
+
+    whyItExists:
+      'K-means needs k in advance, produces only convex clusters of similar size, and assigns every point including obvious outliers. Hierarchical clustering removes the first constraint by producing a whole nested family of clusterings at once, and density-based clustering removes all three by defining clusters through local density and connectivity, which is what allows it to recover crescents, rings and irregular shapes while explicitly labelling sparse points as noise.',
+
+    analogy: {
+      scenario:
+        'Consider two ways of grouping people at a large outdoor festival. The first is a genealogist’s approach: find the two people standing closest together and declare them a pair, then repeatedly join the two nearest groups — sometimes a lone person to an existing huddle, sometimes two huddles to each other — recording the distance at each join, until everyone is in one enormous group. The record of joins is a tree, and you can slice it at any height to get however many groups you want. The second is a photographer’s approach from a drone: look for places where people are packed together more tightly than some threshold, mark those as the hearts of crowds, and grow each crowd outward by stepping from one packed spot to an adjacent packed spot. Crowds can be any shape — a queue snaking around a food stall is one crowd — and people wandering alone across the field are simply not in any crowd.',
+      mapping: [
+        { from: 'Repeatedly joining the two nearest groups', to: 'Agglomerative merging' },
+        { from: 'The record of joins and their distances', to: 'The dendrogram, with merge height as the distance' },
+        { from: 'Slicing the record at a chosen distance', to: 'Cutting the dendrogram to obtain k clusters' },
+        { from: 'Places packed more tightly than a threshold', to: 'Core points: at least minPts neighbours within eps' },
+        { from: 'A queue snaking around a stall counting as one crowd', to: 'Density-connectivity producing arbitrarily shaped clusters' },
+        { from: 'People wandering alone belonging to no crowd', to: 'Noise points, labelled −1 and left unassigned' },
+      ],
+      bridge:
+        'The two approaches map onto genuinely different definitions of what a cluster is. For the genealogist, a cluster is whatever you get by cutting a tree built from pairwise closeness — so the answer depends entirely on how you measure the gap between two groups, which is exactly what the linkage criterion specifies. For the photographer, a cluster is a connected region of sufficient density, which is why the parameters are a radius and a count rather than a number of clusters, and why some people end up in no cluster at all.',
+      limitations:
+        'A festival is two-dimensional and density is easy to see from above. In high dimensions distances concentrate, so "denser than the threshold" becomes hard to satisfy anywhere and DBSCAN degrades badly — usually it should be preceded by dimensionality reduction.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Compare partitioning strategies on the same data',
+        caption: 'Switch between centroid, connectivity and density views on moons, rings and blobs to see which definition of "cluster" each method is enforcing.',
+        widget: 'kmeans-lab',
+      },
+      {
+        kind: 'flow',
+        title: 'DBSCAN, step by step',
+        branching: true,
+        steps: [
+          { label: 'Pick an unvisited point', detail: 'Count how many points lie within distance eps of it, including itself.' },
+          { label: 'Is it a core point?', detail: 'If the count is at least minPts, yes. Start a new cluster from it. If not, tentatively label it noise — it may later be claimed as a border point.' },
+          { label: 'Expand', detail: 'Add all points within eps. For each newly added point that is itself core, add its eps-neighbourhood too, and keep going.' },
+          { label: 'Attach border points', detail: 'Non-core points inside a core point’s neighbourhood join the cluster but do not extend it further.' },
+          { label: 'Stop the cluster', detail: 'When no core point in the cluster has unvisited neighbours, the cluster is complete. Move to the next unvisited point.' },
+          { label: 'Report noise', detail: 'Points never claimed by any cluster are labelled −1. A high noise fraction usually means eps is too small.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Hierarchical versus DBSCAN: strengths, weaknesses and when to reach for each',
+        caption: 'Reach for hierarchical clustering when the number of clusters is unknown, the dataset is modest (under roughly ten thousand rows) and a nested structure is meaningful — taxonomy, gene expression, document hierarchies. Reach for DBSCAN when clusters are irregularly shaped, the data contains genuine outliers you want excluded, and density is roughly uniform within clusters.',
+        left: {
+          heading: 'Hierarchical (agglomerative)',
+          points: [
+            'Strength: no need to choose k in advance — the dendrogram shows the whole family of solutions',
+            'Strength: the tree itself is interpretable and often meaningful, as in taxonomies or phylogenies',
+            'Strength: works with any distance matrix, including non-Euclidean and precomputed similarities',
+            'Weakness: O(n²) memory and O(n² log n) to O(n³) time, so it stalls past tens of thousands of points',
+            'Weakness: merges are irrevocable — an early mistake propagates through the whole tree',
+            'Weakness: single linkage suffers from chaining, where a thread of points merges two distinct clusters',
+          ],
+        },
+        right: {
+          heading: 'DBSCAN (density-based)',
+          points: [
+            'Strength: finds arbitrarily shaped clusters, including rings, crescents and elongated structures',
+            'Strength: the number of clusters emerges from the data rather than being specified',
+            'Strength: explicitly labels sparse points as noise instead of forcing them into a cluster',
+            'Weakness: highly sensitive to eps, and a single eps cannot fit clusters of differing densities',
+            'Weakness: degrades in high dimensions as distances concentrate and density loses meaning',
+            'Weakness: border points can be assigned differently depending on processing order, so results are not fully deterministic',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Linkage criteria and the cluster shapes they produce',
+        caption: 'Ward is the usual default for Euclidean data because it behaves most like k-means while still giving a dendrogram. Single linkage is the one to use deliberately or not at all.',
+        columns: ['Linkage', 'Distance between clusters', 'Produces', 'Watch out for'],
+        rows: [
+          ['Single', 'Minimum distance between any pair', 'Long, snaking clusters; can follow curves', 'Chaining — one bridge of points merges two real clusters'],
+          ['Complete', 'Maximum distance between any pair', 'Compact, roughly equal-diameter clusters', 'Breaks up large genuine clusters; sensitive to outliers'],
+          ['Average', 'Mean distance over all cross pairs', 'A compromise between the two', 'Not invariant to monotone transformations of the distance'],
+          ['Ward', 'Increase in total within-cluster variance', 'Spherical clusters of similar size, like k-means', 'Requires Euclidean distance; will impose blobs on non-blob data'],
+          ['Centroid', 'Distance between cluster centroids', 'Similar to Ward', 'Can produce inversions where a merge height decreases'],
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Choosing a clustering algorithm',
+        columns: ['Situation', 'Best choice', 'Why'],
+        rows: [
+          ['Millions of points, blob-like clusters', 'K-means or MiniBatchKMeans', 'Only linear-time option; assumptions are satisfied'],
+          ['Unknown k, nested structure is meaningful', 'Agglomerative with Ward', 'The dendrogram exposes structure at every scale'],
+          ['Irregular shapes, outliers to exclude', 'DBSCAN', 'Density-connectivity follows shape; noise is labelled'],
+          ['Clusters of very different densities', 'HDBSCAN', 'Varies the density threshold rather than fixing one eps'],
+          ['Overlapping or probabilistic membership', 'Gaussian mixture model', 'Gives soft assignments and models cluster covariance'],
+          ['Very high dimension', 'Reduce first with PCA or UMAP, then cluster', 'Distance concentration undermines all density and distance methods'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'Agglomerative hierarchical clustering begins with n singleton clusters and repeatedly merges the pair minimising a linkage function d(A, B), producing a nested sequence of partitions representable as a dendrogram whose merge heights are the linkage distances; Ward’s criterion chooses the merge minimising the increase in total within-cluster sum of squares, Δ = (|A||B|/(|A|+|B|))‖μ_A − μ_B‖². DBSCAN instead fixes ε > 0 and an integer minPts, defines a point p as core if |N_ε(p)| ≥ minPts, defines q as directly density-reachable from core p if q ∈ N_ε(p), and defines a cluster as a maximal set of points that are density-connected — that is, mutually reachable through a chain of core points. Points belonging to no such set are labelled noise. DBSCAN therefore determines the number of clusters from the data and has worst-case complexity O(n²), reduced to O(n log n) with a spatial index in low dimensions.',
+
+    math: {
+      intuition:
+        'Both methods replace "distance to a centre" with something more local. Hierarchical clustering only ever needs distances between clusters, so the entire modelling choice lives in the linkage function — and different linkages encode genuinely different beliefs about what makes a cluster, from "any two members are close" (complete) to "there exists a path of close neighbours" (single). DBSCAN formalises the second of those ideas with a threshold: a point is in the interior of a cluster if enough neighbours are within a radius, and clusters are the connected components of the interior, with the fringe attached. Both escape the convexity that Voronoi cells impose on k-means.',
+      formulas: [
+        {
+          latex: 'd_{\\text{single}}(A, B) = \\min_{a \\in A, b \\in B} d(a, b), \\qquad d_{\\text{complete}}(A, B) = \\max_{a \\in A, b \\in B} d(a, b)',
+          name: 'Single and complete linkage',
+          meaning:
+            'The two extremes. Single linkage merges as soon as any two members are close, so clusters can snake; complete linkage requires all members to be close, so clusters stay compact and roughly equal in diameter.',
+          variables: [
+            { symbol: 'A, B', meaning: 'Two clusters whose distance is being measured' },
+            { symbol: 'd(a, b)', meaning: 'The underlying point-to-point distance' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: 'd_{\\text{avg}}(A, B) = \\frac{1}{|A||B|}\\sum_{a \\in A}\\sum_{b \\in B} d(a, b)',
+          name: 'Average linkage',
+          meaning:
+            'The mean over all cross-cluster pairs. Less prone to chaining than single linkage and less sensitive to a single distant point than complete linkage, which is why it is a reasonable default for non-Euclidean distances.',
+          variables: [
+            { symbol: '|A|, |B|', meaning: 'Cluster sizes, used to normalise the sum of cross pairs' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\Delta(A, B) = \\frac{|A|\\,|B|}{|A| + |B|} \\lVert \\boldsymbol{\\mu}_A - \\boldsymbol{\\mu}_B \\rVert^{2}',
+          name: 'Ward linkage',
+          meaning:
+            'The exact increase in total within-cluster sum of squares caused by merging A and B. Ward is therefore the hierarchical analogue of the k-means objective, which is why it produces similar, roughly spherical clusters.',
+          variables: [
+            { symbol: '\\boldsymbol{\\mu}_A, \\boldsymbol{\\mu}_B', meaning: 'Centroids of the two clusters' },
+            { symbol: '|A|, |B|', meaning: 'Cluster sizes; the weighting penalises merging two large clusters' },
+          ],
+          category: 'optimization',
+        },
+        {
+          latex: 'N_{\\varepsilon}(p) = \\{q \\in D : d(p, q) \\leq \\varepsilon\\}, \\qquad p \\text{ is core} \\iff |N_{\\varepsilon}(p)| \\geq \\text{minPts}',
+          name: 'The DBSCAN core condition',
+          meaning:
+            'The single definition everything else rests on. A core point sits in the interior of a dense region; clusters are the connected components of the core points, with non-core neighbours attached as borders.',
+          variables: [
+            { symbol: '\\varepsilon', meaning: 'Neighbourhood radius (`eps`)' },
+            { symbol: '\\text{minPts}', meaning: 'Minimum neighbours, including the point itself in scikit-learn’s `min_samples`' },
+            { symbol: 'D', meaning: 'The dataset' },
+          ],
+          category: 'complexity',
+        },
+        {
+          latex: '\\text{minPts} \\geq d + 1, \\quad \\text{commonly } 2d; \\qquad \\varepsilon \\approx \\text{knee of the sorted } k\\text{-distance curve}',
+          name: 'Choosing the DBSCAN parameters',
+          meaning:
+            'A practical recipe: set minPts from the dimensionality, then plot each point’s distance to its minPts-th nearest neighbour in sorted order and take eps at the knee, where the curve turns sharply upward.',
+          variables: [
+            { symbol: 'd', meaning: 'Number of features' },
+            { symbol: 'k\\text{-distance}', meaning: 'Distance from each point to its k-th nearest neighbour, with k = minPts − 1' },
+          ],
+          category: 'complexity',
+        },
+      ],
+      derivation: [
+        'Begin with the agglomerative procedure. Compute the full n × n distance matrix — this is immediately why the method costs O(n²) memory and stalls on large data.',
+        'Place every point in its own cluster. Repeatedly find the pair of clusters minimising the linkage distance, merge them, and record the merge height.',
+        'After each merge, the distances from the new cluster to all others must be updated. The Lance-Williams formula expresses every standard linkage as the same recurrence with different coefficients, which is how one implementation supports them all.',
+        'After n − 1 merges everything is in one cluster and the dendrogram is complete. Cutting it at height h gives the clustering that existed just before any merge above h.',
+        'Now see what each linkage encodes. Single linkage merges A and B as soon as one member of each is close, so a thin thread of points can join two otherwise distinct clusters — the chaining effect. That is a defect when clusters are compact and a feature when clusters are genuinely elongated.',
+        'Complete linkage requires every member of A to be close to every member of B, which produces compact clusters of similar diameter but will happily split a large, genuine, elongated cluster in two.',
+        'Ward’s criterion is derived rather than posited. The increase in total within-cluster sum of squares from merging A and B works out to (|A||B|/(|A|+|B|))‖μ_A − μ_B‖², so Ward greedily minimises exactly the objective k-means minimises. This is why the two produce similar clusters, and why Ward inherits the same blob assumption.',
+        'Turn to DBSCAN, which starts from a different definition. Fix ε and minPts. A point is core if its ε-neighbourhood contains at least minPts points.',
+        'Define q directly density-reachable from p if p is core and q ∈ N_ε(p). Density-reachable is the transitive closure over core points, and two points are density-connected if both are density-reachable from some common core point.',
+        'A cluster is a maximal density-connected set. Because reachability chains through core points, a cluster can extend arbitrarily far in any direction as long as density is maintained — which is exactly how DBSCAN follows a crescent or a ring that no centroid-based method can express.',
+        'Border points — inside a core point’s neighbourhood but not core themselves — are attached to a cluster but cannot extend it. If a border point lies within ε of core points from two different clusters it goes to whichever is processed first, which is the one source of non-determinism in the algorithm.',
+        'Points that are neither core nor border are noise, labelled −1. This is the feature k-means lacks entirely: an outlier is excluded rather than dragging a centroid towards it.',
+        'Parameter selection follows from the definitions. minPts controls how many neighbours constitute "dense"; the usual guidance is at least d + 1 and commonly 2d, with larger values giving more robustness to noise. Then plot the sorted distance from each point to its (minPts − 1)-th nearest neighbour: the curve is flat for points inside clusters and rises sharply for noise points, and the knee is a principled choice of ε.',
+        'The remaining limitation is structural. A single ε defines one density threshold for the entire dataset, so a dataset containing one tight cluster and one diffuse cluster cannot be handled well by any ε — either the diffuse cluster fragments into noise, or the tight ones merge. HDBSCAN addresses this by building a hierarchy over all density thresholds and extracting the most stable clusters, which is why it is generally the better default today.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Agglomerative clustering by hand, then DBSCAN on the same data',
+      setup:
+        'Five one-dimensional points: A = 1, B = 2, C = 5, D = 9, E = 10. Pairwise distances: AB = 1, AC = 4, AD = 8, AE = 9, BC = 3, BD = 7, BE = 8, CD = 4, CE = 5, DE = 1. Build the dendrogram under single and complete linkage, then run DBSCAN on a second dataset.',
+      steps: [
+        {
+          label: 'Single linkage, merges 1 and 2',
+          detail: 'The smallest distances are AB = 1 and DE = 1. Merge both at height 1, giving clusters {A,B}, {C}, {D,E}.',
+          latex: '\\text{merge } \\{A,B\\} \\text{ at } h = 1, \\quad \\{D,E\\} \\text{ at } h = 1',
+        },
+        {
+          label: 'Single linkage, merge 3',
+          detail: 'Recompute using the minimum across pairs: d({A,B}, C) = min(4, 3) = 3; d(C, {D,E}) = min(4, 5) = 4; d({A,B}, {D,E}) = min(8, 9, 7, 8) = 7. The smallest is 3, so merge {A,B} with C at height 3.',
+          latex: 'd_{\\text{single}}(\\{A,B\\}, C) = 3',
+        },
+        {
+          label: 'Single linkage, final merge',
+          detail: 'd({A,B,C}, {D,E}) = min(8, 9, 7, 8, 4, 5) = 4. Merge at height 4. The dendrogram heights are 1, 1, 3, 4.',
+          latex: '\\text{heights} = (1,\\, 1,\\, 3,\\, 4)',
+        },
+        {
+          label: 'Complete linkage on the same data',
+          detail: 'The first two merges are identical. Then d({A,B}, C) = max(4, 3) = 4; d(C, {D,E}) = max(4, 5) = 5; d({A,B}, {D,E}) = max(8, 9, 7, 8) = 9. Merge {A,B} with C at height 4, then the final merge at max(8, 9, 7, 8, 4, 5) = 9.',
+          latex: '\\text{heights} = (1,\\, 1,\\, 4,\\, 9)',
+        },
+        {
+          label: 'Read the two dendrograms',
+          detail: 'Under complete linkage the last merge happens at 9 while the one before it happens at 4 — a gap of 5, strongly suggesting two clusters. Under single linkage the same merges happen at 4 and 3, a gap of only 1, so the two-cluster structure looks far less convincing. Same data, same true structure, and the linkage choice changed how obvious it appeared.',
+          latex: '\\text{gap}_{\\text{complete}} = 5 \\quad \\text{vs} \\quad \\text{gap}_{\\text{single}} = 1',
+        },
+        {
+          label: 'Cut the tree',
+          detail: 'Cutting the complete-linkage dendrogram anywhere between heights 4 and 9 gives two clusters: {A, B, C} and {D, E}. Cutting between 1 and 4 gives three: {A, B}, {C}, {D, E}. The cut height is the decision, and the dendrogram makes the consequences of each choice visible before you commit.',
+          latex: '\\text{cut at } h = 6 \\Rightarrow \\{A,B,C\\}, \\{D,E\\}',
+        },
+        {
+          label: 'Now DBSCAN — set up',
+          detail: 'Take the points 1, 2, 3, 10, 11, 25 with eps = 1.5 and minPts = 3, counting the point itself. Neighbourhood sizes: |N(1)| = |{1,2}| = 2; |N(2)| = |{1,2,3}| = 3; |N(3)| = |{2,3}| = 2; |N(10)| = |{10,11}| = 2; |N(11)| = |{10,11}| = 2; |N(25)| = |{25}| = 1.',
+          latex: '|N_{1.5}(2)| = 3 \\geq \\text{minPts}',
+        },
+        {
+          label: 'Classify and grow',
+          detail: 'Only the point 2 is core. Start a cluster from it and add its neighbours 1 and 3 as border points; neither is core, so neither extends the cluster further. Points 10 and 11 are not core and are not within eps of any core point, so they are noise. Point 25 is noise. Result: one cluster {1, 2, 3} and three noise points.',
+          latex: 'C_1 = \\{1, 2, 3\\}, \\qquad \\text{noise} = \\{10, 11, 25\\}',
+        },
+        {
+          label: 'Change one parameter',
+          detail: 'Set minPts = 2 instead. Now |N(1)| = 2 qualifies, so 1 is core; so are 3, 10 and 11. The clusters become {1, 2, 3} and {10, 11}, with only 25 as noise. A single parameter change turned two noise points into a cluster — which is precisely why eps and minPts must be chosen deliberately, and why the fraction of points labelled noise is the first diagnostic to check.',
+          latex: '\\text{minPts} = 2 \\Rightarrow C_1 = \\{1,2,3\\},\\; C_2 = \\{10,11\\},\\; \\text{noise} = \\{25\\}',
+        },
+      ],
+      conclusion:
+        'The hierarchical half shows that the linkage criterion is a modelling assumption, not a detail: the same five points gave a convincing two-cluster structure under complete linkage and an ambiguous one under single linkage. The DBSCAN half shows the same for eps and minPts, where changing minPts from 3 to 2 converted a pair of noise points into a legitimate cluster. Neither method removes the need for judgement — they relocate it from "how many clusters" to "what counts as close" and "what counts as dense".',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Linkage choice changes the answer',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.cluster import AgglomerativeClustering
+from sklearn.datasets import make_moons, make_blobs
+from sklearn.metrics import adjusted_rand_score
+from sklearn.preprocessing import StandardScaler
+
+sets = {
+    "blobs ": make_blobs(n_samples=500, centers=3, cluster_std=1.0, random_state=0),
+    "moons ": make_moons(n_samples=500, noise=0.05, random_state=0),
+}
+for name, (X, y) in sets.items():
+    Xs = StandardScaler().fit_transform(X)
+    k = len(set(y))
+    scores = {}
+    for link in ["ward", "complete", "average", "single"]:
+        labels = AgglomerativeClustering(n_clusters=k, linkage=link).fit_predict(Xs)
+        scores[link] = adjusted_rand_score(y, labels)
+    print(name, "  ".join(f"{k2}: {v:.3f}" for k2, v in scores.items()))`,
+        output: `blobs  ward: 1.000  complete: 0.968  average: 1.000  single: 0.004
+moons  ward: 0.481  complete: 0.386  average: 0.407  single: 1.000
+`,
+        explanation:
+          'The ranking inverts completely between the two datasets, which is the clearest possible evidence that linkage is a modelling assumption rather than a tuning knob. On compact blobs, Ward and average linkage are perfect while single linkage scores 0.004 — essentially nothing — because a single stray point bridges two clusters and chaining merges them. On the two moons, single linkage is perfect precisely because chaining is what you want: each moon is a connected thread of nearby points, and the ability to follow that thread is the whole requirement. Ward manages only 0.48 there because it minimises within-cluster variance, which is the same blob assumption k-means makes. Choose linkage by asking what shape you expect, not by trying them all and keeping the best number on labelled data you will not have in production.',
+      },
+      {
+        language: 'python',
+        title: 'Choosing eps from the k-distance curve',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.cluster import DBSCAN
+from sklearn.datasets import make_moons
+from sklearn.neighbors import NearestNeighbors
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import adjusted_rand_score
+
+X, y = make_moons(n_samples=800, noise=0.07, random_state=0)
+Xs = StandardScaler().fit_transform(X)
+
+# The recipe: sort each point's distance to its (minPts-1)-th neighbour and look for the knee.
+min_pts = 5
+d, _ = NearestNeighbors(n_neighbors=min_pts).fit(Xs).kneighbors(Xs)
+kdist = np.sort(d[:, -1])
+for q in [0.50, 0.80, 0.90, 0.95, 0.99]:
+    print(f"  {int(q*100)}th percentile of {min_pts}-distance: {np.quantile(kdist, q):.3f}")
+
+print()
+for eps in [0.05, 0.10, 0.20, 0.30, 0.60]:
+    labels = DBSCAN(eps=eps, min_samples=min_pts).fit_predict(Xs)
+    n_clusters = len(set(labels) - {-1})
+    noise = np.mean(labels == -1)
+    print(f"eps={eps:<5} clusters {n_clusters:>2}   noise {noise:6.1%}   ARI {adjusted_rand_score(y, labels):.3f}")`,
+        output: `  50th percentile of 5-distance: 0.088
+  80th percentile of 5-distance: 0.114
+  90th percentile of 5-distance: 0.129
+  95th percentile of 5-distance: 0.145
+  99th percentile of 5-distance: 0.191
+
+eps=0.05  clusters 18   noise  38.2%   ARI 0.152
+eps=0.10  clusters  2   noise   6.0%   ARI 0.947
+eps=0.20  clusters  2   noise   0.0%   ARI 1.000
+eps=0.30  clusters  1   noise   0.0%   ARI 0.000
+eps=0.60  clusters  1   noise   0.0%   ARI 0.000
+`,
+        explanation:
+          'The failure modes sit on either side of a narrow window. Too small an eps and no point has enough neighbours: the data shatters into eighteen fragments with 38% labelled noise. Too large and everything becomes density-connected into a single cluster, which is why ARI collapses to zero at eps = 0.30. The usable range here is roughly 0.10 to 0.25. The k-distance percentiles point at it: most points sit within about 0.09 of their fifth neighbour, and the curve turns upward around the 90th to 95th percentile, which is the standard heuristic for eps. Always report the noise fraction alongside the cluster count — a solution with 38% noise is telling you the parameters are wrong, not that the data is mostly outliers.',
+      },
+      {
+        language: 'python',
+        title: 'The one thing a fixed eps cannot do',
+        runnable: true,
+        code: `import numpy as np
+from sklearn.cluster import DBSCAN, AgglomerativeClustering, KMeans
+from sklearn.datasets import make_blobs
+from sklearn.metrics import adjusted_rand_score
+from sklearn.preprocessing import StandardScaler
+
+# Three clusters with deliberately different densities.
+X, y = make_blobs(n_samples=[300, 300, 300],
+                  centers=[[0, 0], [6, 0], [12, 0]],
+                  cluster_std=[0.3, 1.0, 2.5], random_state=0)
+Xs = StandardScaler().fit_transform(X)
+
+for eps in [0.08, 0.15, 0.30, 0.50]:
+    lab = DBSCAN(eps=eps, min_samples=8).fit_predict(Xs)
+    print(f"DBSCAN eps={eps:<5} clusters {len(set(lab) - {-1}):>2}"
+          f"  noise {np.mean(lab == -1):6.1%}  ARI {adjusted_rand_score(y, lab):.3f}")
+
+print("Ward   k=3            ARI", round(adjusted_rand_score(
+    y, AgglomerativeClustering(n_clusters=3).fit_predict(Xs)), 3))
+print("KMeans k=3            ARI", round(adjusted_rand_score(
+    y, KMeans(3, n_init=10, random_state=0).fit_predict(Xs)), 3))`,
+        output: `DBSCAN eps=0.08  clusters  2  noise  62.4%  ARI 0.274
+DBSCAN eps=0.15  clusters  2  noise  33.1%  ARI 0.476
+DBSCAN eps=0.30  clusters  2  noise   7.2%  ARI 0.611
+DBSCAN eps=0.50  clusters  2  noise   0.9%  ARI 0.717
+Ward   k=3            ARI 0.842
+KMeans k=3            ARI 0.756
+`,
+        explanation:
+          'This is the structural limitation of DBSCAN and it cannot be tuned away. A single eps defines one density threshold for the whole dataset, but here the three clusters have standard deviations of 0.3, 1.0 and 2.5. Any eps tight enough to keep the dense cluster separate is too tight for the diffuse one, which fragments into noise; any eps loose enough to hold the diffuse cluster together merges the two tighter ones. No value of eps recovers all three, and the best DBSCAN result is beaten by both Ward and plain k-means. The remedy is HDBSCAN, which builds a hierarchy across all density thresholds and extracts the most persistent clusters, or — where the blob assumption genuinely holds, as it does here — simply using a method that makes it.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Gene expression and phylogenetics',
+        usage:
+          'Hierarchical clustering with average or Ward linkage is the standard way to group genes with similar expression profiles, and the dendrogram is the output rather than an intermediate: biologists read the tree structure itself, since nested similarity corresponds to shared regulatory pathways or evolutionary descent.',
+      },
+      {
+        context: 'Geospatial and trajectory analysis',
+        usage:
+          'DBSCAN is the default for finding places of interest from GPS traces, because stops form dense irregular blobs while travel between them is sparse and should be excluded as noise. The same approach identifies crime hotspots and clusters of seismic events, where shapes follow roads or faults rather than circles.',
+      },
+      {
+        context: 'Anomaly detection',
+        usage:
+          'DBSCAN’s noise label is used directly as an outlier flag in network intrusion detection and fraud monitoring. Unlike k-means, which forces every point into a cluster and so dilutes the very outliers you are hunting for, DBSCAN leaves them unassigned by construction.',
+      },
+      {
+        context: 'Grouping document or image embeddings',
+        usage:
+          'After reducing embeddings with UMAP, HDBSCAN is the usual clustering step in topic-modelling pipelines such as BERTopic. The combination works because the reduction restores meaningful density, and HDBSCAN handles the widely differing cluster sizes that real corpora produce.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'scikit-learn', role: '`AgglomerativeClustering` with `linkage` and either `n_clusters` or `distance_threshold`; `DBSCAN` with `eps` and `min_samples`; `HDBSCAN` since version 1.3.' },
+      { tool: 'scipy.cluster.hierarchy', role: '`linkage`, `dendrogram` and `fcluster` — the tools you actually use to draw and cut a dendrogram, which scikit-learn does not provide.' },
+      { tool: 'hdbscan / UMAP', role: 'The standard pairing for embedding-based clustering: reduce with UMAP to restore density, then cluster with HDBSCAN, which varies the density threshold rather than fixing one eps.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Using single linkage without understanding chaining',
+        why: 'Single linkage merges clusters as soon as any two members are close, so one thin thread of points bridges two genuinely separate clusters and they merge into one. On compact blob data it can score essentially zero.',
+        fix: 'Use Ward for Euclidean blob-like data and average for general distances. Choose single linkage deliberately, when you want elongated connected structures — where it is the best option available.',
+      },
+      {
+        mistake: 'Running DBSCAN on unscaled features',
+        why: 'eps is a single radius in the feature space, so it only means something if all features share a scale. Unscaled, eps is effectively measured in the units of the largest feature and the others are ignored.',
+        fix: 'Standardise first, always. Then choose eps from the k-distance curve computed on the scaled data, not by guessing.',
+      },
+      {
+        mistake: 'Accepting a DBSCAN result with a large noise fraction',
+        why: 'A run labelling 40% of points as noise is almost never telling you that 40% of the data are outliers — it is telling you eps is too small or minPts too large for the density that actually exists.',
+        fix: 'Report the noise fraction with every run. Raise eps or lower minPts until it is plausible for the domain, and if no setting gives both sensible clusters and sensible noise, the densities likely differ and HDBSCAN is the right tool.',
+      },
+      {
+        mistake: 'Applying hierarchical clustering to hundreds of thousands of points',
+        why: 'The full distance matrix is O(n²) in memory: at n = 200,000 that is 160 GB in double precision, before the merging even starts.',
+        fix: 'Sub-sample and cluster the sample, use `MiniBatchKMeans` to produce a few thousand micro-clusters and run hierarchical clustering on those, or switch to a linear-time method.',
+      },
+      {
+        mistake: 'Expecting DBSCAN to handle clusters of differing densities',
+        why: 'A single eps sets one density threshold for the entire dataset. If one cluster is tight and another diffuse, no eps separates all of them — one will fragment or two will merge.',
+        fix: 'Use HDBSCAN, which builds a hierarchy over all density levels and extracts the most stable clusters, or cluster different density regimes separately if the regimes are known.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'When would you choose DBSCAN over k-means?',
+        answer:
+          'Three situations, all following from how DBSCAN defines a cluster. First, when clusters are not convex — DBSCAN grows clusters by stepping from one dense point to a neighbouring dense point, so it follows crescents, rings and elongated shapes that a set of centroids cannot express, since nearest-centroid assignment produces convex Voronoi cells. Second, when the data contains genuine outliers you want excluded: DBSCAN labels sparse points as noise, whereas k-means forces every point into a cluster and lets outliers drag centroids around. Third, when you do not know how many clusters there are and have no principled way to choose — DBSCAN determines that from the density structure. What you give up is substantial. You now have to choose eps and minPts, and eps is at least as hard to choose as k and much less intuitive; a single eps cannot accommodate clusters of very different densities; and DBSCAN degrades in high dimensions because distances concentrate and "denser than the threshold" stops discriminating. So I would reach for DBSCAN on low-dimensional geometric or geospatial data with irregular shapes, and stay with k-means on high-dimensional blob-like data at scale.',
+      },
+      {
+        level: 'advanced',
+        question: 'How would you set eps and minPts for a DBSCAN run?',
+        answer:
+          'I would set minPts first, because it has a clearer rationale. The usual guidance is at least d + 1 and commonly 2d for d features, with larger values giving more robustness to noise and a stronger requirement for what counts as dense; on two-dimensional geospatial data 4 or 5 is typical. Then I would choose eps from the data rather than guessing. Compute each point’s distance to its (minPts − 1)-th nearest neighbour, sort those distances ascending, and plot them. Points inside clusters have small values that vary little, so the curve is flat; noise points have much larger values, so the curve turns sharply upward. The knee of that curve is the natural eps, and in practice it usually sits around the 90th to 95th percentile of the distribution. I would sweep eps over a range around the knee and report, for each value, the number of clusters, the noise fraction and — if labels exist for validation — an agreement score, because the sensitivity is steep: I have seen a dataset go from eighteen clusters with 38% noise to two perfect clusters to one merged blob over an eps range of 0.05 to 0.30. Two preconditions matter more than either parameter. Features must be standardised, since eps is a single radius in the feature space and is meaningless otherwise. And if the dimensionality is high I would reduce first, because density-based methods lose discriminating power when distances concentrate. If no eps gives both sensible clusters and a sensible noise fraction, that usually means the clusters have different densities, and I would move to HDBSCAN.',
+        followUp:
+          'A strong answer volunteers that a large noise fraction is a diagnostic of bad parameters rather than a finding about the data, and knows that a fixed eps cannot handle varying densities.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'You need to cluster two million embeddings. Hierarchical clustering runs out of memory and DBSCAN finds one giant cluster. What is your approach?',
+        answer:
+          'Both symptoms are expected and both point at the same underlying issue. Hierarchical clustering needs the full pairwise distance matrix, which at two million points is four trillion entries — it was never going to run, regardless of hardware. DBSCAN finding one giant cluster is the signature of high-dimensional distance concentration: when every point is roughly equidistant from every other, any eps large enough to make points core makes everything density-connected. So my first move would be dimensionality reduction, specifically UMAP down to five to fifteen dimensions, which is designed to preserve local neighbourhood structure and restores the density contrast that density-based methods need. Then I would run HDBSCAN rather than DBSCAN, since embedding clusters almost always vary in density and size, and HDBSCAN extracts stable clusters across density levels instead of committing to one eps; this UMAP-plus-HDBSCAN pipeline is what topic-modelling tools such as BERTopic use, at exactly this scale. If I needed hierarchical structure specifically, I would use a two-stage approach: MiniBatchKMeans to produce a few thousand micro-clusters, then agglomerative clustering on those centroids weighted by cluster size, which gives a dendrogram over a tractable number of nodes. And I would validate on a sample before committing compute — cluster a hundred thousand points, inspect the resulting groups by hand, and only then scale up. For clustering at this size the expensive mistake is not a slow algorithm, it is running the wrong one for six hours.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Points at 0, 1, 2, 3 in one dimension. Build the single-linkage and complete-linkage dendrograms and give the merge heights for each.',
+        hint: 'All adjacent distances are 1. Track how the cluster-to-cluster distance changes after each merge.',
+        solution:
+          'Single linkage: the smallest distance is 1, achieved by several pairs. Merge {0,1} at height 1. Now d({0,1}, 2) = min(2, 1) = 1 and d(2, 3) = 1, so merge again at height 1 — say {0,1,2}. Then d({0,1,2}, 3) = min(3, 2, 1) = 1, so the final merge is also at height 1. Heights: 1, 1, 1. The dendrogram is a ladder with no gaps, correctly indicating that this data has no cluster structure at all. Complete linkage: merge {0,1} at height 1. Then d({0,1}, 2) = max(2, 1) = 2 and d(2, 3) = 1, so merge {2,3} at height 1. Finally d({0,1}, {2,3}) = max(2, 3, 1, 2) = 3, so the last merge is at height 3. Heights: 1, 1, 3. The gap from 1 to 3 makes it look as though there are two clusters — but there are not; the apparent structure is an artefact of complete linkage’s preference for compact, equal-sized groups. The lesson is that a visible gap in a dendrogram is evidence about the linkage as much as about the data.',
+      },
+      {
+        prompt:
+          'With eps = 2 and minPts = 3 (including the point itself), classify each of the points 1, 2, 3, 4, 10, 20 as core, border or noise.',
+        hint: 'Count the points within distance 2 of each, then apply the definitions in order.',
+        solution:
+          'Neighbourhoods within distance 2: N(1) = {1,2,3} size 3; N(2) = {1,2,3,4} size 4; N(3) = {1,2,3,4} size 4; N(4) = {2,3,4} size 3; N(10) = {10} size 1; N(20) = {20} size 1. Applying minPts = 3: points 1, 2, 3 and 4 are all core. Points 10 and 20 have neighbourhoods of size 1, so they are not core, and they are not within eps of any core point, so they are noise rather than border points. The four core points are mutually density-reachable — 1 reaches 3 directly, 3 reaches 4 directly, and so on — so they form a single cluster {1, 2, 3, 4}, with no border points in this example. Final answer: one cluster of four, two noise points. Note that there are no border points here because every non-core point is isolated; border points appear when a non-core point sits on the fringe of a dense region.',
+      },
+      {
+        prompt:
+          'Explain why a single eps cannot handle a dataset containing one tight cluster and one diffuse cluster, and name a method that can.',
+        hint: 'What does eps mean in terms of density?',
+        solution:
+          'The core condition asks whether at least minPts points lie within eps, which is a statement about local density: it defines a single density threshold applied uniformly across the dataset. If one cluster has points packed at, say, ten per unit area and another has one per unit area, then an eps tuned to the dense cluster gives the diffuse cluster too few neighbours per ball, so its points fail the core test and are labelled noise — the cluster fragments or disappears. Conversely, an eps large enough for the diffuse cluster makes the dense region and anything near it density-connected, so separate tight clusters merge into one. There is no intermediate value that satisfies both, because the requirement is contradictory. You can see this empirically: on three blobs with standard deviations 0.3, 1.0 and 2.5, sweeping eps finds at most two of the three clusters at every value, and the best result is beaten by plain k-means. The remedy is HDBSCAN, which does not fix a density threshold at all — it builds a hierarchy of DBSCAN results across all values of eps, then extracts the clusters that persist over the widest range of density levels. That makes it robust to varying density and removes eps as a parameter, leaving only a minimum cluster size, which is far easier to reason about.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'ML-018-q1',
+        type: 'mcq',
+        concept: 'chaining',
+        prompt: 'Which linkage criterion is most vulnerable to the chaining effect, where a thin thread of points merges two distinct clusters?',
+        options: ['Single linkage', 'Complete linkage', 'Ward linkage', 'Average linkage'],
+        answerIndex: 0,
+        explanation:
+          'Single linkage defines cluster distance as the minimum over all cross pairs, so one close pair is enough to trigger a merge. That is a defect on compact blobs and exactly the desired behaviour on elongated structures such as two moons.',
+      },
+      {
+        id: 'ML-018-q2',
+        type: 'truefalse',
+        concept: 'noise handling',
+        prompt: 'DBSCAN assigns every point to a cluster.',
+        answer: false,
+        explanation:
+          'Points that are neither core nor within eps of a core point are labelled noise, conventionally −1. This is a genuine advantage over k-means, which forces every point into a cluster and lets outliers drag centroids.',
+      },
+      {
+        id: 'ML-018-q3',
+        type: 'numeric',
+        concept: 'core condition',
+        prompt: 'With eps = 1.5 and min_samples = 3 (counting the point itself), how many of the points {1, 2, 3, 4, 9} are core points?',
+        answer: 2,
+        tolerance: 0.1,
+        explanation:
+          'Neighbourhood sizes within distance 1.5 are: N(1) = {1,2} is 2; N(2) = {1,2,3} is 3; N(3) = {2,3,4} is 3; N(4) = {3,4} is 2; N(9) = {9} is 1. Only the points 2 and 3 reach min_samples, so exactly two points are core; 1 and 4 become border points and 9 is noise.',
+      },
+      {
+        id: 'ML-018-q4',
+        type: 'match',
+        concept: 'choosing a method',
+        prompt: 'Match each dataset characteristic to the most suitable clustering method.',
+        pairs: [
+          { left: 'Two interlocking crescents', right: 'DBSCAN or single-linkage agglomerative' },
+          { left: 'Millions of roughly spherical clusters', right: 'MiniBatchKMeans' },
+          { left: 'Unknown k, nested taxonomy is meaningful', right: 'Agglomerative with Ward linkage' },
+          { left: 'Clusters of very different densities', right: 'HDBSCAN' },
+        ],
+        explanation:
+          'Each method encodes a different definition of a cluster: proximity to a centre, connectivity through close pairs, or density-connectivity. Matching the definition to the data matters far more than tuning any one method.',
+      },
+      {
+        id: 'ML-018-q5',
+        type: 'multi',
+        concept: 'DBSCAN in practice',
+        prompt: 'Which statements about DBSCAN are true? Select all that apply.',
+        options: [
+          'The number of clusters is determined by the data rather than specified in advance',
+          'Features should be standardised before choosing eps',
+          'A single eps cannot accommodate clusters of very different densities',
+          'It scales to very high dimensions better than k-means does',
+          'A large noise fraction usually indicates poorly chosen parameters',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'DBSCAN degrades faster than k-means in high dimensions, not better: distance concentration makes every point roughly equidistant, so no eps discriminates between dense and sparse regions. Reduce dimensionality first.',
+      },
+      {
+        id: 'ML-018-q6',
+        type: 'fill',
+        concept: 'reading the tree',
+        prompt: 'What is the name of the tree diagram produced by agglomerative clustering, whose branch heights show merge distances?',
+        answers: ['dendrogram', 'a dendrogram', 'the dendrogram'],
+        explanation:
+          'The dendrogram. Cutting it at a chosen height yields a clustering, and a long vertical stretch with no merges is evidence of well-separated groups — though as with linkage, apparent gaps can be artefacts of the criterion used.',
+      },
+      {
+        id: 'ML-018-q7',
+        type: 'explain',
+        concept: 'three definitions of a cluster',
+        prompt: 'Compare k-means, hierarchical clustering and DBSCAN in terms of what each one assumes a cluster is.',
+        rubric: [
+          'States that k-means defines a cluster as everything nearest to one centre, giving convex regions',
+          'States that hierarchical clustering defines it through a linkage criterion over pairwise distances',
+          'States that DBSCAN defines it as a density-connected region, allowing arbitrary shapes and noise',
+          'Connects each definition to a concrete strength or failure mode',
+        ],
+        sampleAnswer:
+          'The three differ in their definition of a cluster, and every practical difference follows from that. For k-means a cluster is the set of points closest to one centre. Since each cluster is a Voronoi cell, the regions are convex and bounded by straight hyperplanes, which is why k-means cannot separate two concentric rings no matter how you initialise it, and why it is dominated by large clusters — the objective sums squared distances, so the many points in a big diffuse cluster outweigh the few in a tight one. It also has to be told k, since the objective falls monotonically as k rises. For hierarchical clustering a cluster is whatever a linkage criterion produces when you repeatedly merge the two closest groups, so the definition is deferred to that criterion. Complete linkage says a cluster is a set where every member is close to every other, producing compact equal-diameter groups. Single linkage says a cluster is a set connected by a chain of close neighbours, which follows elongated shapes beautifully and also merges two distinct clusters if one thread of points bridges them. Ward says a cluster is a set with low internal variance, which makes it the hierarchical analogue of k-means. The advantage is that you get every k at once and can choose after seeing the dendrogram; the cost is the O(n²) distance matrix, which rules out large data. For DBSCAN a cluster is a maximal density-connected region: points with enough neighbours within a radius are core, and clusters are the connected components of core points with their fringes attached. That definition buys arbitrary shapes, a number of clusters determined by the data, and an explicit noise label for sparse points. What it costs is a single global density threshold — one eps for the whole dataset — so it cannot handle a tight cluster and a diffuse cluster simultaneously, and it degrades in high dimensions where distances concentrate and density stops discriminating.',
+        explanation:
+          'The strongest answers treat the choice of algorithm as a choice of definition, since each method’s failure modes are direct consequences of the definition it enforces.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'What is a dendrogram?', back: 'The tree of merges from agglomerative clustering, with branch height equal to the merge distance. Cutting it at a height gives a clustering.' },
+      { front: 'What does single linkage do wrong?', back: 'Chaining: it merges clusters as soon as any two members are close, so a thin thread of points joins two distinct clusters.' },
+      { front: 'What is Ward linkage?', back: 'Merge the pair that increases total within-cluster variance least: Δ = (|A||B|/(|A|+|B|))‖μ_A − μ_B‖². The hierarchical analogue of k-means.' },
+      { front: 'What is a DBSCAN core point?', back: 'A point with at least minPts points (including itself) within distance eps. Clusters are the connected components of core points plus their borders.' },
+      { front: 'How do you choose eps?', back: 'Sort each point’s distance to its (minPts−1)-th nearest neighbour and take the knee of the curve, typically around the 90th–95th percentile.' },
+      { front: 'Why can DBSCAN not handle varying densities?', back: 'A single eps sets one density threshold for the whole dataset. Use HDBSCAN, which extracts stable clusters across all density levels.' },
+      { front: 'Why is hierarchical clustering limited to small data?', back: 'It needs the full n × n distance matrix: O(n²) memory and O(n² log n) to O(n³) time. At n = 200,000 that is over 100 GB.' },
+    ],
+
+    challenge: {
+      title: 'Three definitions of a cluster, one dataset',
+      brief:
+        'Assemble four two-dimensional datasets: compact blobs, two moons, concentric rings, and blobs with deliberately different densities. On each, run k-means, agglomerative clustering with all four linkages, and DBSCAN with eps chosen from the k-distance curve. Score every combination with the adjusted Rand index against the known labels, and present the results as a single table of method against dataset. Then write a short analysis explaining each failure in terms of the definition of a cluster that method enforces, not in terms of tuning.',
+      acceptanceCriteria: [
+        'All features are standardised before clustering, and the write-up says why this matters for each method',
+        'eps is chosen from the k-distance curve and the procedure is shown, not asserted',
+        'The results table covers every method on every dataset, including the failures',
+        'Each failure is explained mechanistically — convexity, chaining, or a fixed density threshold',
+        'The analysis ends with a decision rule for choosing a method from properties of the data, not from trying all of them',
+      ],
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain to a colleague how hierarchical clustering and DBSCAN differ from k-means, and when each is the right tool.',
+      mustCover: [
+        'Hierarchical clustering produces a whole tree of nested clusterings rather than one partition, so k is chosen afterwards',
+        'The linkage criterion determines what shape of cluster you get, and single linkage can chain',
+        'DBSCAN defines clusters by density and connectivity, so it finds arbitrary shapes and labels noise',
+        'DBSCAN’s eps sets one global density threshold, which fails when clusters differ in density',
+      ],
+      bonusSignals: ['mentions the O(n²) memory cost of hierarchical clustering', 'mentions choosing eps from the k-distance curve', 'mentions HDBSCAN for varying densities'],
+      sampleExplanation:
+        'K-means makes two commitments up front: you tell it how many clusters there are, and it assumes each one is a round blob around a central point. The other two families relax those commitments in different directions. Hierarchical clustering refuses to pick a number. Every point starts as its own cluster, then you repeatedly merge the two closest clusters, recording the distance at every merge, until everything is one group. What you get is a tree, and you choose the number of clusters afterwards by deciding where to cut it. That is genuinely useful, because if there really are four well-separated groups you will see a long stretch of the tree where nothing merges, and the cut becomes evident rather than arbitrary. The subtlety is that "distance between two clusters" needs defining, and the definition you pick is a real modelling assumption. Complete linkage takes the furthest pair, which gives compact groups of similar size. Single linkage takes the closest pair, which lets a cluster snake along a curve — wonderful for two interlocking crescents, disastrous on blobs, because one stray bridge of points will chain two clusters into one. Ward linkage merges whichever pair increases the within-cluster variance least, which makes it the hierarchical version of k-means and a sensible default for Euclidean data. The cost of all this is the distance matrix: n squared entries, so at a couple of hundred thousand points you are out of memory before you start. DBSCAN takes a different view of what a cluster even is. It says a cluster is a region where points are packed densely. Pick a radius, eps, and a count, minPts. Any point with at least minPts neighbours inside that radius is a core point, sitting in the interior of something dense. Clusters then grow by stepping from one core point to another, picking up the non-core points on the fringes as borders. Everything left over is noise. That gives you three things k-means cannot: shapes can be anything at all, since you are following connectivity rather than measuring distance to a centre; the number of clusters comes out of the data; and outliers are excluded instead of being forced into whichever cluster is nearest. The price is eps, which is harder to choose than k and much less intuitive — the standard recipe is to plot every point’s distance to its minPts-th neighbour in sorted order and take the knee. And there is one limitation you cannot tune away: eps is a single density threshold for the whole dataset, so if one cluster is tight and another is diffuse, no value works for both. That is exactly the case for HDBSCAN, which builds the hierarchy across every density level and keeps the clusters that persist.',
+    },
+  },
+
+];

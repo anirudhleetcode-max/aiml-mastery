@@ -1,0 +1,124 @@
+/**
+ * Performance audit.
+ *
+ * Measures the Core Web Vitals that actually matter for this app on a real
+ * Chromium, plus transferred bytes per route. Not a Lighthouse replacement —
+ * it is the subset that is meaningful to check on every change, run against a
+ * production build.
+ *
+ *   npm run build && npm start &
+ *   node scripts/perf-audit.mjs http://127.0.0.1:3000
+ */
+import { chromium } from '@playwright/test';
+
+const BASE = process.argv[2] ?? 'http://127.0.0.1:3000';
+const ROUTES = [
+  { path: '/', name: 'Landing', auth: false },
+  { path: '/login', name: 'Login', auth: false },
+  { path: '/dashboard', name: 'Dashboard', auth: true },
+  { path: '/roadmap', name: 'Roadmap', auth: true },
+  { path: '/learn/your-first-python-program', name: 'Lesson', auth: true },
+  { path: '/analytics', name: 'Analytics', auth: true },
+  { path: '/labs', name: 'Labs', auth: true },
+];
+
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+const page = await context.newPage();
+
+// Sign in once so the authenticated routes are measurable.
+await page.goto(`${BASE}/login`);
+await page.getByLabel('Email').fill('demo@aimlmastery.app');
+await page.getByLabel('Password', { exact: true }).fill('demolearner2026');
+await page.getByRole('button', { name: 'Sign in' }).click();
+await page.waitForURL(/dashboard|onboarding/, { timeout: 30000 }).catch(() => {});
+
+const rows = [];
+
+for (const route of ROUTES) {
+  const measured = await context.newPage();
+  let transferred = 0;
+  let requests = 0;
+  const errors = [];
+
+  measured.on('response', async (res) => {
+    requests += 1;
+    try {
+      const len = Number(res.headers()['content-length'] ?? 0);
+      transferred += Number.isFinite(len) ? len : 0;
+    } catch { /* ignore */ }
+  });
+  measured.on('pageerror', (e) => errors.push(e.message));
+
+  const start = Date.now();
+  await measured.goto(`${BASE}${route.path}`, { waitUntil: 'networkidle', timeout: 60000 });
+  const loadMs = Date.now() - start;
+
+  const vitals = await measured.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const out = { lcp: 0, cls: 0, fcp: 0, ttfb: 0, domNodes: 0 };
+        const nav = performance.getEntriesByType('navigation')[0];
+        if (nav) out.ttfb = Math.round(nav.responseStart);
+        const paint = performance.getEntriesByName('first-contentful-paint')[0];
+        if (paint) out.fcp = Math.round(paint.startTime);
+
+        try {
+          new PerformanceObserver((list) => {
+            const entries = list.getEntries();
+            const last = entries[entries.length - 1];
+            if (last) out.lcp = Math.round(last.startTime);
+          }).observe({ type: 'largest-contentful-paint', buffered: true });
+
+          new PerformanceObserver((list) => {
+            for (const entry of list.getEntries()) {
+              if (!entry.hadRecentInput) out.cls += entry.value;
+            }
+          }).observe({ type: 'layout-shift', buffered: true });
+        } catch { /* unsupported */ }
+
+        setTimeout(() => {
+          out.domNodes = document.getElementsByTagName('*').length;
+          out.cls = Math.round(out.cls * 1000) / 1000;
+          resolve(out);
+        }, 1200);
+      }),
+  );
+
+  rows.push({
+    Route: route.name,
+    'TTFB (ms)': vitals.ttfb,
+    'FCP (ms)': vitals.fcp,
+    'LCP (ms)': vitals.lcp,
+    CLS: vitals.cls,
+    'Load (ms)': loadMs,
+    Requests: requests,
+    'KB': Math.round(transferred / 1024),
+    'DOM nodes': vitals.domNodes,
+    Errors: errors.length,
+  });
+
+  if (errors.length) console.log(`  ${route.name} page errors:`, errors.slice(0, 3));
+  await measured.close();
+}
+
+console.table(rows);
+
+const budgets = { 'LCP (ms)': 2500, CLS: 0.1, 'DOM nodes': 3000 };
+let failed = 0;
+for (const row of rows) {
+  for (const [metric, limit] of Object.entries(budgets)) {
+    if (row[metric] > limit) {
+      console.log(`  OVER BUDGET: ${row.Route} ${metric} = ${row[metric]} (budget ${limit})`);
+      failed += 1;
+    }
+  }
+  if (row.Errors > 0) {
+    console.log(`  PAGE ERRORS: ${row.Route}`);
+    failed += 1;
+  }
+}
+console.log(failed === 0 ? '\n  All routes within budget.\n' : `\n  ${failed} budget breach(es).\n`);
+
+await browser.close();
+process.exit(failed === 0 ? 0 : 1);
