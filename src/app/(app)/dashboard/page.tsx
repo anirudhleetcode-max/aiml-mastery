@@ -8,6 +8,7 @@ import { buildOverview } from '@/features/progress/overview';
 import { DeadlineTracker } from '@/components/dashboard/deadline-tracker';
 import { TodayCard } from '@/components/dashboard/today-card';
 import { DomainProgress } from '@/components/dashboard/domain-progress';
+import { CompletionBanner } from '@/components/dashboard/completion-banner';
 import { AttentionList, reviewDetail, weakDetail } from '@/components/dashboard/attention-list';
 import { CompositionDonut, TrendChart } from '@/components/charts/charts';
 import { ActivityHeatmap } from '@/components/charts/heatmap';
@@ -43,8 +44,30 @@ export default async function DashboardPage() {
   const overall = o.totals.total ? o.totals.completed / o.totals.total : 0;
   const scoreSeries = o.activitySeries.filter((d) => d.score !== null).map((d) => ({ date: d.date, value: d.score ?? 0 }));
 
+  const curriculumComplete = o.totals.completed >= o.totals.total;
+  const finalBest = state.assessments
+    .filter((a) => a.kind === 'final-assessment')
+    .reduce<number | null>((m, a) => (m === null ? a.score : Math.max(m, a.score)), null);
+
   return (
     <div className="mx-auto max-w-7xl space-y-6">
+      {curriculumComplete && (
+        <CompletionBanner
+          totals={{ total: o.totals.total, completed: o.totals.completed, mastered: o.totals.mastered }}
+          finalAssessmentBest={finalBest}
+          teacherLevelCount={o.totals.teacher}
+          totalStudySeconds={o.totals.totalStudySeconds}
+          domains={o.domains.map((d) => ({
+            id: d.domain.id,
+            name: d.domain.name,
+            total: d.total,
+            completed: d.completed,
+            mastered: d.mastered,
+            averageScore: d.averageScore,
+          }))}
+        />
+      )}
+
       {/* ---------------------------------------------------- Greeting */}
       <header className="rounded-xl border border-line bg-gradient-to-br from-surface to-surface-2 p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-6">

@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { Readout, WidgetShell } from './shared';
+import { usePrefersReducedMotion } from '@/lib/store/ui';
 import { cn } from '@/lib/cn';
 
 /**
@@ -150,6 +151,9 @@ function ShapeEditor({
   shape: number[];
   onChange: (s: number[]) => void;
 }) {
+  // Nothing here animates, so honouring reduced motion means dropping the
+  // small colour fades on the controls rather than stopping anything.
+  const ease = usePrefersReducedMotion() ? '' : 'transition-colors';
   return (
     <div>
       <div className="mb-1 flex items-baseline justify-between gap-2">
@@ -184,7 +188,10 @@ function ShapeEditor({
           type="button"
           disabled={shape.length >= MAX_AXES}
           onClick={() => onChange([1, ...shape])}
-          className="rounded-md border border-line bg-surface-2 px-2 py-1 text-[11.5px] text-muted transition-colors hover:text-ink disabled:opacity-40"
+          className={cn(
+            'rounded-md border border-line bg-surface-2 px-2 py-1 text-[11.5px] text-muted hover:text-ink disabled:opacity-40',
+            ease,
+          )}
         >
           + axis
         </button>
@@ -192,7 +199,10 @@ function ShapeEditor({
           type="button"
           disabled={shape.length <= 1}
           onClick={() => onChange(shape.slice(1))}
-          className="rounded-md border border-line bg-surface-2 px-2 py-1 text-[11.5px] text-muted transition-colors hover:text-ink disabled:opacity-40"
+          className={cn(
+            'rounded-md border border-line bg-surface-2 px-2 py-1 text-[11.5px] text-muted hover:text-ink disabled:opacity-40',
+            ease,
+          )}
         >
           − axis
         </button>
@@ -264,6 +274,7 @@ function StretchGrid({
 
 export default function Broadcasting({ props }: { props?: Record<string, unknown> }) {
   void props;
+  const ease = usePrefersReducedMotion() ? '' : 'transition-colors';
   const [a, setA] = React.useState<number[]>([3, 1]);
   const [b, setB] = React.useState<number[]>([1, 4]);
   const [note, setNote] = React.useState(PRESETS[0].note);
@@ -326,7 +337,10 @@ export default function Broadcasting({ props }: { props?: Record<string, unknown
                     setB(p.b);
                     setNote(p.note);
                   }}
-                  className="rounded-md border border-line bg-surface-2 px-2 py-1 font-mono text-[11.5px] text-muted transition-colors hover:border-line-strong hover:text-ink"
+                  className={cn(
+                    'rounded-md border border-line bg-surface-2 px-2 py-1 font-mono text-[11.5px] text-muted hover:border-line-strong hover:text-ink',
+                    ease,
+                  )}
                 >
                   {p.label}
                 </button>

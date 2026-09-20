@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { Readout, Slider, Toggle, WidgetShell } from './shared';
+import { usePrefersReducedMotion } from '@/lib/store/ui';
 import { cn } from '@/lib/cn';
 
 /**
@@ -90,6 +91,9 @@ function money(v: number): string {
 
 export default function DataframePlayground({ props }: { props?: Record<string, unknown> }) {
   void props;
+  // The table redraws instantly; honouring reduced motion here means dropping
+  // the colour fades on the column chips rather than stopping an animation.
+  const ease = usePrefersReducedMotion() ? '' : 'transition-colors';
   const [seed, setSeed] = React.useState(7);
   const [filterKind, setFilterKind] = React.useState<FilterKind>('none');
   const [filterRegion, setFilterRegion] = React.useState('West');
@@ -279,7 +283,8 @@ export default function DataframePlayground({ props }: { props?: Record<string, 
                       setSelected((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...COLUMNS].filter((x) => prev.includes(x) || x === c)))
                     }
                     className={cn(
-                      'rounded-md border px-2 py-1 font-mono text-[11.5px] transition-colors disabled:opacity-40',
+                      'rounded-md border px-2 py-1 font-mono text-[11.5px] disabled:opacity-40',
+                      ease,
                       on ? 'border-primary bg-primary/15 text-ink' : 'border-line bg-surface-2 text-subtle hover:text-ink',
                     )}
                   >
