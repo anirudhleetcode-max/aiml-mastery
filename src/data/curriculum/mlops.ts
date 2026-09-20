@@ -5921,3 +5921,560 @@ def decide(report, labelled_recent, days_since_train: int, label_coverage: float
         'A model learns a relationship from one period of data and is then asked about a world that keeps moving, and there are three distinct ways that hurts. The inputs can change while the relationship holds — a campaign brings in younger customers, who still churn for the same reasons. The relationship itself can change — a competitor cuts prices, and a profile that was safe now is not, with the inputs looking identical. Or the outcome can simply become more or less common, which breaks whatever threshold you set. You would love to detect this by watching accuracy, but you usually cannot, because the labels arrive weeks or months later. So you watch what is observable today: the distributions of the inputs and of the predictions, compared against a fixed reference taken from the training data, using PSI or the KS statistic — and reading the effect size rather than a p-value, which is meaningless at production sample sizes. When something moves, the first question is not "should we retrain" but "is this even real": check the null rates and look for a step change at an exact timestamp, because a broken upstream pipeline looks exactly like catastrophic drift and retraining on it makes the damage permanent. Then check seasonality against last year. Only when it is genuine do you choose a response, and retraining is only one of them — a base-rate shift is often fixed by recalibration in minutes, and whatever you train still has to beat the current model on a fixed holdout before it is allowed near production.',
     },
   },
+
+  {
+    id: 'OPS-013',
+    domain: 'OPS',
+    module: 'ML System Design',
+    topic: 'System design',
+    title: 'Designing an ML System End to End',
+    slug: 'ml-system-design',
+    difficulty: 5,
+    estimatedMinutes: 50,
+    prerequisites: ['OPS-004', 'OPS-005', 'OPS-008', 'OPS-009', 'OPS-011', 'OPS-012'],
+    related: ['OPS-007', 'OPS-010'],
+    tags: ['system design', 'interview', 'feature store', 'architecture', 'feedback loop', 'recommendation', 'fraud'],
+
+    learningObjectives: [
+      'Run a repeatable framework for an ML system design interview, from clarifying the problem to closing the feedback loop',
+      'Translate a vague business request into an ML framing with an explicit objective and success metrics',
+      'Choose offline and online metrics, and explain why they disagree',
+      'Design the data path: sources, labelling, features, a feature store, and training-serving consistency',
+      'Design the serving path: batch versus real time, caching, queues, storage and scaling',
+      'Close the loop with monitoring, retraining and an honest account of failure modes and feedback effects',
+    ],
+
+    terminology: [
+      {
+        term: 'ML framing',
+        definition:
+          'The translation of a business goal into a learnable task: what is predicted, at what granularity, over what horizon, and what decision the prediction drives. Most weak designs fail here rather than in the modelling.',
+        simple: 'Turning "reduce fraud" into a precise question a model can answer.',
+      },
+      {
+        term: 'Offline vs online metric',
+        definition:
+          'An offline metric is computed on historical held-out data (AUC, precision at k, NDCG). An online metric is measured on live traffic (click-through rate, revenue, chargeback rate). They frequently disagree, and the online one is what matters.',
+        simple: 'The lab score versus what actually happened with real users.',
+      },
+      {
+        term: 'Feature store',
+        definition:
+          'A system holding feature definitions with both an offline store for training and a low-latency online store for serving, computed by shared code so that training and serving cannot silently diverge.',
+        simple: 'One place features are defined, so training and serving use the same numbers.',
+      },
+      {
+        term: 'Training-serving skew',
+        definition:
+          'Any difference between how a feature is computed during training and at inference — a different default, a different time window, a different join. It degrades models silently and is among the most common production ML bugs.',
+        simple: 'The model was taught with one recipe and fed with another.',
+      },
+      {
+        term: 'Feedback loop',
+        definition:
+          'The effect of a model\'s own outputs on the data it later trains on: shown items get clicked, blocked transactions never reveal their outcome, so the training distribution becomes a consequence of past predictions.',
+        simple: 'The model changes the world it later learns from.',
+      },
+      {
+        term: 'Candidate generation and ranking',
+        definition:
+          'A two-stage retrieval pattern: a cheap approximate stage narrows millions of items to a few hundred, then an expensive model ranks only those. It is how recommendation meets a latency budget at all.',
+        simple: 'Shortlist quickly, then score the shortlist carefully.',
+      },
+    ],
+
+    simpleExplanation:
+      "An ML system design question sounds impossibly open — \"design a fraud detection system\" — and the mistake almost everyone makes is to start talking about models. The model is perhaps a tenth of the work and rarely the part that decides whether the system succeeds. What makes an answer strong is a repeatable order. First clarify what is actually being asked: who uses it, what decision it drives, how fast the answer must come, how much traffic there is, and what a mistake costs in each direction. Then state the ML framing precisely, because \"reduce fraud\" is not a task and \"predict the probability that a transaction will be charged back within 60 days\" is. Then define how you will know it worked, offline and online, and accept that those two will disagree. Then walk the data path — where labels come from, how features are computed, and how you stop training and serving from diverging. Then the serving path, deciding between batch and real time, and what to cache, queue and store. Then scale, monitoring and retraining. Then, last and most revealing, talk about how the system\'s own decisions contaminate the data it will learn from next.",
+
+    whyItExists:
+      'A model that is excellent in a notebook routinely fails as a product because the hard parts live elsewhere: an unclear objective, labels that do not exist, features that cannot be computed at serving time within the latency budget, and a feedback loop that poisons the next training set. A design framework exists so those failure modes are surfaced before the work is done, and it is an interview round precisely because the ability to see them is what distinguishes an engineer who can ship from one who can only train.',
+
+    analogy: {
+      scenario:
+        "Think of designing a hospital rather than hiring a surgeon. The surgeon matters, but the building fails or succeeds on triage rules that decide who is seen first, on how records reach the right room, on what happens when the ambulance bay is full at 2 a.m., on which measurements are taken and written down, and on the review process that catches mistakes weeks later. A brilliant surgeon in a hospital with no triage and no records produces worse outcomes than a competent one in a well-designed building.",
+      mapping: [
+        { from: 'The surgeon', to: 'The model itself — necessary, and a small share of the design' },
+        { from: 'Triage rules at the door', to: 'The ML framing and the decision policy the prediction drives' },
+        { from: 'Records reaching the right room in time', to: 'The feature pipeline and the online feature store, within the latency budget' },
+        { from: 'The ambulance bay at capacity', to: 'Load shedding, queueing, caching and fallbacks under peak traffic' },
+        { from: 'Measurements written down every time', to: 'Prediction logging with model version, which enables everything afterwards' },
+        { from: 'The weekly mortality and morbidity review', to: 'Monitoring, delayed evaluation and the retraining decision' },
+      ],
+      bridge:
+        'The analogy earns its place because it reorders your attention correctly: in a real system the model is one component among many, and the components around it determine whether its accuracy ever reaches a user. Concretely, a model with 0.94 AUC that needs a feature unavailable at serving time has an effective AUC of zero, and a model whose predictions are never logged with their version cannot be debugged or improved at all. Where the analogy stops is the feedback loop — a hospital does not change which patients get ill, whereas a deployed model absolutely changes the data it will next be trained on.',
+      limitations:
+        'Hospitals have decades of established protocol; ML systems are usually being designed for the first time, so the framework is a checklist for thinking rather than a set of known-correct answers.',
+    },
+
+    visuals: [
+      {
+        kind: 'flow',
+        title: 'The framework, in the order you should say it',
+        caption: 'Spending the first five minutes here is what separates a strong answer from a model-first one.',
+        steps: [
+          { label: '1. Clarify', detail: 'Users, the decision the output drives, latency budget, traffic, cost of a false positive versus a false negative, constraints such as privacy or regulation.' },
+          { label: '2. Frame as ML', detail: 'What exactly is predicted, at what granularity and horizon. Ask whether a heuristic would do — sometimes the honest answer is that it would.' },
+          { label: '3. Define success', detail: 'One primary online metric, supporting offline metrics, and explicit guardrail metrics that must not regress.' },
+          { label: '4. Data and labels', detail: 'Sources, volume, how labels arise, their delay and bias, and how you will evaluate honestly.' },
+          { label: '5. Features', detail: 'What is computable at serving time within the budget, and how training and serving share one definition.' },
+          { label: '6. Model', detail: 'Start with a baseline. Justify complexity against latency, interpretability and the cost of being wrong.' },
+          { label: '7. Serving', detail: 'Batch, real time or a hybrid; candidate generation then ranking; caching, queues, storage, fallbacks.' },
+          { label: '8. Scale', detail: 'Peak QPS, replicas, autoscaling, cost per thousand predictions, degradation strategy under overload.' },
+          { label: '9. Monitor and retrain', detail: 'Service and model dashboards, drift, delayed evaluation, retraining triggers and the promotion gate.' },
+          { label: '10. Feedback and risk', detail: 'How the model changes its own training data, fairness across segments, abuse and the failure modes you accept.' },
+        ],
+      },
+      {
+        kind: 'widget',
+        title: 'The full pipeline as one picture',
+        caption: 'Data sources through features, training, registry, serving and back again.',
+        widget: 'ml-pipeline-flow',
+      },
+      {
+        kind: 'compare',
+        title: 'Batch versus real-time serving, decided properly',
+        caption: 'Most systems are a hybrid, and saying so is a strong answer.',
+        left: {
+          heading: 'Batch, precomputed',
+          points: [
+            'Score on a schedule, serve from a key-value store',
+            'Lookup latency, negligible cost per prediction',
+            'Only works when no feature changes within the request',
+            'Cannot handle a new user or a new item',
+          ],
+        },
+        right: {
+          heading: 'Real-time inference',
+          points: [
+            'Scores at request time with fresh session features',
+            'Tens of milliseconds, and real infrastructure to run',
+            'Handles cold start and in-session behaviour',
+            'Needs an online feature store with a strict latency budget',
+          ],
+        },
+      },
+      {
+        kind: 'table',
+        title: 'Two worked framings',
+        columns: ['Question', 'Recommendation feed', 'Card fraud detection'],
+        rows: [
+          ['Prediction target', 'P(user engages with item | context)', 'P(transaction is charged back within 60 days)'],
+          ['Latency budget', '150 ms for the whole feed', '40 ms, inline in the authorisation path'],
+          ['Label source', 'Implicit: clicks, watches, skips. Biased by what was shown', 'Chargebacks and confirmed fraud reports, delayed 30 to 60 days'],
+          ['Class balance', 'Roughly balanced after negative sampling', 'Extremely imbalanced, around 0.1 to 0.5% positive'],
+          ['Primary online metric', 'Long-session rate or day-7 retention, not raw click-through', 'Fraud loss in currency at a fixed false-positive budget'],
+          ['Architecture', 'Candidate generation then ranking then business rules', 'Single low-latency model plus rules, with a review queue'],
+          ['Dominant risk', 'Feedback loop and popularity collapse', 'Adversarial adaptation and censored labels from blocked transactions'],
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'An end-to-end machine learning system is the composition of a data path and a serving path around a learned decision function. The data path acquires observations and labels, transforms them into features under a single definition shared by training and inference, and produces versioned models gated on held-out evaluation. The serving path binds a feature retrieval mechanism, an inference runtime and a decision policy within a latency and cost budget, and emits instrumented outcomes. The design is correct only if the joint distribution assumed at training time is reproduced at inference time, and if the effect of the system\'s own decisions on subsequent observations is accounted for in evaluation.',
+
+    workedExample: {
+      title: 'Designing a card fraud detection system in ten minutes',
+      setup:
+        'The prompt is "design a system to detect fraudulent card transactions for a payments company processing 5,000 transactions per second at peak". Nothing else is given, which is deliberate. What follows is the order in which to speak, with the reasoning that makes each step defensible.',
+      steps: [
+        {
+          label: '1. Clarify before designing',
+          detail: 'Where does this sit — inline in authorisation, so we must answer before the transaction completes, or asynchronously for review? Assume inline, which fixes a budget around 40 ms end to end. What is the cost asymmetry? A blocked legitimate transaction costs a furious customer and possibly the relationship; a missed fraud costs the chargeback amount. That asymmetry, not accuracy, drives the threshold. Any regulatory constraint on explainability for declines? Assume yes, which favours a model we can attribute.',
+        },
+        {
+          label: '2. Frame it as a prediction task',
+          detail: 'Predict P(chargeback within 60 days | transaction, card history, merchant, device) at the moment of authorisation. Not "is this fraud", which is unobservable, but the operationally defined event we can actually label. The output feeds a policy with three actions — approve, challenge with step-up authentication, decline — so the model produces a probability and the policy owns the thresholds.',
+        },
+        {
+          label: '3. Define success on both axes',
+          detail: 'Online primary: fraud loss in currency per million transactions, at a false-positive budget expressed as a maximum decline rate on legitimate transactions — say 0.1%. Offline: precision and recall at that operating point, and PR-AUC rather than ROC-AUC because positives are around 0.2%. Guardrails that must not regress: authorisation latency p99, overall approval rate, and decline rate per customer segment, because a fairness regression here is a serious harm.',
+        },
+        {
+          label: '4. Data and labels, including the uncomfortable parts',
+          detail: 'Sources: the transaction stream, card and account history, merchant reputation, device and IP signals. Labels come from chargebacks and confirmed reports, arriving 30 to 60 days later — so today\'s model is evaluated on spring\'s labels. Two biases must be stated: blocked transactions never produce an outcome, so labels are censored by our own decisions, and the adversary adapts, so old fraud patterns under-represent current ones. Mitigation: keep a small randomly approved control slice where the loss is affordable, and weight recent data more heavily.',
+        },
+        {
+          label: '5. Features, constrained by the latency budget',
+          detail: 'Three tiers. Transaction-local, free: amount, merchant category, hour, cross-border flag. Aggregates over the card, requiring an online store: count and sum in the last 1, 24 and 168 hours, distinct merchants today, time since previous transaction. Entity reputation: merchant and device fraud rates, precomputed in batch. All aggregates are defined once and computed by shared code, materialised to an offline store for training and an online key-value store for serving, because a window computed as "last 24 hours" in training and "since midnight" in serving is a classic training-serving skew that will quietly cost accuracy.',
+        },
+        {
+          label: '6. Model, starting deliberately simple',
+          detail: 'Baseline: existing rules plus logistic regression on the tier-one features, which establishes what the complexity has to beat. Then gradient-boosted trees, which handle tabular data with mixed types well, train in minutes, score in well under a millisecond and support attribution for the explainability requirement. Consider a sequence model over the card\'s recent transactions only if the boosted trees plateau and the latency budget allows it. Keep the rules engine alongside the model rather than replacing it, since some patterns are known with certainty and do not need learning.',
+        },
+        {
+          label: '7. Serving architecture',
+          detail: 'Real time, no choice, because the decision is inline. Path: authorisation request arrives, fetch card aggregates from the online store with a hard 10 ms timeout, assemble features, score, apply the policy thresholds, return. Fallback when the feature store times out: score on tier-one features with a model trained for that degraded case, or fall back to rules — never block the payment path waiting. Publish every decision to a queue for logging, review-queue routing and later evaluation, so logging is asynchronous and never on the critical path.',
+        },
+        {
+          label: '8. Scale and cost',
+          detail: '5,000 per second at peak. With sub-millisecond inference, the binding constraint is the feature store and the network, not the model. Size replicas from a measured per-instance throughput with substantial headroom, spread across availability zones, and autoscale on requests per instance rather than CPU. Under overload, shed to the rules path rather than queueing, because a slow decline is worse than a fast approximate one. Cost per million predictions should be computed and stated, since it is a real constraint at this volume.',
+        },
+        {
+          label: '9. Monitoring and retraining',
+          detail: 'Minutes: decline rate and challenge rate against a seasonal baseline, score distribution, feature null and staleness rates, p99 latency. Days: PSI on key features and on the score. Weeks: realised precision and recall on the labelled cohort, per segment, plus calibration. Retrain weekly given an adaptive adversary, gate every candidate against the incumbent on a fixed holdout with a per-segment check, and roll out as a canary watching the decline rate, because that is the number customers feel first.',
+        },
+        {
+          label: '10. Feedback, fairness and what can go wrong',
+          detail: 'The censored-label problem is the deepest issue: the model prevents the outcomes it is judged on, so naive retraining teaches it that whatever it blocked was correct to block. The control slice partly answers this. Fairness: monitor decline rates by segment, because a model optimising aggregate loss can concentrate false positives on a group. Abuse: an adversary can probe the boundary with small transactions, so rate-limit and monitor for probing patterns. And state the accepted failure mode plainly — during a feature-store outage we degrade to rules and accept higher losses for the duration rather than declining everyone.',
+        },
+      ],
+      conclusion:
+        'Notice how little of that was about the model. The defensible parts of the answer were the framing, the label definition and its delay, the feature-freshness constraint, the fallback behaviour, and the honest account of censored labels. That proportion is the point: an interviewer is testing whether you can see the system around the model, and a candidate who reaches gradient-boosted trees in the first minute and spends nine minutes on architecture search has answered a different, easier question.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'One feature definition, used by both training and serving',
+        code: `"""Training-serving skew is prevented by construction: one function, two callers."""
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+
+
+@dataclass(frozen=True)
+class CardAggregates:
+    txn_count_1h: int
+    txn_count_24h: int
+    amount_sum_24h: float
+    distinct_merchants_24h: int
+    seconds_since_previous: float
+
+
+def compute_card_aggregates(history, as_of: datetime) -> CardAggregates:
+    """The ONLY definition. Point-in-time correct: nothing after as_of is visible."""
+    past = [t for t in history if t.ts < as_of]              # no leakage from the future
+    last_1h = [t for t in past if t.ts >= as_of - timedelta(hours=1)]
+    last_24h = [t for t in past if t.ts >= as_of - timedelta(hours=24)]
+    return CardAggregates(
+        txn_count_1h=len(last_1h),
+        txn_count_24h=len(last_24h),
+        amount_sum_24h=sum(t.amount for t in last_24h),
+        distinct_merchants_24h=len({t.merchant_id for t in last_24h}),
+        seconds_since_previous=(as_of - past[-1].ts).total_seconds() if past else -1.0,
+    )
+
+
+# Training: as_of is the historical transaction time, so the label cannot leak backwards.
+def build_training_row(txn, history):
+    return compute_card_aggregates(history, as_of=txn.ts), txn.charged_back
+
+
+# Serving: as_of is now, and history comes from the online store.
+def build_serving_row(txn, online_store):
+    history = online_store.recent_transactions(txn.card_id, hours=24)
+    return compute_card_aggregates(history, as_of=txn.ts)`,
+        explanation:
+          'Two properties are being enforced here at once. Sharing a single function means a window definition can never drift between training and serving, which is the most common silent accuracy killer in production ML. And the `as_of` parameter with a strict `t.ts < as_of` filter enforces point-in-time correctness: during training the features must reflect only what was knowable at the moment of the transaction, because including anything later is label leakage that produces a wonderful offline metric and a useless model.',
+      },
+      {
+        language: 'python',
+        title: 'The serving path with a budget, a fallback and asynchronous logging',
+        code: `import asyncio, time
+
+FEATURE_TIMEOUT_S = 0.010          # hard budget: never block the payment path
+DECLINE_THRESHOLD = 0.85
+CHALLENGE_THRESHOLD = 0.35
+
+
+async def authorise(txn) -> dict:
+    t0 = time.perf_counter()
+    degraded = False
+
+    try:
+        aggs = await asyncio.wait_for(online_store.get(txn.card_id), FEATURE_TIMEOUT_S)
+        score = float(full_model.predict_proba(vectorise(txn, aggs))[0, 1])
+    except (asyncio.TimeoutError, StoreUnavailable):
+        # Degrade, do not fail. A slow decline is worse than a fast approximation.
+        degraded = True
+        score = float(lite_model.predict_proba(vectorise_local(txn))[0, 1])
+
+    if score >= DECLINE_THRESHOLD:
+        action = "decline"
+    elif score >= CHALLENGE_THRESHOLD:
+        action = "challenge"
+    else:
+        action = "approve"
+
+    # Logging is fire-and-forget: it must never be on the critical path.
+    asyncio.create_task(event_bus.publish({
+        "request_id": txn.request_id,
+        "card_id_hash": hash_id(txn.card_id),
+        "score": round(score, 6),
+        "action": action,
+        "degraded": degraded,
+        "model_version": MODEL_VERSION,
+        "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+    }))
+
+    return {"action": action, "score": score}`,
+        explanation:
+          'Three decisions here would each be worth a minute of interview time. The feature fetch has a hard timeout and a degraded model trained specifically on transaction-local features, so a feature-store incident reduces accuracy instead of taking down payments. The thresholds live in the policy, not the model, so risk appetite can be tuned without retraining. And the `degraded` flag in the log is what lets you later measure how much accuracy that fallback actually cost, rather than guessing.',
+      },
+      {
+        language: 'text',
+        title: 'The answer skeleton, as notes you can write on a whiteboard',
+        code: `1  CLARIFY      users · decision driven · latency budget · QPS peak
+                 cost(FP) vs cost(FN) · privacy/regulatory constraints
+2  FRAME        predict WHAT, at what granularity, over what horizon
+                 would a heuristic do? what is the baseline to beat?
+3  METRICS      online primary (business) · offline proxies
+                 guardrails that must not regress (latency, fairness, coverage)
+4  DATA         sources · volume · label source, delay and bias
+                 evaluation split: time-based, never random, for temporal data
+5  FEATURES     computable at serving time? freshness? one shared definition
+                 point-in-time correctness · feature store: offline + online
+6  MODEL        baseline first · justify complexity vs latency and interpretability
+7  SERVING      batch / real time / hybrid · candidate gen then rank
+                 cache · queue · datastore · fallback when a dependency fails
+8  SCALE        replicas from measured throughput · autoscaling signal
+                 cost per 1M predictions · degradation under overload
+9  MONITOR      service metrics · model metrics · drift · delayed evaluation
+                 retraining trigger · promotion gate · canary rollout
+10 LOOP & RISK  how outputs contaminate future training data
+                 fairness per segment · abuse · accepted failure modes`,
+        explanation:
+          'Write this down at the start and work through it out loud. Two habits make the difference in practice: state your assumptions explicitly whenever the interviewer leaves something open, so the design is auditable rather than lucky, and finish with the risk section rather than running out of time before it — candidates who volunteer feedback loops and fairness are demonstrating exactly the judgement the round is designed to test.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Recommendation feedback collapse',
+        usage:
+          'A feed model trained on clicks from items it previously showed narrowed to a handful of popular items within weeks, because unshown items generated no positive signal. The fix was an explicit exploration budget and inverse-propensity weighting of the training data, which is a data-path change rather than a modelling one.',
+      },
+      {
+        context: 'The feature that did not exist at serving time',
+        usage:
+          'A team shipped a model using "average order value over the last 30 days", computed in the warehouse. At serving time the value was up to 24 hours stale, and for new customers absent entirely. Offline AUC 0.93, online performance barely better than the rules it replaced.',
+      },
+      {
+        context: 'Optimising the wrong metric',
+        usage:
+          'A video platform optimised click-through rate and watch time rose while day-30 retention fell, because the model learned to promote clickbait. Changing the objective to a long-session definition, with retention as a guardrail, cost click-through and improved the business — a framing decision no amount of modelling could have rescued.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'Feast / Tecton', role: 'Feature stores providing matched offline and online views from one definition, which is the standard defence against training-serving skew.' },
+      { tool: 'Kafka / Kinesis', role: 'Carries the event stream that feeds real-time aggregates and takes prediction logs off the critical path.' },
+      { tool: 'Redis / DynamoDB', role: 'The online store that must answer feature lookups within single-digit milliseconds.' },
+      { tool: 'FAISS / ScaNN', role: 'Approximate nearest-neighbour retrieval for the candidate-generation stage of large-scale recommendation.' },
+      { tool: 'Airflow / Dagster', role: 'Orchestrates the training pipeline, the drift report and the retraining trigger as scheduled, observable jobs.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Starting with the model architecture',
+        why: 'The model is a small part of the system and almost never the reason it fails. Diving into architecture signals that the candidate has not shipped one, and it consumes the minutes that should establish the framing.',
+        fix: 'Spend the first quarter of the time on clarification, framing and metrics. Name a simple baseline and make the interviewer tell you it is insufficient before adding complexity.',
+      },
+      {
+        mistake: 'Proposing features that cannot be computed at serving time',
+        why: 'A warehouse aggregate may be hours stale or unavailable for a new entity, so an offline metric computed with it is fiction. This is the single most common gap between a strong offline result and a disappointing online one.',
+        fix: 'For every feature, state where it comes from at inference, how fresh it is and what happens when it is missing. If it cannot be served, it cannot be used in training either.',
+      },
+      {
+        mistake: 'Evaluating temporal data with a random split',
+        why: 'A random split lets the model see the future: rows from after the prediction moment leak into training, inflating the offline metric by an amount that vanishes in production.',
+        fix: 'Split by time, train on the past and evaluate on the following period, and enforce point-in-time correctness in feature computation so nothing after `as_of` is visible.',
+      },
+      {
+        mistake: 'Ignoring the feedback loop',
+        why: 'A deployed model changes the data it will next be trained on — shown items get clicked, blocked transactions never reveal outcomes — so naive retraining amplifies the model\'s own past decisions and narrows the system over time.',
+        fix: 'Reserve an exploration or control slice, log propensities so the data can be reweighted, and evaluate on the unbiased slice rather than on logged outcomes alone.',
+      },
+      {
+        mistake: 'No fallback when a dependency fails',
+        why: 'If the feature store, the model server or the network is down, an unprepared system either blocks the critical path or fails every request, converting a degradation into an outage.',
+        fix: 'Define the degraded mode explicitly — a lite model on local features, cached predictions, or rules — with a hard timeout, and log when it is used so you can measure what it costs.',
+      },
+      {
+        mistake: 'Confusing an offline metric with success',
+        why: 'AUC is not money. A model can improve ranking while worsening the business outcome, for example by optimising click-through into clickbait or by concentrating declines on one segment.',
+        fix: 'Name one primary online metric tied to the business decision, keep offline metrics as proxies, and define guardrails — latency, fairness, coverage — that a release must not regress.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'ml-engineer',
+        question: 'Design a system that recommends videos on a home feed for 50 million daily users with a 150 ms budget.',
+        answer:
+          'I would clarify first: is the objective engagement now or retention over weeks, is the catalogue millions of items, how fresh must new uploads be, and what must never regress. Assume retention, a large catalogue and a requirement that new items are reachable within an hour. Framing: predict P(long engagement | user, item, context) at the user-item level, where "long" is defined operationally rather than as a raw click, because click-through as an objective reliably produces clickbait. Architecture is two-stage out of necessity, since scoring millions of items in 150 ms is impossible: candidate generation retrieves a few hundred items using approximate nearest neighbours over embeddings plus simple sources such as recent subscriptions and trending, then a heavier ranking model scores only those with richer features, then business rules apply diversity and policy constraints. Data path: implicit feedback with explicit negative sampling, logged with the propensity of each impression so the training data can be reweighted. Features come from a feature store with one definition for training and serving; user history is precomputed in batch while in-session signals come from the online store. Serving: cache the candidate set per user for a short window, degrade to a popularity-plus-subscriptions feed if ranking times out. Monitoring: latency, coverage of the catalogue, diversity, prediction distribution, and the retention guardrail. The dominant risk is the feedback loop, so I would hold an exploration budget of a small percentage of slots and evaluate on that unbiased slice.',
+        followUp:
+          'The strongest signal is naming two-stage retrieval unprompted as a consequence of the latency budget, and naming the feedback loop as the dominant risk rather than as an afterthought.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Your offline AUC improved from 0.88 to 0.92 but the online A/B test showed no improvement. What are the likely explanations?',
+        answer:
+          'Roughly in order of likelihood. First, training-serving skew: a feature is computed differently at inference — a different window, a different default, stale data from the warehouse — so the model in production is not the model that was evaluated. Second, leakage in the offline evaluation: a random split on temporal data, or a feature that encodes the future such as an aggregate computed after the prediction moment, which inflates AUC by an amount that simply does not exist online. Third, metric mismatch: AUC measures ranking across the whole distribution, while the business only experiences the top of the ranking or a single threshold, so a gain in the middle is invisible. Fourth, the system around the model dominates — business rules, caching, deduplication or a diversity layer may reshuffle whatever the model produces. Fifth, the test itself: insufficient power, contaminated assignment, or novelty effects. I would diagnose by logging production feature vectors and replaying them through the offline pipeline to compare values row by row, which usually finds skew within an hour, and by recomputing the offline metric on the production-logged features rather than on the training pipeline.',
+        followUp:
+          'Naming the replay diagnostic — compare logged serving features against recomputed training features for the same entity and timestamp — is the answer of someone who has actually chased this bug.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Where does the system\'s own behaviour contaminate its training data, and what do you do about it?',
+        answer:
+          'Everywhere a decision determines what is observed. In recommendation, only shown items can be clicked, so the training set is a sample chosen by the previous model and naive retraining amplifies its preferences until the system narrows. In fraud and credit, blocked applications never reveal their outcome, so labels are censored precisely on the cases the model was most confident about. In ranking, position bias means the top slot gets clicks partly because it is the top slot. The mitigations are all data-path rather than model changes: log the propensity of each decision so outcomes can be inverse-propensity weighted; reserve an exploration or randomised control slice, even a small one, to obtain unbiased labels; use position as an explicit feature during training and fix it at serving time to debias; and evaluate on the unbiased slice rather than on logged outcomes. The cost of the control slice is real and should be stated openly — some fraud will be let through, some poor recommendations shown — and it is usually far cheaper than discovering in a year that the model has been learning from its own shadow.',
+        followUp:
+          'This question separates candidates who have operated a system from those who have trained one; volunteering the cost of the control slice rather than pretending it is free is a mark of seriousness.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Take the prompt "design a system to detect toxic comments" and write only the clarification questions — at least six — plus the assumption you would state for each if the interviewer declines to answer.',
+        hint: 'Who acts on the output, how fast, what does each kind of mistake cost, and who is harmed?',
+        solution:
+          'Where does it sit — blocking before publication, or flagging for review afterwards? Assume pre-publication for high-confidence cases and a review queue otherwise, giving a budget around 100 ms. What is the volume at peak? Assume 2,000 comments per second. What is the cost asymmetry — a false positive silences a legitimate user, a false negative exposes readers to abuse; assume false positives are expensive enough to require a challengeable appeal path. Which languages and locales, since toxicity is deeply culture- and language-specific? Assume top five languages at launch. Who defines toxicity, and is there a written policy with labelled examples, since without one there is no learnable target? Assume a policy exists with a labelled sample. Is there a human review capacity constraint, since the model\'s threshold is really a function of how many items reviewers can process per hour? Assume a fixed daily capacity, which turns the threshold into a budget problem. And what regulatory or appeals obligations apply to automated removal decisions?',
+      },
+      {
+        prompt:
+          'For a churn model, decide between batch and real-time serving and defend it with the deciding question. Then describe the hybrid.',
+        hint: 'What is the freshest feature the model needs, and is there any case where it changes within the request?',
+        solution:
+          'The deciding question is whether any input feature changes within the request. For churn, the features are tenure, plan, billing and last month\'s usage, none of which changes in the seconds before someone views a dashboard — so batch scoring nightly into a key-value store is correct, and it is orders of magnitude cheaper with lookup latency. The hybrid becomes necessary at the edges: a customer who signed up this morning has no batch score, and a customer who just started a cancellation flow has session signals the batch score cannot see. So serve the precomputed score by default, and fall back to a real-time path for entities missing from the batch table or for the small set of moments where in-session context genuinely matters. Stating that hybrid explicitly is a stronger answer than picking one, because it shows the choice is driven by feature freshness rather than by preference.',
+      },
+      {
+        prompt:
+          'Write the monitoring plan for a system whose labels arrive 90 days later. Split it into what you watch in minutes, days and months, and say what each catches.',
+        hint: 'Three time horizons, three different questions.',
+        solution:
+          'Minutes: service health — error rate by status class, p95 and p99 latency, saturation — plus the fast model signals of prediction distribution, positive rate, and feature null and imputation rates. This layer catches outages and broken pipelines, and pages. Days: PSI and out-of-range rates on key features and on the score against a fixed training reference, segment mix, and fast business proxies that correlate with the eventual outcome such as engagement with an intervention. This layer catches drift and population change, and creates tickets rather than pages. Months: realised performance on the labelled cohort — AUC or precision at the operating point — calibration, and per-segment breakdowns, computed on a rolling basis so that degradation is at least measured even though it is measured late. State plainly that between the fast proxies and the 90-day truth there is a genuine blind spot, and that the mitigation is a stable reference, an exploration slice where labels can be obtained faster, and a scheduled refresh so the model never drifts unboundedly far from the present.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'OPS-013-q1',
+        type: 'order',
+        concept: 'design framework',
+        prompt: 'Order the first five steps of an ML system design answer.',
+        items: [
+          'Clarify users, the decision, latency, volume and the cost of each kind of error',
+          'Frame the problem as a specific prediction task',
+          'Define online and offline metrics plus guardrails',
+          'Design the data path: sources, labels and their delay',
+          'Design features and how training and serving share one definition',
+        ],
+        explanation:
+          'Requirements, then framing, then how success is measured, then data, then features. Reaching for a model architecture before these is the most common way to lose the round.',
+      },
+      {
+        id: 'OPS-013-q2',
+        type: 'mcq',
+        concept: 'training-serving skew',
+        prompt: 'Offline AUC is 0.93 and online performance is barely better than the previous rules. What is the most likely single cause?',
+        options: [
+          'Training-serving skew or leakage — features computed differently, or with information unavailable at prediction time',
+          'The model is too small',
+          'The learning rate was too high',
+          'The online traffic is simply harder',
+        ],
+        answerIndex: 0,
+        explanation:
+          'A large offline-online gap almost always means the offline evaluation saw something production cannot: a future-looking aggregate, a random split on temporal data, or a feature computed with a different window at serving time.',
+      },
+      {
+        id: 'OPS-013-q3',
+        type: 'truefalse',
+        concept: 'evaluation splits',
+        prompt: 'For a fraud model trained on two years of transactions, a random train/test split is an acceptable evaluation.',
+        answer: false,
+        explanation:
+          'It lets the model see the future, since test rows precede training rows in time and card-level aggregates leak across the boundary. Temporal problems need a time-based split with point-in-time-correct features.',
+      },
+      {
+        id: 'OPS-013-q4',
+        type: 'mcq',
+        concept: 'two-stage retrieval',
+        prompt: 'Why does a large-scale recommender use candidate generation before ranking?',
+        options: [
+          'Scoring millions of items with the ranking model cannot fit the latency budget, so a cheap stage narrows the set first',
+          'Candidate generation is more accurate than ranking',
+          'It removes the need for a feature store',
+          'It eliminates the feedback loop',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The two-stage pattern exists purely because of the latency and cost budget: approximate retrieval reduces millions of items to a few hundred, and only those are scored by the expensive model.',
+      },
+      {
+        id: 'OPS-013-q5',
+        type: 'multi',
+        concept: 'feedback loops',
+        prompt: 'Which of these are genuine feedback-loop problems? Select all that apply.',
+        options: [
+          'Only items the model showed can be clicked, so unshown items generate no positive signal',
+          'Blocked transactions never reveal whether they were fraudulent',
+          'The top-ranked slot gets more clicks partly because it is the top slot',
+          'The model file is too large to fit in the container image',
+          'Customers who received a retention offer behave differently from those who did not',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'Image size is an engineering constraint, not a feedback effect. The other four are all cases where the system\'s own decisions determine which outcomes are observable, which biases the next training set.',
+      },
+      {
+        id: 'OPS-013-q6',
+        type: 'explain',
+        concept: 'end-to-end judgement',
+        prompt: 'An interviewer says "design a system to predict delivery times". Give the first four things you say and why each matters.',
+        rubric: [
+          'Clarifies users, the decision the estimate drives, and the latency and volume constraints',
+          'States the cost asymmetry between over- and under-estimating',
+          'Frames a precise prediction target with granularity and horizon',
+          'Names a primary online metric and at least one guardrail',
+        ],
+        sampleAnswer:
+          'First, who sees this and what does it change? A quoted window at checkout influences whether someone orders, whereas an internal estimate for dispatch planning is a different problem with a different budget; assume the customer-facing quote, so we answer inline in well under 200 ms. Second, what does being wrong cost in each direction? Under-promising loses orders, over-promising produces late deliveries and refunds, and the asymmetry is usually strong enough that we should predict a quantile rather than the mean — a p80 arrival time, not the expected one. Third, the precise target: predict the distribution of minutes from order confirmation to handover, at the order level, conditioned on store, courier supply, basket size, time of day and weather. Fourth, how we measure success: online, the proportion of deliveries arriving within the quoted window, with guardrails on the quoted window length so the model cannot trivially win by quoting three hours, and on conversion at checkout. Only after those would I discuss data, features that are actually available at quote time such as current courier availability, and the model itself.',
+        explanation:
+          'The examinable behaviour is establishing requirements, cost asymmetry, a precise target and a measurable definition of success before any modelling — and noticing that an asymmetric cost implies quantile rather than mean prediction.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'The ten steps of an ML system design answer', back: 'Clarify, frame, metrics, data and labels, features, model, serving, scale, monitoring and retraining, feedback and risk.' },
+      { front: 'Offline metric improves, online does not — first suspect?', back: 'Training-serving skew or leakage: a feature computed differently at inference, or an evaluation that saw information unavailable at prediction time.' },
+      { front: 'What does a feature store actually prevent?', back: 'Training-serving skew, by serving one feature definition into both an offline store for training and a low-latency online store for inference.' },
+      { front: 'Why two-stage retrieval in recommendation?', back: 'Scoring millions of items with a heavy model cannot meet the latency budget; cheap approximate retrieval narrows to hundreds, then ranking scores those.' },
+      { front: 'What is the feedback loop problem?', back: 'The model\'s own decisions determine which outcomes are observed, so the next training set reflects past predictions. Mitigate with exploration slices and propensity weighting.' },
+      { front: 'Why split temporal data by time, not randomly?', back: 'A random split leaks the future into training and inflates offline metrics by an amount that does not exist in production.' },
+      { front: 'What does an asymmetric error cost imply about the target?', back: 'Often predict a quantile rather than a mean, and put the thresholds in the decision policy rather than in the model.' },
+    ],
+
+    challenge: {
+      title: 'A full design document, defended',
+      brief:
+        'Choose a real system — a fraud detector, a recommendation feed, a delivery-time estimator or a document triage service — and write the complete design following the ten-step framework. Every section must contain a decision and its justification, not a list of technologies. Include a latency budget broken down by component, an explicit statement of what happens when each dependency fails, the evaluation split and why, and a section on feedback effects and fairness. Then have someone play the interviewer and attack three choices; revise the document with the counterarguments recorded rather than silently deleted.',
+      language: 'text',
+      acceptanceCriteria: [
+        'All ten framework sections are present with decisions and justifications, not technology lists',
+        'A latency budget is broken down by component and sums to the stated requirement',
+        'Every feature is annotated with its serving-time source, freshness and missing-value behaviour',
+        'The evaluation split is time-based where the data is temporal, with point-in-time correctness stated',
+        'A degraded mode is defined for each external dependency, with the accuracy cost acknowledged',
+        'Feedback effects and per-segment fairness are addressed explicitly, with mitigations and their costs',
+        'Three challenged decisions are recorded with the counterargument and the resolution',
+      ],
+      starterCode: '# System: \n# 1. Clarify\n#    users:\n#    decision driven by the output:\n#    latency budget (p95):\n#    peak QPS:\n#    cost of a false positive / false negative:\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach someone preparing for an ML system design interview the framework, and explain why the model is the least interesting part of the answer.',
+      mustCover: [
+        'Clarify requirements and framing before any modelling',
+        'Define online and offline metrics, plus guardrails, and expect them to disagree',
+        'Design the data path — labels, delay, features, training-serving consistency — before the serving path',
+        'Close with monitoring, retraining and the feedback loop the system creates',
+      ],
+      bonusSignals: ['mentions point-in-time correctness', 'mentions degraded modes and fallbacks', 'mentions that a heuristic baseline may be the honest answer'],
+      sampleExplanation:
+        'The question is open on purpose, and the discipline is to answer it in a fixed order rather than to be clever early. Start by clarifying: who uses this, what decision does the output drive, how fast must it come back, how much traffic is there, and what does each kind of mistake cost? That last one usually determines more of the design than the model does, because a strongly asymmetric cost means you should be predicting a quantile and putting the thresholds in a policy layer. Then frame it as a precise prediction task — not "reduce fraud" but "probability of a chargeback within 60 days at authorisation time" — and say what the baseline is, because sometimes a heuristic is genuinely good enough and saying so is a strong answer. Then define success on two axes: one primary online metric tied to the business, offline metrics as proxies, and guardrails such as latency and per-segment fairness that must not regress. Only then the data: where labels come from, how delayed and how biased they are, and how you will split for evaluation, which for anything temporal must be by time. Then features, and here the question to ask about every single one is whether it can be computed at serving time, how fresh it will be, and what happens when it is missing — a feature that only exists in the warehouse cannot be used, no matter how predictive it looks offline. Then the model, briefly, starting simple. Then serving, scaling, monitoring and retraining. And finish with the part that most candidates never reach: your system changes the data it will next learn from, because only shown items get clicked and blocked transactions never reveal their outcome, so you need an exploration slice and propensity logging or the model will slowly learn from its own shadow. The model is the least interesting part because it is the part most easily swapped; everything around it is what determines whether its accuracy ever reaches a user at all.',
+    },
+  },
+];

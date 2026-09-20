@@ -112,12 +112,27 @@ function Ball({
 }) {
   const ball = React.useRef<THREE.Mesh>(null);
   const arrow = React.useRef<THREE.ArrowHelper>(null);
-  const trail = React.useRef<THREE.Line>(null);
   const accumulator = React.useRef(0);
   const { camera } = useThree();
 
+  // `<line>` collides with SVG's element in JSX typings, so the trail is a real
+  // THREE.Line mounted through <primitive>.
   const trailGeometry = React.useMemo(() => new THREE.BufferGeometry(), []);
-  React.useEffect(() => () => trailGeometry.dispose(), [trailGeometry]);
+  const trailMaterial = React.useMemo(
+    () => new THREE.LineBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.75 }),
+    [],
+  );
+  const trailObject = React.useMemo(
+    () => new THREE.Line(trailGeometry, trailMaterial),
+    [trailGeometry, trailMaterial],
+  );
+  React.useEffect(
+    () => () => {
+      trailGeometry.dispose();
+      trailMaterial.dispose();
+    },
+    [trailGeometry, trailMaterial],
+  );
 
   useFrame((_, delta) => {
     const s = stateRef.current;
@@ -162,7 +177,7 @@ function Ball({
       }
     }
 
-    if (trail.current && s.history.length > 1) {
+    if (s.history.length > 1) {
       trailGeometry.setFromPoints(s.history.map(([x, y, zz]) => new THREE.Vector3(x, Math.min(12, y), zz)));
     }
 
@@ -178,10 +193,7 @@ function Ball({
       <pointLight position={[0, 4, 0]} intensity={18} distance={16} color="#ffd8a8" />
       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
       <arrowHelper ref={arrow as any} args={[new THREE.Vector3(1, 0, 0), new THREE.Vector3(), 1, 0xff6b6b, 0.3, 0.18]} />
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      <line ref={trail as any} geometry={trailGeometry}>
-        <lineBasicMaterial color="#ffd166" transparent opacity={0.75} />
-      </line>
+      <primitive object={trailObject} />
     </>
   );
 }

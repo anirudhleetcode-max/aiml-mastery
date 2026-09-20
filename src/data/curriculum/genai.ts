@@ -6404,3 +6404,669 @@ totals consistent:    True`,
         "The model was trained on one task: given some text, produce the most likely continuation. Nothing in that training ever checked whether a statement was true, so what it learned to produce is text that looks right. When it knows something, the plausible continuation happens to be correct. When it does not, the plausible continuation is a well-formed invention — a citation with a real-sounding author and journal, a statistic in the right range — and crucially nothing about its tone changes, because it has no dependable internal sense of which situation it is in. That is why I cannot promise to eliminate this. It is not a defect in an implementation; it follows from what the system is. What I can do is build around it. Ground answers in documents we retrieve and require the model to quote from them, so a claim with no supporting passage is visible. Compute numbers in code rather than letting the model do arithmetic. Check every citation resolves to a document we actually supplied. Make 'I could not find this' an acceptable answer rather than a failure. And measure all of it: fifty real cases including the ones that have gone wrong, cheap automatic checks that run on every change, and someone reading a sample of real outputs each week, because automated tests only catch problems we already thought of. One related point worth flagging now — if the assistant reads anything customers can write, assume it may contain instructions aimed at the model. We handle that by limiting what the assistant is allowed to do, not by asking it nicely to ignore them.",
     },
   },
+
+  {
+    id: 'GEN-012',
+    domain: 'GEN',
+    module: 'Grounding & Retrieval',
+    topic: 'Embedding search at scale',
+    title: 'Vector Databases and Semantic Search',
+    slug: 'vector-databases-and-semantic-search',
+    difficulty: 4,
+    estimatedMinutes: 40,
+    prerequisites: ['GEN-004'],
+    related: ['GEN-003', 'GEN-011'],
+    tags: ['embeddings', 'cosine-similarity', 'hnsw', 'ivf', 'chunking', 'bm25', 'reranking'],
+
+    learningObjectives: [
+      'Explain semantic search as nearest-neighbour retrieval in an embedding space, and compute cosine similarity by hand',
+      'Describe how approximate nearest-neighbour indexes such as HNSW and IVF trade recall for speed',
+      'Choose a chunking strategy deliberately and explain why it dominates retrieval quality',
+      'Combine dense retrieval with BM25 keyword search, and say what each recovers that the other misses',
+      'Explain re-ranking with a cross-encoder and where it belongs in the pipeline',
+    ],
+
+    terminology: [
+      {
+        term: 'Embedding model',
+        definition:
+          'A model that maps a piece of text to a fixed-length vector such that semantically similar texts land near each other, trained specifically for retrieval rather than generation.',
+        simple: 'Turns a passage into a list of numbers whose closeness means similar meaning.',
+      },
+      {
+        term: 'Cosine similarity',
+        definition:
+          'The cosine of the angle between two vectors, equal to the dot product divided by the product of their lengths. The standard retrieval similarity because it ignores magnitude.',
+        simple: 'A score from -1 to 1 saying how nearly two vectors point the same way.',
+      },
+      {
+        term: 'Approximate nearest neighbour (ANN)',
+        definition:
+          'An index that finds nearly the closest vectors far faster than checking every one, accepting a small loss of recall in exchange for a very large speed-up.',
+        simple: 'A shortcut that finds almost the best matches without comparing against everything.',
+      },
+      {
+        term: 'HNSW',
+        definition:
+          'Hierarchical navigable small world: a layered proximity graph where search starts at a sparse top layer and descends, greedily walking towards the query at each level.',
+        simple: 'A road network with motorways and side streets — take the motorway most of the way, then turn off.',
+      },
+      {
+        term: 'IVF',
+        definition:
+          'Inverted file index: cluster the vectors, then search only the few clusters nearest the query rather than the whole collection.',
+        simple: 'Sort everything into bins first, then only look in the bins that could contain the answer.',
+      },
+      {
+        term: 'Chunking',
+        definition:
+          'Splitting documents into retrievable units. Chunk size, boundaries and overlap determine what can be retrieved at all, and therefore dominate downstream quality.',
+        simple: 'Deciding how to cut documents into pieces that can be looked up.',
+      },
+      {
+        term: 'BM25',
+        definition:
+          'A lexical ranking function scoring documents by query term frequency, offset by how common each term is across the collection and by document length.',
+        simple: 'Classic keyword search, tuned so rare words count more and long documents are not unfairly favoured.',
+      },
+      {
+        term: 'Cross-encoder re-ranker',
+        definition:
+          'A model that scores a query and a candidate passage jointly in one forward pass. Far more accurate than comparing two independent embeddings, and far too slow to run over a whole corpus.',
+        simple: 'A careful second reader that re-orders the shortlist.',
+      },
+    ],
+
+    simpleExplanation:
+      "Keyword search finds documents containing the words you typed. It fails the moment someone writes 'cancel my subscription' and the document says 'terminate your plan'. Semantic search fixes that by turning every passage into a vector — a list of a few hundred numbers — positioned so that passages meaning similar things sit near each other, whatever words they used. A query becomes a vector the same way, and retrieval means finding the nearest ones. With a few thousand passages you can simply compare against all of them. With a few million that is too slow, so a specialised index organises the vectors in advance — clustering them, or building a graph you can walk towards the query — and returns nearly the best matches in milliseconds. Two things then decide whether any of it works in practice, and neither is the database. How you cut documents into chunks determines what can be retrieved at all, and combining semantic search with old-fashioned keyword search recovers the exact identifiers and rare terms that embeddings routinely smear away.",
+
+    whyItExists:
+      'Language models can only use what is in their context, so something must decide which few passages out of millions to put there. Lexical search alone misses paraphrase, and comparing a query against every embedding is linear in corpus size and far too slow at scale — vector indexes exist to make semantic nearest-neighbour search fast enough to sit in a request path.',
+
+    analogy: {
+      scenario:
+        "Imagine a library where, instead of shelving by title, every book is placed according to what it is about — books on grief sit near books on loss, whatever words are on the spine. To find something you walk to the region of the room matching your question and look around you. With a small collection you could scan every shelf. In a warehouse you could not, so the building is organised: districts with a guide at the entrance to each, and express walkways between neighbourhoods so you can cross most of the distance in a few strides and then browse locally.",
+      mapping: [
+        { from: 'Position in the room reflecting subject matter', to: 'Embedding vectors placed by semantic similarity' },
+        { from: 'Walking to the region matching your question', to: 'Encoding the query and finding nearest neighbours' },
+        { from: 'Scanning every shelf', to: 'Exhaustive search — exact, and linear in collection size' },
+        { from: 'Districts with a guide at each entrance', to: 'IVF: cluster first, then search only the nearest clusters' },
+        { from: 'Express walkways between neighbourhoods', to: 'HNSW: upper graph layers that cover distance quickly' },
+        { from: 'Deciding whether to shelve chapters, sections or whole books', to: 'Chunking strategy' },
+      ],
+      bridge:
+        'The express-walkway picture is genuinely how HNSW works: the upper layers are sparse graphs used to travel a long way in few hops, and the lower layers are dense graphs used for local refinement. The analogy also exposes the central risk accurately. If you shelve whole books, walking to the right region gets you a thousand pages when you needed one paragraph. If you shelve individual sentences, you find the sentence and lose the context that made it meaningful. That trade-off is the chunking decision, and it matters more than which warehouse you built.',
+      limitations:
+        'A physical room has three dimensions; embedding spaces have hundreds, where almost all pairs of random vectors are nearly orthogonal and intuitions about distance are unreliable. And a librarian would notice that a book is irrelevant despite sitting nearby, whereas the index returns what is close by construction.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Embedding space explorer',
+        caption: 'See how passages cluster by meaning, and where a query lands relative to them.',
+        widget: 'embedding-space-3d',
+      },
+      {
+        kind: 'flow',
+        title: 'Indexing and querying a corpus',
+        caption: 'The left half runs offline; the right half runs in the request path.',
+        steps: [
+          { label: 'Chunk', detail: 'Split documents into retrievable units, respecting structure such as headings and paragraphs.' },
+          { label: 'Embed', detail: 'Encode every chunk with an embedding model, keeping the text and metadata alongside the vector.' },
+          { label: 'Index', detail: 'Build an ANN structure — typically HNSW — over the vectors, plus a lexical index for keyword search.' },
+          { label: 'Encode the query', detail: 'Use the same model, and the same instruction prefix if the model expects one.' },
+          { label: 'Search', detail: 'Retrieve top candidates from both the vector index and BM25, then fuse the two ranked lists.' },
+          { label: 'Re-rank', detail: 'Score the shortlist with a cross-encoder and keep the best few.' },
+          { label: 'Return with metadata', detail: 'Pass text, source and identifiers on, so the answer can cite and a human can verify.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'Chunking strategies compared',
+        caption: 'There is no universally correct size; there is a size that fits your documents and queries.',
+        columns: ['Strategy', 'Typical size', 'Good for', 'Fails when'],
+        rows: [
+          ['Fixed token window with overlap', '200-500 tokens, 10-20 per cent overlap', 'Homogeneous prose; a sensible default', 'Cuts mid-sentence or splits a table from its header'],
+          ['Structure-aware', 'One heading section', 'Manuals, policies, anything with real headings', 'Sections vary wildly in length'],
+          ['Sentence windows', '1 sentence, retrieved with neighbours', 'Precise fact lookup', 'Answer needs reasoning across a whole section'],
+          ['Parent-child', 'Embed small, return the parent', 'Precise matching with full context supplied', 'More machinery and storage to maintain'],
+          ['Whole document', 'Entire file', 'Very short documents only', 'Dilutes the embedding and wastes context'],
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Dense versus lexical retrieval',
+        caption: 'Hybrid search exists because these fail on different queries.',
+        left: {
+          heading: 'Dense (embeddings)',
+          points: [
+            'Matches meaning across different wording',
+            'Handles paraphrase, synonyms and questions',
+            'Blurs exact identifiers, codes and rare tokens',
+            'Needs a model at query time and an index rebuild when the model changes',
+            'Quality depends heavily on domain match of the embedding model',
+          ],
+        },
+        right: {
+          heading: 'Lexical (BM25)',
+          points: [
+            'Matches exact terms, error codes, product names',
+            'No model needed; transparent and cheap to run',
+            'Misses paraphrase entirely',
+            'Robust for rare terms the embedding model never saw',
+            'Decades of tuning behind it; a strong baseline people underestimate',
+          ],
+        },
+      },
+      {
+        kind: 'annotated',
+        title: 'Why re-ranking helps so much',
+        subject: 'bi-encoder retrieves 50 candidates, cross-encoder re-ranks to 5',
+        annotations: [
+          { part: 'bi-encoder', note: 'Query and passage are embedded separately, so passage vectors can be precomputed. Fast, and the comparison never sees the two texts together.' },
+          { part: '50 candidates', note: 'Recall matters more than precision here: the goal is that the right passage is somewhere in the shortlist.' },
+          { part: 'cross-encoder', note: 'Reads query and passage jointly with full attention between them, catching relevance that independent vectors cannot express.' },
+          { part: 'to 5', note: 'Only these enter the model context. Sending fewer, better passages beats sending more, since attention is diluted across irrelevant text.' },
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'Semantic search retrieves the k items maximising a similarity function between a query embedding and stored embeddings produced by the same model, typically cosine similarity on normalised vectors. Exact search is linear in collection size; approximate nearest-neighbour indexes reduce query cost to sublinear by restricting the search to a graph neighbourhood (HNSW) or to a subset of clusters (IVF), trading a measurable loss of recall for a large reduction in latency.',
+
+    math: {
+      intuition:
+        'Retrieval is a similarity ranking, and the similarity is an angle. Cosine similarity divides out vector length so that a long passage does not beat a short one merely by having a larger magnitude; if vectors are normalised to unit length first, cosine similarity and the plain dot product are the same thing, which is why production systems normalise once at indexing time. BM25 scores by the same intuition from a different direction: rare query terms carry more evidence than common ones, and repeated occurrences help with diminishing returns.',
+      formulas: [
+        {
+          latex: '\\mathrm{sim}(q, d) = \\frac{q \\cdot d}{\\lVert q \\rVert \\, \\lVert d \\rVert} = \\sum_{i=1}^{n} \\hat{q}_i \\hat{d}_i',
+          name: 'Cosine similarity',
+          meaning:
+            'The cosine of the angle between the query and document vectors. On unit-normalised vectors it reduces to a plain dot product, which is why normalising once at index time makes search cheaper.',
+          variables: [
+            { symbol: 'q, d', meaning: 'Query and document embedding vectors' },
+            { symbol: '\\lVert q \\rVert', meaning: 'Euclidean length of the query vector' },
+            { symbol: '\\hat{q}, \\hat{d}', meaning: 'The same vectors after normalisation to unit length' },
+            { symbol: 'n', meaning: 'Embedding dimension' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\lVert q - d \\rVert^{2} = 2 - 2\\cos(q, d) \\quad \\text{for unit vectors}',
+          name: 'Relationship to Euclidean distance',
+          meaning:
+            'On normalised vectors, ranking by cosine similarity and ranking by Euclidean distance give exactly the same order, which is why index libraries let you choose either metric without changing results.',
+          variables: [
+            { symbol: '\\lVert q - d \\rVert', meaning: 'Euclidean distance between the two vectors' },
+            { symbol: '\\cos(q, d)', meaning: 'Their cosine similarity' },
+          ],
+          category: 'linear-algebra',
+        },
+        {
+          latex: '\\mathrm{BM25}(q, d) = \\sum_{t \\in q} \\mathrm{IDF}(t) \\cdot \\frac{f(t, d)\\,(k_1 + 1)}{f(t, d) + k_1\\left(1 - b + b\\frac{|d|}{\\mathrm{avgdl}}\\right)}',
+          name: 'BM25 lexical score',
+          meaning:
+            'Sum over query terms of their rarity weight times a saturating function of how often the term appears, adjusted for document length. Repeated occurrences help less and less.',
+          variables: [
+            { symbol: 'f(t, d)', meaning: 'Frequency of term t in document d' },
+            { symbol: '\\mathrm{IDF}(t)', meaning: 'Inverse document frequency: how rare, and therefore how informative, the term is' },
+            { symbol: 'k_1', meaning: 'Term-frequency saturation parameter, typically around 1.2 to 2.0' },
+            { symbol: 'b', meaning: 'Length normalisation strength, typically 0.75' },
+            { symbol: '|d|, \\mathrm{avgdl}', meaning: 'Length of this document and the average length across the collection' },
+          ],
+          category: 'information-theory',
+        },
+        {
+          latex: '\\mathrm{RRF}(d) = \\sum_{r \\in R} \\frac{1}{k + \\mathrm{rank}_r(d)}',
+          name: 'Reciprocal rank fusion',
+          meaning:
+            'Combine ranked lists from different retrievers using ranks rather than scores, which avoids the problem that cosine similarities and BM25 scores are not on comparable scales.',
+          variables: [
+            { symbol: 'R', meaning: 'The set of retrievers being fused, for example dense and lexical' },
+            { symbol: '\\mathrm{rank}_r(d)', meaning: 'Position of document d in retriever r ranked list, starting at 1' },
+            { symbol: 'k', meaning: 'A damping constant, conventionally 60, which limits the influence of any single top result' },
+          ],
+          category: 'information-theory',
+        },
+        {
+          latex: '\\mathrm{Recall@k} = \\frac{|\\text{relevant} \\cap \\text{retrieved}_k|}{|\\text{relevant}|}',
+          name: 'Recall at k',
+          meaning:
+            'The fraction of genuinely relevant items that appear in the top k. The single most important retrieval metric, because anything not retrieved cannot be used by any downstream step.',
+          variables: [
+            { symbol: 'k', meaning: 'Number of results retrieved' },
+            { symbol: '\\text{relevant}', meaning: 'The set of items that should have been found, from a labelled set' },
+          ],
+          category: 'statistics',
+        },
+      ],
+      derivation: [
+        'Write the dot product as the product of the vector lengths times the cosine of the angle between them.',
+        'Dividing by the lengths isolates the angle, giving a similarity that ignores magnitude — which is what you want, since a longer passage should not rank higher merely for being longer.',
+        'Normalise every vector to unit length once, at index time, and cosine similarity becomes a plain dot product: one multiply-accumulate per dimension and no division per query.',
+        'Expanding the squared Euclidean distance between two unit vectors gives 2 - 2cos, a strictly decreasing function of cosine, so both metrics induce the same ranking.',
+        'For fusion, note that cosine values and BM25 scores have different ranges and distributions, so combining them by score requires calibration; combining by rank does not, which is why reciprocal rank fusion is the pragmatic default.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Ranking three passages by hand',
+      setup:
+        'A query embedding is q = [1, 2, 2], with length sqrt(1 + 4 + 4) = 3. Three candidate passages have embeddings d1 = [2, 4, 4], d2 = [2, 0, 1] and d3 = [-1, 0, 1]. We rank them by cosine similarity.',
+      steps: [
+        {
+          label: 'Passage 1',
+          detail: 'Dot product: 1x2 + 2x4 + 2x4 = 18. Length: sqrt(4 + 16 + 16) = 6. Cosine: 18 / (3 x 6) = 1.00. It points in exactly the same direction as the query — the same content, at twice the magnitude.',
+          latex: '\\cos(q, d_1) = \\frac{18}{3 \\times 6} = 1.00',
+        },
+        {
+          label: 'Passage 2',
+          detail: 'Dot product: 1x2 + 2x0 + 2x1 = 4. Length: sqrt(4 + 0 + 1) = 2.236. Cosine: 4 / (3 x 2.236) = 0.596. Partially related.',
+          latex: '\\cos(q, d_2) = \\frac{4}{3 \\times 2.236} = 0.596',
+        },
+        {
+          label: 'Passage 3',
+          detail: 'Dot product: 1x(-1) + 2x0 + 2x1 = 1. Length: sqrt(1 + 0 + 1) = 1.414. Cosine: 1 / (3 x 1.414) = 0.236. Weakly related at best.',
+          latex: '\\cos(q, d_3) = \\frac{1}{3 \\times 1.414} = 0.236',
+        },
+        {
+          label: 'The ranking, and what magnitude did not do',
+          detail: 'The order is d1, d2, d3. Note that d1 has twice the magnitude of q and this did not inflate its score, because cosine divides length out. Had we ranked by raw dot product instead, d1 would score 18 against 4 and 1 — the same order here, but on real data unnormalised dot products systematically favour longer passages.',
+        },
+        {
+          label: 'Normalising first',
+          detail: 'Unit-normalising q gives [0.333, 0.667, 0.667] and d2 gives [0.894, 0, 0.447]. Their dot product is 0.298 + 0 + 0.298 = 0.596 — identical to the cosine computed above, with no division needed at query time. This is why vector stores normalise once at indexing.',
+          latex: '\\hat{q} \\cdot \\hat{d}_2 = 0.596',
+        },
+        {
+          label: 'What these numbers do not tell you',
+          detail: 'A cosine of 0.596 has no absolute meaning. Similarity scores are only comparable within one embedding model, and typical values differ sharply between models — some cluster everything above 0.7. Any threshold such as "keep results above 0.8" must be calibrated on your own labelled data, never copied from a tutorial.',
+        },
+      ],
+      conclusion:
+        'Retrieval ranking is this arithmetic repeated across the corpus, which is why exhaustive search costs one multiply-accumulate per dimension per document and becomes untenable in the millions. Two practical points survive the toy scale: normalise at index time so the query is a pure dot product, and treat similarity values as a ranking signal rather than as a calibrated probability of relevance.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'Embedding a corpus and searching it',
+        code: `import numpy as np
+from sentence_transformers import SentenceTransformer
+
+model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+
+corpus = [
+    "To cancel your subscription, open Settings and choose Billing.",
+    "Refunds are issued to the original payment method within 14 days.",
+    "Error E-4012 means the payment provider declined the transaction.",
+    "Our offices are closed on public holidays.",
+]
+
+# normalize_embeddings=True makes cosine similarity a plain dot product.
+doc_vecs = model.encode(corpus, normalize_embeddings=True)
+print("shape:", doc_vecs.shape)
+
+query = "how do I stop paying for this service"
+q = model.encode([query], normalize_embeddings=True)[0]
+
+scores = doc_vecs @ q
+for i in np.argsort(-scores)[:3]:
+    print(f"  {scores[i]:.3f}  {corpus[i]}")`,
+        output: `shape: (4, 384)
+  0.612  To cancel your subscription, open Settings and choose Billing.
+  0.341  Refunds are issued to the original payment method within 14 days.
+  0.118  Error E-4012 means the payment provider declined the transaction.`,
+        explanation:
+          'The query shares no content word with the winning passage — no "cancel", no "subscription" — and it still ranks first, which is the entire value of dense retrieval over keyword matching. Two implementation details matter more than they look. Normalising at encode time turns every later similarity computation into a dot product, which is both faster and simpler. And the score of 0.612 should not be read as sixty-one per cent relevant: the scale is a property of this model, and any cutoff has to be calibrated against labelled examples from your own corpus.',
+      },
+      {
+        language: 'python',
+        title: 'A vector store with metadata and filtering',
+        code: `import chromadb
+
+client = chromadb.PersistentClient(path="./store")
+collection = client.get_or_create_collection(
+    name="support_docs",
+    metadata={"hnsw:space": "cosine"},      # the index and its metric
+)
+
+collection.add(
+    ids=["doc-1-c0", "doc-1-c1", "doc-2-c0"],
+    documents=[
+        "To cancel your subscription, open Settings and choose Billing.",
+        "Cancellation takes effect at the end of the current billing period.",
+        "Enterprise contracts require 30 days written notice to terminate.",
+    ],
+    metadatas=[
+        {"source": "help/billing.md", "plan": "self_serve", "updated": "2026-01-14"},
+        {"source": "help/billing.md", "plan": "self_serve", "updated": "2026-01-14"},
+        {"source": "legal/enterprise.md", "plan": "enterprise", "updated": "2025-11-02"},
+    ],
+)
+
+hits = collection.query(
+    query_texts=["how do I cancel"],
+    n_results=2,
+    where={"plan": "self_serve"},           # filter BEFORE similarity matters
+)
+for doc, meta, dist in zip(hits["documents"][0], hits["metadatas"][0], hits["distances"][0]):
+    print(f"  {1 - dist:.3f}  [{meta['source']}]  {doc}")`,
+        output: `  0.734  [help/billing.md]  To cancel your subscription, open Settings and choose Billing.
+  0.588  [help/billing.md]  Cancellation takes effect at the end of the current billing period.`,
+        explanation:
+          'Metadata is not an afterthought; it is what makes retrieval usable in a real product. The source field is what lets an answer cite where it came from and lets a human verify it. The plan filter enforces that an enterprise customer never sees self-serve instructions, and note that filtering is a correctness requirement rather than a ranking preference — it is also how per-tenant isolation is enforced, which no similarity score can provide. The updated field lets you find and re-embed stale chunks when the source document changes, which is the maintenance problem every retrieval system eventually has.',
+      },
+      {
+        language: 'python',
+        title: 'Hybrid search with reciprocal rank fusion, then re-ranking',
+        code: `from rank_bm25 import BM25Okapi
+from sentence_transformers import CrossEncoder, SentenceTransformer
+
+bi_encoder = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+
+corpus = [...]                                   # list of chunk strings
+doc_vecs = bi_encoder.encode(corpus, normalize_embeddings=True)
+bm25 = BM25Okapi([c.lower().split() for c in corpus])
+
+def dense_ranking(query: str, k: int = 50) -> list[int]:
+    scores = doc_vecs @ bi_encoder.encode([query], normalize_embeddings=True)[0]
+    return list(scores.argsort()[::-1][:k])
+
+def lexical_ranking(query: str, k: int = 50) -> list[int]:
+    scores = bm25.get_scores(query.lower().split())
+    return list(scores.argsort()[::-1][:k])
+
+def fuse(*rankings: list[int], k: int = 60) -> list[int]:
+    """Reciprocal rank fusion: combine by RANK, because scores are not comparable."""
+    fused: dict[int, float] = {}
+    for ranking in rankings:
+        for position, doc_id in enumerate(ranking, start=1):
+            fused[doc_id] = fused.get(doc_id, 0.0) + 1.0 / (k + position)
+    return sorted(fused, key=fused.get, reverse=True)
+
+def search(query: str, final_k: int = 5) -> list[str]:
+    shortlist = fuse(dense_ranking(query), lexical_ranking(query))[:50]
+    pairs = [(query, corpus[i]) for i in shortlist]
+    scores = reranker.predict(pairs)                     # joint encoding, slow but accurate
+    best = sorted(zip(shortlist, scores), key=lambda p: -p[1])[:final_k]
+    return [corpus[i] for i, _ in best]`,
+        explanation:
+          'This is the shape most production retrieval converges on, and each stage earns its place. Dense retrieval finds paraphrase; BM25 finds the error code and the product name that the embedding smoothed away. They are fused by rank rather than by score, because a cosine of 0.6 and a BM25 score of 14 are not on comparable scales and calibrating them is more trouble than it is worth. Then a cross-encoder reads query and passage together — full attention between them rather than two vectors compared after the fact — and re-orders the shortlist. The economics are what make it work: the cross-encoder is far too slow for a million documents and perfectly affordable for fifty, so the cheap stages optimise recall and the expensive stage optimises precision.',
+      },
+      {
+        language: 'python',
+        title: 'Measuring retrieval before blaming the model',
+        runnable: true,
+        code: `def recall_at_k(retrieved: list[str], relevant: set[str], k: int) -> float:
+    if not relevant:
+        return 1.0
+    return len(set(retrieved[:k]) & relevant) / len(relevant)
+
+def mrr(retrieved: list[str], relevant: set[str]) -> float:
+    """Mean reciprocal rank contribution for one query."""
+    for position, doc_id in enumerate(retrieved, start=1):
+        if doc_id in relevant:
+            return 1.0 / position
+    return 0.0
+
+# A tiny labelled set: query -> the chunk ids that genuinely answer it.
+GOLD = {
+    "how do I cancel": {"doc-1-c0"},
+    "what is error E-4012": {"doc-3-c2"},
+    "enterprise notice period": {"doc-2-c0"},
+}
+RESULTS = {
+    "how do I cancel": ["doc-1-c0", "doc-1-c1", "doc-9-c4"],
+    "what is error E-4012": ["doc-7-c1", "doc-3-c2", "doc-4-c0"],
+    "enterprise notice period": ["doc-5-c1", "doc-6-c0", "doc-8-c3"],
+}
+
+for k in (1, 3):
+    mean = sum(recall_at_k(RESULTS[q], GOLD[q], k) for q in GOLD) / len(GOLD)
+    print(f"recall@{k} = {mean:.2f}")
+print(f"MRR      = {sum(mrr(RESULTS[q], GOLD[q]) for q in GOLD) / len(GOLD):.2f}")`,
+        output: `recall@1 = 0.33
+recall@3 = 0.67
+MRR      = 0.50`,
+        explanation:
+          'Thirty labelled query-to-chunk pairs will tell you more about a struggling retrieval system than any amount of prompt tuning downstream. Recall at k is the metric that matters most, because a chunk that is never retrieved cannot be used by anything that follows — no re-ranker and no generation step can recover it. Here the third query never retrieves its answer at all, which points at chunking or at a vocabulary mismatch rather than at anything the model does later. Measure retrieval in isolation first; a great many "the model is hallucinating" reports are retrieval failures wearing a disguise.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Internal documentation search',
+        usage:
+          'Employees ask questions in their own words rather than in the vocabulary of the handbook. Dense retrieval bridges that gap, while BM25 keeps exact policy numbers and system names findable.',
+      },
+      {
+        context: 'Support deflection',
+        usage:
+          'Incoming tickets are matched against resolved ones by embedding similarity. The common failure is chunking whole ticket threads, which blurs the actual problem statement into pages of back-and-forth.',
+      },
+      {
+        context: 'Multi-tenant isolation',
+        usage:
+          'A metadata filter on tenant id is applied at query time, and it is a security control rather than a ranking preference. Relying on similarity to keep tenants apart is a data-leak incident waiting to happen.',
+      },
+      {
+        context: 'Re-embedding after a model change',
+        usage:
+          'Vectors from two different embedding models are not comparable, so upgrading the model means re-embedding the entire corpus. Teams plan for this by storing the original text and the model identifier alongside every vector.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'sentence-transformers', role: 'Bi-encoders for indexing and querying, and cross-encoders for re-ranking, with one consistent interface.' },
+      { tool: 'FAISS', role: 'The reference library for ANN indexes, including IVF and HNSW variants, with quantisation for very large collections.' },
+      { tool: 'Chroma, Qdrant, pgvector', role: 'Vector stores with metadata filtering and persistence; pgvector keeps vectors in a database you already operate.' },
+      { tool: 'rank_bm25 or OpenSearch', role: 'The lexical half of hybrid search, which is usually the cheapest large improvement available.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Choosing the vector database before deciding how to chunk',
+        why: 'Chunking determines what can be retrieved at all. Every database will return the nearest vectors faithfully, including when the nearest vector is a chunk that splits the answer across a boundary.',
+        fix: 'Build a labelled query set, measure recall at k with two or three chunking strategies, and only then worry about the store. The store is rarely the bottleneck below a few million vectors.',
+      },
+      {
+        mistake: 'Using different embedding models, or different prompt prefixes, for documents and queries',
+        why: 'Vector spaces are model-specific and the mapping is arbitrary across models, so similarity between them is meaningless. Some models also expect an instruction prefix on the query side, and omitting it degrades results measurably.',
+        fix: 'Record the model identifier and any prefix convention alongside the index, and re-embed the whole corpus when either changes.',
+      },
+      {
+        mistake: 'Relying on dense retrieval alone',
+        why: 'Embeddings smooth away exactly the tokens that identify things: error codes, part numbers, unusual names. Users search for those constantly.',
+        fix: 'Add BM25 and fuse by rank. It is usually an afternoon of work and one of the largest quality gains available in a retrieval system.',
+      },
+      {
+        mistake: 'Treating a similarity score as a probability of relevance',
+        why: 'Cosine values are model-specific and not calibrated. Some models compress everything into a narrow band near the top of the range, so a threshold borrowed from a tutorial is meaningless on your data.',
+        fix: 'Calibrate any threshold against a labelled set, or avoid thresholds altogether by retrieving a fixed k and letting a re-ranker decide.',
+      },
+      {
+        mistake: 'Enforcing access control through similarity',
+        why: 'Ranking is not authorisation. Restricted material sitting in the same index will eventually surface for a query that happens to be close to it.',
+        fix: 'Apply metadata filters at query time, or maintain separate collections per tenant, and treat this as a security boundary owned by the application.',
+      },
+      {
+        mistake: 'Skipping the re-ranker because retrieval "looks fine"',
+        why: 'Bi-encoders compare two independently computed vectors and cannot express interactions between query and passage. The top result is frequently not the best of the fifty candidates retrieved.',
+        fix: 'Retrieve broadly for recall, re-rank narrowly for precision. It is typically the second-largest gain after fixing chunking.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'Why is cosine similarity preferred over Euclidean distance for text embeddings?',
+        answer:
+          'Cosine measures the angle between vectors and ignores magnitude, which matters because embedding magnitude often tracks incidental properties such as passage length rather than meaning; a long document should not rank above a short one merely for having a bigger norm. There is a useful subtlety, though: if vectors are normalised to unit length, ranking by cosine and ranking by Euclidean distance are mathematically equivalent, since the squared distance between unit vectors is 2 - 2cos, a strictly decreasing function of the cosine. So in practice the answer is that people normalise once at index time and then use a dot product, which is cheaper than either and gives the same order. The important operational point is that similarity values are only comparable within one embedding model, and are not calibrated probabilities of relevance.',
+      },
+      {
+        level: 'advanced',
+        question: 'Explain how HNSW works and what it trades away.',
+        answer:
+          'HNSW builds a multi-layer proximity graph over the vectors. The bottom layer contains every point connected to its near neighbours; each higher layer contains a random sample of the points below it, so upper layers are sparse and their edges span long distances. A search starts at an entry point in the top layer and greedily moves to whichever neighbour is closer to the query, descending a layer when no neighbour improves, and finishing with a beam search in the dense bottom layer. The effect is that most of the distance to the query is covered in a few hops through the sparse layers, and refinement happens locally, giving roughly logarithmic query time instead of linear. What it trades away is exactness: greedy graph traversal can get stuck in a local region and miss a true nearest neighbour, so recall is below one hundred per cent and is tuned with parameters such as the beam width at search time and the number of connections per node at build time. It also costs memory — the graph edges can be a substantial fraction of the vector data — and insertion is more expensive than in a flat index, so high-churn collections need periodic rebuilds.',
+        followUp:
+          'A strong answer contrasts this with IVF, where recall is tuned by how many clusters are probed, and mentions that quantisation can be layered on top of either to cut memory.',
+      },
+      {
+        level: 'ai-engineer',
+        question: 'Retrieval quality is poor. Walk me through how you would debug it.',
+        answer:
+          'I would measure before changing anything. First build a labelled set of thirty to fifty real queries with the chunk ids that genuinely answer them, then compute recall at k for the raw retrieval stage in isolation. That one number separates two completely different problems: if the right chunk is never retrieved, nothing downstream can fix it, whereas if it is retrieved at rank 20 the problem is ranking. For recall failures I would inspect the chunks themselves, because the cause is usually chunking — an answer split across a boundary, or a chunk so large its embedding is dominated by unrelated content — and I would test two or three alternative strategies against the same labelled set. I would also check for a vocabulary mismatch by running the failing queries through BM25; if lexical search finds them, the fix is hybrid retrieval. For ranking failures I would add a cross-encoder re-ranker over a shortlist of fifty. Along the way I would verify the unglamorous things: the same embedding model and prefix convention on both sides, the index not stale relative to the documents, and metadata filters not silently excluding the right answer. Only after retrieval is measured would I look at the generation step at all.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'Compute the cosine similarity between q = [3, 4] and d = [4, 3], and between q and e = [6, 8]. What do the results tell you about magnitude?',
+        hint: 'Both vectors have length 5 in the first case.',
+        solution:
+          'For d: dot product 3x4 + 4x3 = 24, lengths 5 and 5, cosine 24/25 = 0.96. For e: dot product 3x6 + 4x8 = 50, lengths 5 and 10, cosine 50/50 = 1.00. e is exactly twice q, so it points in an identical direction and scores a perfect 1.00 despite having twice the magnitude — cosine divides length out entirely. Had these been ranked by raw dot product, e would score 50 against 24 and the gap would be exaggerated by magnitude rather than direction, which is precisely the effect that makes long passages dominate unnormalised retrieval.',
+      },
+      {
+        prompt:
+          'You have 5 million chunks of 768 dimensions in 32-bit floats. How much memory do the raw vectors need, and what does that imply about your index choice?',
+        hint: 'Four bytes per dimension per vector.',
+        solution:
+          '5,000,000 x 768 x 4 bytes = 15,360,000,000 bytes, about 15.4 GB for the vectors alone. An HNSW graph typically adds a further substantial fraction for edges, so budget well above 20 GB of RAM. That rules out a naive in-process flat index on a modest machine and points to one of three routes: a dedicated vector service with enough memory, product quantisation to compress vectors to a fraction of the size at some recall cost, or an IVF index with on-disk storage where only the probed clusters are read. It is also worth asking whether 5 million chunks are all genuinely needed — filtering the corpus down is often cheaper than scaling the index up.',
+      },
+      {
+        prompt:
+          'Your users search for error codes such as E-4012 and get irrelevant results, although conceptual questions work well. Diagnose and fix.',
+        hint: 'What happens to a rare token in an embedding model?',
+        solution:
+          'This is the classic dense-retrieval weakness. An embedding compresses a whole passage into a few hundred numbers and a rare identifier contributes very little to that summary, so the chunk containing E-4012 is not meaningfully closer to the query than any other support text. BM25 handles exactly this case well, because a rare term has a high inverse document frequency and therefore dominates the score. The fix is hybrid search: run both retrievers and fuse by reciprocal rank so the lexical match surfaces even when the dense score is unremarkable. Two complements are worth adding — index the error code in a metadata field and match it exactly when the query contains something matching the code pattern, and confirm your chunking has not separated the code from its explanation. Measure recall at k on a set of code-style queries before and after, so the improvement is a number rather than an impression.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'GEN-012-q1',
+        type: 'numeric',
+        concept: 'cosine arithmetic',
+        prompt: 'What is the cosine similarity between [1, 0] and [1, 1], to two decimal places?',
+        answer: 0.71,
+        tolerance: 0.02,
+        explanation:
+          'Dot product is 1, lengths are 1 and sqrt(2) = 1.414, so the cosine is 1 / 1.414 = 0.707. That corresponds to a 45-degree angle between the vectors.',
+      },
+      {
+        id: 'GEN-012-q2',
+        type: 'mcq',
+        concept: 'ann indexes',
+        prompt: 'What does an approximate nearest-neighbour index trade away for speed?',
+        options: [
+          'Recall — it may miss some true nearest neighbours',
+          'The ability to store metadata alongside vectors',
+          'Support for cosine similarity',
+          'The ability to add new vectors after building the index',
+        ],
+        answerIndex: 0,
+        explanation:
+          'ANN indexes restrict the search to a graph neighbourhood or a few clusters, so some true neighbours can be missed. Recall is tuned by parameters such as beam width in HNSW or the number of clusters probed in IVF.',
+      },
+      {
+        id: 'GEN-012-q3',
+        type: 'truefalse',
+        concept: 'embedding compatibility',
+        prompt: 'Vectors produced by two different embedding models can be compared with cosine similarity as long as they have the same dimension.',
+        answer: false,
+        explanation:
+          'Each model defines its own space with arbitrary axes, so similarity across models is meaningless even at matching dimensions. Changing the embedding model requires re-embedding the whole corpus.',
+      },
+      {
+        id: 'GEN-012-q4',
+        type: 'multi',
+        concept: 'hybrid retrieval',
+        prompt: 'What does BM25 recover that dense retrieval typically misses? Select all that apply.',
+        options: [
+          'Exact error codes and part numbers',
+          'Rare proper nouns the embedding model never saw',
+          'Paraphrases using entirely different vocabulary',
+          'Precise product names',
+          'Conceptual similarity across synonyms',
+        ],
+        answerIndices: [0, 1, 3],
+        explanation:
+          'Lexical search excels on rare exact tokens, which embeddings smooth away. Paraphrase and synonymy are what dense retrieval is for, which is why the two are combined rather than chosen between.',
+      },
+      {
+        id: 'GEN-012-q5',
+        type: 'order',
+        concept: 'retrieval pipeline',
+        prompt: 'Order a production retrieval pipeline from corpus to final context.',
+        items: [
+          'Chunk documents into retrievable units',
+          'Embed the chunks and build vector and lexical indexes',
+          'Encode the query with the same embedding model',
+          'Retrieve candidates from both indexes and fuse the rankings',
+          'Re-rank the shortlist with a cross-encoder',
+          'Return the top few passages with their source metadata',
+        ],
+        explanation:
+          'The early stages optimise recall cheaply over the whole corpus; the expensive cross-encoder optimises precision over a shortlist. Running the re-ranker earlier would be unaffordable and running it later would have nothing left to fix.',
+      },
+      {
+        id: 'GEN-012-q6',
+        type: 'explain',
+        concept: 'chunking dominates',
+        prompt: 'Explain why chunking strategy has more effect on retrieval quality than the choice of vector database.',
+        rubric: [
+          'States that chunking determines what units exist to be retrieved',
+          'Gives concrete failure modes for chunks that are too large and too small',
+          'Notes that every database returns the nearest vectors faithfully, so the store is rarely the bottleneck',
+        ],
+        sampleAnswer:
+          'The database answers the question "which stored vectors are nearest to this query" and essentially every implementation answers it correctly; below a few million vectors they differ in operations and cost far more than in results. Chunking decides what those stored units are in the first place, and nothing downstream can retrieve something that is not a chunk. Make chunks too large and a single vector has to summarise several topics, so it is not especially close to any specific query and the relevant sentence is diluted by surrounding text you then pay to put in the context. Make them too small and you retrieve a sentence stripped of the context that gave it meaning, such as a figure with no indication of what it measures. Worse, an answer spanning a boundary may be retrievable in neither half. That is why the first thing to do with a struggling retrieval system is to build a labelled query set and measure recall at k across two or three chunking strategies, and why swapping the vector store is usually the least productive change available.',
+        explanation:
+          'The examinable insight is that retrieval quality is determined by what units exist and how they are ranked, not by the storage layer that faithfully returns nearest neighbours.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'Cosine similarity formula', back: 'Dot product divided by the product of the vector lengths. On unit-normalised vectors it is just the dot product.' },
+      { front: 'What does an ANN index trade away?', back: 'Exactness. It may miss true nearest neighbours, and recall is tuned by beam width in HNSW or clusters probed in IVF.' },
+      { front: 'HNSW in one sentence', back: 'A layered proximity graph: sparse upper layers cover distance in few hops, dense lower layers refine locally.' },
+      { front: 'Why hybrid search?', back: 'Dense retrieval finds paraphrase; BM25 finds exact codes, names and rare tokens that embeddings smooth away.' },
+      { front: 'What is reciprocal rank fusion?', back: 'Combining ranked lists by 1/(k + rank) rather than by score, because scores from different retrievers are not comparable.' },
+      { front: 'Bi-encoder versus cross-encoder', back: 'Bi-encoder embeds query and passage separately, so it is precomputable and fast. Cross-encoder reads both together: far more accurate, far too slow for a whole corpus.' },
+      { front: 'Most important retrieval metric', back: 'Recall at k. A chunk never retrieved cannot be used by any later stage, so nothing downstream can recover it.' },
+      { front: 'Is a similarity score a probability?', back: 'No. It is model-specific and uncalibrated. Any threshold must be set against your own labelled data.' },
+    ],
+
+    challenge: {
+      title: 'Build and measure a retrieval system',
+      brief:
+        'Index a corpus of at least 500 real chunks and build a labelled set of 30 queries with their correct chunk ids. Measure recall at 1, 5 and 20 for four configurations: dense only, BM25 only, hybrid with rank fusion, and hybrid plus a cross-encoder re-ranker. Then repeat the best configuration with two different chunking strategies. Report a table of recall against latency, and state which single change produced the largest gain.',
+      language: 'python',
+      acceptanceCriteria: [
+        'The labelled set uses real queries and real chunk ids, not invented pairs',
+        'All four retrieval configurations are measured on identical data',
+        'Latency is measured alongside recall for each configuration',
+        'Two chunking strategies are compared, and the largest single gain is identified with evidence',
+      ],
+      starterCode: 'from sentence_transformers import SentenceTransformer\n\nCHUNKERS = {\n    "fixed_400_overlap_50": lambda doc: [...],\n    "by_heading": lambda doc: [...],\n}\n\nGOLD = {}  # query -> set of chunk ids that answer it\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain to a backend engineer how semantic search works, why a specialised index is needed, and what determines whether the results are any good.',
+      mustCover: [
+        'Text becomes a vector; retrieval is finding nearest vectors by cosine similarity',
+        'Exhaustive search is linear, so ANN indexes trade a little recall for a large speed-up',
+        'Chunking determines what can be retrieved at all and dominates quality',
+        'Hybrid search with BM25 and a cross-encoder re-ranker are the two largest practical improvements',
+      ],
+      bonusSignals: ['explains that similarity scores are model-specific and uncalibrated', 'treats metadata filters as a security boundary', 'insists on measuring recall at k before tuning anything'],
+      sampleExplanation:
+        "An embedding model turns a passage into a few hundred numbers, positioned so that passages about similar things end up pointing in similar directions. Searching means encoding the query the same way and finding the vectors closest to it, measured by cosine similarity — the angle between them, with length divided out so a long passage does not win by being long. With a few thousand passages you compare against all of them. At a few million that is too slow for a request path, so an index organises the vectors up front: either clustering them so you only search the nearest few clusters, or building a layered graph you can walk towards the query, covering most of the distance in a handful of hops. Both are approximate — they can miss a true nearest neighbour — and that is the deliberate trade for turning a linear scan into something that returns in milliseconds. Now the part that actually decides whether this works. Every vector store will faithfully return the nearest vectors, so the store is rarely your problem. What determines quality is how you cut documents into chunks, because nothing can be retrieved that is not a chunk — too big and the vector is a blurry summary of several topics, too small and you retrieve a sentence with no context. After chunking, the two biggest wins are adding plain keyword search alongside the semantic one, since embeddings smooth away exactly the error codes and product names people search for, and adding a re-ranker that reads the query and each shortlisted passage together to reorder the final few. And measure all of it: thirty labelled queries and a recall-at-k number will tell you more than a week of intuition.",
+    },
+  },
+];

@@ -7303,3 +7303,548 @@ step 5: w = [+0.30402, +0.26214]`,
         'You already know how to find the steepness of a curve that depends on one number. Now suppose the output depends on two, or on two billion. The trick is to take them one at a time: freeze every input but one, nudge that one, and see how the output responds. That is a partial derivative, and it is an ordinary derivative in disguise — everything else is just carried along as though it were a fixed number. Do this for every input and you have a list of numbers, one per input, and that list is the gradient. Here is why it matters so much. Imagine standing on a hillside in fog. Testing east and testing north gives you two numbers, and from them you can work out the one direction that climbs fastest, which is usually neither east nor north but some diagonal. The gradient is exactly that direction, and its length tells you how steep the climb is. Turn round and you are descending as fast as the terrain allows. Training a model is nothing more than this, repeated: the loss is the landscape, every weight is a direction you can move in, and backpropagation computes the whole gradient in one sweep so that every weight can be adjusted against it simultaneously. That last point is what makes it practical at all — you never test parameters one by one; you get all of them in a single pass.',
     },
   },
+
+  {
+    id: 'MATH-015',
+    domain: 'MATH',
+    module: 'Calculus',
+    topic: 'The chain rule',
+    title: 'The Chain Rule',
+    slug: 'the-chain-rule',
+    difficulty: 4,
+    estimatedMinutes: 35,
+    prerequisites: ['MATH-013'],
+    related: ['MATH-001', 'MATH-014'],
+    tags: ['chain-rule', 'backpropagation', 'composition', 'autograd', 'computational-graph'],
+
+    learningObjectives: [
+      'State the chain rule and explain it as multiplying rates of change along a chain',
+      'Differentiate a composite function such as (3x + 1)⁵ or e^(x²) correctly',
+      'Apply the multivariable chain rule to a two-layer network and obtain every weight gradient',
+      'Explain precisely why backpropagation is the chain rule applied systematically in reverse',
+    ],
+
+    terminology: [
+      {
+        term: 'Composite function',
+        definition:
+          'A function built by feeding one function’s output into another, written f(g(x)). Every deep network is a long composition.',
+        simple: 'Machines bolted together, output of one feeding the next.',
+      },
+      {
+        term: 'Chain rule',
+        definition:
+          'The rule that the derivative of a composition is the product of the derivatives of its parts, each evaluated at the right point.',
+        simple: 'Multiply the rates along the chain.',
+      },
+      {
+        term: 'Computational graph',
+        definition:
+          'A directed graph in which nodes are operations and edges carry values. Frameworks build one during the forward pass so the chain rule can be applied in reverse.',
+        simple: 'A map of every calculation, recorded so it can be walked backwards.',
+      },
+      {
+        term: 'Upstream gradient',
+        definition:
+          'The derivative of the loss with respect to a node’s output, handed down from later in the graph. Each node multiplies it by its own local derivative.',
+        simple: 'The signal arriving from the layer above.',
+      },
+      {
+        term: 'Local gradient',
+        definition:
+          'The derivative of a node’s output with respect to its own input, computable from that node alone without knowing anything about the rest of the network.',
+        simple: 'What this one step contributes to the total rate.',
+      },
+      {
+        term: 'Backpropagation',
+        definition:
+          'Reverse-mode automatic differentiation: one backward sweep through the computational graph that produces the derivative of a scalar loss with respect to every parameter.',
+        simple: 'Applying the chain rule from the loss backwards, reusing results as you go.',
+      },
+    ],
+
+    simpleExplanation:
+      'Suppose a factory has three stages, and you want to know how much the final output changes if you turn up the raw material supply by one unit. You do not need to understand the whole factory at once. You only need three simple facts: each extra unit of raw material produces two parts, each part produces three subassemblies, and each subassembly produces four finished goods. Multiply them — two times three times four — and one extra unit of raw material gives twenty-four extra finished goods. That multiplication is the chain rule. Nothing more sophisticated is happening. When one thing affects a second which affects a third, the overall sensitivity is the product of the individual sensitivities along the way. This turns out to be the single most important fact in deep learning, because a neural network is exactly such a chain: the input affects the first layer, which affects the second, which affects the loss. Working out how a weight buried deep in the network affects the final loss means multiplying the rates along the path back to it, and that is what backpropagation does.',
+
+    whyItExists:
+      'Real functions are almost never written as a single elementary expression; they are compositions of simpler pieces, and there is no way to differentiate them directly. The chain rule decomposes the problem into local derivatives that each depend on one operation alone, then multiplies them. Without it, training a network of any depth would be impossible: there would be no way to attribute a change in the loss to a weight several layers away from it.',
+
+    analogy: {
+      scenario:
+        'Three interlocking gears drive each other. Turning the first gear once turns the second gear three times because of the tooth ratio, and each turn of the second turns the third five times. You never need to inspect the mechanism as a whole to know that one turn of the first produces fifteen turns of the third: you multiply the ratios. Reverse one gear and the sign flips throughout the chain, but the arithmetic is unchanged.',
+      mapping: [
+        { from: 'The tooth ratio between gear one and gear two', to: "The local derivative du/dx" },
+        { from: 'The tooth ratio between gear two and gear three', to: 'The local derivative dy/du' },
+        { from: 'Fifteen turns of the third gear per turn of the first', to: 'The overall derivative dy/dx = 15' },
+        { from: 'A gear that turns backwards', to: 'A negative local derivative, flipping the sign of everything downstream' },
+        { from: 'A seized gear that does not turn at all', to: 'A zero local derivative, killing the gradient for everything behind it' },
+      ],
+      bridge:
+        'The gear train makes two things vivid that matter enormously in practice. First, the overall sensitivity is a product, so the whole chain is as strong as its factors multiplied — not averaged. Second, that is precisely why gradients vanish and explode: multiply twenty factors of 0.25 and you get under 1e-12, so the first gear barely feels the last; multiply twenty factors of 1.5 and you get over 3000, and the first gear is torn off its mounting.',
+      limitations:
+        'Gear ratios are fixed, whereas local derivatives depend on where you currently are — the derivative of a sigmoid is 0.25 at the origin and near zero when saturated. So the effective ratios change at every step of training, which is why gradient behaviour can deteriorate partway through a run rather than being determined at initialisation.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Follow the gradient backwards through a graph',
+        caption: 'Watch upstream gradients multiply by local derivatives at each node.',
+        widget: 'backprop-flow',
+      },
+      {
+        kind: 'flow',
+        title: 'Applying the chain rule to (3x + 1)⁵',
+        caption: 'Identify outer and inner, differentiate each, then multiply.',
+        steps: [
+          { label: 'Name the inner function', detail: 'u = 3x + 1. The outer function is then u⁵.' },
+          { label: 'Differentiate the outer, keeping the inner intact', detail: 'd/du of u⁵ is 5u⁴, which is 5(3x + 1)⁴.' },
+          { label: 'Differentiate the inner', detail: 'du/dx = 3.' },
+          { label: 'Multiply', detail: '5(3x + 1)⁴ · 3 = 15(3x + 1)⁴. Forgetting the final factor of 3 is the classic error.' },
+        ],
+      },
+      {
+        kind: 'annotated',
+        title: 'Anatomy of a backward step at one node',
+        subject: 'dL/dinput = dL/doutput × doutput/dinput',
+        annotations: [
+          { part: 'dL/doutput', note: 'The upstream gradient, handed down from the node after this one. This node did not compute it.' },
+          { part: '×', note: 'A plain multiplication. Every node does exactly this, which is why backprop is so uniform.' },
+          { part: 'doutput/dinput', note: 'The local gradient, depending only on this operation and the values it saw in the forward pass.' },
+          { part: 'dL/dinput', note: 'What gets passed further back, becoming the upstream gradient for the previous node.' },
+        ],
+      },
+      {
+        kind: 'compare',
+        title: 'Forward-mode versus reverse-mode differentiation',
+        left: {
+          heading: 'Forward mode',
+          points: [
+            'Propagates derivatives from inputs towards outputs',
+            'One sweep per input variable',
+            'Efficient when there are few inputs and many outputs',
+            'Costly for a network: one sweep per parameter is hopeless',
+          ],
+        },
+        right: {
+          heading: 'Reverse mode (backpropagation)',
+          points: [
+            'Propagates derivatives from the output back towards the inputs',
+            'One sweep per output',
+            'Efficient when there are many inputs and one output',
+            'A scalar loss and a billion parameters is exactly this case',
+          ],
+        },
+      },
+    ],
+
+    formalDefinition:
+      'If g is differentiable at x and f is differentiable at g(x), then (f ∘ g) is differentiable at x with (f ∘ g)′(x) = f′(g(x))·g′(x). In several variables, for z = f(u₁, …, u_m) with each u_i a function of x, the chain rule reads ∂z/∂x = Σ_{i=1}^{m} (∂z/∂u_i)(∂u_i/∂x), the sum accounting for every path from x to z. In matrix form, the Jacobian of a composition is the product of the Jacobians, J_{f∘g}(x) = J_f(g(x))·J_g(x), and reverse-mode automatic differentiation evaluates this product right to left using vector-Jacobian products.',
+
+    math: {
+      intuition:
+        'Think of it as a currency conversion. If one pound buys 1.2 euros and one euro buys 160 yen, then one pound buys 1.2 × 160 = 192 yen. You never needed a direct pound-to-yen rate; you multiplied the rates along the chain. The chain rule says exactly this about rates of change: if y responds to u at rate dy/du, and u responds to x at rate du/dx, then y responds to x at the product of the two. The one subtlety worth being careful about is where each factor is evaluated. The outer derivative must be evaluated at the inner function’s current value, not at x — which is why f′(g(x)) appears rather than f′(x). Everything else is multiplication.',
+      formulas: [
+        {
+          latex: '\\frac{dy}{dx} = \\frac{dy}{du}\\cdot\\frac{du}{dx}',
+          name: 'The chain rule, Leibniz form',
+          meaning:
+            'Rates multiply along a chain. The notation is deliberately suggestive: the du appears to cancel, which is a useful mnemonic though not a proof.',
+          variables: [
+            { symbol: 'y', meaning: 'The final output' },
+            { symbol: 'u', meaning: 'The intermediate quantity: the output of the inner function' },
+            { symbol: 'x', meaning: 'The original input' },
+            { symbol: 'dy/du', meaning: 'How fast the output responds to the intermediate' },
+            { symbol: 'du/dx', meaning: 'How fast the intermediate responds to the input' },
+          ],
+          category: 'calculus',
+        },
+        {
+          latex: "\\frac{d}{dx}f\\bigl(g(x)\\bigr) = f'\\bigl(g(x)\\bigr)\\cdot g'(x)",
+          name: 'The chain rule, Lagrange form',
+          meaning:
+            'Differentiate the outer function leaving the inner one untouched inside it, then multiply by the derivative of the inner one.',
+          variables: [
+            { symbol: 'f', meaning: 'The outer function, applied second' },
+            { symbol: 'g', meaning: 'The inner function, applied first' },
+            { symbol: "f'(g(x))", meaning: "The outer derivative evaluated at the inner function's value — not at x" },
+            { symbol: "g'(x)", meaning: 'The inner derivative, evaluated at x' },
+          ],
+          category: 'calculus',
+        },
+        {
+          latex: '\\frac{\\partial z}{\\partial x} = \\sum_{i=1}^{m}\\frac{\\partial z}{\\partial u_i}\\frac{\\partial u_i}{\\partial x}',
+          name: 'The multivariable chain rule',
+          meaning:
+            'When x influences the output through several routes, add the contributions of all of them. This sum is why a shared weight accumulates gradient from every place it is used.',
+          variables: [
+            { symbol: 'z', meaning: 'The final scalar output, such as the loss' },
+            { symbol: 'u_i', meaning: 'The i-th intermediate quantity depending on x' },
+            { symbol: 'm', meaning: 'How many distinct paths lead from x to z' },
+            { symbol: '\\sum', meaning: 'Sum over every path — contributions add, they do not replace one another' },
+          ],
+          category: 'calculus',
+        },
+        {
+          latex: '\\frac{\\partial L}{\\partial W^{(1)}} = \\frac{\\partial L}{\\partial \\hat{y}}\\cdot\\frac{\\partial \\hat{y}}{\\partial h}\\cdot\\frac{\\partial h}{\\partial z}\\cdot\\frac{\\partial z}{\\partial W^{(1)}}',
+          name: 'Backpropagation through two layers',
+          meaning:
+            'The gradient for an early weight is the product of every local derivative between it and the loss, evaluated in reverse order.',
+          variables: [
+            { symbol: 'L', meaning: 'The scalar loss' },
+            { symbol: '\\hat{y}', meaning: 'The network prediction' },
+            { symbol: 'h', meaning: 'The hidden layer activation' },
+            { symbol: 'z', meaning: 'The hidden pre-activation, before the nonlinearity' },
+            { symbol: 'W^{(1)}', meaning: 'The first-layer weight matrix whose gradient is wanted' },
+          ],
+          category: 'deep-learning',
+        },
+        {
+          latex: '\\left\\|\\frac{\\partial L}{\\partial \\mathbf{h}^{(1)}}\\right\\| \\approx \\prod_{k=2}^{K}\\left\\|\\frac{\\partial \\mathbf{h}^{(k)}}{\\partial \\mathbf{h}^{(k-1)}}\\right\\|',
+          name: 'Why gradients vanish or explode',
+          meaning:
+            'The gradient reaching the first layer is a product of K − 1 factors. Factors below 1 shrink it geometrically; factors above 1 blow it up.',
+          variables: [
+            { symbol: 'K', meaning: 'The number of layers' },
+            { symbol: '\\mathbf{h}^{(k)}', meaning: 'The activations of layer k' },
+            { symbol: '\\prod', meaning: 'Product over all the layers between the first and the loss' },
+            { symbol: '\\|\\cdot\\|', meaning: 'A norm measuring the size of each layer’s Jacobian' },
+          ],
+          category: 'deep-learning',
+        },
+      ],
+      derivation: [
+        'Why does the chain rule hold? Consider y = f(u) with u = g(x), and nudge x by a small amount Δx.',
+        'That nudge changes u by roughly Δu ≈ g′(x)·Δx, because g′ is by definition the rate at which u responds to x.',
+        'The change in u then changes y by roughly Δy ≈ f′(u)·Δu, for the same reason one level up.',
+        'Substitute the first into the second: Δy ≈ f′(u)·g′(x)·Δx.',
+        'Divide through by Δx: Δy/Δx ≈ f′(u)·g′(x) = f′(g(x))·g′(x).',
+        'Take the limit as Δx → 0. The approximations become exact, because the error terms in each linearisation are of smaller order than Δx.',
+        'Hence dy/dx = f′(g(x))·g′(x). Note where the outer derivative is evaluated: at u = g(x), the value the inner function actually produced, which is why the forward pass must be computed and cached before the backward pass can run.',
+        'The multivariable case adds one wrinkle. If x reaches z through several intermediates, each route contributes its own product, and the total is their sum — which is exactly why a weight used in several places accumulates gradient from each use rather than being overwritten.',
+      ],
+    },
+
+    workedExample: {
+      title: 'Backpropagation through a two-layer network, every number by hand',
+      setup:
+        'A network with one input, one hidden unit and one output. Forward pass: z = w₁x + b₁, h = ReLU(z), ŷ = w₂h + b₂, L = (ŷ − y)². Take x = 2, w₁ = 3, b₁ = −1, w₂ = 0.5, b₂ = 1 and target y = 4.',
+      steps: [
+        { label: 'Forward: hidden pre-activation', detail: 'z = 3(2) + (−1) = 5.', latex: 'z = w_1x + b_1 = 5' },
+        { label: 'Forward: hidden activation', detail: 'h = ReLU(5) = 5, since the input is positive.', latex: 'h = 5' },
+        { label: 'Forward: prediction', detail: 'ŷ = 0.5(5) + 1 = 3.5.', latex: '\\hat{y} = 3.5' },
+        { label: 'Forward: loss', detail: 'L = (3.5 − 4)² = 0.25. Cache every intermediate — the backward pass needs them.', latex: 'L = 0.25' },
+        { label: 'Backward: dL/dŷ', detail: 'The derivative of (ŷ − y)² with respect to ŷ is 2(ŷ − y) = 2(−0.5) = −1.', latex: '\\frac{\\partial L}{\\partial \\hat{y}} = -1' },
+        { label: 'Backward: dL/dw₂ and dL/db₂', detail: 'Since ŷ = w₂h + b₂, we have ∂ŷ/∂w₂ = h = 5 and ∂ŷ/∂b₂ = 1. So dL/dw₂ = (−1)(5) = −5 and dL/db₂ = (−1)(1) = −1.', latex: '\\frac{\\partial L}{\\partial w_2} = -5' },
+        { label: 'Backward: dL/dh', detail: '∂ŷ/∂h = w₂ = 0.5, so dL/dh = (−1)(0.5) = −0.5. The upstream gradient is multiplied by the local one.', latex: '\\frac{\\partial L}{\\partial h} = -0.5' },
+        { label: 'Backward: through the ReLU', detail: 'z = 5 > 0, so the local derivative dh/dz is 1 and the gradient passes through unchanged: dL/dz = −0.5. Had z been negative this would be 0 and everything behind it would receive nothing.', latex: '\\frac{\\partial L}{\\partial z} = -0.5' },
+        { label: 'Backward: dL/dw₁ and dL/db₁', detail: 'Since z = w₁x + b₁, ∂z/∂w₁ = x = 2 and ∂z/∂b₁ = 1. So dL/dw₁ = (−0.5)(2) = −1 and dL/db₁ = −0.5.', latex: '\\frac{\\partial L}{\\partial w_1} = -1' },
+        { label: 'Read the chain that produced dL/dw₁', detail: 'It is 2(ŷ − y) × w₂ × 1 × x = (−1)(0.5)(1)(2) = −1. Four local derivatives multiplied, exactly as the chain rule prescribes.' },
+        { label: 'Take a step', detail: 'With η = 0.1: w₁ ← 3 − 0.1(−1) = 3.1, w₂ ← 0.5 − 0.1(−5) = 1.0. Forward again: z = 5.2, h = 5.2, ŷ = 1.0(5.2) + 1.1 = 6.3. Overshot, because w₂ moved a long way; the new loss is 5.29.' },
+      ],
+      conclusion:
+        'Every gradient came from multiplying local derivatives along the path back from the loss, and each one needed a value cached during the forward pass. The final step also illustrates something real: a learning rate of 0.1 was too large for the second-layer weight, whose gradient was five times bigger than the first-layer weight’s, which is precisely the imbalance adaptive optimisers correct.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'The chain rule, verified numerically',
+        runnable: true,
+        code: `import numpy as np
+
+def f(x):  return (3 * x + 1) ** 5
+def df(x): return 15 * (3 * x + 1) ** 4      # 5(3x+1)^4 * 3
+
+x0, h = 0.5, 1e-6
+numeric = (f(x0 + h) - f(x0 - h)) / (2 * h)
+print("analytic:", df(x0))
+print("numeric :", round(numeric, 6))
+
+def g(x):  return np.exp(x ** 2)
+def dg(x): return 2 * x * np.exp(x ** 2)     # outer e^u times inner 2x
+print("exp case analytic:", round(float(dg(x0)), 8),
+      " numeric:", round(float((g(x0 + h) - g(x0 - h)) / (2 * h)), 8))`,
+        output: `analytic: 585.9375
+numeric : 585.937501
+exp case analytic: 1.28402542  numeric: 1.28402542`,
+        explanation:
+          'Both analytic derivatives match a central-difference check, confirming the chain rule applications. The common mistake in the first case is stopping at 5(3x + 1)⁴ and forgetting the inner derivative of 3, which would give an answer five times too small — numerically checking a hand derivation is the cheapest way to catch exactly that.',
+      },
+      {
+        language: 'python',
+        title: 'Backpropagation by hand, matching autograd',
+        runnable: true,
+        code: `import torch
+
+x, y = 2.0, 4.0
+w1 = torch.tensor(3.0,  requires_grad=True)
+b1 = torch.tensor(-1.0, requires_grad=True)
+w2 = torch.tensor(0.5,  requires_grad=True)
+b2 = torch.tensor(1.0,  requires_grad=True)
+
+z    = w1 * x + b1
+h    = torch.relu(z)
+yhat = w2 * h + b2
+loss = (yhat - y) ** 2
+loss.backward()
+
+print("forward:", f"z={z.item()} h={h.item()} yhat={yhat.item()} L={loss.item()}")
+print("dL/dw2 =", w2.grad.item(), " by hand -5.0")
+print("dL/db2 =", b2.grad.item(), " by hand -1.0")
+print("dL/dw1 =", w1.grad.item(), " by hand -1.0")
+print("dL/db1 =", b1.grad.item(), " by hand -0.5")`,
+        output: `forward: z=5.0 h=5.0 yhat=3.5 L=0.25
+dL/dw2 = -5.0  by hand -5.0
+dL/db2 = -1.0  by hand -1.0
+dL/dw1 = -1.0  by hand -1.0
+dL/db1 = -0.5  by hand -0.5`,
+        explanation:
+          'Every gradient matches the hand computation exactly, because autograd is doing precisely what we did: recording each operation during the forward pass and then multiplying local derivatives in reverse. There is no approximation and no magic — the framework simply automates a bookkeeping task that is error-prone by hand once the network has more than a few nodes.',
+      },
+      {
+        language: 'python',
+        title: 'Why deep sigmoid stacks stop learning',
+        runnable: true,
+        code: `import numpy as np
+
+def sigmoid(z): return 1 / (1 + np.exp(-z))
+
+rng = np.random.default_rng(0)
+a = rng.normal(size=64) * 0.5
+grad = 1.0
+
+for layer in range(1, 21):
+    W = rng.normal(scale=0.5, size=(64, 64))
+    z = W @ a
+    a = sigmoid(z)
+    local = np.mean(sigmoid(z) * (1 - sigmoid(z)))     # mean sigmoid derivative
+    grad *= local
+    if layer % 5 == 0:
+        print(f"after {layer:2d} layers: mean local deriv={local:.4f}  "
+              f"accumulated factor={grad:.3e}")`,
+        output: `after  5 layers: mean local deriv=0.1876  accumulated factor=1.545e-04
+after 10 layers: mean local deriv=0.1702  accumulated factor=2.163e-08
+after 15 layers: mean local deriv=0.1723  accumulated factor=2.871e-12
+after 20 layers: mean local deriv=0.1746  accumulated factor=4.017e-16`,
+        explanation:
+          'Each sigmoid contributes a factor averaging well under 0.25, and the chain rule multiplies them, so after twenty layers the gradient reaching the first layer is scaled by about 4e-16 — indistinguishable from zero in float32. The first layers therefore never learn. Swapping the sigmoid for ReLU, whose local derivative is exactly 1 wherever the unit is active, keeps the product near 1 and is the single change that made deep networks trainable.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'Every call to loss.backward()',
+        usage:
+          'PyTorch walks the recorded graph in reverse topological order, multiplying each node’s upstream gradient by its local derivative. That is the chain rule executed mechanically.',
+      },
+      {
+        context: 'Vanishing and exploding gradients',
+        usage:
+          'Both are direct consequences of the chain rule being a product: many small factors annihilate the signal, many large ones blow it up. Residual connections add an identity path whose local derivative is 1, keeping a route open.',
+      },
+      {
+        context: 'Adversarial example generation',
+        usage:
+          'The fast gradient sign method backpropagates all the way through the network to the input pixels, using the same chain of local derivatives but stopping at the image rather than the weights.',
+      },
+      {
+        context: 'Differentiable rendering and physics simulation',
+        usage:
+          'A whole simulator is written from differentiable primitives so that the chain rule can propagate a loss defined on the output back to the physical parameters that produced it.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'PyTorch', role: 'Autograd records the graph and applies the chain rule in reverse; custom Functions require you to supply the local gradient yourself.' },
+      { tool: 'JAX', role: 'grad, vjp and jvp expose reverse and forward mode directly, and are composable to arbitrary order.' },
+      { tool: 'TensorFlow', role: 'GradientTape records operations in a context manager, then tape.gradient walks them backwards.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Forgetting the inner derivative',
+        why: 'Differentiating the outer function looks like the whole job, so the final multiplication is skipped.',
+        fix: 'Name the inner function explicitly as u before differentiating. The derivative of (3x + 1)⁵ is 5(3x + 1)⁴ × 3, not 5(3x + 1)⁴.',
+      },
+      {
+        mistake: 'Evaluating the outer derivative at x instead of at g(x)',
+        why: 'The Lagrange notation f′(g(x)) is easy to misread as f′(x).',
+        fix: 'The outer derivative must be evaluated at the value the inner function actually produced. This is exactly why the forward pass must be computed and cached before the backward pass.',
+      },
+      {
+        mistake: 'Overwriting rather than summing gradients when a variable is used more than once',
+        why: 'The single-variable chain rule is a product, so the sum over paths in the multivariable case is easy to overlook.',
+        fix: 'Contributions from every path add. Frameworks accumulate into .grad for this reason, which is also why you must zero gradients between optimisation steps rather than relying on assignment.',
+      },
+      {
+        mistake: 'Calling backward() twice without retain_graph',
+        why: 'PyTorch frees the intermediate values after the backward pass to save memory, and those values are exactly what the chain rule needs.',
+        fix: 'Either recompute the forward pass, or pass retain_graph=True when you genuinely need a second backward pass through the same graph.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'State the chain rule and explain why backpropagation is just the chain rule.',
+        answer:
+          'The chain rule says that for a composition, (f ∘ g)′(x) = f′(g(x))·g′(x): rates of change multiply along a chain, with the outer derivative evaluated at the inner function’s output. A neural network is a long composition — input into layer one, into an activation, into layer two, and finally into the loss — so the derivative of the loss with respect to any weight is the product of the local derivatives along the path from that weight to the loss. Backpropagation computes those products efficiently by working backwards from the loss: each node receives the derivative of the loss with respect to its own output, multiplies by its local derivative, and passes the result to its inputs. Doing it in this direction means every shared prefix of the chain is computed once rather than once per parameter, which is why the entire gradient costs about as much as one forward pass instead of one forward pass per weight.',
+        followUp:
+          'A strong answer mentions that when a variable feeds several downstream nodes the contributions are summed, which is the multivariable form of the rule and the reason frameworks accumulate into .grad.',
+      },
+      {
+        level: 'advanced',
+        question: 'Explain vanishing gradients in terms of the chain rule, and how modern architectures avoid them.',
+        answer:
+          'The gradient reaching an early layer is a product of one Jacobian factor per intervening layer. If those factors typically have norm below 1, the product shrinks geometrically with depth: sigmoid derivatives are at most 0.25, so twenty sigmoid layers scale the gradient by at most 0.25²⁰, under 1e-12, and the early layers receive no usable signal. If the factors exceed 1, the product explodes instead. Architectures respond by keeping the factors near 1. ReLU has derivative exactly 1 wherever the unit is active, so no shrinkage occurs on the active path. Residual connections compute h + f(h), whose Jacobian is I + J_f, guaranteeing an identity route with derivative 1 straight back through the network however deep it is. Normalisation layers keep activations in a regime where derivatives are not saturated. LSTM and GRU gates create an additive memory path that avoids repeated multiplication by the same recurrent matrix. And for the exploding case, gradient clipping bounds the step without changing its direction.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Why is reverse-mode automatic differentiation used for neural networks rather than forward mode?',
+        answer:
+          'Because of the shape of the problem. Forward mode propagates derivatives from inputs towards outputs and costs one sweep per input variable; reverse mode propagates from outputs backwards and costs one sweep per output. A neural network has an enormous number of inputs to differentiate with respect to — every parameter, often billions — and exactly one output, the scalar loss. So reverse mode needs one sweep, while forward mode would need a billion. Concretely, reverse mode computes the full gradient at roughly two to three times the cost of the forward pass, independent of parameter count. The trade-off is memory: reverse mode must retain the intermediate activations from the forward pass to evaluate local derivatives at the right points, which is why activation memory dominates GPU usage during training and why gradient checkpointing, which recomputes activations instead of storing them, is a standard memory-saving technique. Forward mode is the better choice in the opposite regime, few inputs and many outputs, such as sensitivity analysis with respect to one or two hyperparameters.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt: 'Differentiate y = (2x³ + 5)⁴ and evaluate at x = 1.',
+        hint: 'Let u = 2x³ + 5. Differentiate u⁴ with respect to u, then multiply by du/dx.',
+        solution:
+          'dy/du = 4u³ = 4(2x³ + 5)³ and du/dx = 6x². Multiplying: dy/dx = 24x²(2x³ + 5)³. At x = 1: u = 7, so dy/dx = 24(1)(343) = 8232. The step people miss is the 6x²; stopping at 4(2x³+5)³ would give 1372, six times too small at this point.',
+      },
+      {
+        prompt: 'For a chain z = w·x, h = σ(z), L = (h − y)², write dL/dw as a product of three local derivatives and evaluate for w = 1, x = 2, y = 0.',
+        hint: 'Work backwards: dL/dh, then dh/dz, then dz/dw.',
+        solution:
+          'dL/dw = 2(h − y) × σ(z)(1 − σ(z)) × x. With w = 1 and x = 2, z = 2 and σ(2) = 0.8808. So dL/dh = 2(0.8808 − 0) = 1.7616; dh/dz = 0.8808(0.1192) = 0.1050; dz/dw = 2. The product is 1.7616 × 0.1050 × 2 = 0.3699. Notice the sigmoid factor of 0.105 has already cut the gradient by an order of magnitude at a single layer, which previews the vanishing gradient problem.',
+      },
+      {
+        prompt: 'A weight w is used in two different places in a network, contributing to the loss via paths giving ∂L/∂w of 0.3 and −0.8 respectively. What is the total gradient, and what does this tell you about how frameworks store gradients?',
+        hint: 'The multivariable chain rule sums over paths.',
+        solution:
+          'The total is 0.3 + (−0.8) = −0.5. Contributions from distinct paths add rather than replacing one another, because the multivariable chain rule sums over every route from the variable to the output. This is exactly why PyTorch accumulates into .grad with += rather than assigning: weight sharing, as in a convolutional kernel applied at every spatial position or an embedding matrix used for several tokens, depends on that accumulation. It is also why you must call zero_grad() at the start of each step, since otherwise the previous step’s gradient is still sitting there waiting to be added to.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'MATH-015-q1',
+        type: 'mcq',
+        concept: 'applying the chain rule',
+        prompt: 'What is the derivative of (3x + 1)⁵?',
+        options: [
+          '15(3x + 1)⁴',
+          '5(3x + 1)⁴',
+          '5(3x + 1)⁴ + 3',
+          '15(3x + 1)⁵',
+        ],
+        answerIndex: 0,
+        explanation:
+          'The outer derivative gives 5(3x + 1)⁴ and the inner derivative of 3x + 1 is 3. Multiplying gives 15(3x + 1)⁴; forgetting the factor of 3 is the standard error.',
+      },
+      {
+        id: 'MATH-015-q2',
+        type: 'numeric',
+        concept: 'multiplying rates',
+        prompt: 'If dy/du = 4 and du/dx = 0.5, what is dy/dx?',
+        answer: 2,
+        explanation:
+          'Rates multiply along a chain: dy/dx = 4 × 0.5 = 2. This is the whole content of the chain rule in one line.',
+      },
+      {
+        id: 'MATH-015-q3',
+        type: 'truefalse',
+        concept: 'backpropagation',
+        prompt: 'Backpropagation is a fundamentally different algorithm from the chain rule.',
+        answer: false,
+        explanation:
+          'False. Backpropagation is the chain rule applied systematically in reverse through a computational graph, with intermediate results cached and reused so the whole gradient costs about one extra forward pass.',
+      },
+      {
+        id: 'MATH-015-q4',
+        type: 'order',
+        concept: 'backward pass order',
+        prompt: 'Order the steps of computing dL/dw₁ in the network z = w₁x + b₁, h = ReLU(z), ŷ = w₂h + b₂, L = (ŷ − y)².',
+        items: [
+          'Run the forward pass and cache z, h and ŷ',
+          'Compute dL/dŷ = 2(ŷ − y)',
+          'Multiply by dŷ/dh = w₂ to get dL/dh',
+          'Multiply by dh/dz, which is 1 if z > 0 and 0 otherwise',
+          'Multiply by dz/dw₁ = x to get dL/dw₁',
+        ],
+        explanation:
+          'The forward pass must come first, because every local derivative is evaluated at values it produced. Then each backward step multiplies the upstream gradient by one local derivative.',
+      },
+      {
+        id: 'MATH-015-q5',
+        type: 'multi',
+        concept: 'gradient pathologies',
+        prompt: 'Which of these follow from the chain rule being a product of local derivatives?',
+        options: [
+          'Gradients can vanish exponentially with depth',
+          'Gradients can explode exponentially with depth',
+          'A zero local derivative blocks all gradient behind it',
+          'Gradients are always bounded between 0 and 1',
+          'Residual connections help by providing a path with local derivative 1',
+        ],
+        answerIndices: [0, 1, 2, 4],
+        explanation:
+          'Products of many small factors vanish, products of many large ones explode, a single zero factor annihilates the whole product, and an identity path keeps one factor at exactly 1. Nothing bounds gradients to [0, 1] in general.',
+      },
+      {
+        id: 'MATH-015-q6',
+        type: 'explain',
+        concept: 'backprop as chain rule',
+        prompt: 'Explain to a colleague why backpropagation is efficient, in terms of the chain rule.',
+        rubric: [
+          'Says the network is a composition, so weight gradients are products of local derivatives',
+          'Says working backwards from the loss reuses shared portions of those products',
+          'Notes that one backward sweep yields every parameter gradient, at a cost comparable to a forward pass',
+        ],
+        sampleAnswer:
+          'A network is a chain of functions, so the derivative of the loss with respect to any weight is the product of the local derivatives along the path from that weight forward to the loss. Computing each of those products independently would be enormously wasteful, because a weight in layer one and a weight in layer two share almost the whole path back to the loss. Backpropagation exploits that by starting at the loss and moving backwards: each node receives the derivative of the loss with respect to its own output, multiplies by its own local derivative, and hands the result to its inputs. The shared portion is therefore computed exactly once and reused by everything behind it. The result is that a single backward sweep produces the gradient for every parameter, at a cost of roughly one to two extra forward passes regardless of whether the model has a thousand parameters or a billion. The price is memory, since the intermediate activations from the forward pass must be kept so each local derivative can be evaluated at the right point.',
+        explanation:
+          'A strong answer identifies reuse of shared subexpressions as the source of the efficiency, and names the memory cost as the trade-off.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'State the chain rule.', back: "(f∘g)'(x) = f'(g(x))·g'(x). Rates multiply along a chain, with the outer derivative evaluated at the inner output." },
+      { front: 'Derivative of (3x + 1)⁵?', back: '15(3x + 1)⁴ — the outer 5(3x+1)⁴ times the inner derivative 3.' },
+      { front: 'What is backpropagation?', back: 'The chain rule applied in reverse through a computational graph, reusing shared subexpressions.' },
+      { front: 'What happens when a variable feeds several nodes?', back: 'The gradient contributions from all paths are summed, which is why frameworks accumulate into .grad.' },
+      { front: 'Why do gradients vanish in deep sigmoid networks?', back: 'Each sigmoid contributes a factor of at most 0.25 and the chain rule multiplies them, so depth shrinks the gradient geometrically.' },
+      { front: 'Why reverse mode rather than forward mode?', back: 'One scalar loss and a billion parameters: reverse mode needs one sweep per output, forward mode one per input.' },
+    ],
+
+    challenge: {
+      title: 'Build a miniature autograd engine',
+      brief:
+        'Implement a Value class supporting addition, multiplication, power, exp and ReLU, each recording its children and a local backward function. Add a backward() method that topologically sorts the graph and applies the chain rule in reverse, accumulating into a .grad field. Use it to train the two-layer network from the worked example and confirm the gradients match PyTorch.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Supports at least +, *, ** and one nonlinearity, with correct local derivatives',
+        'Accumulates rather than overwrites gradients when a Value is used more than once',
+        'Topologically sorts the graph before the backward sweep',
+        'Reproduces dL/dw1 = −1.0 and dL/dw2 = −5.0 for the worked example',
+      ],
+      starterCode: 'class Value:\n    def __init__(self, data, children=()):\n        self.data = data\n        self.grad = 0.0\n        self._children = children\n        self._backward = lambda: None\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Explain the chain rule to someone who can differentiate x³ but freezes when they see (x³ + 1)⁷, then connect it to how neural networks learn.',
+      mustCover: [
+        'When one quantity affects another which affects a third, the rates multiply',
+        'Identify the inner and outer functions, differentiate each, and multiply',
+        'The outer derivative is evaluated at the inner function’s value',
+        'Backpropagation is this rule applied in reverse through a network',
+      ],
+      bonusSignals: ['uses the gear train or currency conversion image', 'mentions summing over paths when a variable is reused', 'connects the product to vanishing gradients'],
+      sampleExplanation:
+        'Here is the whole idea in one sentence: when one thing affects a second which affects a third, the overall sensitivity is the product of the two sensitivities. If a pound buys 1.2 euros and a euro buys 160 yen, then a pound buys 192 yen — you multiply the rates and never need a direct rate. Apply that to (x³ + 1)⁷. There are two machines here: the inner one computes x³ + 1, and the outer one raises whatever it receives to the seventh power. Ask how fast the outer machine responds to its input: seven times its input to the sixth, so 7(x³ + 1)⁶. Ask how fast the inner one responds to x: 3x². Multiply and you have 21x²(x³ + 1)⁶. The only thing to be careful about is that the outer derivative is evaluated at whatever the inner machine actually produced, not at x itself. Now the payoff. A neural network is precisely a long chain of such machines: the input feeds a layer, which feeds an activation, which feeds another layer, which finally produces a loss. To know how a weight buried deep inside affects the loss you multiply the rates along the path from it to the loss — and that is all backpropagation is, done backwards from the loss so that the shared parts of the chain are computed once rather than once per weight. It also explains a famous problem: if each link contributes a factor well under one, then after twenty links the product is nearly zero, and the earliest layers learn nothing at all.',
+    },
+  },
+];

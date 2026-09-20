@@ -1,5 +1,5 @@
 import { ALL_UNITS, UNIT_BY_ID, allUnitMeta, type UnitMeta } from '@/data/curriculum';
-import { DOMAINS, type Domain } from '@/data/domains';
+import { DOMAINS } from '@/data/domains';
 import { bucketFor, computeMastery, isWeak, requirementsFor } from '@/features/progress/mastery';
 import {
   buildRecoveryPlan, buildSchedule, computePace, COURSE_END, COURSE_START,
@@ -10,7 +10,7 @@ import { effectiveStreak } from '@/features/streak/streak';
 import { levelFor, type LevelState } from '@/features/xp/levels';
 import { addDays, dateKey, daysBetween } from '@/lib/format';
 import type { FullState } from '@/lib/sync/state';
-import type { DomainId, LearningUnit } from '@/types/curriculum';
+import type { Domain, DomainId, LearningUnit } from '@/types/curriculum';
 import {
   emptyUnitProgress, type DayActivity, type MasteryLevel, type ProgressBucket, type UnitProgress,
 } from '@/types/progress';

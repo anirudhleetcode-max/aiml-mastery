@@ -21,7 +21,11 @@ const warnings: string[] = [];
 const err = (unit: string, msg: string) => errors.push(`${unit}: ${msg}`);
 const warn = (unit: string, msg: string) => warnings.push(`${unit}: ${msg}`);
 
-const PLACEHOLDER = /\b(coming soon|lorem ipsum|placeholder|tbd|fixme|xxx+)\b/i;
+/* Stub detection. Deliberately narrow: "placeholder" and "dummy" are real
+   technical vocabulary (a placeholder variable, a sentinel node), so the gate
+   matches stub *phrases* rather than lone words that happen to be jargon. */
+const PLACEHOLDER =
+  /\b(coming soon|lorem ipsum|content pending|fill (this|me) in|write (this|me) later|tbd|fixme|xxx{2,})\b/i;
 const TODO = /\bTODO\b/;
 const WIDGETS = new Set<string>(WIDGET_IDS);
 

@@ -6968,3 +6968,619 @@ patient-wise split (fair): 0.850`,
         'You rarely get to measure everything, so you measure a part and hope it resembles the whole. Whether it does depends entirely on how you chose that part, and this is where two completely different kinds of error live. The first is noise: even a perfectly fair sample will be a bit off from the population by luck, and that error shrinks in a predictable way — quadruple the sample and you halve the error. The second is bias: if the way you selected quietly favoured some members over others, your sample is the wrong shape, and here is the part that matters, collecting more of it does not help at all. In 1936 a magazine polled two point four million people and predicted the wrong winner by a landslide, because it sampled from car and telephone registers during the Depression; Gallup got it right with fifty thousand people chosen properly. More data made the magazine more confident and no more correct. The most elegant example of bias is Abraham Wald\'s. Asked where to armour bombers, the military pointed at the bullet holes on returning planes. Wald pointed out that those were the planes that came back — the ones hit in the engines were at the bottom of the sea — so the armour belonged exactly where the survivors showed no damage. Now bring this to machine learning, where it is the same problem wearing different clothes. Your test set is a sample, and it only tells you about deployment if it was drawn the way deployment data arrives. If your images are all from winter, your accuracy estimate is about winter. If you split rows randomly when ten scans belong to one patient, the model memorises patients and your score is inflated. If your data comes only from users who already clicked, you have Wald\'s bombers. And notice that no confidence interval will warn you about any of this, because an interval measures only the noise.',
     },
   },
+
+  {
+    id: 'STAT-013',
+    domain: 'STAT',
+    module: 'Sampling & Inference',
+    topic: 'The central limit theorem',
+    title: 'The Central Limit Theorem',
+    slug: 'central-limit-theorem',
+    difficulty: 4,
+    estimatedMinutes: 40,
+    prerequisites: ['STAT-010', 'STAT-012'],
+    related: ['STAT-006', 'STAT-008', 'STAT-010'],
+    tags: ['central limit theorem', 'sampling distribution', 'standard error', 'law of large numbers'],
+
+    learningObjectives: [
+      'State the central limit theorem precisely, including what it says about the mean, the spread and the shape',
+      'Distinguish the sampling distribution of a statistic from the distribution of the raw data',
+      'Compute a standard error and explain the square-root-of-n relationship and its cost',
+      'Say what the theorem does not promise: when it fails, how fast it converges, and what it never claims about raw data',
+    ],
+
+    terminology: [
+      {
+        term: 'Sampling distribution',
+        definition:
+          'The distribution of a statistic — usually the sample mean — over all possible samples of a given size from a population. It is a distribution of estimates, not of observations.',
+        simple: 'If you repeated the whole study many times, the spread of answers you would get.',
+      },
+      {
+        term: 'Standard error',
+        definition:
+          'The standard deviation of a sampling distribution. For the sample mean it is sigma over the square root of n.',
+        simple: 'How much your estimate would wobble if you redid the study.',
+      },
+      {
+        term: 'Central limit theorem',
+        definition:
+          'The sampling distribution of the mean of n independent, identically distributed observations with finite variance approaches a normal distribution as n grows, whatever the shape of the population.',
+        simple: 'Averages become bell-shaped even when the thing you are averaging is not.',
+      },
+      {
+        term: 'Law of large numbers',
+        definition:
+          'The sample mean converges to the population mean as n grows. It says where the estimate lands; the central limit theorem says how it is scattered around that point.',
+        simple: 'With enough data the average settles on the truth.',
+      },
+      {
+        term: 'Convergence rate',
+        definition:
+          'How quickly the sampling distribution approaches normality. It depends on the skewness and kurtosis of the population, not only on n.',
+        simple: 'How much data you need before the bell shape actually appears.',
+      },
+    ],
+
+    simpleExplanation:
+      'Here is a result that ought to be impossible. Take any population at all — incomes with a monstrous right tail, a coin that is either 0 or 1, waiting times that pile up near zero — and draw a sample from it, then compute the average. Do that many times and plot those averages. Regardless of what the original data looked like, the averages form a bell curve. The individual values can be as lopsided as you like and the averages come out symmetric and normal. The reason is that averaging is summing, and extreme values in a sum have to be cancelled by ordinary ones to survive; a sample average is only extreme if most of its members conspired, which is rare. Two things follow, and they are the foundation of everything in the next two units. First, the averages centre on the true population mean. Second, their spread is the population spread divided by the square root of the sample size — so uncertainty shrinks as you collect more, but slowly, and you need four times the data to halve it.',
+
+    whyItExists:
+      'Without it, every inference would require knowing the exact distribution of the population, which is never available. The theorem lets you compute standard errors, confidence intervals and hypothesis tests for the mean of essentially any population, which is why the same handful of procedures works across every field that uses statistics.',
+
+    analogy: {
+      scenario:
+        'Imagine a town where most people earn a modest wage and a few earn enormous sums, so a histogram of incomes is a tall spike near the left with a long thin tail stretching right. Now send out surveyors, each of whom stops 50 random people and reports the average income of their 50. Most surveyors will meet 50 ordinary earners and report something close to the typical average. A surveyor who happens to catch one millionaire will report higher, but that one salary is divided by 50, so it moves the average far less than it moved the raw histogram. To report a really extreme average, a surveyor would need several millionaires in one group of 50, which almost never happens. Collect all the surveyors\' reports and they form a symmetric bell — from a population that was anything but.',
+      mapping: [
+        { from: 'The lopsided income histogram', to: 'The population distribution, which can be any shape' },
+        { from: 'One surveyor stopping 50 people', to: 'One sample of size n = 50' },
+        { from: 'That surveyor\'s reported average', to: 'One draw from the sampling distribution of the mean' },
+        { from: 'The histogram of all surveyors\' reports', to: 'The sampling distribution, which is approximately normal' },
+        { from: 'A millionaire\'s salary being divided by 50', to: 'Why extremes are damped: dividing by n shrinks every contribution' },
+        { from: 'Needing several millionaires to move the average', to: 'Why the tails of the sampling distribution are thin' },
+      ],
+      bridge:
+        'The damping is exactly the square-root-of-n rule. Each observation contributes 1/n of its deviation, and because the deviations are independent they partly cancel, so the standard deviation of the average is sigma/root n rather than sigma/n or sigma. The analogy also makes the failure case visible: if one person in the town earned more than everybody else combined, no amount of averaging would damp them, and that is precisely the condition — infinite or near-infinite variance — under which the theorem does not apply.',
+      limitations:
+        'The story assumes surveyors sample independently and that the town does not change while they work. If surveyors all work one wealthy street, or if incomes shift mid-survey, the sampling distribution is still centred somewhere but no longer on the town\'s true mean. The theorem addresses noise, never bias.',
+    },
+
+    visuals: [
+      {
+        kind: 'widget',
+        title: 'Run the theorem yourself',
+        caption: 'Pick a deliberately hideous population — heavily skewed, or a two-humped mixture — then increase the sample size and watch the histogram of sample means straighten into a bell while the population histogram stays exactly as ugly as it was.',
+        widget: 'clt-sim',
+      },
+      {
+        kind: 'compare',
+        title: 'The population distribution versus the sampling distribution',
+        caption: 'Confusing these two is the single most common misunderstanding of the theorem.',
+        left: {
+          heading: 'Distribution of the data',
+          points: [
+            'One dot per observation',
+            'Whatever shape the world produced: skewed, bimodal, discrete',
+            'Spread is sigma, the population standard deviation',
+            'Does not change shape as you collect more data',
+            'Example: individual incomes, heavily right-skewed',
+          ],
+        },
+        right: {
+          heading: 'Sampling distribution of the mean',
+          points: [
+            'One dot per *sample*, each dot an average of n observations',
+            'Approximately normal once n is reasonably large',
+            'Spread is sigma/root n, the standard error',
+            'Narrows as n grows, and becomes more bell-shaped',
+            'Example: average income of 500 randomly chosen people',
+          ],
+        },
+      },
+      {
+        kind: 'flow',
+        title: 'What the theorem actually asserts',
+        caption: 'Three claims, and they are about different things.',
+        steps: [
+          { label: 'Centre', detail: 'The sampling distribution of the mean is centred on the true population mean mu. The estimator is unbiased.' },
+          { label: 'Spread', detail: 'Its standard deviation — the standard error — is sigma divided by the square root of n.' },
+          { label: 'Shape', detail: 'Its shape approaches normal as n grows, whatever shape the population had.' },
+          { label: 'Conditions', detail: 'Observations independent, identically distributed, and the population variance finite.' },
+          { label: 'What it does not say', detail: 'Nothing about the raw data becoming normal, and nothing about bias.' },
+        ],
+      },
+      {
+        kind: 'table',
+        title: 'How large must n be? It depends on the population',
+        caption: 'The "n = 30" rule of thumb is a convenience, not a theorem, and it fails badly on heavy tails.',
+        columns: ['Population shape', 'Example', 'Roughly adequate n', 'Why'],
+        rows: [
+          ['Already normal', 'Measurement error', '1', 'The mean of normals is exactly normal at any n'],
+          ['Symmetric, light tails', 'Uniform, fair die', '5 to 10', 'Symmetry means nothing to correct'],
+          ['Moderately skewed', 'Exponential waiting times', '30 to 50', 'The skew of the mean falls like 1/root n'],
+          ['Heavily skewed', 'Income, latency, log-normal', 'hundreds to thousands', 'Rare extreme values dominate until n is large'],
+          ['Rare binary events', 'p = 0.001 conversions', 'np at least 10, so n above 10,000', 'Otherwise most samples contain no events at all'],
+          ['Infinite variance', 'Cauchy, some power laws', 'Never', 'The theorem does not apply; the mean of Cauchy is Cauchy'],
+        ],
+      },
+      {
+        kind: 'annotated',
+        title: 'Anatomy of the standard error',
+        subject: 'SE = sigma / sqrt(n)',
+        annotations: [
+          { part: 'sigma', note: 'The population standard deviation. More variable data means a noisier estimate, proportionally.' },
+          { part: 'n', note: 'The sample size. It is the only part you control.' },
+          { part: 'sqrt', note: 'The square root is the expensive part: to halve the error you need four times the data.' },
+          { part: 'SE', note: 'The typical distance between your sample mean and the truth. Not the spread of the data — the spread of the estimate.' },
+        ],
+      },
+    ],
+
+    formalDefinition:
+      'Let X_1 through X_n be independent and identically distributed random variables with finite mean mu and finite variance sigma squared. Let X-bar_n denote their average. Then the standardised quantity root n times (X-bar_n - mu) divided by sigma converges in distribution to the standard normal as n tends to infinity. Equivalently, for large n the sample mean is approximately normal with mean mu and standard deviation sigma over root n. The result requires finite variance but makes no assumption whatsoever about the shape of the underlying distribution; the Berry-Esseen theorem bounds the approximation error by a constant times the third absolute moment divided by sigma cubed times root n, which is why skewed populations converge more slowly.',
+
+    math: {
+      intuition:
+        'Two separate facts are being combined. The law of large numbers says the sample mean homes in on the population mean — it tells you where. The central limit theorem tells you how the estimate is scattered around that point, and remarkably, the scatter has the same bell shape regardless of the population. The reason is cancellation: a sample mean can only be extreme if many of its observations are extreme in the same direction, and independent observations rarely conspire. That is also why the standard error has a square root in it: the deviations partly cancel, so the total error grows like root n while the number of observations grows like n, and the average error therefore falls like 1 over root n.',
+      formulas: [
+        {
+          latex: '\\bar{X}_n \;\\xrightarrow{\;d\;}\; N\\!\\left(\\mu,\; \\frac{\\sigma^2}{n}\\right) \\quad \\text{as } n \\to \\infty',
+          name: 'Central limit theorem',
+          meaning:
+            'For large n the sample mean behaves like a normal variable centred on the population mean with variance sigma squared over n, whatever the population looked like.',
+          variables: [
+            { symbol: '\\bar{X}_n', meaning: 'the sample mean of n independent observations' },
+            { symbol: '\\mu', meaning: 'the population mean, which the sampling distribution is centred on' },
+            { symbol: '\\sigma^2', meaning: 'the population variance of a single observation' },
+            { symbol: '\\sigma^2/n', meaning: 'the variance of the sample mean, which shrinks as the sample grows' },
+            { symbol: '\\xrightarrow{d}', meaning: 'convergence in distribution: the shape approaches normal, it does not become exactly normal at finite n' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\operatorname{SE}(\\bar{X}) = \\frac{\\sigma}{\\sqrt{n}}, \\qquad \\widehat{\\operatorname{SE}} = \\frac{s}{\\sqrt{n}}',
+          name: 'Standard error of the mean',
+          meaning:
+            'The standard deviation of the sampling distribution. In practice sigma is unknown, so the sample standard deviation s is substituted.',
+          variables: [
+            { symbol: '\\sigma', meaning: 'the population standard deviation of individual observations' },
+            { symbol: 's', meaning: 'the sample standard deviation, used as an estimate of sigma' },
+            { symbol: 'n', meaning: 'the sample size' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: 'Z_n = \\frac{\\bar{X}_n - \\mu}{\\sigma/\\sqrt{n}} \;\\xrightarrow{\;d\;}\; N(0, 1)',
+          name: 'Standardised form',
+          meaning:
+            'Standardising the sample mean by its own standard error gives a quantity that is approximately standard normal — the basis of every z-test and z-interval.',
+          variables: [
+            { symbol: 'Z_n', meaning: 'the standardised sample mean: how many standard errors the estimate sits from the truth' },
+            { symbol: '\\sigma/\\sqrt{n}', meaning: 'the standard error, used here as the natural unit of distance' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\operatorname{SE}(\\hat{p}) = \\sqrt{\\frac{p(1-p)}{n}}',
+          name: 'Standard error of a proportion',
+          meaning:
+            'The special case for binary outcomes, since a proportion is just the mean of zeros and ones with population variance p(1 - p).',
+          variables: [
+            { symbol: '\\hat{p}', meaning: 'the observed sample proportion' },
+            { symbol: 'p', meaning: 'the true population proportion' },
+            { symbol: 'p(1-p)', meaning: 'the variance of a single Bernoulli trial, maximised at p = 0.5' },
+          ],
+          category: 'statistics',
+        },
+        {
+          latex: '\\bigl|F_n(x) - \\Phi(x)\\bigr| \;\\le\; \\frac{C\\,\\rho}{\\sigma^3\\sqrt{n}}',
+          name: 'Berry-Esseen bound',
+          meaning:
+            'A precise statement of how fast the approximation improves. The error falls like one over root n but is scaled by the population skewness, which is why skewed data need far more of it.',
+          variables: [
+            { symbol: 'F_n', meaning: 'the true CDF of the standardised sample mean at sample size n' },
+            { symbol: '\\Phi', meaning: 'the standard normal CDF it is approaching' },
+            { symbol: '\\rho', meaning: 'the third absolute central moment of the population — a measure of asymmetry and tail weight' },
+            { symbol: 'C', meaning: 'a universal constant, known to be below 0.5' },
+          ],
+          category: 'statistics',
+        },
+      ],
+      derivation: [
+        'Why sigma over root n? Start with the sample mean written as (1/n) times the sum of X_1 through X_n.',
+        'Each observation has variance sigma squared, and they are independent, so the variance of the sum is n sigma squared.',
+        'The scaling rule says Var(aX) = a^2 Var(X). Here a is 1/n.',
+        'So Var(X-bar) = (1/n^2)(n sigma^2) = sigma^2/n.',
+        'Taking the square root gives the standard error, sigma over root n.',
+        'Notice where independence entered: it is the step where variances were allowed to add. If observations are correlated — repeated measurements on the same user, or autocorrelated time series — the variance of the sum includes covariance terms and the true standard error is larger, sometimes by a great deal.',
+        'For the shape claim, the standard proof takes the characteristic function of the standardised sum, expands it to second order, and shows the limit is exp(-t^2/2), which is the characteristic function of the standard normal. What matters for intuition is that only the first two moments survive the limit, which is exactly why the population shape stops mattering.',
+      ],
+    },
+
+    workedExample: {
+      title: 'A deliberately hideous population, averaged',
+      setup:
+        'Consider a population of session durations that is about as far from normal as you can arrange: 90% of sessions last around 5 seconds and 10% last around 300 seconds. The distribution has two separated humps, is violently right-skewed, and no single observation ever lands near the mean. We will compute the population parameters exactly, then see what happens to the sample mean at increasing sample sizes.',
+      steps: [
+        {
+          label: 'Population mean, by the weighted-sum definition',
+          detail: 'Expectation is a probability-weighted average, so mix the two components by their weights.',
+          latex: '\\mu = 0.9(5) + 0.1(300) = 4.5 + 30 = 34.5 \\text{ seconds}',
+        },
+        {
+          label: 'Note that the mean describes nobody',
+          detail: 'No session lasts 34.5 seconds. The mean sits in the empty valley between the two humps, which is exactly why this population is a good test case.',
+          latex: '34.5 \\notin \\{\\approx 5\\} \\cup \\{\\approx 300\\}',
+        },
+        {
+          label: 'Population variance, via E[X squared] minus the square of the mean',
+          detail: 'Treating the two components as concentrated at 5 and 300 for simplicity.',
+          latex: 'E[X^2] = 0.9(25) + 0.1(90000) = 22.5 + 9000 = 9022.5',
+        },
+        {
+          label: 'Finish the variance and the standard deviation',
+          detail: 'Subtract the square of the mean.',
+          latex: '\\sigma^2 = 9022.5 - 34.5^2 = 9022.5 - 1190.25 = 7832.25, \\qquad \\sigma \\approx 88.5',
+        },
+        {
+          label: 'Standard error at n = 100',
+          detail: 'Divide the population standard deviation by the square root of the sample size.',
+          latex: '\\operatorname{SE}_{100} = \\frac{88.5}{\\sqrt{100}} = 8.85 \\text{ seconds}',
+        },
+        {
+          label: 'Standard error at n = 10,000',
+          detail: 'A hundredfold increase in data gives a tenfold reduction in standard error — the square-root penalty in action.',
+          latex: '\\operatorname{SE}_{10000} = \\frac{88.5}{100} = 0.885 \\text{ seconds}',
+        },
+        {
+          label: 'Build an interval at n = 10,000',
+          detail:
+            'By the theorem the sample mean is approximately normal, so about 95% of samples give a mean within two standard errors of the truth.',
+          latex: '34.5 \\pm 1.96(0.885) = [32.77,\; 36.23]',
+        },
+        {
+          label: 'Ask how large n must be here',
+          detail:
+            'At n = 100 the sample contains on average 10 long sessions, and that count varies between roughly 4 and 17, so the sample mean is still visibly right-skewed. By n = 10,000 there are about 1,000 long sessions and the skew of the mean has fallen by a factor of ten. Bimodality in the population is irrelevant; what governs the rate is the skewness.',
+          latex: '\\text{skew}(\\bar{X}_n) = \\frac{\\text{skew}(X)}{\\sqrt{n}}',
+        },
+      ],
+      conclusion:
+        'The population is bimodal and wildly skewed, and yet the sample mean at n = 10,000 is approximately normal with mean 34.5 and standard error 0.885 seconds. Note precisely what did and did not happen: the raw session durations are exactly as ugly as they were, and no amount of data will change that. It is the average that became well behaved. Note also the cost of precision — moving from ±8.85 to ±0.885 seconds required a hundredfold increase in data.',
+    },
+
+    codeExamples: [
+      {
+        language: 'python',
+        title: 'The theorem demonstrated on three awful populations',
+        runnable: true,
+        code: `import numpy as np
+from scipy import stats
+
+rng = np.random.default_rng(0)
+trials = 20_000
+
+populations = {
+    "exponential": lambda k: rng.exponential(2.0, k),
+    "bimodal    ": lambda k: np.where(rng.random(k) < 0.9,
+                                      rng.normal(5, 1, k),
+                                      rng.normal(300, 20, k)),
+    "bernoulli  ": lambda k: (rng.random(k) < 0.2).astype(float),
+}
+
+for name, draw in populations.items():
+    raw_skew = stats.skew(draw(200_000))
+    print(f"{name}  population skew = {raw_skew:+.2f}")
+    for n in [2, 10, 100]:
+        means = draw(trials * n).reshape(trials, n).mean(axis=1)
+        print(f"    n={n:>3}: skew of sample means = {stats.skew(means):+.3f}")`,
+        output: `exponential  population skew = +2.00
+    n=  2: skew of sample means = +1.425
+    n= 10: skew of sample means = +0.636
+    n=100: skew of sample means = +0.191
+bimodal      population skew = +2.67
+    n=  2: skew of sample means = +1.889
+    n= 10: skew of sample means = +0.857
+    n=100: skew of sample means = +0.264
+bernoulli    population skew = +1.50
+    n=  2: skew of sample means = +1.071
+    n= 10: skew of sample means = +0.479
+    n=100: skew of sample means = +0.148`,
+        explanation:
+          'Three populations that could hardly be less normal — an exponential, a two-humped mixture, and a variable that only ever takes the values 0 and 1 — and in every case the skewness of the sample mean falls in exactly the predicted way. Each tenfold increase in n divides the skew by roughly the square root of ten, about 3.16, which is precisely what the Berry-Esseen bound says. The populations themselves never change; only the averages become well behaved.',
+      },
+      {
+        language: 'python',
+        title: 'The standard error, verified empirically',
+        runnable: true,
+        code: `import numpy as np
+
+rng = np.random.default_rng(1)
+sigma = 15.0
+trials = 50_000
+
+print("     n   predicted SE   observed SE   ratio")
+for n in [10, 40, 160, 640]:
+    means = rng.normal(100, sigma, size=(trials, n)).mean(axis=1)
+    predicted = sigma / np.sqrt(n)
+    observed = means.std(ddof=1)
+    print(f"{n:>6}   {predicted:12.4f}   {observed:11.4f}   {observed/predicted:5.3f}")`,
+        output: `     n   predicted SE   observed SE   ratio
+    10         4.7434        4.7370   0.999
+    40         2.3717        2.3686   0.999
+   160         1.1859        1.1853   0.999
+   640         0.5929        0.5932   1.000`,
+        explanation:
+          'Each row quadruples the sample size and exactly halves the standard error, which is the practical meaning of the square root. The sobering version of that arithmetic: going from ±5 to ±0.5 requires a hundredfold increase in data, and to ±0.05 a ten-thousandfold increase. This is why experiments are powered in advance rather than extended indefinitely, and why a marginal result rarely becomes decisive by simply collecting a bit more.',
+      },
+      {
+        language: 'python',
+        title: 'Where the theorem fails: infinite variance',
+        runnable: true,
+        code: `import numpy as np
+
+rng = np.random.default_rng(0)
+
+print("Cauchy population (undefined mean, infinite variance)")
+for n in [10, 100, 10_000, 1_000_000]:
+    means = rng.standard_cauchy(size=(200, n)).mean(axis=1)
+    print(f"  n={n:>8}: spread of sample means (IQR) = {np.subtract(*np.percentile(means, [75, 25])):.3f}")
+
+print("\\nNormal population, for contrast")
+for n in [10, 100, 10_000, 1_000_000]:
+    means = rng.normal(size=(200, n)).mean(axis=1)
+    print(f"  n={n:>8}: spread of sample means (IQR) = {np.subtract(*np.percentile(means, [75, 25])):.4f}")`,
+        output: `Cauchy population (undefined mean, infinite variance)
+  n=      10: spread of sample means (IQR) = 2.141
+  n=     100: spread of sample means (IQR) = 2.062
+  n=   10000: spread of sample means (IQR) = 1.884
+  n= 1000000: spread of sample means (IQR) = 2.030
+
+Normal population, for contrast
+  n=      10: spread of sample means (IQR) = 0.4271
+  n=     100: spread of sample means (IQR) = 0.1345
+  n=   10000: spread of sample means (IQR) = 0.0136
+  n= 1000000: spread of sample means (IQR) = 0.0014`,
+        explanation:
+          'The Cauchy distribution has such heavy tails that its variance is infinite, and the theorem\'s conditions fail. The consequence is dramatic: the spread of the sample mean does not shrink at all, even at a million observations. In fact the mean of n Cauchy variables has exactly the same Cauchy distribution as a single one, so averaging accomplishes literally nothing. The normal contrast shows the expected hundredfold narrowing. The practical warning is that for extremely heavy-tailed data — some financial returns, some network and file-size distributions — sample means and the intervals built on them are far less trustworthy than their formulas suggest, and a median or a trimmed mean is the safer summary.',
+      },
+    ],
+
+    realWorldExamples: [
+      {
+        context: 'A/B test significance',
+        usage:
+          'Conversion is a 0/1 Bernoulli variable, about as non-normal as a variable can be, yet every A/B test computes a z-statistic on the difference of two proportions. That is legitimate only because the theorem makes the sampling distribution of each proportion approximately normal once np is large enough.',
+      },
+      {
+        context: 'Reporting model performance with error bars',
+        usage:
+          'Test-set accuracy is a sample mean of per-example correctness. Its standard error is the square root of p(1-p)/n, which is why a 1,000-example test set gives roughly ±2 percentage points and cannot distinguish a 91% model from a 92% one.',
+      },
+      {
+        context: 'Mini-batch gradient descent',
+        usage:
+          'A mini-batch gradient is an average of per-example gradients, so it is unbiased for the full gradient with a standard error falling like one over the square root of the batch size. Doubling the batch reduces gradient noise by only about 30%, which is why very large batches give diminishing returns.',
+      },
+      {
+        context: 'Monitoring aggregate metrics',
+        usage:
+          'Daily average latency is well behaved and trend-testable even though individual latencies are heavy-tailed, because the daily average aggregates millions of requests. The same dashboard should not apply normal reasoning to individual request times.',
+      },
+    ],
+
+    projectConnections: [
+      { tool: 'SciPy', role: '`stats.sem` computes the standard error of the mean; `stats.ttest_ind` and `stats.norm` rely on the theorem for their sampling distributions.' },
+      { tool: 'NumPy', role: 'Reshaping a long draw into a (trials, n) array and averaging along one axis is the idiomatic way to simulate a sampling distribution.' },
+      { tool: 'scikit-learn', role: '`cross_val_score` produces per-fold scores whose mean and standard error quantify how much of an observed difference is noise.' },
+    ],
+
+    commonMistakes: [
+      {
+        mistake: 'Believing the theorem makes the raw data normal',
+        why: 'It is a statement about the sampling distribution of a statistic, not about observations. Incomes remain skewed no matter how many you collect; it is the average of many incomes that becomes normal.',
+        fix: 'Always name which distribution you mean. If you are about to apply a normal-based method to individual observations, the theorem does not license it.',
+      },
+      {
+        mistake: 'Trusting "n = 30" as a universal threshold',
+        why: 'The required n depends on the population\'s skewness and tail weight. For a symmetric population 5 may suffice; for heavily skewed income or latency data, hundreds or thousands are needed; for a rare binary event you need np of at least about 10.',
+        fix: 'Simulate. Bootstrap the sampling distribution of your statistic and look at it, rather than invoking a rule of thumb that has no theorem behind it.',
+      },
+      {
+        mistake: 'Applying it to dependent observations',
+        why: 'The derivation adds variances, which requires independence. Repeated measurements on the same user, or autocorrelated time series, have a larger true standard error — sometimes several times larger.',
+        fix: 'Aggregate to the independent unit — one row per user rather than per event — or use methods that model the correlation, such as clustered standard errors or a block bootstrap.',
+      },
+      {
+        mistake: 'Confusing standard deviation with standard error',
+        why: 'The standard deviation describes the spread of the data and does not shrink with n; the standard error describes the spread of the estimate and does. Reporting one as the other misstates uncertainty by a factor of root n.',
+        fix: 'Ask what the error bar is about. Describing the population? Standard deviation. Describing how precisely you know the mean? Standard error.',
+      },
+      {
+        mistake: 'Forgetting that it says nothing about bias',
+        why: 'The theorem describes the distribution of estimates around the true mean of the population you sampled. If that population is not the one you care about, the sampling distribution is beautifully normal around the wrong value.',
+        fix: 'Treat sampling design and sampling theory as separate problems. A narrow confidence interval is not evidence that the sample was representative.',
+      },
+    ],
+
+    interviewQuestions: [
+      {
+        level: 'intermediate',
+        question: 'State the central limit theorem and explain why it matters in practice.',
+        answer:
+          'For independent, identically distributed observations with finite mean mu and finite variance sigma squared, the sampling distribution of the sample mean approaches a normal distribution with mean mu and standard deviation sigma over root n as n grows, regardless of the shape of the population. It matters because it decouples inference from knowing the population distribution. Without it, every confidence interval and hypothesis test would require you to know the exact distribution you sampled from, which you essentially never do. With it, the same z and t procedures work for incomes, latencies, conversion indicators and anything else with finite variance. It is also the reason a proportion — the mean of zeros and ones, about as non-normal as a variable gets — can be tested with normal-theory methods in every A/B test ever run. The two things to be careful about are that it concerns the statistic and not the raw data, and that the required n depends on the population\'s skewness rather than on any universal threshold.',
+        followUp:
+          'A strong answer distinguishes it from the law of large numbers: the law says the estimate converges to the truth, the theorem describes the shape and scale of the scatter around it on the way there.',
+      },
+      {
+        level: 'intermediate',
+        question: 'What is the difference between standard deviation and standard error?',
+        answer:
+          'The standard deviation measures the spread of individual observations around their mean and is a property of the population. It does not change as you collect more data — a bigger sample from the same population estimates the same sigma more precisely, but sigma itself is fixed. The standard error measures the spread of a *statistic* across hypothetical repetitions of the study, and for the sample mean it equals sigma over root n, so it shrinks as the sample grows. The practical consequence is that they answer different questions and should be used for different error bars: if you are describing how variable individuals are, use the standard deviation; if you are describing how precisely you know the mean, use the standard error. Reporting a standard error when the reader expects a standard deviation understates the variability of the population by a factor of root n, which on a large sample is enormously misleading.',
+      },
+      {
+        level: 'ml-engineer',
+        question: 'Your A/B test on a rare conversion event shows a significant result after two days. What would you check before shipping?',
+        answer:
+          'Several things, and the first is whether the normal approximation is even valid. For a rare event the sampling distribution of a proportion is only approximately normal when np and n(1-p) are both comfortably above about 10; if the treatment arm has a handful of conversions, the interval and p-value are unreliable and I would use an exact binomial or a bootstrap instead. Second, whether the test was stopped because it reached significance, which is optional stopping and inflates the false-positive rate well above the nominal level — the fix is a pre-registered sample size, or a sequential procedure such as an alpha-spending boundary that is designed for repeated looks. Third, independence: if one user can convert several times, or conversions cluster within a session or a household, the effective sample size is smaller than the row count and the true standard error is larger, so I would aggregate to the user level. Fourth, whether two days covers a representative slice of traffic, since weekday and weekend populations differ and novelty effects are strongest early. Fifth, the practical size of the effect against its interval: a statistically significant lift whose interval runs from 0.1% to 4% may not justify the change. And finally, how many variants and metrics were examined, because the multiple-comparisons arithmetic applies here as much as anywhere.',
+      },
+    ],
+
+    practiceQuestions: [
+      {
+        prompt:
+          'A population has mean 50 and standard deviation 12. For samples of size 36, what are the mean and standard error of the sampling distribution, and what range contains about 95% of sample means?',
+        hint: 'The sampling distribution is centred on the population mean; divide sigma by the square root of n.',
+        solution:
+          'Mean of the sampling distribution: 50, the same as the population mean, because the sample mean is unbiased.\n\nStandard error: 12/sqrt(36) = 12/6 = 2.\n\nBy the central limit theorem the sampling distribution is approximately normal, so about 95% of sample means lie within 1.96 standard errors: 50 ± 1.96(2) = 50 ± 3.92, giving [46.08, 53.92].\n\nNote what this is not: it is not a statement that 95% of individual observations lie in that range. Individuals have standard deviation 12, so about 95% of them lie in 50 ± 23.5, a range six times wider. Confusing the two is the most common error in this topic.',
+      },
+      {
+        prompt:
+          'A test set of 1,000 examples gives 92% accuracy. Compute the standard error and a rough 95% range, and say whether you could distinguish this model from one scoring 93%.',
+        hint: 'Accuracy is a proportion, so use the square root of p(1-p)/n.',
+        solution:
+          'SE = sqrt(0.92 x 0.08 / 1000) = sqrt(0.0000736) = 0.00858.\n\nA 95% range is 0.92 ± 1.96(0.00858) = 0.92 ± 0.0168, so roughly [0.903, 0.937], or ±1.7 percentage points.\n\nA model scoring 93% sits comfortably inside that range, so on this test set alone the two are indistinguishable — the difference is well within what resampling noise produces. To resolve a one-point difference reliably you would need a far larger test set: matching a margin of about 0.5 points requires roughly 11,000 examples, since the margin falls with the square root of n.\n\nThe much better approach is a paired comparison: evaluate both models on the *same* examples and analyse the per-example differences. That removes the variation caused by which examples happened to be in the test set and is dramatically more powerful at the same sample size.',
+      },
+      {
+        prompt:
+          'By simulation, show that the sampling distribution of the mean becomes normal for a heavily skewed population, and find roughly how large n must be before it looks acceptably normal.',
+        hint: 'Use a log-normal or exponential population, and track the skewness of the sample means as n increases.',
+        language: 'python',
+        starterCode:
+          'import numpy as np\nfrom scipy import stats\n\nrng = np.random.default_rng(0)\ntrials = 20_000\n',
+        solution:
+          'import numpy as np\nfrom scipy import stats\nrng = np.random.default_rng(0)\ntrials = 20_000\n\nfor n in [1, 5, 30, 100, 500]:\n    means = rng.lognormal(0, 1.2, size=(trials, n)).mean(axis=1)\n    print(n, round(stats.skew(means), 3))\n\nThe population skewness of a log-normal with sigma = 1.2 is about 5.4. The skewness of the sample mean falls roughly as 5.4/sqrt(n): about 2.4 at n = 5, 1.0 at n = 30, 0.54 at n = 100 and 0.24 at n = 500.\n\nUsing a common working threshold of |skew| below about 0.5, this population needs roughly n = 120 before the sampling distribution is acceptably normal — four times the "n = 30" rule of thumb. Repeating the exercise with sigma = 2.0 pushes the requirement into the thousands.\n\nThe general lesson: the rule of thumb is not a theorem, and the honest procedure is to simulate or bootstrap the sampling distribution of your actual statistic on your actual data rather than to assume.',
+      },
+    ],
+
+    quiz: [
+      {
+        id: 'STAT-013-q1',
+        type: 'truefalse',
+        concept: 'what the CLT claims',
+        prompt: 'The central limit theorem says that with a large enough sample, your raw data will be normally distributed.',
+        answer: false,
+        explanation:
+          'It concerns the sampling distribution of the mean, not the observations. Incomes stay right-skewed forever; it is the average of many incomes that becomes approximately normal.',
+      },
+      {
+        id: 'STAT-013-q2',
+        type: 'numeric',
+        concept: 'standard error',
+        prompt:
+          'A population has standard deviation 24. What is the standard error of the mean for a sample of 64?',
+        answer: 3,
+        tolerance: 0.05,
+        explanation:
+          'SE = sigma/sqrt(n) = 24/8 = 3. Quadrupling the sample to 256 would halve it to 1.5, which is the square-root penalty that makes precision expensive.',
+      },
+      {
+        id: 'STAT-013-q3',
+        type: 'mcq',
+        concept: 'sample size requirements',
+        prompt: 'For which population would you need the largest sample before the mean is approximately normal?',
+        options: [
+          'A heavily right-skewed log-normal',
+          'A uniform distribution on [0, 1]',
+          'A symmetric triangular distribution',
+          'A normal distribution',
+        ],
+        answerIndex: 0,
+        explanation:
+          'Convergence speed is governed by skewness and tail weight, not by how "unusual" the shape looks. Symmetric populations converge in a handful of observations, a normal is already exact at n = 1, and heavy right skew can require hundreds or thousands.',
+      },
+      {
+        id: 'STAT-013-q4',
+        type: 'multi',
+        concept: 'conditions',
+        prompt: 'Which conditions does the classical central limit theorem require? Select all that apply.',
+        options: [
+          'Observations are independent',
+          'Observations are identically distributed',
+          'The population variance is finite',
+          'The population is approximately normal',
+          'The sample size is at least 30',
+        ],
+        answerIndices: [0, 1, 2],
+        explanation:
+          'The whole point is that the population need not be normal. The n = 30 figure is a rule of thumb with no theorem behind it — the required size depends on the population\'s skewness. Finite variance is the condition that genuinely fails for Cauchy-like data.',
+      },
+      {
+        id: 'STAT-013-q5',
+        type: 'order',
+        concept: 'deriving the standard error',
+        prompt: 'Put the derivation of the standard error of the mean into order.',
+        items: [
+          'Write the sample mean as (1/n) times the sum of the observations',
+          'Note that each observation has variance sigma squared',
+          'Use independence to add variances: the sum has variance n sigma squared',
+          'Apply Var(aX) = a squared Var(X) with a = 1/n',
+          'Obtain Var(X-bar) = sigma squared over n',
+          'Take the square root to get SE = sigma over root n',
+        ],
+        explanation:
+          'The independence step is where the argument can break: correlated observations add covariance terms, so the real standard error is larger than the formula suggests — often much larger for clustered or autocorrelated data.',
+      },
+      {
+        id: 'STAT-013-q6',
+        type: 'explain',
+        concept: 'applying the CLT',
+        prompt:
+          'A colleague says "our latency data is right-skewed, so we cannot use a t-test on the mean". Respond.',
+        rubric: [
+          'Explains that the t-test concerns the sampling distribution of the mean, not the raw data',
+          'Notes that with a large sample the central limit theorem makes that sampling distribution approximately normal even for skewed data',
+          'Adds an honest caveat about how skewness slows convergence, or questions whether the mean is the right summary at all',
+        ],
+        sampleAnswer:
+          'The normality assumption behind a t-test applies to the sampling distribution of the mean, not to the individual observations, so skewed raw data is not by itself a disqualification. With the sample sizes typical of latency monitoring — thousands or millions of requests — the central limit theorem makes the sampling distribution of the mean very close to normal, and the t-test is fine. Two caveats though. First, convergence is slower for skewed populations, so I would check by bootstrapping the sampling distribution rather than assuming, especially if the sample is small or the tail is extreme enough that variance is barely finite. Second, and more importantly, I would question whether the mean is the statistic we want at all. For latency the mean is dominated by the tail and describes no real request; the p50 and p99 are what users experience and what service-level objectives are written against. So the right answer is probably not "use a different test for the mean" but "test a different statistic", comparing percentiles with a bootstrap, which sidesteps the distributional question entirely.',
+        explanation:
+          'A complete answer separates the statistical objection (which is misplaced) from the measurement objection (which is well founded), and offers the bootstrap as the practical route when assumptions are in doubt.',
+      },
+    ],
+
+    flashcards: [
+      { front: 'State the central limit theorem', back: 'For independent, identically distributed observations with finite variance, the sample mean is approximately normal with mean mu and standard deviation sigma/root n, whatever the population shape.' },
+      { front: 'Sampling distribution vs data distribution', back: 'The data distribution is one dot per observation and keeps its shape. The sampling distribution is one dot per sample mean, becomes normal, and narrows as n grows.' },
+      { front: 'Standard error of the mean', back: 'sigma/sqrt(n). Quadrupling the sample halves it; a hundredfold increase is needed for one more decimal place.' },
+      { front: 'CLT vs law of large numbers', back: 'The law says the sample mean converges to mu. The theorem describes the shape and scale of the scatter around mu at finite n.' },
+      { front: 'When does the CLT fail?', back: 'Infinite variance (Cauchy, some power laws), dependent observations, or a sample too small for the population\'s skewness.' },
+      { front: 'Is "n = 30" a rule?', back: 'No, it is a rule of thumb with no theorem behind it. Symmetric populations need far less; heavily skewed ones need hundreds or thousands.' },
+      { front: 'What does the CLT say about bias?', back: 'Nothing. It describes scatter around the mean of the population you sampled. If that is the wrong population, the interval is normal and wrong.' },
+    ],
+
+    challenge: {
+      title: 'A central limit theorem laboratory',
+      brief:
+        'Build a simulation tool that takes any sampling function and, for a list of sample sizes, produces the sampling distribution of the mean: its mean, its standard deviation compared against the theoretical sigma/root n, its skewness, and a normality diagnostic. Run it on at least five populations — normal, uniform, exponential, a rare Bernoulli with p = 0.01, and a Cauchy — and produce a table showing the smallest n at which each becomes acceptably normal by your chosen criterion. Explain in a printed summary why the Cauchy never does.',
+      language: 'python',
+      acceptanceCriteria: [
+        'Observed standard errors are compared against the theoretical sigma/root n for every population and sample size',
+        'A stated, justified normality criterion is applied consistently',
+        'The Cauchy case is included and its failure explained in terms of infinite variance',
+        'The rare-Bernoulli case demonstrates that np, not n alone, governs the requirement',
+        'The output is a readable table plus a short written interpretation',
+      ],
+      starterCode:
+        'import numpy as np\nfrom scipy import stats\n\ndef clt_lab(sampler, name: str, sizes=(2, 5, 30, 100, 1000), trials: int = 20_000) -> None:\n    """Simulate the sampling distribution of the mean at several sample sizes."""\n    ...\n',
+    },
+
+    teachingPrompt: {
+      prompt:
+        'Teach the central limit theorem to someone who knows about means, standard deviations and the normal distribution. Make sure they end up able to state exactly what it promises and exactly what it does not.',
+      mustCover: [
+        'That it describes the distribution of sample means, not of raw observations',
+        'The three claims: centred on mu, standard deviation sigma/root n, shape approaching normal',
+        'That it holds regardless of the population shape, given finite variance and independence',
+        'What it does not promise: nothing about raw data, nothing about bias, and no universal sample size',
+      ],
+      bonusSignals: [
+        'demonstrates with a deliberately non-normal population',
+        'explains the square root and its practical cost',
+        'names a failure case such as heavy tails or dependent observations',
+      ],
+      sampleExplanation:
+        'Take a population that is as far from a bell curve as you can imagine — say session durations where ninety percent last five seconds and ten percent last five minutes, so the histogram is two separate humps with nothing in between. Now do this: pick a hundred sessions at random, average them, write the number down, and repeat ten thousand times. Plot those ten thousand averages and you get a clean, symmetric bell curve. That is the central limit theorem, and the first thing to be precise about is what became normal. The session durations did not; they are exactly as ugly as they were and always will be. It is the averages that became normal. The reason is cancellation. For one average to come out extreme, a lot of its hundred members have to be extreme in the same direction at once, and independent observations rarely conspire like that; one long session gets divided by a hundred, so it barely moves the result. The theorem makes three claims. The averages centre on the true population mean. Their spread is the population spread divided by the square root of the sample size — that is called the standard error. And their shape approaches a normal curve as the sample grows. The square root is worth dwelling on, because it is the economics of the whole of data collection: to halve your uncertainty you need four times the data, and one more decimal place costs a hundred times as much. Finally, the limits. It says nothing about the raw data. It says nothing about bias — if you sampled the wrong population, you get a beautiful normal distribution centred on the wrong number. It needs the observations to be independent, so repeated measurements on the same user do not count separately. And it needs finite variance, which fails for a few genuinely wild distributions where averaging never helps at all.',
+    },
+  },
+];
