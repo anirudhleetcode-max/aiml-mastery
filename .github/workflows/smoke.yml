@@ -1,0 +1,29 @@
+# Smoke-tests a URL that is already live.
+#
+# The deploy workflow tests the deployment URL it just created. That is the
+# right thing to gate a deploy on, but it is not the address people use: a
+# production deploy is also aliased to the project's stable domain, and an
+# alias that points at the wrong deployment is a failure mode the deploy job
+# cannot see by construction. This workflow exists to check the alias, and to
+# re-check any URL later without deploying anything.
+name: Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: The URL to test, e.g. https://aiml-mastery.vercel.app
+        required: true
+        type: string
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Smoke-test ${{ inputs.url }}
+        run: node scripts/smoke-production.mjs "${{ inputs.url }}"
