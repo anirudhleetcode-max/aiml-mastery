@@ -49,6 +49,10 @@ test.describe('accessibility', () => {
   });
 
   test('the core app pages have no serious violations', async ({ page }) => {
+    // Eight full page loads with an axe scan each, and on a cold `next dev`
+    // every one of them compiles its route first. This is the slowest test in
+    // the suite by a wide margin and says so rather than flaking.
+    test.slow();
     await signInAsDemo(page);
 
     for (const path of ['/dashboard', '/today', '/roadmap', '/tests', '/analytics', '/labs', '/interview', '/flashcards']) {

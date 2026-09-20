@@ -35,6 +35,9 @@ jobs:
       - name: Lint
         run: npm run lint -- --max-warnings=0
 
+      - name: UI contrast (WCAG AA)
+        run: npm run check:contrast
+
       - name: Curriculum integrity
         run: npm run curriculum:verify -- --stats
 

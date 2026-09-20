@@ -117,15 +117,25 @@ function purposeMatches(stored: string, expected: TokenPurpose): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+/** A week past expiry, which is long after any link could still be clicked. */
+export const PRUNE_GRACE_MS = 1000 * 60 * 60 * 24 * 7;
+
 /**
- * Deletes tokens that are expired or spent.
+ * Deletes tokens long past their expiry.
+ *
+ * The grace period is the whole design. Deleting a spent token the moment it
+ * is spent would be tidier and worse: `consumeToken` distinguishes "this link
+ * has already been used" from "this link is not a link", and it can only do
+ * that while the row still exists. Someone clicking yesterday's reset link
+ * deserves the first message. A week later the row has stopped carrying that
+ * information for anyone, and can go.
  *
  * Safe to call on any schedule, or never — the table grows with issued links
- * rather than with requests, and every row is already inert.
+ * rather than with requests, and every row it removes was already inert.
  */
-export async function pruneAuthTokens(): Promise<number> {
+export async function pruneAuthTokens(graceMs: number = PRUNE_GRACE_MS): Promise<number> {
   const { count } = await prisma.authToken.deleteMany({
-    where: { OR: [{ expiresAt: { lt: new Date() } }, { usedAt: { not: null } }] },
+    where: { expiresAt: { lt: new Date(Date.now() - graceMs) } },
   });
   return count;
 }

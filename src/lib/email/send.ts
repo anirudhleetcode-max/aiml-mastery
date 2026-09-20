@@ -1,4 +1,6 @@
 import 'server-only';
+import { appendFileSync, mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 
 /**
  * Transactional email.
@@ -19,7 +21,7 @@ import 'server-only';
  * importing this fails the build rather than shipping an API key to a browser.
  */
 
-export type EmailTransport = 'console' | 'resend';
+export type EmailTransport = 'console' | 'resend' | 'file';
 
 export interface EmailMessage {
   to: string;
@@ -41,6 +43,10 @@ export interface SendResult {
 function transport(): EmailTransport {
   const explicit = process.env.EMAIL_TRANSPORT?.toLowerCase();
   if (explicit === 'resend' || explicit === 'console') return explicit;
+  // The file transport writes live tokens to disk, which is right for a test
+  // run reading its own inbox and wrong everywhere else — so it is refused in
+  // a production build regardless of what the environment asks for.
+  if (explicit === 'file' && process.env.NODE_ENV !== 'production') return 'file';
   // Infer rather than fail: a key present means somebody configured a
   // provider, and its absence in development should not break signup.
   return process.env.RESEND_API_KEY ? 'resend' : 'console';
@@ -96,6 +102,23 @@ async function sendViaResend(message: EmailMessage): Promise<SendResult> {
   }
 }
 
+/**
+ * Appends the message to a JSONL file, for a test that needs to read the link
+ * it was just sent. The equivalent of running a local mail catcher, without
+ * the process.
+ */
+function sendViaFile(message: EmailMessage): SendResult {
+  const target = process.env.EMAIL_OUTBOX_PATH;
+  if (!target) return { ok: false, transport: 'file', error: 'EMAIL_OUTBOX_PATH is not set' };
+  try {
+    mkdirSync(dirname(target), { recursive: true });
+    appendFileSync(target, `${JSON.stringify({ ...message, at: new Date().toISOString() })}\n`, 'utf8');
+    return { ok: true, transport: 'file' };
+  } catch (error) {
+    return { ok: false, transport: 'file', error: error instanceof Error ? error.name : 'write failed' };
+  }
+}
+
 function sendViaConsole(message: EmailMessage): SendResult {
   console.info(
     [
@@ -124,6 +147,7 @@ function sendViaConsole(message: EmailMessage): SendResult {
 export async function sendEmail(message: EmailMessage): Promise<SendResult> {
   const t = transport();
   if (t === 'resend') return sendViaResend(message);
+  if (t === 'file') return sendViaFile(message);
   return sendViaConsole(message);
 }
 

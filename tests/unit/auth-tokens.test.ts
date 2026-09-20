@@ -167,18 +167,66 @@ describe('reissue', () => {
 });
 
 describe('pruning', () => {
-  it('removes spent and expired rows and keeps live ones', async () => {
+  it('removes rows long past their expiry and keeps everything else', async () => {
     const live = await tokens.issueToken(userA, 'email-verification');
     const spent = await tokens.issueToken(userB, 'email-verification');
     await tokens.consumeToken(spent.token, 'email-verification');
+
+    const ancient = new Date(Date.now() - tokens.PRUNE_GRACE_MS - 1000);
     await prisma.authToken.create({
-      data: { userId: userB, purpose: 'password-reset', tokenHash: 'stale', expiresAt: new Date(Date.now() - 1000) },
+      data: { userId: userB, purpose: 'password-reset', tokenHash: 'ancient', expiresAt: ancient },
     });
 
-    expect(await tokens.pruneAuthTokens()).toBe(2);
+    expect(await tokens.pruneAuthTokens()).toBe(1);
     const left = await prisma.authToken.findMany();
-    expect(left).toHaveLength(1);
-    expect(left[0].tokenHash).toBe(tokens.hashToken(live.token));
+    expect(left.map((r) => r.tokenHash).sort()).toEqual(
+      [tokens.hashToken(live.token), tokens.hashToken(spent.token)].sort(),
+    );
+  });
+
+  it('keeps a recently spent token, so it can still be reported as used', async () => {
+    const { token } = await tokens.issueToken(userA, 'password-reset');
+    await tokens.consumeToken(token, 'password-reset');
+
+    await tokens.pruneAuthTokens();
+
+    // The whole point of the grace period: somebody clicking yesterday's link
+    // is told it was used, not that it never existed.
+    expect(await tokens.consumeToken(token, 'password-reset')).toEqual({ ok: false, reason: 'used' });
+  });
+
+  it('keeps a just-expired token too, for the same reason', async () => {
+    const { token } = await tokens.issueToken(userA, 'password-reset');
+    await prisma.authToken.updateMany({ data: { expiresAt: new Date(Date.now() - 1000) } });
+
+    expect(await tokens.pruneAuthTokens()).toBe(0);
+    expect(await tokens.consumeToken(token, 'password-reset')).toEqual({ ok: false, reason: 'expired' });
+  });
+});
+
+describe('opportunistic maintenance', () => {
+  it('runs at most once per interval and reports what it removed', async () => {
+    const { maybePrune, pruneNow, resetPruneClock } = await import('@/lib/maintenance');
+
+    const ancient = new Date(Date.now() - tokens.PRUNE_GRACE_MS - 1000);
+    await prisma.authToken.create({
+      data: { userId: userA, purpose: 'password-reset', tokenHash: 'ancient-1', expiresAt: ancient },
+    });
+
+    resetPruneClock();
+    expect(await pruneNow()).toEqual({ tokens: 1, rateLimits: 0 });
+
+    // A second stale row, but the clock has just been claimed, so the
+    // opportunistic path declines to run again.
+    await prisma.authToken.create({
+      data: { userId: userA, purpose: 'password-reset', tokenHash: 'ancient-2', expiresAt: ancient },
+    });
+    resetPruneClock();
+    maybePrune();
+    maybePrune();
+    maybePrune();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(await prisma.authToken.count({ where: { tokenHash: 'ancient-2' } })).toBe(0);
   });
 });
 

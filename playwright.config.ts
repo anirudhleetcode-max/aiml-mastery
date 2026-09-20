@@ -5,11 +5,16 @@ import path from 'node:path';
 const DEMO_STATE = path.join('playwright', '.auth', 'demo.json');
 
 const PORT = Number(process.env.E2E_PORT ?? 3100);
+/** Where the file transport drops messages so a spec can read its own inbox. */
+const OUTBOX = path.resolve('playwright', '.auth', 'outbox.jsonl');
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 
 export default defineConfig({
   testDir: './tests/e2e',
-  timeout: 90_000,
+  // `next dev` compiles a route on first visit, and this app's authenticated
+  // tree is large. A generous ceiling costs nothing on a warm run and is the
+  // difference between a cold-start report of "broken" and the truth.
+  timeout: 150_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
   workers: 1,
@@ -43,6 +48,7 @@ export default defineConfig({
   ],
   webServer: {
     command: `npx next dev --port ${PORT}`,
+    env: { EMAIL_TRANSPORT: 'file', EMAIL_OUTBOX_PATH: OUTBOX, APP_URL: BASE_URL },
     url: BASE_URL,
     reuseExistingServer: true,
     timeout: 180_000,

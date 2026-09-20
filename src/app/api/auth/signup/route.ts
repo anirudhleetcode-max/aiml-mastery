@@ -6,6 +6,7 @@ import { createSessionToken, setSessionCookie } from '@/lib/auth/session';
 import { clientKey, rateLimit, sameOrigin } from '@/lib/auth/rate-limit';
 import { newUserData } from '@/lib/auth/bootstrap';
 import { issueToken } from '@/lib/auth/tokens';
+import { maybePrune } from '@/lib/maintenance';
 import { sendEmail } from '@/lib/email/send';
 import { verificationEmail } from '@/lib/email/messages';
 
@@ -62,6 +63,8 @@ export async function POST(req: Request) {
   // behind a mailbox round trip before they have seen anything is how you
   // lose them; the banner and the gentle gate below do the work instead.
   const { token } = await issueToken(user.id, 'email-verification');
+  // Housekeeping, at most hourly per process, awaited by nobody.
+  maybePrune();
   const sent = await sendEmail(verificationEmail(user.email, name.trim(), token));
   if (!sent.ok) {
     // A provider outage must not fail a signup that otherwise succeeded —

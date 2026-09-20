@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { issueToken } from '@/lib/auth/tokens';
+import { maybePrune } from '@/lib/maintenance';
 import { clientKey, rateLimit, sameOrigin } from '@/lib/auth/rate-limit';
 import { sendEmail } from '@/lib/email/send';
 import { passwordResetEmail } from '@/lib/email/messages';
@@ -60,6 +61,8 @@ export async function POST(req: Request) {
 
   if (user) {
     const { token } = await issueToken(user.id, 'password-reset');
+    // Housekeeping, at most hourly per process, awaited by nobody.
+    maybePrune();
     const result = await sendEmail(passwordResetEmail(user.email, user.profile?.name ?? '', token));
     if (!result.ok) {
       console.error('[email] password reset send failed:', result.error);

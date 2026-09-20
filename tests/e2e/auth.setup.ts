@@ -36,11 +36,18 @@ setup('clear rate-limit counters', async () => {
 });
 
 setup('authenticate as the demo learner', async ({ page }) => {
-  await page.goto('/login');
+  // Visiting the protected tree first makes the dev server compile the whole
+  // authenticated layout — sidebar, charts, 3D — while we are still signed
+  // out and it costs nothing. Without it that compile lands inside the
+  // post-login navigation, where a cold start can outrun any sensible
+  // timeout and report a working login as a broken one.
+  await page.goto('/dashboard');
+  await page.waitForURL(/\/login/, { timeout: 120_000 });
+
   await page.getByLabel('Email').fill(DEMO.email);
   await page.getByLabel('Password', { exact: true }).fill(DEMO.password);
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await page.waitForURL(/\/(dashboard|onboarding)/, { timeout: 30_000 });
+  await page.waitForURL(/\/(dashboard|onboarding)/, { timeout: 120_000 });
   await expect(page).toHaveURL(/\/(dashboard|onboarding)/);
 
   fs.mkdirSync(path.dirname(DEMO_STATE), { recursive: true });

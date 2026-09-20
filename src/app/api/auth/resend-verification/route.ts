@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { apiUser } from '@/lib/auth/guard';
 import { issueToken } from '@/lib/auth/tokens';
+import { maybePrune } from '@/lib/maintenance';
 import { clientKey, rateLimit, sameOrigin } from '@/lib/auth/rate-limit';
 import { sendEmail } from '@/lib/email/send';
 import { verificationEmail } from '@/lib/email/messages';
@@ -50,6 +51,10 @@ export async function POST(req: Request) {
   if (row.emailVerifiedAt) return NextResponse.json({ status: 'already-verified' as const });
 
   const { token } = await issueToken(user.id, 'email-verification');
+
+  // Housekeeping, at most hourly per process, awaited by nobody.
+
+  maybePrune();
   const result = await sendEmail(verificationEmail(row.email, row.profile?.name ?? '', token));
   if (!result.ok) {
     console.error('[email] verification send failed:', result.error);
