@@ -215,19 +215,59 @@ never been built.
 
 That is why the deployment runs from a GitHub Actions runner: a runner has
 ordinary network access, and the workflow can be triggered and its results read
-through the GitHub API from inside the restricted environment. The blocker is
-therefore not "deployment is impossible" but "four secrets have to be created
-by a human", which is the list in the one-time setup above.
+through the GitHub API from inside the restricted environment. This is how the
+live deployment and its smoke test were actually performed — the restriction
+shapes where the work runs, it does not prevent it.
+
+One consequence is worth stating plainly: nothing here can open the production
+URL directly. Every claim about the live site in this document comes from the
+smoke test running on the runner, which is why that test asserts behaviour
+rather than status codes alone.
 
 ### What is verified, and what is not
 
+Deployed and verified against the live production alias, not localhost and not
+a build log.
+
 | | Status |
 |---|---|
+| Deployed to a public URL | **Production verified** — `https://aiml-mastery.vercel.app`, commit `5f4685a`, GitHub Actions run 35544786098. |
+| Live smoke test | **Production verified** — 36/36 against the alias as the deploy's gating step (run 35544786098), and 36/36 again from an independent run against the same alias with a fresh account (run 35544946796). |
+| PostgreSQL read, write and persistence | **Production verified** — a real signup wrote a row to Neon, the account survived logout and signed in again, and `/api/state` read the learner state back as JSON. |
+| Session cookie flags | **Production verified** — `HttpOnly`, `Secure`, `SameSite=Lax` observed on the live response. |
+| Security headers | **Production verified** — all six present on the alias, through Vercel's proxy. |
+| API authorisation | **Production verified** — `/api/state` 401 anonymous; cross-origin login 403. |
 | Production build (`npm run build`) | Verified — passes, and emits `.next/standalone`. |
-| Standalone server starts and serves | Verified — `node .next/standalone/server.js` run directly: `/`, `/login`, `/signup` return 200; `/interview`, `/flashcards`, `/labs`, `/analytics` return 307 to `/login` signed out; a real signup wrote to the database and set a `Secure; HttpOnly; SameSite=lax` cookie; all six security headers present. Note that `next dev` overwrites `.next`, so build immediately before checking. |
-| Full test suite | Verified — 730 unit/integration and 127 end-to-end, the latter against this same production server rather than `next dev`. |
+| Full test suite | Verified locally — 730 unit/integration and 127 end-to-end, the latter against a production server rather than `next dev`. |
 | `./scripts/verify-all.sh --full` twice consecutively | Verified — 7/7 both runs. |
-| Postgres provider switch | Verified mechanically — `scripts/db-provider.mjs` rewrites the schema in both directions and the build consumes it. **Not** verified against a real Postgres server, because none is reachable from here. |
-| `Dockerfile` builds | **Not verified.** No Docker daemon in this environment. The build it runs is verified and the layout it copies matches what that build produces, but treat the first `docker build` as a step to watch. |
-| Deployed to a public URL | **Not done.** Blocked as above, pending the four secrets. |
-| Live smoke test | **Not run.** `scripts/smoke-production.mjs` is written and syntax-checked; it runs automatically as the last step of the Deploy workflow. |
+| `Dockerfile` builds | **Not verified.** No Docker daemon in this environment. |
+| Real email delivery | **Not verified.** No email provider is configured; the transport abstraction and both token flows are tested, which is not the same claim. |
+
+### Three faults that a green build could not see
+
+Worth writing down, because each one deployed successfully and then failed at
+request time, and the first two masked the third.
+
+1. **The provider was reverted by the build.** `vercel build` runs `npm run
+   build` in an environment of its own, `DATABASE_PROVIDER` did not reach it,
+   and `db-provider.mjs` read the absence as a request for SQLite — undoing the
+   schema push that had just run. The client shipped to production was
+   generated for SQLite against a `postgresql://` URL. It now derives the
+   provider from `DATABASE_URL` when nothing states it, and refuses to build a
+   client that cannot speak to the URL it is given.
+
+2. **The query engine was built for the wrong operating system.** The deploy
+   builds on a GitHub runner and uploads the result, so `prisma generate`
+   emitted a `debian-openssl-3.0.x` engine for a bundle that executes on
+   Vercel's Amazon Linux. `binaryTargets` now names both.
+
+3. **The project had no environment variables at all.** `vercel env ls
+   production` answered "No Environment Variables found". No `DATABASE_URL`, so
+   Prisma threw on the first query; no `AUTH_SECRET`, so signup could not have
+   issued a session either. The deploy now ensures they exist before creating
+   the deployment, adding only what is absent.
+
+All three present identically from outside — a 500 from whichever endpoint
+touched the database first — which is why `/api/health` exists. It reports a
+fixed, coarse classification and never the driver's own text, since Prisma's
+errors quote the connection string and the endpoint is public.
