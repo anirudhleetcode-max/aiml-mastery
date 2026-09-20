@@ -10,6 +10,7 @@
  *   node scripts/perf-audit.mjs http://127.0.0.1:3000
  */
 import { chromium } from '@playwright/test';
+import { existsSync } from 'node:fs';
 
 const BASE = process.argv[2] ?? 'http://127.0.0.1:3000';
 const ROUTES = [
@@ -23,20 +24,46 @@ const ROUTES = [
 ];
 
 const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
-const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+
+// Reuse the session the e2e setup project saved, when there is one. The login
+// endpoint is rate limited to ten attempts per ten minutes, so a perf run
+// after a test run would otherwise be refused and silently measure the login
+// page for every authenticated route.
+const SAVED = 'playwright/.auth/demo.json';
+const context = await browser.newContext({
+  viewport: { width: 1440, height: 900 },
+  ...(existsSync(SAVED) ? { storageState: SAVED } : {}),
+});
 const page = await context.newPage();
 
-// Sign in once so the authenticated routes are measurable.
-await page.goto(`${BASE}/login`);
-await page.getByLabel('Email').fill('demo@aimlmastery.app');
-await page.getByLabel('Password', { exact: true }).fill('demolearner2026');
-await page.getByRole('button', { name: 'Sign in' }).click();
-await page.waitForURL(/dashboard|onboarding/, { timeout: 30000 }).catch(() => {});
+await page.goto(`${BASE}/dashboard`);
+if (/\/login/.test(page.url())) {
+  await page.getByLabel('Email').fill('demo@aimlmastery.app');
+  await page.getByLabel('Password', { exact: true }).fill('demolearner2026');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.waitForURL(/dashboard|onboarding/, { timeout: 30000 }).catch(() => {});
+}
+
+// Measuring the login page seven times and calling it a perf report is worse
+// than reporting nothing, so refuse to continue rather than swallow this.
+if (/\/login/.test(page.url())) {
+  console.error(
+    '\n  Could not authenticate — every signed-in route would measure the login\n' +
+      '  page instead. Seed the database (npm run db:reset) and, if the login\n' +
+      '  rate limiter has been tripped, wait for its window to clear.\n',
+  );
+  await browser.close();
+  process.exit(1);
+}
 
 const rows = [];
 
+// Routes marked auth:false must be measured signed out, or `/login` simply
+// redirects to the dashboard and the row reports the wrong page's numbers.
+const anon = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+
 for (const route of ROUTES) {
-  const measured = await context.newPage();
+  const measured = await (route.auth ? context : anon).newPage();
   let transferred = 0;
   let requests = 0;
   const errors = [];
