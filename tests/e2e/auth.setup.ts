@@ -14,6 +14,27 @@ export const DEMO_STATE = path.join('playwright', '.auth', 'demo.json');
  * "Too many attempts", which looks like a broken app and is not. Authenticating
  * once here also removes about a second from every test that needs a session.
  */
+/**
+ * Clears rate-limit counters before the run.
+ *
+ * The limiter is shared state in the database, so counters survive a server
+ * restart — which is the whole point of moving it there. But the suite signs
+ * up two fresh accounts per run against a 5-per-15-minutes budget, so two
+ * runs in quick succession would exhaust it and every later test would fail
+ * on what looks like a broken signup page. Resetting counters is setup in the
+ * same sense that seeding the database is; it changes nothing about how the
+ * limiter behaves in production.
+ */
+setup('clear rate-limit counters', async () => {
+  const { PrismaClient } = await import('@prisma/client');
+  const prisma = new PrismaClient();
+  try {
+    await prisma.rateLimit.deleteMany({});
+  } finally {
+    await prisma.$disconnect();
+  }
+});
+
 setup('authenticate as the demo learner', async ({ page }) => {
   await page.goto('/login');
   await page.getByLabel('Email').fill(DEMO.email);
