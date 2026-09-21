@@ -50,6 +50,25 @@ describe('transport selection', () => {
     vi.stubEnv('RESEND_API_KEY', '');
     expect(send.emailConfigured()).toBe(false);
   });
+
+  // The health endpoint returns this name and the production smoke test
+  // asserts it, because a deployment that has quietly lost its provider is
+  // indistinguishable from a working one from outside: the send is non-fatal
+  // by design, so signup still returns 200 either way.
+  it('names the transport it will actually use', async () => {
+    vi.stubEnv('EMAIL_TRANSPORT', '');
+    vi.stubEnv('RESEND_API_KEY', 'not-a-real-key');
+    expect(send.emailTransport()).toBe('resend');
+
+    vi.stubEnv('RESEND_API_KEY', '');
+    expect(send.emailTransport()).toBe('console');
+  });
+
+  it('never reports a transport outside the three it can run', async () => {
+    vi.stubEnv('EMAIL_TRANSPORT', 'carrier-pigeon');
+    vi.stubEnv('RESEND_API_KEY', '');
+    expect(['console', 'resend', 'file']).toContain(send.emailTransport());
+  });
 });
 
 describe('the file transport', () => {
