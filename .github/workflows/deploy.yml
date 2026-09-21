@@ -113,6 +113,8 @@ jobs:
           TOKEN: ${{ secrets.VERCEL_TOKEN }}
           DB_URL: ${{ secrets.DATABASE_URL }}
           PUBLIC_URL: ${{ inputs.public_url }}
+          RESEND_KEY: ${{ secrets.RESEND_API_KEY }}
+          MAIL_FROM: ${{ secrets.EMAIL_FROM }}
         run: |
           set -euo pipefail
           existing=$(vercel env ls "$TARGET" --token="$TOKEN" 2>/dev/null || true)
@@ -147,6 +149,16 @@ jobs:
           # stable, and nothing outside the running application needs to know
           # it. `ensure` will not touch it again once it exists.
           ensure AUTH_SECRET "$(openssl rand -hex 32)"
+
+          # Mail. Unlike the four above, these have no fallback worth
+          # inventing: a generated API key is not a key, and guessing a from
+          # address gets the provider to reject the send. So if the repository
+          # secret is absent this reports the variable as missing and carries
+          # on — the deployment still works, it simply logs its mail instead of
+          # sending it, and the smoke test is what refuses to call that
+          # production-ready.
+          ensure RESEND_API_KEY "$RESEND_KEY"
+          ensure EMAIL_FROM "$MAIL_FROM"
 
           echo
           echo "Names now configured for $TARGET:"
