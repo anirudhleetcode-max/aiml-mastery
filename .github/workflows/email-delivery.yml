@@ -1,0 +1,82 @@
+# Real-delivery verification for transactional email.
+#
+# Separate from the deploy and smoke workflows on purpose, and manual only,
+# because this one sends mail to a real person. The smoke test signs up an
+# `@example.com` address — RFC 2606 reserves that domain and nothing accepts
+# mail for it, which is the correct behaviour for a check that runs on every
+# deploy and the reason those runs can never be inbox evidence.
+#
+# Required secret:
+#   RESEND_API_KEY   the same key the deployment uses
+# Optional secrets:
+#   EMAIL_FROM       the sender identity to test; defaults to the app's default
+#   IMAP_HOST        \
+#   IMAP_PORT        |  a mailbox for `recipient`. Without these the job runs
+#   IMAP_USER        |  every stage it can and reports actual inbox receipt as
+#   IMAP_PASSWORD    /  BLOCKED rather than passing quietly.
+#
+# The three claims this can produce are kept apart because they are not the
+# same claim: the provider accepted the message, the provider observed the
+# receiving server accept it, and the message was read out of a mailbox. Only
+# the last is inbox receipt.
+name: Email delivery
+
+on:
+  workflow_dispatch:
+    inputs:
+      recipient:
+        description: >-
+          A real address you control. This job will create an account for it on
+          the target deployment and send it two real emails.
+        type: string
+        required: true
+      base_url:
+        description: The deployment to exercise.
+        type: string
+        default: https://aiml-mastery.vercel.app
+
+concurrency:
+  group: email-delivery
+  cancel-in-progress: false
+
+jobs:
+  delivery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify delivery
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          IMAP_HOST: ${{ secrets.IMAP_HOST }}
+          IMAP_PORT: ${{ secrets.IMAP_PORT }}
+          IMAP_USER: ${{ secrets.IMAP_USER }}
+          IMAP_PASSWORD: ${{ secrets.IMAP_PASSWORD }}
+        run: |
+          node scripts/email-delivery.mjs \
+            --to "${{ inputs.recipient }}" \
+            --base-url "${{ inputs.base_url }}"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Email delivery"
+            echo
+            echo "- target: ${{ inputs.base_url }}"
+            echo "- result: ${{ job.status }}"
+            echo
+            if [ -z "${{ secrets.IMAP_HOST }}" ]; then
+              echo "Actual inbox receipt was **not** verified: no mailbox is configured"
+              echo "for this job, so nothing here read a message out of an inbox."
+              echo "Provider acceptance and the provider's delivery event are reported"
+              echo "separately above and are not the same claim."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -79,6 +79,42 @@ jobs:
           fi
           echo "The build-time placeholder is not in the shipped files."
 
+      # The builder stage runs `COPY . .`, so whatever .dockerignore fails to
+      # exclude is present while the image is built. The runner stage copies
+      # named paths out of it, which should mean none of that reaches the
+      # image somebody runs — "should" being the word this step replaces.
+      - name: Assert no secret-bearing file was copied into the image
+        run: |
+          set -euo pipefail
+          found=$(docker run --rm --entrypoint sh aiml-mastery:ci -c '
+            find /app \
+              \( -name ".env" -o -name ".env.*" ! -name ".env.example" \
+                 -o -name "*.pem" -o -name "*.key" -o -name "*.p12" -o -name "*.pfx" \
+                 -o -name "id_rsa*" -o -name "id_ed25519*" -o -name ".npmrc" \
+                 -o -name ".netrc" -o -name "*.db" -o -name ".vercel" -o -name ".git" \) \
+              -print 2>/dev/null | head -20' || true)
+          if [ -n "$found" ]; then
+            echo "FAIL: the image carries files that should never ship in it:"
+            printf '%s\n' "$found"
+            exit 1
+          fi
+          echo "No .env file, private key, credential file, database file, .vercel or .git directory is present under /app."
+
+          # A second pass by content rather than by name, because a secret in a
+          # file nobody thought to name is the case the list above misses. The
+          # tokens searched for are the recognisable prefixes of the providers
+          # this project uses plus the PEM header, none of which has any reason
+          # to appear in a built application.
+          leaked=$(docker run --rm --entrypoint sh aiml-mastery:ci -c '
+            grep -rlE "re_[A-Za-z0-9]{20,}|sk-ant-[A-Za-z0-9-]{20,}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|postgres(ql)?://[^/@ ]+:[^@ ]+@" \
+              /app --exclude-dir=node_modules 2>/dev/null | head -10' || true)
+          if [ -n "$leaked" ]; then
+            echo "FAIL: credential-shaped content found in the image:"
+            printf '%s\n' "$leaked"
+            exit 1
+          fi
+          echo "No provider key, private key or credential-bearing database URL is present in the shipped application."
+
       - name: Assert the standalone server and its assets are present
         run: |
           docker run --rm --entrypoint sh aiml-mastery:ci -c \
