@@ -1,0 +1,165 @@
+# Builds the production image and runs it.
+#
+# The repository documents a container as a deployment target, but the
+# environment this project is developed in has no Docker daemon, so for a long
+# time the image was only ever reasoned about. Reasoning found a real bug in it
+# once — the builder baking a SQLite client into an image whose own comment says
+# the database URL arrives at runtime — which is precisely why reasoning is not
+# enough on its own. A runner has a daemon, so the image gets built here.
+#
+# It runs against a throwaway Postgres in a service container. Nothing here
+# touches the production database, and the only credentials involved are
+# generated for this job and die with it.
+name: Docker
+
+on:
+  workflow_dispatch:
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        # Local to the job and unreachable from anywhere else, so this password
+        # is a fixture rather than a secret.
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: aiml
+          POSTGRES_PASSWORD: throwaway-ci-password
+          POSTGRES_DB: aiml_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aiml"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show the daemon this is building against
+        run: |
+          docker version
+          docker info --format 'server: {{.ServerVersion}} | driver: {{.Driver}}'
+
+      - name: Build the production image
+        run: docker build -t aiml-mastery:ci .
+
+      # The image is meant to carry no credentials. That is asserted here
+      # rather than trusted, because the builder stage does set a placeholder
+      # AUTH_SECRET so that Next can import a module which validates its
+      # length, and a multi-stage boundary is the only thing stopping that
+      # value reaching the image somebody actually runs.
+      - name: Assert no credential survived into the image
+        run: |
+          set -euo pipefail
+          env_json=$(docker image inspect aiml-mastery:ci --format '{{json .Config.Env}}')
+          echo "image environment: $env_json"
+          for name in AUTH_SECRET DATABASE_URL RESEND_API_KEY ANTHROPIC_API_KEY EMAIL_FROM; do
+            if printf '%s' "$env_json" | grep -q "\"$name="; then
+              echo "FAIL: $name is baked into the image environment"
+              exit 1
+            fi
+          done
+          echo "No credential-bearing variable is set in the image environment."
+
+          # The placeholder must not have survived either, in the environment
+          # or anywhere in the shipped filesystem.
+          if docker run --rm --entrypoint sh aiml-mastery:ci -c \
+              'grep -rl "build-time-placeholder-not-a-secret" / 2>/dev/null | head -1' | grep -q .; then
+            echo "FAIL: the build-time placeholder secret is present in the image filesystem"
+            exit 1
+          fi
+          echo "The build-time placeholder is not in the image filesystem."
+
+      - name: Assert the standalone server and its assets are present
+        run: |
+          docker run --rm --entrypoint sh aiml-mastery:ci -c \
+            'set -e; ls -1 server.js >/dev/null; ls -d .next/static >/dev/null; ls -d public >/dev/null; ls -d node_modules/.prisma >/dev/null; echo present'
+
+      # A client generated for the wrong database is the fault this image
+      # already shipped once, so the provider it was built with is read back
+      # out of the image rather than assumed from the build argument.
+      - name: Assert the image was built for PostgreSQL
+        run: |
+          set -euo pipefail
+          provider=$(docker run --rm --entrypoint sh aiml-mastery:ci -c \
+            'sed -n "/datasource db/,/}/p" prisma/schema.prisma | sed -n "s/.*provider *= *\"\([a-z]*\)\".*/\1/p"')
+          echo "datasource provider baked into the image: $provider"
+          [ "$provider" = "postgresql" ] || { echo "FAIL: expected postgresql"; exit 1; }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # The schema has to exist before the container serves a request. This is
+      # the throwaway database, never production.
+      - name: Create the schema in the throwaway database
+        env:
+          DATABASE_URL: postgresql://aiml:throwaway-ci-password@localhost:5432/aiml_ci
+          DATABASE_PROVIDER: postgresql
+        run: |
+          node scripts/db-provider.mjs postgresql
+          npx prisma db push --skip-generate
+
+      - name: Start the container
+        run: |
+          set -euo pipefail
+          # Generated here and gone when the job ends. Host networking so the
+          # container can reach the Postgres service on localhost.
+          docker run -d --name aiml --network host \
+            -e DATABASE_URL='postgresql://aiml:throwaway-ci-password@localhost:5432/aiml_ci' \
+            -e AUTH_SECRET="$(openssl rand -hex 32)" \
+            -e APP_URL='http://localhost:3000' \
+            aiml-mastery:ci
+
+          for i in $(seq 1 60); do
+            if curl -fsS -o /dev/null http://localhost:3000/api/health 2>/dev/null; then break; fi
+            if [ "$i" = 60 ]; then echo "container never became reachable"; docker logs aiml; exit 1; fi
+            sleep 2
+          done
+
+      - name: The running container reports a healthy database
+        run: |
+          set -euo pipefail
+          body=$(curl -fsS http://localhost:3000/api/health)
+          echo "health: $body"
+          printf '%s' "$body" | grep -q '"ok":true' || { echo "FAIL: not ok"; docker logs aiml; exit 1; }
+          printf '%s' "$body" | grep -q '"database":"ok"' || { echo "FAIL: database not ok"; docker logs aiml; exit 1; }
+
+      # The point of running it at all: a real write through the real client
+      # against a real Postgres, which is what the provider bug broke.
+      - name: The running container writes to PostgreSQL and issues a session
+        run: |
+          set -euo pipefail
+          email="docker-$(date +%s)-$RANDOM@example.com"
+          out=$(curl -sS -i -X POST http://localhost:3000/api/auth/signup \
+            -H 'Content-Type: application/json' -H 'Origin: http://localhost:3000' \
+            -d "{\"name\":\"Docker Probe\",\"email\":\"$email\",\"password\":\"a-long-enough-docker-passphrase\"}")
+          status=$(printf '%s' "$out" | head -1)
+          echo "signup: $status"
+          printf '%s' "$status" | grep -q ' 200' || { echo "FAIL: signup did not return 200"; docker logs aiml; exit 1; }
+          printf '%s' "$out" | grep -qi 'set-cookie: *aiml_session=' || { echo "FAIL: no session cookie"; exit 1; }
+          printf '%s' "$out" | grep -qi 'HttpOnly' || { echo "FAIL: session cookie not HttpOnly"; exit 1; }
+          echo "Signup wrote to PostgreSQL and issued an HttpOnly session cookie."
+
+      - name: A protected route still refuses an anonymous caller
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o /dev/null -w '%{http_code}' http://localhost:3000/api/state)
+          echo "anonymous /api/state: $code"
+          [ "$code" = "401" ] || { echo "FAIL: expected 401"; exit 1; }
+
+      - name: Container log
+        if: always()
+        run: docker logs aiml 2>&1 | tail -40 || true
+
+      - name: Stop the container
+        if: always()
+        run: docker rm -f aiml || true
