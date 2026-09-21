@@ -14,7 +14,12 @@ The categories are deliberately narrow:
 | **BLOCKED** | An external limitation prevents verification from here. |
 
 Production URL: **https://aiml-mastery.vercel.app**
-Verified at commit `8c1ba67`.
+
+The deployed artifact is commit `21a8b8b`. Everything on this branch since
+then changes only workflows, scripts, the Dockerfile and these documents —
+`git diff 21a8b8b..HEAD -- src/ prisma/ package.json package-lock.json
+next.config.ts` is empty — so nothing here required a redeploy and production
+was not disturbed to produce this report.
 
 ---
 
@@ -42,7 +47,7 @@ never be the evidence for inbox delivery, no matter how many times it passes.
 
 | Gate | Status | Evidence |
 |---|---|---|
-| Production responds | VERIFIED | 39/39 smoke checks against the live alias — run [35633264735](https://github.com/anirudhleetcode-max/aiml-mastery/actions/runs/35633264735). |
+| Production responds | VERIFIED | 39/39 smoke checks against the live alias — runs [35633264735](https://github.com/anirudhleetcode-max/aiml-mastery/actions/runs/35633264735) and [35635004832](https://github.com/anirudhleetcode-max/aiml-mastery/actions/runs/35635004832), the second at the end of this pass. |
 | Deployed commit is the intended one | VERIFIED | Deploy run [35552920505](https://github.com/anirudhleetcode-max/aiml-mastery/actions/runs/35552920505) for `21a8b8b`; `git diff 21a8b8b..HEAD -- src/ prisma/ package.json package-lock.json next.config.ts` is empty, so no later commit changes the deployed artifact. |
 | PostgreSQL read, write, persistence | VERIFIED | Smoke signs up, the row survives a logout and a fresh sign-in, and `/api/state` reads it back as JSON. |
 | Database reachable from the deployment | VERIFIED | `/api/health` on the live site reports `"database":"ok"`. |
@@ -88,10 +93,14 @@ never be the evidence for inbox delivery, no matter how many times it passes.
 
 | Gate | Status | Evidence |
 |---|---|---|
-| Unit and integration | VERIFIED | 740/740 in 22 files, locally at `8c1ba67`; green in CI on every push. |
+| Unit and integration | VERIFIED | 740/740 in 22 files; green in CI on every push. |
+| Email and token tests specifically | VERIFIED | 62/62 — `auth-flows` 28, `auth-tokens` 24, `email-transport` 10. |
+| Frontend component tests | VERIFIED | 351/351 in `widgets.test.ts`. |
 | End-to-end | VERIFIED | 137/137 against a production build rather than `next dev`. |
+| Account-flow end-to-end specifically | VERIFIED | 11/11 in `account-flows.spec.ts` — verification, spent links, invented tokens, resend, reset through the emailed link. |
 | Typecheck, lint, contrast, curriculum integrity | VERIFIED | All four green in the same run. |
 | Production build | VERIFIED | `npm run build` completes; 16 static pages generated. |
+| `./scripts/verify-all.sh --full` | VERIFIED | 7/7 steps, exit 0, in one clean run. |
 | Accessibility | VERIFIED | axe, no serious violations, across the core pages and a lesson. |
 | Responsive | VERIFIED | 320, 375, 390, 412, 768, 1024, 1280, 1440 — no horizontal scroll, heading visible. |
 | Performance, live site | VERIFIED | Measured on the alias in a real Chromium, signed in and signed out. |
