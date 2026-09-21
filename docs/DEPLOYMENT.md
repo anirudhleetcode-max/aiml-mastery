@@ -231,18 +231,19 @@ a build log.
 
 | | Status |
 |---|---|
-| Deployed to a public URL | **Production verified** — `https://aiml-mastery.vercel.app`, commit `5f4685a`, GitHub Actions run 35544786098. |
-| Live smoke test | **Production verified** — 36/36 against the alias as the deploy's gating step (run 35544786098), and 36/36 again from an independent run against the same alias with a fresh account (run 35544946796). |
+| Deployed to a public URL | **Production verified** — `https://aiml-mastery.vercel.app`, commit `9b21dd0`, GitHub Actions run 35547916102. |
+| Live smoke test | **Production verified** — 37/37 against the alias as the deploy's gating step (run 35547916102). The suite has also passed from an independent run against the same alias with a fresh account. |
 | PostgreSQL read, write and persistence | **Production verified** — a real signup wrote a row to Neon, the account survived logout and signed in again, and `/api/state` read the learner state back as JSON. |
 | Session cookie flags | **Production verified** — `HttpOnly`, `Secure`, `SameSite=Lax` observed on the live response. |
 | Security headers | **Production verified** — all six present on the alias, through Vercel's proxy. |
 | API authorisation | **Production verified** — `/api/state` 401 anonymous; cross-origin login 403. |
-| Performance, live site | **Production verified** — measured on the alias in a real Chromium, signed in and signed out (run 35545316413). Worst LCP 1704 ms (Labs), best 256 ms (Login); CLS 0 on every route; zero console or page errors. All routes inside the budget of LCP 2500 ms / CLS 0.1 / 3000 DOM nodes. |
+| Performance, live site | **Production verified** — measured on the alias in a real Chromium, signed in and signed out (run 35545784069). Worst LCP 1596 ms (Dashboard), best 188 ms (Login); CLS 0 on every route; zero console or page errors. All routes inside the budget of LCP 2500 ms / CLS 0.1 / 3000 DOM nodes. |
 | Production build (`npm run build`) | Verified — passes, and emits `.next/standalone`. |
-| Full test suite | Verified locally — 730 unit/integration and 127 end-to-end, the latter against a production server rather than `next dev`. |
+| Full test suite | Verified locally — 740 unit/integration across 22 files and 137 end-to-end, the latter against a production server rather than `next dev`. Also 137/137 in CI on this commit. |
 | `./scripts/verify-all.sh --full` twice consecutively | Verified — 7/7 both runs. |
 | `Dockerfile` builds | **Not verified.** No Docker daemon in this environment. |
-| Real email delivery | **Not verified.** No email provider is configured; the transport abstraction and both token flows are tested, which is not the same claim. |
+| Mail leaves the application | **Production verified** — the live site reports its transport as `resend`, and a real signup's verification email drew no rejection from the provider in the runtime log (run 35547916102). |
+| Mail arrives in an inbox | **Not verified.** Acceptance by the provider is not receipt, and there is no mailbox here to read. The step that would close this is opening one of those messages. |
 
 ### Three faults that a green build could not see
 
