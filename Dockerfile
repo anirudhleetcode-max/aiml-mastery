@@ -37,6 +37,14 @@ RUN apk add --no-cache libc6-compat openssl
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
+# Bind every interface. Next's standalone server listens on $HOSTNAME, and
+# Docker sets that variable itself — to the container id normally, and to the
+# host's name under `--network host`. Either way the server ends up bound to
+# one interface rather than all of them, so it answers on the address Docker
+# happened to pick and refuses the loopback address anything else would try.
+# Running the image is the only way this shows up: it starts cleanly, reports
+# "Ready", and then accepts no connection you would think to make.
+ENV HOSTNAME=0.0.0.0
 
 # Not root. A container that does not need write access to its own code
 # should not have it.
