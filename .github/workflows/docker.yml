@@ -160,9 +160,14 @@ jobs:
           echo "anonymous /api/state: $code"
           [ "$code" = "401" ] || { echo "FAIL: expected 401"; exit 1; }
 
+      # Worth keeping: this log is what exposed the server binding a single
+      # interface, which nothing static about the image revealed. The console
+      # transport prints the verification link in full, though, so the token
+      # is masked — it is dead the moment this job ends, but a token in a log
+      # is a habit worth not forming.
       - name: Container log
         if: always()
-        run: docker logs aiml 2>&1 | tail -40 || true
+        run: docker logs aiml 2>&1 | sed -E 's/(token=)[A-Za-z0-9_-]+/\1REDACTED/g' | tail -40 || true
 
       - name: Stop the container
         if: always()
