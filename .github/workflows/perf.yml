@@ -1,0 +1,40 @@
+# Measures Core Web Vitals against a deployed instance.
+#
+# Performance measured on localhost says how fast the machine that built it
+# is. It says nothing about TLS, the platform's proxy, the distance to the
+# database, or a cold serverless function — which are most of what a real
+# visitor actually waits for. So this runs against a URL, in a real Chromium,
+# and reports what it found.
+#
+# It signs in by creating an account, because a deployment has no seeded demo
+# learner, and it refuses to report at all if that fails rather than quietly
+# measuring the login page seven times.
+name: Performance
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: The deployment to measure, e.g. https://aiml-mastery.vercel.app
+        required: true
+        type: string
+
+jobs:
+  perf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Measure ${{ inputs.url }}
+        run: node scripts/perf-audit.mjs "${{ inputs.url }}"

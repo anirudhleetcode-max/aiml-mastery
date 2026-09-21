@@ -35,6 +35,9 @@ jobs:
       - name: Lint
         run: npm run lint -- --max-warnings=0
 
+      - name: UI contrast (WCAG AA)
+        run: npm run check:contrast
+
       - name: Curriculum integrity
         run: npm run curriculum:verify -- --stats
 
@@ -50,8 +53,11 @@ jobs:
       - name: Seed demo data
         run: npm run db:seed
 
+      # `npx playwright test`, not `npm run test:e2e`: the build step above
+      # already produced what `next start` serves, and the npm script would
+      # build it a second time.
       - name: End-to-end tests
-        run: npm run test:e2e
+        run: npx playwright test
         env:
           CHROMIUM_PATH: ''
 

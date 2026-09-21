@@ -5,6 +5,8 @@ import { Check, ChevronRight, Lightbulb, RotateCw, Sparkles } from 'lucide-react
 import type { Challenge, Flashcard, LearningUnit, PracticeQuestion, QuizQuestion, TeachingPrompt } from '@/types/curriculum';
 import { gradeQuestion, scoreTest, type Graded, type Response } from '@/features/testing/scoring';
 import { evaluateTeaching, type TeachingEvaluation } from '@/features/teaching/evaluate';
+import type { AnswerEvaluation } from '@/features/evaluation/schema';
+import { EvaluationResult } from '@/components/evaluation/answer-evaluator';
 import { useLearnerStore } from '@/lib/store/learner';
 import { QuestionCard } from '@/components/testing/question-card';
 import { Button } from '@/components/ui/button';
@@ -316,12 +318,48 @@ export function TeachBackSection({ unit }: { unit: LearningUnit }) {
   const [text, setText] = React.useState('');
   const [result, setResult] = React.useState<TeachingEvaluation | null>(null);
   const [showSample, setShowSample] = React.useState(false);
+  // The optional second reading. Null while none has been asked for or when
+  // no model is configured; the analysis above stands on its own either way.
+  const [review, setReview] = React.useState<AnswerEvaluation | null>(null);
+  const [reviewing, setReviewing] = React.useState(false);
+  const [reviewFailed, setReviewFailed] = React.useState(false);
 
   function submit() {
     const evaluation = evaluateTeaching(unit, text);
     setResult(evaluation);
     emit({ type: 'teaching-submitted', unitId: unit.id, text });
     void flush();
+  }
+
+  /**
+   * Asks for a closer reading of the same explanation.
+   *
+   * Deliberately a second, explicit step rather than part of submitting: the
+   * points analysis is instant and is what gets recorded, and waiting on a
+   * network round trip before showing it would make the fast, certain half of
+   * the feedback hostage to the slow, optional half.
+   */
+  async function askForReview() {
+    setReviewing(true);
+    setReviewFailed(false);
+    try {
+      const res = await fetch('/api/evaluate/teaching', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unitId: unit.id, text }),
+      });
+      if (!res.ok) {
+        setReviewFailed(true);
+        return;
+      }
+      const data = (await res.json().catch(() => null)) as { evaluation?: AnswerEvaluation | null } | null;
+      if (data?.evaluation) setReview(data.evaluation);
+      else setReviewFailed(true);
+    } catch {
+      setReviewFailed(true);
+    } finally {
+      setReviewing(false);
+    }
   }
 
   const prompt: TeachingPrompt = unit.teachingPrompt;
@@ -358,6 +396,8 @@ export function TeachBackSection({ unit }: { unit: LearningUnit }) {
             onClick={() => {
               setResult(null);
               setShowSample(false);
+              setReview(null);
+              setReviewFailed(false);
             }}
           >
             Try again
@@ -446,6 +486,33 @@ export function TeachBackSection({ unit }: { unit: LearningUnit }) {
               </ul>
             </div>
           )}
+
+          {/* The optional second reading. The analysis above is what was
+              recorded and what mastery is computed from; this adds the
+              judgement a points check cannot make. */}
+          <div className="rounded-xl border border-line bg-surface p-5">
+            {review ? (
+              <EvaluationResult evaluation={review} />
+            ) : (
+              <>
+                <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-subtle">A closer reading</p>
+                <p className="mt-2 text-[13px] leading-relaxed text-muted">
+                  The analysis above checks which of this unit&rsquo;s points you covered. It cannot tell whether the
+                  mechanism you described is right, or whether anything you stated confidently is wrong — which is the
+                  part that matters most in an explanation.
+                </p>
+                <Button size="sm" className="mt-3" onClick={askForReview} loading={reviewing} disabled={reviewing}>
+                  <Sparkles size={14} /> Read it more closely
+                </Button>
+                {reviewFailed && (
+                  <p role="status" className="mt-3 text-[12.5px] leading-relaxed text-subtle">
+                    No closer reading is available right now — either no evaluation model is configured for this
+                    deployment, or it could not be reached. The feedback above is unaffected.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
 
           <div className="rounded-xl border border-line bg-surface p-5">
             <button

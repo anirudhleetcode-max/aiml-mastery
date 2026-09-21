@@ -6,6 +6,7 @@ import { requireUser } from '@/lib/auth/guard';
 import { loadState } from '@/lib/sync/state';
 import { buildOverview } from '@/features/progress/overview';
 import { reteachStrategy } from '@/features/revision/spaced';
+import { GoalRings } from '@/components/dashboard/goal-rings';
 import { TodayCard } from '@/components/dashboard/today-card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -88,7 +89,7 @@ export default async function TodayPage() {
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
+      <div className="grid gap-4 [&>*]:min-w-0 lg:grid-cols-[1.1fr_1fr]">
         <TodayCard
           theme={plan?.theme ?? 'Rest day'}
           testDone={o.todayTestDone}
@@ -104,8 +105,10 @@ export default async function TodayPage() {
         />
 
         <div className="space-y-4">
+          <GoalRings goals={o.goals} />
+
           {/* --------------------------------------------- Reviews due */}
-          <section className="rounded-xl border border-line bg-surface p-5">
+          <section className="min-w-0 rounded-xl border border-line bg-surface p-4 sm:p-5">
             <SectionHeading
               as="h2"
               title="Spaced review"
@@ -179,7 +182,7 @@ export default async function TodayPage() {
           )}
 
           {/* -------------------------------------------- Teach it back */}
-          <section className="rounded-xl border border-line bg-surface p-5">
+          <section className="min-w-0 rounded-xl border border-line bg-surface p-4 sm:p-5">
             <h2 className="flex items-center gap-2 text-[14px] font-semibold text-ink">
               <GraduationCap size={15} className="text-subtle" /> Teach something back
             </h2>
@@ -197,7 +200,7 @@ export default async function TodayPage() {
       </div>
 
       {/* ------------------------------------------------ Daily report */}
-      <section className="rounded-xl border border-line bg-surface p-5">
+      <section className="min-w-0 rounded-xl border border-line bg-surface p-4 sm:p-5">
         <SectionHeading
           as="h2"
           title="Today's report"

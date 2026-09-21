@@ -23,7 +23,7 @@ export function ActivityPanel({
   const day = selected ? activity[selected] : undefined;
 
   return (
-    <div className="rounded-xl border border-line bg-surface p-5">
+    <div className="rounded-xl border border-line bg-surface p-4 sm:p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-[14px] font-semibold text-ink">Daily activity</h2>
         <p className="text-[12px] text-subtle">
@@ -91,7 +91,7 @@ export function PeriodReports({ weeks, months }: { weeks: PeriodSummary[]; month
   const rows = view === 'weekly' ? weeks : months;
 
   return (
-    <div className="rounded-xl border border-line bg-surface p-5">
+    <div className="rounded-xl border border-line bg-surface p-4 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-[14px] font-semibold text-ink">Reports</h2>

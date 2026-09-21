@@ -1,5 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { completeOnboarding, signUpFresh } from './helpers';
+import { UNIT_BY_SLUG } from '@/data/curriculum';
+import { COURSE_START } from '@/features/scheduling/planner';
+import { dateKey, daysBetween } from '@/lib/format';
 
 // These exercise the sign-in and sign-up UI itself, so they must start
 // from a signed-out browser rather than the shared demo session.
@@ -30,11 +33,33 @@ test.describe('authentication and onboarding', () => {
     await completeOnboarding(page);
 
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/Good (morning|afternoon|evening)|Still up/);
+
     // Onboarding lands on today's mission, which situates the learner in the
     // real course window and lists actual units rather than a placeholder.
-    await expect(page.getByText(/Day 1 of \d+/)).toBeVisible();
+    //
+    // The day is computed from the course start rather than written down.
+    // This read "Day 1" originally, which was true on the day it was written
+    // and wrong every day after — the suite went red the first midnight it
+    // survived. Deriving it keeps the assertion exact, which is the point:
+    // that the learner is placed on the *correct* day of a real window, not
+    // merely on some day of one.
+    const today = dateKey();
+    const expectedDay = daysBetween(COURSE_START, today) + 1;
+    await expect(
+      page.getByText(today < COURSE_START ? /Before you begin/ : new RegExp(`Day ${expectedDay} of \\d+`)),
+    ).toBeVisible();
     await expect(page.getByRole('heading', { name: /Today.s mission/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /Your First Python Program/ }).first()).toBeVisible();
+
+    // And the mission links real curriculum, which is the half of this that a
+    // placeholder would fail. Naming the unit would not test that: which unit
+    // is scheduled depends on the day, so "Your First Python Program" was
+    // another assertion that only held on the day it was written. What has to
+    // be true on every day is that the link goes to a unit the curriculum
+    // actually contains.
+    const lesson = page.locator('a[href^="/learn/"]').first();
+    await expect(lesson).toBeVisible();
+    const slug = (await lesson.getAttribute('href'))?.replace('/learn/', '').split('#')[0] ?? '';
+    expect(UNIT_BY_SLUG.has(slug), `"${slug}" is not a unit in the curriculum`).toBe(true);
   });
 
   test('protects the app from signed-out visitors', async ({ page, context }) => {

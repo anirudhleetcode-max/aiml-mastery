@@ -47,6 +47,13 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
 
+  // Traces the server's real dependencies into `.next/standalone`, so the
+  // container in the Dockerfile ships the server and what it imports rather
+  // than the whole node_modules tree. Platforms that build from source ignore
+  // this; the ones that take an image are several hundred megabytes lighter
+  // for it.
+  output: 'standalone',
+
   // The curriculum is large and lives only on the server; keeping it out of
   // any client bundle is the single biggest thing we do for page weight.
   serverExternalPackages: ['@prisma/client', 'bcryptjs'],

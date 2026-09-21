@@ -39,7 +39,7 @@ export function TodayCard({
   const allLessonsDone = items.length > 0 && done === items.length;
 
   return (
-    <section className="rounded-xl border border-line bg-surface p-5" aria-labelledby="today-heading">
+    <section className="min-w-0 rounded-xl border border-line bg-surface p-4 sm:p-5" aria-labelledby="today-heading">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 id="today-heading" className="text-[11px] font-semibold uppercase tracking-[0.13em] text-subtle">
@@ -124,22 +124,37 @@ export function TodayCard({
       )}
 
       <div className="mt-5">
+        {/* `block` on each Link: a bare <Link> renders an inline <a>, which
+            leaves the button's `w-full` without a definite containing block —
+            it then resolves to max-content, and a long unit title widens the
+            whole dashboard past a phone screen. */}
         {next ? (
-          <Link href={`/learn/${next.slug}`}>
-            <Button className="w-full group" size="lg">
-              Continue: {next.title}
-              <ArrowRight size={16} className="transition-transform duration-200 group-hover:translate-x-0.5" />
+          <Link href={`/learn/${next.slug}`} className="block">
+            <Button className="group h-auto w-full whitespace-normal py-3" size="lg">
+              {/* Wrapping, not truncating. Buttons are `whitespace-nowrap` by
+                  default, which is right for a label and wrong for a unit
+                  title: with nowrap the button's intrinsic min-content width
+                  is the entire title, and a grid track sized to that widens
+                  the whole dashboard past a phone screen. `truncate` does not
+                  help, because it sets `white-space: nowrap` itself. */}
+              <span className="text-left">
+                Continue<span className="hidden sm:inline">: {next.title}</span>
+              </span>
+              <ArrowRight
+                size={16}
+                className="shrink-0 transition-transform duration-200 group-hover:translate-x-0.5"
+              />
             </Button>
           </Link>
         ) : !testDone && items.length > 0 ? (
-          <Link href={testHref}>
+          <Link href={testHref} className="block">
             <Button className="w-full" size="lg">
               Take today&rsquo;s test
               <ArrowRight size={16} />
             </Button>
           </Link>
         ) : (
-          <Link href="/today">
+          <Link href="/today" className="block">
             <Button className="w-full" size="lg" variant="secondary">
               Open today&rsquo;s mission
             </Button>

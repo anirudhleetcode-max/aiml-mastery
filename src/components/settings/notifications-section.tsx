@@ -48,6 +48,8 @@ export function NotificationsSection({ data }: { data: SettingsData }) {
           testReminder: prefs.testReminder,
           streakReminder: prefs.streakReminder,
           weeklySummary: prefs.weeklySummary,
+          goalReminder: prefs.goalReminder,
+          achievementAlerts: prefs.achievementAlerts,
           ...(isTime(prefs.morningTime) ? { morningTime: prefs.morningTime } : {}),
           ...(isTime(prefs.studyTime) ? { studyTime: prefs.studyTime } : {}),
           ...(isTime(prefs.testTime) ? { testTime: prefs.testTime } : {}),
@@ -242,6 +244,22 @@ export function NotificationsSection({ data }: { data: SettingsData }) {
             onChange={(v) => set({ weeklySummary: v })}
             label="Weekly summary"
             description="One message a week: units completed, average score, which topics are slipping, and whether you are ahead of or behind your deadline."
+          />
+
+          <Switch
+            id="set-goal-reminder"
+            checked={prefs.goalReminder}
+            onChange={(v) => set({ goalReminder: v })}
+            label="Daily goal"
+            description="A nudge once you have started but not finished the day — how many lessons and roughly how many minutes are left in the plan. Nothing is sent on a day you have not opened yet."
+          />
+
+          <Switch
+            id="set-achievement-alerts"
+            checked={prefs.achievementAlerts}
+            onChange={(v) => set({ achievementAlerts: v })}
+            label="Achievements"
+            description="When something unlocks. Achievements are earned from recorded evidence, so this only fires on work you actually did."
           />
         </div>
       </fieldset>

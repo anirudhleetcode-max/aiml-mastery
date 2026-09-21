@@ -7,6 +7,8 @@ import type { DomainId } from '@/types/curriculum';
 import { domainColor } from '@/data/domains';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { AnswerEvaluator } from '@/components/evaluation/answer-evaluator';
+import type { FlashcardEvaluation } from '@/features/evaluation/schema';
 import { Select } from '@/components/ui/input';
 import { ProgressBar } from '@/components/ui/progress';
 import { EmptyState } from '@/components/ui/misc';
@@ -349,10 +351,18 @@ export function FlashcardSession({
               </div>
 
               {!flipped && (
-                <p className="text-[12px] text-subtle">
-                  Flip the card before judging yourself. Deciding you knew it before seeing the answer is the one way
-                  to get nothing out of this.
-                </p>
+                <>
+                  <p className="text-[12px] text-subtle">
+                    Flip the card before judging yourself. Deciding you knew it before seeing the answer is the one way
+                    to get nothing out of this.
+                  </p>
+
+                  {/* Writing the recall down before flipping is the strongest
+                      version of this exercise, and the check is the reason to
+                      bother. What it says is advice: the buttons above still
+                      decide, and the scheduler still follows them. */}
+                  <RecallCheck cardKey={currentKey!} />
+                </>
               )}
             </>
           )}
@@ -417,5 +427,54 @@ function Summary({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Optional written recall, checked before the card is flipped.
+ *
+ * It renders a suggestion and stops there. Pressing known or again for the
+ * learner would put a language model in charge of their revision schedule,
+ * which is precisely the thing the spaced-repetition system must not have
+ * happen to it — the schedule is only as good as the honesty of the signal it
+ * is fed, and a machine guess is not that signal.
+ */
+function RecallCheck({ cardKey }: { cardKey: string }) {
+  const [unitId, rawIndex] = cardKey.split(':');
+  const cardIndex = Number(rawIndex);
+  if (!unitId || !Number.isInteger(cardIndex) || cardIndex < 0) return null;
+
+  return (
+    <details className="rounded-lg border border-line bg-surface-2 p-3">
+      <summary className="cursor-pointer text-[12.5px] font-medium text-ink">
+        Optional: write your recall and have it checked
+      </summary>
+      <div className="mt-3">
+        <AnswerEvaluator<FlashcardEvaluation>
+          endpoint="/api/evaluate/flashcard"
+          body={{ unitId, cardIndex }}
+          label="What came back to you?"
+          placeholder="Write it as you remember it — a sentence is plenty."
+        >
+          {(evaluation) => <SuggestionNote evaluation={evaluation} />}
+        </AnswerEvaluator>
+      </div>
+    </details>
+  );
+}
+
+const SUGGESTION_LABEL: Record<FlashcardEvaluation['suggestion'], string> = {
+  known: 'Reads like you knew it',
+  partial: 'Reads like a partial recall',
+  again: 'Reads like one to see again',
+};
+
+function SuggestionNote({ evaluation }: { evaluation: FlashcardEvaluation }) {
+  return (
+    <p className="mt-3 rounded-lg border border-line bg-surface p-3 text-[12.5px] leading-relaxed text-muted">
+      <strong className="text-ink">{SUGGESTION_LABEL[evaluation.suggestion]}. </strong>
+      {evaluation.suggestionReason} Flip the card and decide for yourself — your button is what sets the next review
+      date, not this.
+    </p>
   );
 }

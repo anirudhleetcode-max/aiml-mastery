@@ -1,0 +1,242 @@
+# Production deployment.
+#
+# This exists because the environment the application is developed in has no
+# outbound internet beyond GitHub and npm — every hosting API is refused at the
+# gateway — while a GitHub runner has ordinary network access. So the deploy
+# happens here, where it can actually reach the provider, and the same job then
+# smoke-tests the URL it just produced. A deploy that is not smoke-tested is a
+# deploy that reports success for a site nobody has opened.
+#
+# It is manual on purpose. Nothing about this repository should deploy itself
+# because a commit landed.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   VERCEL_TOKEN       a Vercel access token
+#   VERCEL_ORG_ID      from .vercel/project.json after `vercel link`
+#   VERCEL_PROJECT_ID  likewise
+#   DATABASE_URL       the production postgresql:// connection string
+#
+# Everything the running application needs at runtime — DATABASE_URL,
+# DATABASE_PROVIDER, AUTH_SECRET, APP_URL and optionally RESEND_API_KEY and
+# ANTHROPIC_API_KEY — is set on the Vercel project itself, not here. This
+# workflow needs DATABASE_URL only to create the schema before the first
+# request arrives.
+
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which Vercel environment to deploy
+        type: choice
+        options: [production, preview]
+        default: production
+      run_schema_push:
+        description: Create or update the database schema before deploying
+        type: boolean
+        default: true
+      public_url:
+        description: >-
+          Public URL to smoke-test instead of the deployment URL. A production
+          deploy is aliased to the project's stable domain, and Vercel's
+          Deployment Protection answers the deployment-specific URL with an SSO
+          redirect — so testing that URL measures the protection, not the app.
+        type: string
+        default: ''
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # The schema has to exist before the first request, and `db push` is
+      # idempotent: on an empty database it creates everything, and on one
+      # already in step it is a no-op. It is deliberately not `--accept-data-loss`
+      # — if this schema change would drop data, the deploy should stop and a
+      # human should look at it.
+      - name: Create or update the production schema
+        if: ${{ inputs.run_schema_push }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_PROVIDER: postgresql
+        run: |
+          node scripts/db-provider.mjs postgresql
+          npx prisma db push --skip-generate
+
+      - name: Install the Vercel CLI
+        run: npm i -g vercel@latest
+
+      # DATABASE_PROVIDER has to be stated here, not just on the Vercel
+      # project. `vercel build` runs `npm run build` in an environment of its
+      # own, and when the variable does not reach it the build generates a
+      # SQLite client against a postgresql:// URL — which compiles, deploys,
+      # serves every page that does not touch the database, and then fails
+      # every read and write at runtime. A managed host cannot keep a SQLite
+      # file anyway, which is why this is a constant and not an input.
+      # The application reads its configuration from the Vercel project, and a
+      # project with no variables set deploys perfectly and then fails every
+      # request that needs a database or a session — which is exactly what
+      # happened: `vercel env ls` reported "No Environment Variables found"
+      # while the build stayed green.
+      #
+      # So the deploy makes sure they exist rather than assuming it. This runs
+      # before the deployment is created, because Vercel binds a deployment's
+      # environment at creation: setting a variable afterwards does nothing
+      # until something deploys again.
+      #
+      # It only ever *adds* what is absent. A variable already set is left
+      # exactly as it is — this must not quietly replace a value somebody
+      # chose, and rotating AUTH_SECRET would sign every existing session out.
+      # Values arrive on stdin and every command's output is discarded, so no
+      # value can reach the log.
+      - name: Ensure the production environment is configured
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          TARGET: ${{ inputs.environment }}
+          TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DB_URL: ${{ secrets.DATABASE_URL }}
+          PUBLIC_URL: ${{ inputs.public_url }}
+          RESEND_KEY: ${{ secrets.RESEND_API_KEY }}
+          MAIL_FROM: ${{ secrets.EMAIL_FROM }}
+        run: |
+          set -euo pipefail
+          existing=$(vercel env ls "$TARGET" --token="$TOKEN" 2>/dev/null || true)
+
+          ensure() {
+            name="$1"
+            value="$2"
+            if printf '%s' "$existing" | grep -qw -- "$name"; then
+              echo "  $name — already set, left unchanged"
+              return
+            fi
+            if [ -z "$value" ]; then
+              echo "  $name — MISSING and no source available"
+              return
+            fi
+            if printf '%s' "$value" | vercel env add "$name" "$TARGET" --token="$TOKEN" >/dev/null 2>&1; then
+              echo "  $name — added"
+            else
+              # Deploying on past this would produce the exact failure this
+              # step exists to prevent, so it stops here instead.
+              echo "  $name — could not be added"
+              exit 1
+            fi
+          }
+
+          # A managed serverless host cannot keep a SQLite file, so the
+          # provider is a constant here rather than a choice.
+          ensure DATABASE_PROVIDER postgresql
+          ensure DATABASE_URL "$DB_URL"
+          ensure APP_URL "${PUBLIC_URL:-https://aiml-mastery.vercel.app}"
+          # Generated rather than stored: it needs to be high-entropy and
+          # stable, and nothing outside the running application needs to know
+          # it. `ensure` will not touch it again once it exists.
+          ensure AUTH_SECRET "$(openssl rand -hex 32)"
+
+          # Mail. Unlike the four above, these have no fallback worth
+          # inventing: a generated API key is not a key, and guessing a from
+          # address gets the provider to reject the send. So if the repository
+          # secret is absent this reports the variable as missing and carries
+          # on — the deployment still works, it simply logs its mail instead of
+          # sending it, and the smoke test is what refuses to call that
+          # production-ready.
+          ensure RESEND_API_KEY "$RESEND_KEY"
+          ensure EMAIL_FROM "$MAIL_FROM"
+
+          echo
+          echo "Names now configured for $TARGET:"
+          vercel env ls "$TARGET" --token="$TOKEN" 2>/dev/null || true
+
+      - name: Pull the Vercel environment
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: vercel pull --yes --environment=${{ inputs.environment }} --token=${{ secrets.VERCEL_TOKEN }}
+
+
+      - name: Build
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          DATABASE_PROVIDER: postgresql
+        run: vercel build ${{ inputs.environment == 'production' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy
+        id: deploy
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          url=$(vercel deploy --prebuilt ${{ inputs.environment == 'production' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Deployed to $url"
+
+      # The point of the whole job. A URL that has not been exercised is a
+      # claim, not a result.
+      - name: Smoke-test the deployment
+        run: |
+          target="${{ inputs.public_url }}"
+          [ -n "$target" ] || target="${{ steps.deploy.outputs.url }}"
+          echo "Smoke-testing $target"
+          node scripts/smoke-production.mjs "$target"
+
+      # The smoke test's signup triggers a real verification email. A provider
+      # that rejects it is logged by the application and returned to nobody,
+      # because a failed send must not fail the signup it belongs to — so the
+      # runtime log is the only place that rejection exists. This looks for it
+      # explicitly rather than trusting silence.
+      - name: Check whether the verification email was accepted
+        if: always()
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          logs=$(vercel inspect "${{ steps.deploy.outputs.url }}" --logs --token=${{ secrets.VERCEL_TOKEN }} 2>&1 || true)
+          if printf '%s' "$logs" | grep -q 'verification send failed'; then
+            echo "A verification email was REJECTED by the provider:"
+            printf '%s' "$logs" | grep 'verification send failed' | head -5
+            exit 1
+          fi
+          echo "No rejected verification email in the runtime log."
+
+      # Only on failure, and only then. The runtime's own log is the one place
+      # the real driver error exists — the application deliberately does not
+      # return it — and it is not reachable from the environment this is
+      # developed in.
+      - name: Runtime logs for the failed deployment
+        if: failure()
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          vercel inspect "${{ steps.deploy.outputs.url }}" --logs --token=${{ secrets.VERCEL_TOKEN }} 2>&1 | tail -80 || true
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Deployment"
+            echo
+            echo "- environment: \`${{ inputs.environment }}\`"
+            echo "- commit: \`${{ github.sha }}\`"
+            echo "- url: ${{ steps.deploy.outputs.url }}"
+            echo "- smoke-tested: ${{ inputs.public_url || steps.deploy.outputs.url }}"
+            echo "- smoke test: ${{ job.status }}"
+          } >> "$GITHUB_STEP_SUMMARY"

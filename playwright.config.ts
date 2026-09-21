@@ -9,7 +9,10 @@ const BASE_URL = `http://127.0.0.1:${PORT}`;
 
 export default defineConfig({
   testDir: './tests/e2e',
-  timeout: 90_000,
+  // `next dev` compiles a route on first visit, and this app's authenticated
+  // tree is large. A generous ceiling costs nothing on a warm run and is the
+  // difference between a cold-start report of "broken" and the truth.
+  timeout: 150_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
   workers: 1,
@@ -41,8 +44,20 @@ export default defineConfig({
       use: { ...devices['Pixel 7'], storageState: DEMO_STATE },
     },
   ],
+  // Runs against the production build, not `next dev`.
+  //
+  // `next dev` compiles each route on its first visit. With 57 tests that was
+  // merely slow; at 127 it is fatal — a CI runner spent over two minutes
+  // compiling the authenticated tree for the very first sign-in and the whole
+  // suite never ran. The production server has no compile step, so the suite
+  // is both faster and a more faithful target: it is what actually ships.
+  //
+  // `E2E_DEV=1` restores the dev server for iterating on a single spec.
   webServer: {
-    command: `npx next dev --port ${PORT}`,
+    command: process.env.E2E_DEV
+      ? `npx next dev --port ${PORT}`
+      : `npx next start --port ${PORT}`,
+    env: { APP_URL: BASE_URL },
     url: BASE_URL,
     reuseExistingServer: true,
     timeout: 180_000,

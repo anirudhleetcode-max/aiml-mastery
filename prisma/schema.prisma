@@ -7,6 +7,13 @@
 
 generator client {
   provider = "prisma-client-js"
+  // The deploy builds on a GitHub runner and uploads the result to Vercel, so
+  // the machine that runs `prisma generate` is not the machine that runs the
+  // query. "native" covers local development and the runner itself; the rhel
+  // target is Vercel's Lambda runtime (Amazon Linux). Without it the bundle
+  // ships an engine the runtime cannot load, and every query fails at request
+  // time while the build stays green.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
@@ -37,7 +44,12 @@ model User {
   authSessions      AuthSession[]
   flashcardReviews  FlashcardReview[]
   interviewAttempts InterviewAttempt[]
+  answerEvaluations AnswerEvaluation[]
   labCompletions    LabCompletion[]
+  authTokens        AuthToken[]
+  /// Null until the address is confirmed. Gating on a timestamp rather than a
+  /// boolean records *when*, which an audit needs and a flag cannot give.
+  emailVerifiedAt   DateTime?
 }
 
 /// Server-side session records, so a token can be revoked rather than only expiring.
@@ -376,4 +388,62 @@ model RateLimit {
   updatedAt DateTime @updatedAt
 
   @@index([resetAt])
+}
+
+/// Single-use, expiring tokens for email verification and password reset.
+///
+/// Only a SHA-256 hash of the token is stored. A database dump therefore
+/// cannot be replayed against the endpoints, which is the same reasoning that
+/// puts a bcrypt hash in `passwordHash` rather than the password. The raw
+/// token exists only in the email link.
+model AuthToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// "email-verification" or "password-reset".
+  purpose   String
+  /// SHA-256 of the raw token, hex encoded. Unique so a lookup is a single
+  /// indexed read and so two tokens can never collide.
+  tokenHash String    @unique
+  expiresAt DateTime
+  /// Set the moment the token is spent, which is what makes it single-use.
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, purpose])
+  @@index([expiresAt])
+}
+
+/// One stored evaluation of a typed answer, for an interview question or a
+/// flashcard recall attempt.
+///
+/// Kept as one row per item rather than an append-only log: the learner wants
+/// to see what the last attempt said, and an unbounded history of prose
+/// answers is storage nobody reads. `attempts` preserves the fact that the
+/// item was worked more than once, which is the part that carries meaning.
+model AnswerEvaluation {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// "interview" or "flashcard" — which bank the index addresses.
+  target    String
+  unitId    String
+  /// Index of the question or card within its unit.
+  itemIndex Int
+  /// The learner's own text, so the feedback can be read back beside it.
+  answer    String
+  /// The evaluation, serialised. Read back through storedEvaluationSchema
+  /// rather than cast, because a row written by an older version of the
+  /// evaluator is untrusted input like any other.
+  result    String
+  /// "deterministic" or "ai" — surfaced so a score is never anonymous.
+  source    String
+  /// Headline score, duplicated out of `result` so it is queryable.
+  score     Int      @default(0)
+  attempts  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, target, unitId, itemIndex])
+  @@index([userId, target])
 }

@@ -79,7 +79,12 @@ export function ActivityHeatmap({
   }, [weeks]);
 
   return (
-    <div className={cn('w-full', className)}>
+    // `min-w-0` lets this shrink inside a grid or flex parent. Without it the
+    // parent's `min-width: auto` resolves to the full width of a year of
+    // day cells, the column grows to ~420px, and the page scrolls sideways on
+    // a phone — while the `overflow-x-auto` below, which exists precisely to
+    // stop that, never gets the chance to do anything.
+    <div className={cn('w-full min-w-0', className)}>
       <div className="overflow-x-auto pb-1">
         <div className="inline-block min-w-full">
           <div className="mb-1 flex gap-[3px] pl-7 text-[10px] text-subtle">

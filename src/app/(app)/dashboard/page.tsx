@@ -102,7 +102,7 @@ export default async function DashboardPage() {
       </header>
 
       {/* ------------------------------------------------------- Stats */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+      <div className="grid [&>*]:min-w-0 grid-cols-2 gap-3 lg:grid-cols-6">
         <Stat label="XP" value={formatXP(state.xp)} tone="xp" icon={<Zap size={14} />} sub={o.level.current.title} />
         <Stat
           label="Streak"
@@ -132,7 +132,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* --------------------------------------------- Today + deadline */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid [&>*]:min-w-0 gap-4 lg:grid-cols-2">
         <TodayCard
           theme={o.schedule.byDate.get(o.today)?.theme ?? 'Rest day'}
           testDone={o.todayTestDone}
@@ -150,7 +150,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* ------------------------------------------------------ Charts */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid [&>*]:min-w-0 gap-4 lg:grid-cols-3">
         <CompositionDonut
           title="Mastery composition"
           subtitle={`Where all ${o.totals.total} units currently stand`}
@@ -174,8 +174,8 @@ export default async function DashboardPage() {
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+      <div className="grid [&>*]:min-w-0 gap-4 lg:grid-cols-3">
+        <div className="min-w-0 lg:col-span-2">
           <ChartFrame
             title="Daily activity"
             subtitle={`${state.profile.startDate} to ${state.profile.endDate}`}
@@ -213,7 +213,10 @@ export default async function DashboardPage() {
       </div>
 
       {/* --------------------------------------------- Domains + focus */}
-      <div className="grid gap-4 lg:grid-cols-[1.15fr_1fr]">
+      {/* `[&>*]:min-w-0`: grid items default to `min-width: auto`, i.e.
+          their min-content, so one dense card sets the track width and the
+          page scrolls sideways on a phone. */}
+      <div className="grid gap-4 [&>*]:min-w-0 lg:grid-cols-[1.15fr_1fr]">
         <DomainProgress domains={o.domains} />
         <div className="space-y-4">
           <AttentionList
@@ -230,7 +233,7 @@ export default async function DashboardPage() {
               detail: reviewDetail(r.progress.nextReviewAt, o.today),
             }))}
           />
-          <section className="rounded-xl border border-line bg-surface p-5">
+          <section className="rounded-xl border border-line bg-surface p-4 sm:p-5">
             <h2 className="text-[14px] font-semibold text-ink">Keep going</h2>
             <p className="mt-1 text-[12.5px] leading-relaxed text-subtle">
               {o.totals.completed === 0
@@ -241,13 +244,21 @@ export default async function DashboardPage() {
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               {o.continueWith && (
-                <Link href={`/learn/${o.continueWith.slug}`}>
-                  <Button size="sm">Continue: {o.continueWith.title}</Button>
+                <Link href={`/learn/${o.continueWith.slug}`} className="min-w-0">
+                  <Button size="sm" className="h-auto whitespace-normal py-2">
+                    <span className="text-left">
+                      Continue<span className="hidden sm:inline">: {o.continueWith.title}</span>
+                    </span>
+                  </Button>
                 </Link>
               )}
               {o.nextUp && o.nextUp.id !== o.continueWith?.id && (
-                <Link href={`/learn/${o.nextUp.slug}`}>
-                  <Button size="sm" variant="secondary">Next up: {o.nextUp.title}</Button>
+                <Link href={`/learn/${o.nextUp.slug}`} className="min-w-0">
+                  <Button size="sm" variant="secondary" className="h-auto whitespace-normal py-2">
+                    <span className="text-left">
+                      Next up<span className="hidden sm:inline">: {o.nextUp.title}</span>
+                    </span>
+                  </Button>
                 </Link>
               )}
               <Link href="/tutor">
