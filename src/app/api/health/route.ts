@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { emailTransport } from '@/lib/email/send';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -72,6 +73,14 @@ export async function GET() {
   let database: Status = 'unknown';
   let detail: { kind: string; code?: string } | null = null;
 
+  // Whether this instance sends mail or writes it to a log is invisible from
+  // outside, because a failed send deliberately does not fail the signup it
+  // belongs to. A deployment that has quietly lost its provider therefore
+  // looks exactly like one that never had it, and the first symptom is a
+  // learner who cannot reset their password. The name is one of three fixed
+  // words and carries no credential.
+  const email = emailTransport();
+
   try {
     // Cheap and side-effect free: it proves a connection and a round trip
     // without depending on any table having rows.
@@ -84,7 +93,7 @@ export async function GET() {
     console.error('[health] database check failed:', error);
   }
 
-  const body = { ok: database === 'ok', database, ...(detail ? { detail } : {}) };
+  const body = { ok: database === 'ok', database, email, ...(detail ? { detail } : {}) };
   return NextResponse.json(body, {
     status: body.ok ? 200 : 503,
     headers: { 'cache-control': 'no-store' },

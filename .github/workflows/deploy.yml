@@ -185,6 +185,25 @@ jobs:
           echo "Smoke-testing $target"
           node scripts/smoke-production.mjs "$target"
 
+      # The smoke test's signup triggers a real verification email. A provider
+      # that rejects it is logged by the application and returned to nobody,
+      # because a failed send must not fail the signup it belongs to — so the
+      # runtime log is the only place that rejection exists. This looks for it
+      # explicitly rather than trusting silence.
+      - name: Check whether the verification email was accepted
+        if: always()
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          logs=$(vercel inspect "${{ steps.deploy.outputs.url }}" --logs --token=${{ secrets.VERCEL_TOKEN }} 2>&1 || true)
+          if printf '%s' "$logs" | grep -q 'verification send failed'; then
+            echo "A verification email was REJECTED by the provider:"
+            printf '%s' "$logs" | grep 'verification send failed' | head -5
+            exit 1
+          fi
+          echo "No rejected verification email in the runtime log."
+
       # Only on failure, and only then. The runtime's own log is the one place
       # the real driver error exists — the application deliberately does not
       # return it — and it is not reachable from the environment this is

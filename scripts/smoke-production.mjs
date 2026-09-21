@@ -125,6 +125,16 @@ expect(
     : `got ${health.status}`,
 );
 
+// A deployment that has lost its mail provider still signs people up, still
+// returns 200, and still looks entirely healthy — the send is deliberately
+// non-fatal — right up until somebody needs a password reset. Nothing else
+// here would catch that, so it is asserted rather than assumed.
+expect(
+  healthBody?.email === 'resend',
+  'the deployment sends mail through a real provider',
+  healthBody?.email ? `transport is "${healthBody.email}"` : 'transport not reported',
+);
+
 const email = `smoke-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com`;
 const password = 'a-long-enough-smoke-passphrase';
 

@@ -155,3 +155,16 @@ export async function sendEmail(message: EmailMessage): Promise<SendResult> {
 export function emailConfigured(): boolean {
   return transport() !== 'console';
 }
+
+/**
+ * Which transport this instance will actually use.
+ *
+ * The name is one of three fixed words and carries no credential, which is
+ * what makes it safe to report from a public diagnostic. It answers the
+ * question a deployment cannot otherwise be asked from outside: whether mail
+ * is being sent or merely written to a log. Those two look identical to a
+ * caller, because a send that fails must not fail the signup it belongs to.
+ */
+export function emailTransport(): EmailTransport {
+  return transport();
+}
