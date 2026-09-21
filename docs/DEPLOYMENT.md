@@ -62,6 +62,19 @@ docker run --rm -p 3000:3000 \
 only the server and the traced dependencies rather than the whole
 `node_modules`.
 
+The image defaults to a PostgreSQL client, because Prisma compiles the
+datasource provider into the generated client and a container is almost always
+pointed at a server. Build with `--build-arg DATABASE_PROVIDER=sqlite` for an
+image meant to run against a mounted SQLite file.
+
+This is built and run on a GitHub Actions runner by
+`.github/workflows/docker.yml`, against a throwaway Postgres service
+container — the development environment here has no Docker daemon. Running it
+found a fault that reading it could not: Next's standalone server binds
+`$HOSTNAME`, which Docker sets itself, so the container started, reported
+`Ready`, and accepted no connection. The Dockerfile now sets
+`HOSTNAME=0.0.0.0`.
+
 Run migrations as a release step, not in the image's entrypoint — an
 entrypoint migration races itself the moment you run two instances:
 
@@ -232,7 +245,7 @@ a build log.
 | | Status |
 |---|---|
 | Deployed to a public URL | **Production verified** — `https://aiml-mastery.vercel.app`, commit `9b21dd0`, GitHub Actions run 35547916102. |
-| Live smoke test | **Production verified** — 37/37 against the alias as the deploy's gating step (run 35547916102). The suite has also passed from an independent run against the same alias with a fresh account. |
+| Live smoke test | **Production verified** — 39/39 against the alias (run 35633264735). It runs as the deploy's gating step and can also be dispatched independently, which is how that run was made. |
 | PostgreSQL read, write and persistence | **Production verified** — a real signup wrote a row to Neon, the account survived logout and signed in again, and `/api/state` read the learner state back as JSON. |
 | Session cookie flags | **Production verified** — `HttpOnly`, `Secure`, `SameSite=Lax` observed on the live response. |
 | Security headers | **Production verified** — all six present on the alias, through Vercel's proxy. |
@@ -241,9 +254,10 @@ a build log.
 | Production build (`npm run build`) | Verified — passes, and emits `.next/standalone`. |
 | Full test suite | Verified locally — 740 unit/integration across 22 files and 137 end-to-end, the latter against a production server rather than `next dev`. Also 137/137 in CI on this commit. |
 | `./scripts/verify-all.sh --full` twice consecutively | Verified — 7/7 both runs. |
-| `Dockerfile` builds | **Not verified.** No Docker daemon in this environment. |
+| `Dockerfile` builds, and the image runs | **Verified** — built and run on a GitHub Actions runner against a throwaway Postgres (run 35634244665). The container reports a healthy database, completes a real signup with an `HttpOnly` cookie, and still returns 401 to an anonymous caller. The image is also asserted to carry no credential, no `.env`, no private key and no `.git`. |
 | Mail leaves the application | **Production verified** — the live site reports its transport as `resend`, and a real signup's verification email drew no rejection from the provider in the runtime log (run 35547916102). |
-| Mail arrives in an inbox | **Not verified.** Acceptance by the provider is not receipt, and there is no mailbox here to read. The step that would close this is opening one of those messages. |
+| Mail arrives in an inbox | **Not verified.** Acceptance by the provider is not receipt, and there is no mailbox here to read. `.github/workflows/email-delivery.yml` will verify it end to end given a recipient and IMAP credentials; see [docs/PRODUCTION_VERIFICATION.md](PRODUCTION_VERIFICATION.md) for that and for the manual procedure. |
+| Sender is on a verified Resend domain | **Not verified.** The production key is scoped to sending only, so it cannot read the account's domains (run 35634577053). This is the first thing to check if a message never arrives. |
 
 ### Three faults that a green build could not see
 
