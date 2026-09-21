@@ -66,14 +66,18 @@ jobs:
           done
           echo "No credential-bearing variable is set in the image environment."
 
-          # The placeholder must not have survived either, in the environment
-          # or anywhere in the shipped filesystem.
-          if docker run --rm --entrypoint sh aiml-mastery:ci -c \
-              'grep -rl "build-time-placeholder-not-a-secret" / 2>/dev/null | head -1' | grep -q .; then
-            echo "FAIL: the build-time placeholder secret is present in the image filesystem"
+          # The placeholder must not have survived into the shipped files
+          # either. Scanning /app rather than / on purpose: / walks /proc and
+          # /sys, which do not terminate in any useful time, and everything
+          # this image adds to its base lives under /app.
+          hits=$(docker run --rm --entrypoint sh aiml-mastery:ci -c \
+            'grep -rl "build-time-placeholder-not-a-secret" /app 2>/dev/null | head -5' || true)
+          if [ -n "$hits" ]; then
+            echo "FAIL: the build-time placeholder is present in the shipped files:"
+            printf '%s\n' "$hits"
             exit 1
           fi
-          echo "The build-time placeholder is not in the image filesystem."
+          echo "The build-time placeholder is not in the shipped files."
 
       - name: Assert the standalone server and its assets are present
         run: |
