@@ -56,6 +56,13 @@ const TO = arg('to');
 const CONFIG_ONLY = args.includes('--config-only');
 const BASE_URL = (arg('base-url', 'https://aiml-mastery.vercel.app') || '').replace(/\/+$/, '');
 const KEY = process.env.RESEND_API_KEY;
+/**
+ * The sender under test. If EMAIL_FROM is not set the application falls back
+ * to the provider's shared onboarding sender, and so does this — but that
+ * fallback is reported, because checking a default while production uses
+ * something else would verify nothing.
+ */
+const FROM_IS_EXPLICIT = Boolean(process.env.EMAIL_FROM);
 const FROM = process.env.EMAIL_FROM || 'AI/ML Mastery <onboarding@resend.dev>';
 
 if (!TO && !CONFIG_ONLY) {
@@ -221,7 +228,7 @@ async function findMessage({ host, port, user, password }, subjectFragment, atte
 
 console.log(`\nEmail delivery verification`);
 if (TO) console.log(`  recipient: ${maskAddress(TO)}`);
-console.log(`  sender:    ${FROM}`);
+console.log(`  sender:    ${FROM}${FROM_IS_EXPLICIT ? '' : '   (EMAIL_FROM is not set here — this is the application default)'}`);
 console.log(`  target:    ${BASE_URL}\n`);
 
 let failed = 0;
@@ -237,11 +244,29 @@ let failed = 0;
 // deployment that works.
 {
   const { status, body } = await resend('/domains');
-  if (status === 401 || status === 403) {
-    record('the API key is accepted by the provider', 'FAIL', `HTTP ${status}`);
-    failed++;
+  // The provider's own error name is the useful part and carries no secret.
+  // `restricted_api_key` in particular is not a bad key: Resend issues keys
+  // scoped to sending only, and such a key sends mail perfectly while being
+  // refused on every management endpoint. Reporting that as an invalid key
+  // would be a false alarm about the one credential production depends on.
+  const name = body?.name ?? '';
+  if (name === 'restricted_api_key') {
+    record(
+      'the API key is accepted by the provider',
+      'PASS',
+      'the key is valid and scoped to sending only, so it is refused on management endpoints by design',
+    );
+    record(
+      'the configured sender is on a verified domain',
+      'BLOCKED',
+      'a send-only key cannot read the account\'s domains; check it in the Resend dashboard or use a full-access key here',
+    );
   } else if (status !== 200) {
-    record('the API key is accepted by the provider', 'FAIL', `HTTP ${status}`);
+    record(
+      'the API key is accepted by the provider',
+      'FAIL',
+      `HTTP ${status}${name ? ` — ${name}` : ''}${body?.message ? ` — ${body.message}` : ''}`,
+    );
     failed++;
   } else {
     record('the API key is accepted by the provider', 'PASS', `HTTP 200`);
@@ -255,7 +280,8 @@ let failed = 0;
     );
 
     const senderDomain = (/@([^>\s]+)>?\s*$/.exec(FROM)?.[1] ?? '').toLowerCase();
-    if (verified.some((name) => senderDomain === name.toLowerCase() || senderDomain.endsWith(`.${name.toLowerCase()}`))) {
+    const matches = (d) => senderDomain === d.toLowerCase() || senderDomain.endsWith(`.${d.toLowerCase()}`);
+    if (verified.some(matches)) {
       record(
         'the configured sender is on a verified domain',
         'PASS',
