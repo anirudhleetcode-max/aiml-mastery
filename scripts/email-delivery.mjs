@@ -49,12 +49,18 @@ function arg(name, fallback = null) {
 }
 
 const TO = arg('to');
+/**
+ * Checks the provider configuration and stops. Sends nothing, so it is safe
+ * to run on a schedule or against production without a recipient.
+ */
+const CONFIG_ONLY = args.includes('--config-only');
 const BASE_URL = (arg('base-url', 'https://aiml-mastery.vercel.app') || '').replace(/\/+$/, '');
 const KEY = process.env.RESEND_API_KEY;
 const FROM = process.env.EMAIL_FROM || 'AI/ML Mastery <onboarding@resend.dev>';
 
-if (!TO) {
+if (!TO && !CONFIG_ONLY) {
   console.error('Usage: node scripts/email-delivery.mjs --to <address> [--base-url <url>]');
+  console.error('   or: node scripts/email-delivery.mjs --config-only');
   process.exit(2);
 }
 if (!KEY) {
@@ -214,11 +220,71 @@ async function findMessage({ host, port, user, password }, subjectFragment, atte
 // ───────────────────────────── stages ─────────────────────────────
 
 console.log(`\nEmail delivery verification`);
-console.log(`  recipient: ${maskAddress(TO)}`);
-console.log(`  sender:    ${FROM.replace(/<.*>/, (m) => m)}`);
+if (TO) console.log(`  recipient: ${maskAddress(TO)}`);
+console.log(`  sender:    ${FROM}`);
 console.log(`  target:    ${BASE_URL}\n`);
 
 let failed = 0;
+
+// Stage 0 — the configuration itself, which sends nothing.
+//
+// This is the stage that explains a silent mail failure before one happens.
+// Resend delivers to an arbitrary recipient only from a domain the account
+// has verified; its shared `onboarding@resend.dev` sender is restricted to
+// the account owner's own address. A deployment configured with the latter
+// will accept every send, return a 2xx for every one of them, and deliver
+// nothing to anybody else — which looks identical, from outside, to a
+// deployment that works.
+{
+  const { status, body } = await resend('/domains');
+  if (status === 401 || status === 403) {
+    record('the API key is accepted by the provider', 'FAIL', `HTTP ${status}`);
+    failed++;
+  } else if (status !== 200) {
+    record('the API key is accepted by the provider', 'FAIL', `HTTP ${status}`);
+    failed++;
+  } else {
+    record('the API key is accepted by the provider', 'PASS', `HTTP 200`);
+
+    const domains = body?.data ?? [];
+    const verified = domains.filter((d) => d.status === 'verified').map((d) => d.name);
+    console.log(
+      `        domains on this account: ${
+        domains.length === 0 ? '(none)' : domains.map((d) => `${d.name} [${d.status}]`).join(', ')
+      }`,
+    );
+
+    const senderDomain = (/@([^>\s]+)>?\s*$/.exec(FROM)?.[1] ?? '').toLowerCase();
+    if (verified.some((name) => senderDomain === name.toLowerCase() || senderDomain.endsWith(`.${name.toLowerCase()}`))) {
+      record(
+        'the configured sender is on a verified domain',
+        'PASS',
+        `${senderDomain} is verified, so mail can be sent to any recipient`,
+      );
+    } else if (senderDomain === 'resend.dev') {
+      record(
+        'the configured sender is on a verified domain',
+        'FAIL',
+        'the sender is the provider\'s shared onboarding domain, which only delivers to the account owner\'s own address',
+      );
+      failed++;
+    } else {
+      record(
+        'the configured sender is on a verified domain',
+        'FAIL',
+        `${senderDomain || '(no domain in EMAIL_FROM)'} is not a verified domain on this account`,
+      );
+      failed++;
+    }
+  }
+}
+
+if (CONFIG_ONLY) {
+  const blockedCount = results.filter((r) => r.status === 'BLOCKED').length;
+  const passedCount = results.filter((r) => r.status === 'PASS').length;
+  console.log(`\n  ${passedCount} passed, ${failed} failed, ${blockedCount} blocked. Nothing was sent.\n`);
+  process.exit(failed > 0 ? 1 : 0);
+}
 
 // Stage 1 — the provider accepts a message from this sender identity.
 const probeSubject = `Delivery probe ${Date.now()}`;

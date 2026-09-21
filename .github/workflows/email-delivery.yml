@@ -27,9 +27,11 @@ on:
       recipient:
         description: >-
           A real address you control. This job will create an account for it on
-          the target deployment and send it two real emails.
+          the target deployment and send it real email. Leave it empty to check
+          the provider configuration only, which sends nothing.
         type: string
-        required: true
+        required: false
+        default: ''
       base_url:
         description: The deployment to exercise.
         type: string
@@ -60,9 +62,14 @@ jobs:
           IMAP_USER: ${{ secrets.IMAP_USER }}
           IMAP_PASSWORD: ${{ secrets.IMAP_PASSWORD }}
         run: |
-          node scripts/email-delivery.mjs \
-            --to "${{ inputs.recipient }}" \
-            --base-url "${{ inputs.base_url }}"
+          if [ -z "${{ inputs.recipient }}" ]; then
+            echo "No recipient given — checking the provider configuration only."
+            node scripts/email-delivery.mjs --config-only
+          else
+            node scripts/email-delivery.mjs \
+              --to "${{ inputs.recipient }}" \
+              --base-url "${{ inputs.base_url }}"
+          fi
 
       - name: Summary
         if: always()
