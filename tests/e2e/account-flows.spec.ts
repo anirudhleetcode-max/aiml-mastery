@@ -151,6 +151,13 @@ test.describe('password reset', () => {
     await page.goto('/forgot-password');
     await page.getByLabel('Email').fill(email);
     await page.getByRole('button', { name: 'Send the reset link' }).click();
+    // Wait for the form's own confirmation before minting, because issuing a
+    // token invalidates any outstanding one for the same purpose. Without
+    // this barrier the click's request can land *after* the token below is
+    // minted and revoke it, and the page then says the link is not valid —
+    // which is what made this test flaky rather than failing outright. The
+    // sibling test above already waits here for the same reason.
+    await expect(page.getByText(/If an account exists/i)).toBeVisible();
 
     const token = await mintToken(email, 'password-reset');
 
