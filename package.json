@@ -27,6 +27,8 @@
     "db:provider": "node scripts/db-provider.mjs"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
     "@prisma/client": "6.19.3",
     "@react-three/drei": "^10.7.8",
     "@react-three/fiber": "^9.3.0",
@@ -49,6 +51,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
+    "@capacitor/cli": "^8.5.2",
     "@eslint/eslintrc": "^3",
     "@playwright/test": "^1.55.0",
     "@tailwindcss/postcss": "^4",

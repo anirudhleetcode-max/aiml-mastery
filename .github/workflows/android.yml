@@ -1,0 +1,176 @@
+# Builds the Android APK.
+#
+# This runs here for the same reason the Docker image does: the environment
+# this project is developed in cannot build it. The gateway there answers 403
+# to CONNECT for `dl.google.com`, and `maven.google.com` redirects to exactly
+# that host — so the Android Gradle Plugin and every AndroidX artifact are
+# unreachable, and no amount of local SDK assembly gets around a missing
+# compiler plugin. A runner has the SDK preinstalled and an open network.
+#
+# The app is a client for the deployed site, so there is no web build step
+# here. `capacitor.config.ts` points the WebView at production and the APK
+# carries only the native shell.
+name: Android
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'android/**'
+      - 'capacitor.config.ts'
+      - 'capacitor-shell/**'
+      - 'scripts/android-icons.mjs'
+      - '.github/workflows/android.yml'
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Capacitor 8 compiles against API 36. The runner image usually has it,
+      # but "usually" is how a build breaks on a Tuesday, so it is requested
+      # explicitly and the request is a no-op when it is already there.
+      - name: Ensure the SDK packages this build needs
+        run: |
+          set -euo pipefail
+          echo "ANDROID_HOME=${ANDROID_HOME:-unset}"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platforms;android-36" "build-tools;36.0.0" "platform-tools" >/dev/null
+          echo "Installed platforms:" && ls "$ANDROID_HOME/platforms"
+          echo "Installed build-tools:" && ls "$ANDROID_HOME/build-tools"
+
+      # Copies the bootstrap page and regenerates capacitor.config.json inside
+      # the project. Both are gitignored, so without this the APK would be
+      # built from a tree missing its own runtime config.
+      - name: Capacitor sync
+        run: npx cap sync android
+
+      - name: Build the debug APK
+        run: |
+          set -euo pipefail
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Collect the APK
+        id: collect
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/android
+          built=android/app/build/outputs/apk/debug/app-debug.apk
+          [ -f "$built" ] || { echo "FAIL: gradle reported success but produced no APK"; exit 1; }
+          cp "$built" artifacts/android/aiml-mastery-debug.apk
+
+          size=$(stat -c%s artifacts/android/aiml-mastery-debug.apk)
+          echo "size=$size" >> "$GITHUB_OUTPUT"
+          echo "APK bytes: $size"
+          # A Capacitor shell is a few megabytes. Anything under a megabyte is
+          # not an app, it is a truncated file that happens to exist.
+          [ "$size" -gt 1000000 ] || { echo "FAIL: APK is implausibly small"; exit 1; }
+
+      # Reads the identity back out of the built file rather than trusting the
+      # sources that were supposed to produce it.
+      - name: Assert package id and application label
+        run: |
+          set -euo pipefail
+          aapt=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -r | head -1)
+          echo "using: $aapt"
+          badging=$("$aapt" dump badging artifacts/android/aiml-mastery-debug.apk)
+          printf '%s\n' "$badging" | head -5
+
+          printf '%s' "$badging" | grep -q "package: name='com.anirudh.aimlmastery'" \
+            || { echo "FAIL: wrong package id"; exit 1; }
+          printf '%s' "$badging" | grep -q "application-label:'AI/ML Mastery'" \
+            || { echo "FAIL: wrong application label"; exit 1; }
+          printf '%s' "$badging" | grep -q "uses-permission: name='android.permission.INTERNET'" \
+            || { echo "FAIL: INTERNET permission missing"; exit 1; }
+
+          # Least privilege: INTERNET is the only permission this app has any
+          # business holding. This fails the build if one is ever added.
+          extra=$(printf '%s\n' "$badging" | grep "^uses-permission:" | grep -v "android.permission.INTERNET" || true)
+          if [ -n "$extra" ]; then
+            echo "FAIL: unexpected permissions requested:"
+            printf '%s\n' "$extra"
+            exit 1
+          fi
+          echo "Package, label and permission set are as intended."
+
+      # Attempted every run. Without a key it produces an unsigned artifact and
+      # says so, rather than failing the job or inventing a keystore.
+      - name: Build the release APK
+        id: release
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ]; then
+            # Written outside the workspace so it cannot be picked up by a
+            # later step that globs the repo, and removed immediately after.
+            export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/release.jks"
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$ANDROID_KEYSTORE_PATH"
+            echo "signing=configured" >> "$GITHUB_OUTPUT"
+          else
+            echo "No release keystore secret is configured — building unsigned."
+            echo "signing=absent" >> "$GITHUB_OUTPUT"
+          fi
+
+          cd android
+          ./gradlew assembleRelease --no-daemon --stacktrace || {
+            echo "release build failed"; exit 1;
+          }
+          cd ..
+
+          rm -f "${ANDROID_KEYSTORE_PATH:-/nonexistent}"
+
+          signed=android/app/build/outputs/apk/release/app-release.apk
+          unsigned=android/app/build/outputs/apk/release/app-release-unsigned.apk
+          if [ -f "$signed" ]; then
+            cp "$signed" artifacts/android/aiml-mastery-release.apk
+            echo "result=signed" >> "$GITHUB_OUTPUT"
+          elif [ -f "$unsigned" ]; then
+            cp "$unsigned" artifacts/android/aiml-mastery-release-unsigned.apk
+            echo "result=unsigned" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=none" >> "$GITHUB_OUTPUT"
+          fi
+          ls -la artifacts/android/
+
+      - name: Upload APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiml-mastery-android
+          path: artifacts/android/*.apk
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Android build"
+            echo
+            echo "- commit: \`${{ github.sha }}\`"
+            echo "- package: \`com.anirudh.aimlmastery\`"
+            echo "- debug APK bytes: ${{ steps.collect.outputs.size }}"
+            echo "- release signing: ${{ steps.release.outputs.signing }}"
+            echo "- release artifact: ${{ steps.release.outputs.result }}"
+          } >> "$GITHUB_STEP_SUMMARY"

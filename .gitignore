@@ -23,3 +23,14 @@ shots.mjs
 # Playwright session saved by the auth setup project
 playwright/.auth/
 test-results/
+
+# Android signing material. Never committed — a release keystore and its
+# passwords are credentials, and the build reads them from the environment.
+*.jks
+*.keystore
+keystore.properties
+android/local.properties
+android/.gradle/
+android/build/
+android/app/build/
+android/capacitor-cordova-android-plugins/

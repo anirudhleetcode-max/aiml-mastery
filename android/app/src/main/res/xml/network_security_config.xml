@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The session cookie is issued `Secure`, so a cleartext request could never
+  carry it anyway. Declaring that at the platform level means the WebView will
+  refuse a downgrade outright rather than making a plaintext request that
+  silently fails to authenticate. It also removes cleartext as a debugging
+  shortcut someone could reach for later.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>
