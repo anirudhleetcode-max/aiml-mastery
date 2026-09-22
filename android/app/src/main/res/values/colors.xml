@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The brand palette, taken from public/icon.svg and the site's dark surface so
+  the wrapper and the site are the same product. These names override the
+  Material defaults that ship inside the capacitor-android library.
+-->
+<resources>
+    <color name="brandSurface">#0B0F19</color>
+    <color name="brandSurfaceRaised">#131828</color>
+    <color name="brandInk">#E6E8EE</color>
+    <color name="brandInkMuted">#9AA3B8</color>
+    <color name="brandViolet">#7C5CFB</color>
+    <color name="brandCyan">#2AD5EF</color>
+
+    <color name="colorPrimary">#7C5CFB</color>
+    <color name="colorPrimaryDark">#0B0F19</color>
+    <color name="colorAccent">#2AD5EF</color>
+</resources>

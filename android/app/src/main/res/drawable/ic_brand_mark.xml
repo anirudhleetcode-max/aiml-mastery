@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- public/icon.svg as a vector drawable: the same node-graph glyph. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="32"
+    android:viewportHeight="32">
+
+    <path
+        android:pathData="M8.5,9.5 L16,16 L8.5,22.5"
+        android:strokeColor="#7C5CFB"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M16,16 L23.5,16"
+        android:strokeColor="#2AD5EF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round" />
+
+    <path
+        android:pathData="M8.5,7.4a2.1,2.1 0 1,0 0.01,0z"
+        android:fillColor="#7C5CFB" />
+    <path
+        android:pathData="M8.5,20.4a2.1,2.1 0 1,0 0.01,0z"
+        android:fillColor="#7C5CFB" />
+    <path
+        android:pathData="M23.5,13.6a2.4,2.4 0 1,0 0.01,0z"
+        android:fillColor="#2AD5EF" />
+</vector>

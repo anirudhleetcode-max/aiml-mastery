@@ -182,6 +182,28 @@ const crossOrigin = await fetch(`${BASE}/api/auth/login`, {
 });
 expect(crossOrigin.status === 403, 'a cross-origin login is rejected', `got ${crossOrigin.status}`);
 
+/* ---------------------------------------------- 7b. the mail-sending surface */
+// These are the two endpoints that make the deployment send mail, and both
+// are reachable by anyone. Neither can be checked by looking at an inbox, but
+// what they must not do is observable from outside: reveal whether an address
+// has an account, and send on behalf of a caller who is not signed in.
+const unknownAddress = await post('/api/auth/forgot-password', {
+  email: `definitely-no-such-account-${Date.now()}@example.com`,
+});
+const unknownBody = await unknownAddress.json().catch(() => null);
+expect(
+  unknownAddress.status === 200 && unknownBody?.status === 'sent',
+  'a reset request for an unknown address is answered like any other',
+  `got ${unknownAddress.status} ${JSON.stringify(unknownBody)}`,
+);
+
+const resendAnonymously = await post('/api/auth/resend-verification', {});
+expect(
+  resendAnonymously.status === 401,
+  'resending a verification email requires a session',
+  `got ${resendAnonymously.status}`,
+);
+
 /* ---------------------------------------------- 8. nothing leaks */
 expect(!/sk-ant-|AUTH_SECRET|DATABASE_URL|postgres:\/\//i.test(html), 'no secret material in the landing HTML');
 const notFound = await get('/this-route-does-not-exist');

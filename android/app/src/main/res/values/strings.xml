@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">AI/ML Mastery</string>
+    <string name="title_activity_main">AI/ML Mastery</string>
+    <string name="package_name">com.anirudh.aimlmastery</string>
+    <string name="custom_url_scheme">com.anirudh.aimlmastery</string>
+
+    <string name="offline_title">You\'re offline</string>
+    <string name="offline_body">AI/ML Mastery needs an internet connection for this feature. Your progress is saved on your account, so nothing is lost.</string>
+    <string name="offline_retry">Retry</string>
+</resources>
