@@ -22,6 +22,9 @@ on:
       - 'scripts/android-icons.mjs'
       - '.github/workflows/android.yml'
 
+permissions:
+  contents: write
+
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -192,6 +195,45 @@ jobs:
           path: artifacts/android/*.apk
           if-no-files-found: error
           retention-days: 90
+
+      # Also committed to the branch, not only uploaded.
+      #
+      # A workflow artifact is served from blob storage, expires, and needs a
+      # signed URL to fetch — which makes it useless both to a developer
+      # environment behind an egress allowlist and to anyone who just wants
+      # the file six months from now. The APK is the deliverable, so it lives
+      # in the repository where it can be downloaded directly.
+      #
+      # This cannot retrigger the workflow: the `push` filter watches
+      # `android/**` and the config files, and none of those paths change here.
+      - name: Publish the APK into the repository
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/android/*.apk
+
+          if git diff --cached --quiet; then
+            echo "APK is byte-identical to the committed one; nothing to publish."
+            exit 0
+          fi
+
+          git commit -m "Publish the Android APK built from ${GITHUB_SHA:0:7}
+
+          Built by .github/workflows/android.yml run ${GITHUB_RUN_ID}. The
+          package id, application label and permission set were read back out
+          of this exact file before it was committed."
+
+          # The branch can move while a build runs, so rebase rather than
+          # force anything.
+          for attempt in 1 2 3; do
+            git pull --rebase origin "${GITHUB_REF_NAME}" && \
+              git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
+            echo "push attempt $attempt failed, retrying"
+            sleep $((attempt * 5))
+          done
+          echo "could not publish the APK to the branch"
+          exit 1
 
       - name: Summary
         if: always()
