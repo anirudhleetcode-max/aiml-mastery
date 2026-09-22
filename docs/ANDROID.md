@@ -155,6 +155,45 @@ at the repository root as well.
 
 ---
 
+## The built artifact
+
+Both APKs are committed under `artifacts/android/`, and are also uploaded as a
+workflow artifact by every Android run.
+
+| | |
+|---|---|
+| `aiml-mastery-debug.apk` | 4,600,373 bytes — signed with the Android debug key (APK Signature Scheme v2), **installable** |
+| `aiml-mastery-release-unsigned.apk` | 3,443,278 bytes — unsigned, not installable until a key is configured |
+
+Verified locally against the built file with `aapt` and `apksigner`:
+
+```
+package: name='com.anirudh.aimlmastery' versionCode='1' versionName='1.0'
+         compileSdkVersion='36'
+sdkVersion:'24'
+targetSdkVersion:'36'
+uses-permission: name='android.permission.INTERNET'
+application-label:'AI/ML Mastery'
+launchable-activity: name='com.anirudh.aimlmastery.MainActivity'
+
+apksigner verify -> Verifies
+  Verified using v2 scheme (APK Signature Scheme v2): true
+  Signer #1 certificate DN: C=US, O=Android, CN=Android Debug
+```
+
+To install over USB:
+
+```bash
+adb install -r artifacts/android/aiml-mastery-debug.apk
+```
+
+Or copy the `.apk` to the phone and open it, allowing installation from the
+file manager when prompted. Because it is debug-signed, Play Protect will warn
+about an unknown developer — expected for a sideloaded debug build, and the
+reason the release signing gate above exists.
+
+---
+
 ## What is not verified
 
 No physical device or emulator was available in the environment that produced
