@@ -109,6 +109,7 @@ test walks the source tree on every run to prove both.
 | `npm run verify` | Typecheck, lint, contrast, curriculum, tests |
 | `./scripts/verify-all.sh --full` | The above, plus build and end-to-end |
 | `docker build -t aiml-mastery .` | Container image — see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) |
+| `npx cap sync android` | Android client — see [docs/ANDROID.md](docs/ANDROID.md) |
 | `npm run db:reset` | Drop, recreate and reseed the database |
 
 ## Architecture
