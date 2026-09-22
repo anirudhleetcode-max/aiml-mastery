@@ -101,15 +101,46 @@ jobs:
           printf '%s' "$badging" | grep -q "uses-permission: name='android.permission.INTERNET'" \
             || { echo "FAIL: INTERNET permission missing"; exit 1; }
 
-          # Least privilege: INTERNET is the only permission this app has any
-          # business holding. This fails the build if one is ever added.
-          extra=$(printf '%s\n' "$badging" | grep "^uses-permission:" | grep -v "android.permission.INTERNET" || true)
-          if [ -n "$extra" ]; then
-            echo "FAIL: unexpected permissions requested:"
-            printf '%s\n' "$extra"
+          # Least privilege, stated precisely.
+          #
+          # Two kinds of entry show up here and only one of them is a
+          # permission in the sense that matters:
+          #
+          #   android.permission.*  — real platform capabilities. INTERNET is
+          #     the only one this app has any business holding, and any other
+          #     must fail the build. This is the check that stops a camera,
+          #     location or contacts permission arriving with some future
+          #     dependency.
+          #
+          #   com.anirudh.aimlmastery.*  — permissions androidx.core declares
+          #     against this app's own package at protection level `signature`,
+          #     currently DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION. It is how
+          #     ContextCompat marks a dynamically registered receiver as not
+          #     exported. Only a build signed with the same key can hold it, it
+          #     grants access to nothing outside this app, and removing it
+          #     would break the very non-export guarantee it exists to make.
+          #     Allowed by namespace, never by name-with-a-wildcard, so a
+          #     genuine platform permission cannot hide behind it.
+          platform=$(printf '%s\n' "$badging" | grep "^uses-permission:" \
+            | grep -o "name='android\.permission\.[A-Z_]*'" | grep -v "name='android.permission.INTERNET'" || true)
+          if [ -n "$platform" ]; then
+            echo "FAIL: unexpected platform permissions requested:"
+            printf '%s\n' "$platform"
             exit 1
           fi
+
+          foreign=$(printf '%s\n' "$badging" | grep "^uses-permission:" \
+            | grep -v "name='android\.permission\.INTERNET'" \
+            | grep -v "name='com\.anirudh\.aimlmastery\." || true)
+          if [ -n "$foreign" ]; then
+            echo "FAIL: permission outside the platform and this app's own namespace:"
+            printf '%s\n' "$foreign"
+            exit 1
+          fi
+
           echo "Package, label and permission set are as intended."
+          echo "Permissions in the built APK:"
+          printf '%s\n' "$badging" | grep "^uses-permission:" | sed 's/^/  /'
 
       # Attempted every run. Without a key it produces an unsigned artifact and
       # says so, rather than failing the job or inventing a keystore.
